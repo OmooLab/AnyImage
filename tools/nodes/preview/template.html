@@ -1,0 +1,303 @@
+<div id="node-layout-results">
+  <h3>节点排列 · 尺寸模型预览</h3>
+  <div class="viz-controls">
+    <label class="form-label">节点组
+      <select class="form-select" id="layout-group"></select>
+    </label>
+    <label class="form-label">视野
+      <select class="form-select" id="layout-view">
+        <option value="all">完整排列</option>
+        <option value="input">起点输入附近</option>
+        <option value="middle">中段计算局部</option>
+        <option value="join">Join Geometry 附近</option>
+        <option value="menu">Menu Switch 附近</option>
+        <option value="combine">Combine XYZ 附近</option>
+        <option value="boolean">Boolean Math 附近</option>
+        <option value="sample">Sample Index 附近</option>
+        <option value="zone">成对节点内部范围</option>
+        <option value="output">最终输出附近</option>
+      </select>
+    </label>
+  </div>
+  <div class="viz-row">
+    <button class="btn" type="button" id="layout-out" aria-label="缩小">−</button>
+    <button class="btn" type="button" id="layout-in" aria-label="放大">＋</button>
+    <span class="text-small tabular-nums" id="layout-scale"></span>
+    <span class="text-small">拖动平移 · 滚轮缩放 · 点击节点查看名称</span>
+  </div>
+  <canvas id="layout-canvas" role="img" aria-label="按实际排列坐标绘制的节点组，尺寸和曲线使用估算模型"></canvas>
+  <div class="viz-row text-small" id="layout-legend">
+    <span><i class="geometry-key"></i>几何与着色连接</span>
+    <span><i class="field-key"></i>字段与参数连接</span>
+    <span id="layout-count"></span>
+  </div>
+  <div class="text-small" id="layout-detail" aria-live="polite">完整排列</div>
+</div>
+<style>
+  #node-layout-results { --geometry-color: #00d6a3; --field-color: #535353; --node-body: #282828; --node-text: #ededed; --zone-color: #b986d3; }
+  #node-layout-results canvas { display: block; width: 100%; height: 550px; touch-action: none; cursor: grab; margin: 8px 0; }
+  #node-layout-results canvas:active { cursor: grabbing; }
+  #node-layout-results .geometry-key, #node-layout-results .field-key { display: inline-block; width: 18px; height: 2px; vertical-align: middle; margin-right: 5px; }
+  #node-layout-results .geometry-key { background: var(--geometry-color); }
+  #node-layout-results .field-key { background: var(--muted-foreground); }
+  #node-layout-results #layout-detail { min-height: 2em; overflow-wrap: anywhere; }
+  @media (max-width: 440px) { #node-layout-results canvas { height: 450px; } }
+</style>
+<script type="application/json" id="layout-data">__NODE_DATA__</script>
+<script>
+(() => {
+  const root = document.getElementById('node-layout-results');
+  const data = JSON.parse(document.getElementById('layout-data').textContent);
+  const canvas = root.querySelector('#layout-canvas');
+  const context = canvas.getContext('2d');
+  const picker = root.querySelector('#layout-group');
+  const view = root.querySelector('#layout-view');
+  const detail = root.querySelector('#layout-detail');
+  let current = data[0], selected = null, scale = 1, dx = 0, dy = 0, width = 0, height = 0;
+  let dragging = null, moved = false;
+  data.forEach((group, index) => {
+    const option = document.createElement('option');
+    option.value = index; option.textContent = group.name; picker.appendChild(option);
+  });
+  const probe = document.createElement('span');
+  probe.hidden = true; root.appendChild(probe);
+  function color(token) {
+    probe.style.color = `var(${token})`;
+    return getComputedStyle(probe).color;
+  }
+  function bounds(nodes) {
+    return [Math.min(...nodes.map(n => n.x)), Math.min(...nodes.map(n => n.y)),
+            Math.max(...nodes.map(n => n.x + n.w)), Math.max(...nodes.map(n => n.y + n.h))];
+  }
+  function fit(box) {
+    const [left, top, right, bottom] = box;
+    scale = Math.min((width - 36) / (right - left), (height - 36) / (bottom - top));
+    dx = (width - (right + left) * scale) / 2;
+    dy = (height - (bottom + top) * scale) / 2;
+    draw();
+  }
+  function updateRegionViews() {
+    view.querySelectorAll('[data-zone], [data-frame]').forEach(option => option.remove());
+    current.zones.forEach(zone => {
+      const option = document.createElement('option');
+      option.value = `zone:${zone.entry}`; option.dataset.zone = 'true';
+      option.textContent = `${current.nodes[zone.entry].name} → ${current.nodes[zone.exit].name}`;
+      view.appendChild(option);
+    });
+    current.frames.forEach((frame, index) => {
+      const option = document.createElement('option');
+      option.value = `frame:${index}`; option.dataset.frame = 'true';
+      option.textContent = `Frame · ${frame.title}`;
+      view.appendChild(option);
+    });
+  }
+  function changeView() {
+    selected = null;
+    if (view.value === 'all') {
+      fit(bounds([...current.nodes, ...current.zones, ...current.frames]));
+      detail.textContent = '完整排列';
+      return;
+    }
+    if (view.value.startsWith('frame:')) {
+      const frame = current.frames[Number(view.value.split(':')[1])];
+      fit(bounds([frame])); detail.textContent = frame.title;
+      return;
+    }
+    if (view.value === 'zone' || view.value.startsWith('zone:')) {
+      if (current.zones.length) {
+        const zones = view.value === 'zone' ? current.zones : current.zones.filter(zone => `zone:${zone.entry}` === view.value);
+        fit(bounds(zones)); detail.textContent = zones.map(zone => `${current.nodes[zone.entry].name} → ${current.nodes[zone.exit].name}`).join(' · ');
+      } else {
+        fit(bounds(current.nodes)); detail.textContent = `${current.name} · 当前组无成对节点`;
+      }
+      return;
+    }
+    if (view.value === 'middle') {
+      const mainNodes = current.nodes.filter(n => n.type !== 'NodeReroute' && n.role !== 'field');
+      const midX = (Math.min(...mainNodes.map(n => n.x)) + Math.max(...mainNodes.map(n => n.x))) / 2;
+      const target = mainNodes.sort((a, b) => Math.abs(a.x - midX) - Math.abs(b.x - midX))[0];
+      fit([target.x - 850, target.y - 560, target.x + 670, target.y + 600]);
+      detail.textContent = `${current.name} · 中段计算局部`;
+      return;
+    }
+    if (view.value === 'input') {
+      const target = current.nodes.filter(n => n.role !== 'field' && n.type !== 'NodeReroute').sort((a, b) => a.x - b.x)[0];
+      fit([target.x - 850, target.y - 650, target.x + 750, target.y + 650]);
+      detail.textContent = `${current.name} · 起点输入附近`; return;
+    }
+    const types = {join: 'GeometryNodeJoinGeometry', menu: 'GeometryNodeMenuSwitch', combine: 'ShaderNodeCombineXYZ', boolean: 'FunctionNodeBooleanMath', sample: 'GeometryNodeSampleIndex', output: 'NodeGroupOutput'};
+    let candidates = current.nodes.filter(n => n.type === types[view.value]);
+    if (view.value === 'menu') {
+      const geometryMenus = candidates.filter(n => n.sockets.some(s => s[2] && s[3] === 'GEOMETRY'));
+      if (geometryMenus.length) candidates = geometryMenus;
+    }
+    if (!candidates.length) {
+      fit(bounds(current.nodes)); detail.textContent = `${current.name} · 当前组无此类节点`; return;
+    }
+    const target = candidates.sort((a, b) => b.x - a.x)[0] || current.nodes.at(-1);
+    fit([target.x - 1100, target.y - 560, target.x + 420, target.y + 600]);
+    detail.textContent = `${target.name} · ${target.title}`;
+  }
+  function label(text, x, y, maxWidth, align = 'left') {
+    if (maxWidth < 24) return;
+    let value = String(text);
+    if (context.measureText(value).width > maxWidth) {
+      while (value.length && context.measureText(value + '…').width > maxWidth) value = value.slice(0, -1);
+      value += '…';
+    }
+    context.textAlign = align;
+    context.fillText(value, x, y);
+  }
+  function draw() {
+    if (!width || !height) return;
+    const ratio = window.devicePixelRatio || 1;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    const foreground = color('--foreground');
+    const border = color('--border'), fields = color('--muted-foreground');
+    const geometry = color('--geometry-color'), other = color('--field-color');
+    const font = getComputedStyle(root).fontFamily;
+    const size = Math.max(11, parseFloat(getComputedStyle(root).fontSize) * 0.86);
+    context.font = `400 ${size}px ${font}`;
+    context.textBaseline = 'middle';
+    context.strokeStyle = border; context.lineWidth = 1;
+    context.strokeRect(0.5, 0.5, width - 1, height - 1);
+    context.save(); context.beginPath(); context.rect(1, 1, width - 2, height - 2); context.clip();
+    for (const frame of current.frames) {
+      const x = frame.x * scale + dx, y = frame.y * scale + dy;
+      const w = frame.w * scale, h = frame.h * scale;
+      context.fillStyle = '#78909c'; context.globalAlpha = 0.06;
+      context.fillRect(x, y, w, h);
+      context.globalAlpha = 0.5; context.strokeStyle = '#78909c'; context.lineWidth = 1;
+      context.strokeRect(x, y, w, h); context.globalAlpha = 1;
+      if (w > 90 && scale >= 0.15) {
+        context.fillStyle = foreground; label(frame.title, x + 8, y + Math.max(size, 24 * scale), w - 16);
+      }
+    }
+    for (const zone of current.zones) {
+      const x = zone.x * scale + dx, y = zone.y * scale + dy;
+      const w = zone.w * scale, h = zone.h * scale;
+      context.fillStyle = color('--zone-color'); context.globalAlpha = 0.065;
+      const heading = w > 90 && h > size + 12 ? size + 4 : 0;
+      context.beginPath(); context.roundRect(x, y - heading, w, h + heading, Math.min(24 * scale, 12)); context.fill();
+      context.globalAlpha = 0.55; context.strokeStyle = color('--zone-color'); context.lineWidth = 1; context.stroke();
+      context.globalAlpha = 1;
+      if (heading) {
+        context.fillStyle = foreground; label(zone.title, x + 8, y - heading / 2, w - 16);
+      }
+    }
+    for (const edge of current.links) {
+      const [source, target, wx1, wy1, wx2, wy2, type] = edge;
+      const x1 = wx1 * scale + dx, y1 = wy1 * scale + dy;
+      const x2 = wx2 * scale + dx, y2 = wy2 * scale + dy;
+      const bend = Math.max(40, Math.abs(wx2 - wx1) * 0.42) * scale;
+      const active = selected === source || selected === target;
+      context.globalAlpha = selected !== null && !active ? 0.18 : ['GEOMETRY', 'SHADER'].includes(type) ? 0.85 : 0.46;
+      context.strokeStyle = ['GEOMETRY', 'SHADER'].includes(type) ? geometry : fields;
+      context.lineWidth = active ? 2.5 : ['GEOMETRY', 'SHADER'].includes(type) ? 1.35 : 0.8;
+      context.beginPath(); context.moveTo(x1, y1);
+      context.bezierCurveTo(x1 + bend, y1, x2 - bend, y2, x2, y2); context.stroke();
+    }
+    context.globalAlpha = 1;
+    for (const node of current.nodes) {
+      const x = node.x * scale + dx, y = node.y * scale + dy, w = node.w * scale, h = node.h * scale;
+      if (x + w < 0 || x > width || y + h < 0 || y > height) continue;
+      const mainNode = node.type === 'NodeReroute'
+        ? node.sockets.some(socket => ['GEOMETRY', 'SHADER'].includes(socket[3])) : node.role !== 'field';
+      const hue = mainNode ? geometry : other;
+      if (node.type === 'NodeReroute') {
+        context.fillStyle = hue; context.beginPath();
+        context.arc(x + w / 2, y + h / 2, Math.max(1.5, w / 3), 0, Math.PI * 2); context.fill(); continue;
+      }
+      context.fillStyle = color('--node-body');
+      context.beginPath(); context.roundRect(x, y, w, h, Math.min(node.folded ? h / 2 : 5, 5)); context.fill();
+      context.fillStyle = hue; context.globalAlpha = 0.11; context.fill(); context.globalAlpha = 1;
+      context.strokeStyle = selected === node.id ? foreground : border;
+      context.lineWidth = selected === node.id ? 2 : 0.8; context.stroke();
+      if (!node.folded) {
+        context.fillStyle = hue; context.globalAlpha = 0.26;
+        context.fillRect(x + 0.5, y + 0.5, Math.max(0, w - 1), Math.min(32 * scale, h - 1));
+        context.globalAlpha = 1;
+      }
+      if (w >= 78 && h >= size + 5) {
+        context.save(); context.beginPath(); context.rect(x + 3, y, w - 6, h); context.clip();
+        context.fillStyle = color('--node-text');
+        label(node.title, x + 7, node.folded ? y + h / 2 : y + Math.max(size / 2 + 3, 16 * scale), w - 14);
+        if (!node.folded && scale >= 0.52) {
+          for (const [name, offset, output, type, value] of node.sockets) {
+            context.fillStyle = color('--node-text');
+            label(value ? `${name}: ${value}` : name, output ? x + w - 8 : x + 8,
+                  y + offset * scale, w - 16, output ? 'right' : 'left');
+          }
+          const outputs = node.sockets.filter(s => s[2]);
+          const firstInput = node.sockets.find(s => !s[2]);
+          let row = (outputs.length ? Math.max(...outputs.map(s => s[1])) + 26 : 56);
+          for (const setting of node.settings) {
+            if (firstInput && row > firstInput[1] - 24) break;
+            context.fillStyle = fields; label(setting, x + 8, y + row * scale, w - 16); row += 24;
+          }
+        }
+        context.restore();
+      }
+      if (scale >= 0.22) {
+        for (const socket of node.sockets) {
+          context.fillStyle = ['GEOMETRY', 'SHADER'].includes(socket[3]) ? geometry : fields;
+          context.beginPath(); context.arc(socket[2] ? x + w : x, y + socket[1] * scale,
+            Math.max(1.4, 3.6 * scale), 0, Math.PI * 2); context.fill();
+        }
+      }
+    }
+    context.restore();
+    root.querySelector('#layout-scale').textContent = `${Math.round(scale * 100)}%`;
+    root.querySelector('#layout-count').textContent = `${current.nodes.length} 节点 · ${current.links.length} 连接`;
+    canvas.setAttribute('aria-label', `${current.name}，${current.nodes.length} 个节点，${current.links.length} 条连接。几何路径与字段支线按函数输出坐标绘制。`);
+  }
+  function zoom(factor, x = width / 2, y = height / 2) {
+    const next = Math.max(0.01, Math.min(2.5, scale * factor));
+    dx = x - (x - dx) * next / scale; dy = y - (y - dy) * next / scale; scale = next; draw();
+  }
+  picker.addEventListener('change', () => {
+    if (view.value.startsWith('zone:')) view.value = 'zone';
+    current = data[Number(picker.value)]; updateRegionViews();
+    if (!view.value) view.value = 'all';
+    changeView();
+  });
+  view.addEventListener('change', changeView);
+  root.querySelector('#layout-in').addEventListener('click', () => zoom(1.5));
+  root.querySelector('#layout-out').addEventListener('click', () => zoom(1 / 1.5));
+  canvas.addEventListener('wheel', event => {
+    event.preventDefault(); const rect = canvas.getBoundingClientRect();
+    zoom(Math.exp(-event.deltaY * 0.0015), event.clientX - rect.left, event.clientY - rect.top);
+  }, { passive: false });
+  canvas.addEventListener('pointerdown', event => {
+    dragging = [event.clientX, event.clientY, dx, dy]; moved = false;
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove', event => {
+    if (!dragging) return;
+    const x = event.clientX - dragging[0], y = event.clientY - dragging[1];
+    if (Math.abs(x) + Math.abs(y) > 4) moved = true;
+    dx = dragging[2] + x; dy = dragging[3] + y; draw();
+  });
+  canvas.addEventListener('pointerup', event => {
+    if (!moved) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left - dx) / scale, y = (event.clientY - rect.top - dy) / scale;
+      const node = current.nodes.findLast(n => x >= n.x && x <= n.x + n.w && y >= n.y && y <= n.y + n.h);
+      selected = node ? node.id : null;
+      detail.textContent = node ? `${node.name} · ${node.title} · ${node.role !== 'field' ? '结果主线' : '计算或输入'}${node.settings.length ? ' · ' + node.settings.join(' / ') : ''}` : current.name;
+      draw();
+    }
+    dragging = null;
+  });
+  canvas.addEventListener('pointercancel', () => { dragging = null; });
+  new ResizeObserver(() => {
+    const rect = canvas.getBoundingClientRect(); width = rect.width; height = rect.height;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio); changeView();
+  }).observe(canvas);
+  new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  updateRegionViews();
+})();
+</script>

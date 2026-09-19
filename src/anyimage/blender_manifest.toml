@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+
+id = "anyimage"
+version = "1.0.1"
+name = "AnyImage"
+tagline = "Build spatial structures from images, fast"
+maintainer = "OmooLab"
+type = "add-on"
+
+blender_version_min = "4.5.0"
+platforms = ["windows-x64"]
+wheels = ["./wheels/blendjob-0.1.17-py3-none-any.whl", "./wheels/scipy-1.15.3-cp311-cp311-win_amd64.whl", "./wheels/scipy-1.15.3-cp313-cp313-win_amd64.whl"]
+license = ["SPDX:GPL-3.0-or-later"]
+
+[permissions]
+network = "Access the local Job Server and download environment dependencies and model weights"
+files = "Read source and clipboard images, and store environment data"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "*.blend[0-9]*",
+  "*.zip",
+]

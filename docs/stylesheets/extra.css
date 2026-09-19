@@ -1,0 +1,133 @@
+@import url("https://fontsapi.zeoseven.com/292/main/result.css");
+@import url("https://fontsapi.zeoseven.com/293/main/result.css");
+
+/* [data-md-color-scheme="slate"] {
+  --md-code-hl-string-color: #8b8b8b;
+  --md-code-hl-keyword-color: #ffe8a3;
+  --md-code-hl-number-color: #ffe8a3;
+  --md-typeset-a-color: #ffe8a3;
+}
+
+[data-md-color-scheme="default"] {
+  --md-code-hl-string-color: #444444;
+  --md-code-hl-keyword-color: #bd9100;
+  --md-code-hl-number-color: #bd9100;
+}
+
+[data-md-color-scheme=slate][data-md-color-primary=black] {
+  --md-typeset-a-color: #ffe8a3;
+}
+
+[data-md-color-scheme=default][data-md-color-primary=black] {
+  --md-typeset-a-color: #bd9100;
+} */
+
+:root {
+  --md-text-font: "LXGW WenKai";
+  --md-code-font: "LXGW WenKai Mono";
+}
+
+/* 首页的扩展安装拖拽组件，数值取自 extensions.blender.org 的按钮。 */
+@font-face {
+  font-family: "fontutti";
+  src: url("../assets/fonts/fontutti.woff2") format("woff2");
+  font-style: normal;
+  font-weight: normal;
+}
+
+.anyimage-install {
+  font-size: 14px;
+  line-height: 1.4286;
+}
+
+.anyimage-install-item {
+  margin-bottom: 1.6rem;
+}
+
+.anyimage-install [class^="i-"]:before,
+.anyimage-install [class*=" i-"]:before {
+  display: inline-block;
+  width: 1em;
+  margin: 0 0.2em;
+  font-family: "fontutti";
+  font-style: normal;
+  font-variant: normal;
+  font-weight: normal;
+  line-height: 1em;
+  text-align: center;
+  text-decoration: inherit;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.anyimage-install .i-move:before {
+  content: "\e8d5";
+}
+
+.anyimage-install-item.is-active ~ .anyimage-install-item.is-active {
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  padding-top: 1.6rem;
+}
+
+.anyimage-install-group {
+  border: 2px solid transparent;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.anyimage-install-group.is-dragging {
+  opacity: 0.5;
+}
+
+.anyimage-install-button {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background-color: rgba(0, 153, 255, 0.1);
+  color: #0099ff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 24px;
+  outline: 2px dashed currentColor;
+  outline-offset: -2px;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 150ms, color 150ms ease-out;
+  user-select: none;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.anyimage-install-button:hover {
+  background-color: rgba(0, 153, 255, 0.2);
+  cursor: move;
+}
+
+.anyimage-install-platform {
+  text-align: center;
+}
+
+.anyimage-install-platform strong {
+  font-weight: 600;
+}
+
+.anyimage-install-platform-rest {
+  font-weight: 400;
+}
+
+.anyimage-install small.anyimage-install-note {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  opacity: 1;
+  text-align: center;
+}
+
+.anyimage-install-note a {
+  color: #0099ff;
+  text-decoration: underline;
+}

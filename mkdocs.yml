@@ -1,0 +1,120 @@
+site_name: AnyImage 文档
+site_url: https://docs.omoolab.xyz/anyimage/
+site_author: OmooLab
+site_description: AnyImage 是一款将图片、视频和序列帧转换为立体面片的 Blender 扩展。
+
+repo_name: OmooLab/AnyImage
+repo_url: https://git.omoolab.xyz/icrdr/AnyImage
+
+nav:
+  - AnyImage:
+      - index.md
+  - 开始使用:
+      - 安装与首次配置: getting-started/installation.md
+  - 内部实现:
+      - 总览: internals/index.md
+      - 程序架构: internals/architecture.md
+      - Common 公共函数: internals/common.md
+      - 基础设施:
+          - Job Runtime 与 Server: internals/runtime.md
+          - Job 产物: internals/outputs.md
+      - Operators:
+          - 总览: internals/operators/index.md
+          - AI 环境管理: internals/operators/ai-setup.md
+          - Clipboard Image: internals/operators/clipboard-image.md
+          - Convert to Plane: internals/operators/convert-to-plane.md
+          - Convert to Panorama: internals/operators/convert-to-panorama.md
+          - Cutout Tool: internals/operators/cutout-tool.md
+          - Frame: internals/operators/frame.md
+          - Mask: internals/operators/mask.md
+          - Rectify: internals/operators/rectify.md
+          - Remove Background: internals/operators/remove-background.md
+          - Upscale: internals/operators/upscale.md
+      - 开发维护:
+          - 开发与发布: internals/development.md
+          - 节点资产: internals/node-assets.md
+
+theme:
+  name: material
+  favicon: assets/favicon.png
+  logo: assets/logo.png
+  language: zh
+  font:
+    text: Open Sans
+    code: Cascadia Code
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      primary: black
+      toggle:
+        icon: fontawesome/solid/circle-half-stroke
+        name: Switch to light mode
+
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      toggle:
+        icon: fontawesome/regular/moon
+        name: Switch to dark mode
+
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      toggle:
+        icon: fontawesome/solid/moon
+        name: Switch to system preference
+
+  features:
+    - header.autohide
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - content.code.copy
+    - content.code.select
+
+extra:
+  version:
+    provider: mike
+
+extra_css:
+  - stylesheets/extra.css
+  
+extra_javascript:
+  - javascripts/extra.js
+
+copyright: Copyright &copy; 2020 - 2024 Omoolab
+
+plugins:
+  - search
+  - mkdocstrings
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: zh
+          name: 中文
+          default: true
+        - locale: en
+          name: English
+          nav_translations:
+            快捷键: Keymap
+
+markdown_extensions:
+  - mkdocs-click
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+  - pymdownx.tabbed:
+      alternate_style: true

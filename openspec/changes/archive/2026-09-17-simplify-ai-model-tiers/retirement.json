@@ -1,0 +1,131 @@
+{
+  "remote": "omoolab-r2:ai-models",
+  "local": [
+    {
+      "path": "D:\\Projects\\AnyImage\\models\\DA3-BASE",
+      "owner": "D:\\Projects\\AnyImage\\models"
+    },
+    {
+      "path": "D:\\Projects\\AnyImage\\models\\DA3-SMALL",
+      "owner": "D:\\Projects\\AnyImage\\models"
+    },
+    {
+      "path": "D:\\Projects\\AnyImage\\models\\moge-2-vitl-normal-onnx",
+      "owner": "D:\\Projects\\AnyImage\\models"
+    },
+    {
+      "path": "D:\\Projects\\AnyImage\\models\\safmn-real-x4",
+      "owner": "D:\\Projects\\AnyImage\\models"
+    },
+    {
+      "path": "D:\\Projects\\AnyImage\\models\\pisa-sr",
+      "owner": "D:\\Projects\\AnyImage\\models"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.anyimage\\models\\moge-2-vitl-normal-onnx",
+      "owner": "C:\\Users\\icrdr\\.anyimage\\models"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.anyimage\\models\\safmn-real-x4",
+      "owner": "C:\\Users\\icrdr\\.anyimage\\models"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.anyimage\\models\\pisa-sr",
+      "owner": "C:\\Users\\icrdr\\.anyimage\\models"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-BASE",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-GIANT-1.1",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\.locks\\models--depth-anything--DA3-GIANT-1.1",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\.locks"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-LARGE-1.1",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-SMALL",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3NESTED-GIANT-LARGE-1.1",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--mindqtrl--DA3-LARGE-1.1-ONNX",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\.locks\\models--mindqtrl--DA3-LARGE-1.1-ONNX",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\.locks"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--Ruicheng--moge-2-vitl",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--Ruicheng--moge-2-vitl-normal",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    },
+    {
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--Ruicheng--moge-2-vitl-normal-onnx",
+      "owner": "C:\\Users\\icrdr\\.cache\\huggingface\\hub"
+    }
+  ],
+  "objects": [
+    {
+      "path": "DA3-BASE/model.onnx",
+      "size": 412856697
+    },
+    {
+      "path": "DA3-SMALL/model.onnx",
+      "size": 105484029
+    },
+    {
+      "path": "moge-2-vitl-normal-onnx/model.onnx",
+      "size": 1324265014
+    },
+    {
+      "path": "pisa-sr/LICENSE-APACHE.txt",
+      "size": 11358
+    },
+    {
+      "path": "pisa-sr/LICENSE-MODEL.txt",
+      "size": 14206
+    },
+    {
+      "path": "pisa-sr/NOTICE.txt",
+      "size": 1081
+    },
+    {
+      "path": "pisa-sr/decoder.onnx",
+      "size": 99084589
+    },
+    {
+      "path": "pisa-sr/encoder.onnx",
+      "size": 68426712
+    },
+    {
+      "path": "pisa-sr/noise.npy",
+      "size": 32896
+    },
+    {
+      "path": "pisa-sr/unet-full.onnx",
+      "size": 1732713007
+    },
+    {
+      "path": "pisa-sr/unet-pixel.onnx",
+      "size": 1732713007
+    },
+    {
+      "path": "safmn-real-x4/safmn-real-x4.onnx",
+      "size": 22657477
+    }
+  ]
+}

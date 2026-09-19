@@ -1,0 +1,53 @@
+[project]
+name = "anyimage"
+version = "1.0.1"
+description = "Fast image-guided structure building tools for Blender"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = "GPL-3.0-or-later"
+dependencies = ["blendjob==0.1.17", "numpy>=1.26,<2.0", "scipy==1.15.3"]
+
+[dependency-groups]
+dev = [
+    "pillow==12.1.1",
+    "pip>=25,<27",
+    "pytest",
+]
+blender = [
+    "bpy==4.5.3",
+]
+ai = [
+    "huggingface-hub==1.4.1",
+    "onnxruntime==1.24.4",
+    "trimesh==4.11.2",
+]
+models = [
+    "onnx==1.19.0",
+    "onnxruntime==1.24.4",
+    "torch==2.13.0",
+]
+docs = [
+    "mike>=2.1.3,<3",
+    "mkdocs>=1.6.1,<2",
+    "mkdocs-click==0.9.0",
+    "mkdocs-material>=9.6.16,<10",
+    "mkdocs-static-i18n[material]>=1.3.0",
+    "mkdocstrings[python]>=1.0.6",
+]
+
+[project.scripts]
+pack = "tools.pack:main"
+node-group = "tools.nodes.cli:main"
+model = "tools.models.cli:main"
+docs = "tools.docs:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/anyimage", "tools", "nodes"]
+
+[tool.pytest.ini_options]
+# Keep native asserts: bpy 4.5 can crash at shutdown after assertion rewriting.
+addopts = "--assert=plain"

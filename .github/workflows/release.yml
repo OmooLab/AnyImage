@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Publish on any tag starting with a `v`, e.g., v1.0.1
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  check_version:
+    name: Check Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read_version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+
+      - name: Check tag matches project version
+        id: read_version
+        run: |
+          version="$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pyproject.toml version $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build_extensions:
+    name: Build Extensions
+    needs: check_version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+
+      - name: Build node assets
+        run: uv run --group blender node-group build --skip-tests
+
+      - name: Run tests
+        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools
+
+      - name: Pack extensions
+        run: uv run pack
+
+      - name: Check extension archives
+        run: |
+          for platform in windows-x64 macos-arm64 linux-x64; do
+            archive="dist/AnyImage.v${{ needs.check_version.outputs.version }}.${platform}.zip"
+            if [ ! -f "$archive" ]; then
+              echo "Missing archive: $archive" >&2
+              exit 1
+            fi
+          done
+
+      - name: Publish release
+        uses: https://gitea.com/actions/gitea-release-action@v1.3.6
+        with:
+          files: |-
+            dist/*.zip

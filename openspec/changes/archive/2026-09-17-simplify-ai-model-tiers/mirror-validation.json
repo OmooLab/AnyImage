@@ -1,0 +1,53 @@
+[
+  {
+    "model": "BIREFNET_LITE",
+    "ready": true,
+    "files": [
+      {
+        "url": "https://models.omoolab.xyz/birefnet-lite/model.onnx",
+        "bytes": 112968598,
+        "sha256": "6e2a9844c57b080e95a402722ddcae5660e6f254a04d3e003347f06f587b71fe"
+      },
+      {
+        "url": "https://models.omoolab.xyz/birefnet-lite/LICENSE.txt",
+        "bytes": 1066,
+        "sha256": "92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb"
+      }
+    ],
+    "execution": "passed"
+  },
+  {
+    "model": "BIREFNET_HR_MATTING",
+    "ready": true,
+    "files": [
+      {
+        "url": "https://models.omoolab.xyz/birefnet-hr-matting/model.onnx",
+        "bytes": 529467341,
+        "sha256": "b3abc34843a4d96f669ca9fb1a2a16b3417ab8b91c987573fdbda36d20514133"
+      },
+      {
+        "url": "https://models.omoolab.xyz/birefnet-hr-matting/LICENSE.txt",
+        "bytes": 1066,
+        "sha256": "92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb"
+      }
+    ],
+    "execution": "passed"
+  },
+  {
+    "model": "HAT_GAN_X4_SHARPER",
+    "ready": true,
+    "files": [
+      {
+        "url": "https://models.omoolab.xyz/hat-gan-x4-sharper/model.onnx",
+        "bytes": 45874438,
+        "sha256": "032d8b03c704220a08d91465a822aca252c1d6e63db20c3cf23c5fb67f3d2366"
+      },
+      {
+        "url": "https://models.omoolab.xyz/hat-gan-x4-sharper/LICENSE.txt",
+        "bytes": 11342,
+        "sha256": "a91d57ebad8955a1757be7891ca2da8e07493e662f0e34e1e1926571e05f37fc"
+      }
+    ],
+    "execution": "passed"
+  }
+]

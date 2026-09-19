@@ -1,0 +1,267 @@
+{
+  "results": [
+    {
+      "kind": "r2",
+      "path": "DA3-BASE/model.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "DA3-SMALL/model.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "moge-2-vitl-normal-onnx/model.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/LICENSE-APACHE.txt",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/LICENSE-MODEL.txt",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/NOTICE.txt",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/decoder.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/encoder.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/noise.npy",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/unet-full.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "pisa-sr/unet-pixel.onnx",
+      "removed": true
+    },
+    {
+      "kind": "r2",
+      "path": "safmn-real-x4/safmn-real-x4.onnx",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "D:\\Projects\\AnyImage\\models\\DA3-BASE",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "D:\\Projects\\AnyImage\\models\\DA3-SMALL",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "D:\\Projects\\AnyImage\\models\\moge-2-vitl-normal-onnx",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "D:\\Projects\\AnyImage\\models\\safmn-real-x4",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "D:\\Projects\\AnyImage\\models\\pisa-sr",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.anyimage\\models\\moge-2-vitl-normal-onnx",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.anyimage\\models\\safmn-real-x4",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.anyimage\\models\\pisa-sr",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-BASE",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-GIANT-1.1",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\.locks\\models--depth-anything--DA3-GIANT-1.1",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-LARGE-1.1",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3-SMALL",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--depth-anything--DA3NESTED-GIANT-LARGE-1.1",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--mindqtrl--DA3-LARGE-1.1-ONNX",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\.locks\\models--mindqtrl--DA3-LARGE-1.1-ONNX",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--Ruicheng--moge-2-vitl",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--Ruicheng--moge-2-vitl-normal",
+      "removed": true
+    },
+    {
+      "kind": "local",
+      "path": "C:\\Users\\icrdr\\.cache\\huggingface\\hub\\models--Ruicheng--moge-2-vitl-normal-onnx",
+      "removed": true
+    }
+  ],
+  "remote_remaining": [],
+  "retained_changed": [],
+  "retained_objects": [
+    {
+      "Path": "BEN2-ONNX/onnx/model_fp16.onnx",
+      "Name": "model_fp16.onnx",
+      "Size": 219121675,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-08-14T09:16:42.426271600+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "birefnet-hr-matting/LICENSE.txt",
+      "Name": "LICENSE.txt",
+      "Size": 1066,
+      "MimeType": "text/plain; charset=utf-8",
+      "ModTime": "2026-09-10T18:25:27.626890000+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "birefnet-hr-matting/model.onnx",
+      "Name": "model.onnx",
+      "Size": 529467341,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-09-10T18:25:26.979196800+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "birefnet-lite/LICENSE.txt",
+      "Name": "LICENSE.txt",
+      "Size": 1066,
+      "MimeType": "text/plain; charset=utf-8",
+      "ModTime": "2026-09-10T18:14:05.058461000+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "birefnet-lite/model.onnx",
+      "Name": "model.onnx",
+      "Size": 112968598,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-09-10T18:14:04.582138300+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "hat-gan-x4-sharper/LICENSE.txt",
+      "Name": "LICENSE.txt",
+      "Size": 11342,
+      "MimeType": "text/plain; charset=utf-8",
+      "ModTime": "2026-09-10T16:58:24.978566500+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "hat-gan-x4-sharper/model.onnx",
+      "Name": "model.onnx",
+      "Size": 45874438,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-09-10T16:58:24.123871100+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "moge-2-vitb-normal-onnx/model.onnx",
+      "Name": "model.onnx",
+      "Size": 419411850,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-08-14T00:42:46.699086800+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "moge-2-vits-normal-onnx/model.onnx",
+      "Name": "model.onnx",
+      "Size": 140852051,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-08-14T00:27:11.713132700+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "moge-3-vitl-onnx/backbone.onnx",
+      "Name": "backbone.onnx",
+      "Size": 1324190318,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-09-10T10:38:13.252671700+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "moge-3-vitl-onnx/refiner.onnx",
+      "Name": "refiner.onnx",
+      "Size": 157729628,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-09-10T10:38:07.481681400+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "realesr-general-wdn-x4v3/realesr-general-wdn-x4v3.onnx",
+      "Name": "realesr-general-wdn-x4v3.onnx",
+      "Size": 4867419,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-08-23T00:00:31.076651000+08:00",
+      "IsDir": false
+    },
+    {
+      "Path": "realesrgan-x4plus/realesrgan-x4plus.onnx",
+      "Name": "realesrgan-x4plus.onnx",
+      "Size": 67051618,
+      "MimeType": "application/octet-stream",
+      "ModTime": "2026-08-23T00:02:33.710120800+08:00",
+      "IsDir": false
+    }
+  ]
+}

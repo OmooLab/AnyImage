@@ -51,7 +51,9 @@ jobs:
         run: uv run --group blender node-group build --skip-tests
 
       - name: Run tests
-        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: xvfb-run -a uv run --group blender pytest tests/anyimage tests/nodes tests/tools
 
       - name: Pack extensions
         run: uv run pack

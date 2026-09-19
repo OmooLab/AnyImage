@@ -46,7 +46,8 @@ def test_ai_and_model_groups_own_their_runtime_dependencies():
 def test_workflows_run_the_regular_blender_suite():
     build_command = "uv run --group blender node-group build --skip-tests"
     test_command = (
-        "uv run --group blender pytest tests/anyimage tests/nodes tests/tools"
+        "xvfb-run -a uv run --group blender pytest "
+        "tests/anyimage tests/nodes tests/tools"
     )
     for name in ("test.yml", "release.yml"):
         workflow = (PROJECT_ROOT / ".github" / "workflows" / name).read_text(
@@ -55,6 +56,7 @@ def test_workflows_run_the_regular_blender_suite():
         assert build_command in workflow
         assert test_command in workflow
         assert workflow.index(build_command) < workflow.index(test_command)
+        assert 'LIBGL_ALWAYS_SOFTWARE: "1"' in workflow
         assert "BLENDER_BIN" not in workflow
         assert "download" not in workflow.lower()
 

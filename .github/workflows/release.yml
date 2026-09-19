@@ -76,7 +76,19 @@ jobs:
 
       - name: Publish Gitea release
         if: github.server_url != 'https://github.com'
-        uses: https://gitea.com/actions/gitea-release-action@v1.3.6
-        with:
-          files: |-
-            dist/*.zip
+        env:
+          RELEASE_TOKEN: ${{ github.token }}
+        run: |
+          release_id="$(curl --fail-with-body \
+            --header "Authorization: token $RELEASE_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "$(jq -n --arg tag "$GITHUB_REF_NAME" '{tag_name: $tag, name: $tag}')" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases" | jq -r .id)"
+          for archive in dist/*.zip; do
+            curl --fail-with-body \
+              --request POST \
+              --header "Authorization: token $RELEASE_TOKEN" \
+              --header "Content-Type: application/octet-stream" \
+              --data-binary "@$archive" \
+              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/$release_id/assets?name=$(basename "$archive")"
+          done

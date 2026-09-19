@@ -65,7 +65,8 @@ def test_workflows_run_the_regular_blender_suite():
     )
     assert "uv run pack" in release
     assert "gh release create" in release
-    assert "gitea-release-action" in release
+    assert "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases" in release
+    assert "gitea-release-action" not in release
 
 
 def test_generated_node_asset_is_ignored_and_untracked():

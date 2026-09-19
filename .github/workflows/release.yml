@@ -68,7 +68,14 @@ jobs:
             fi
           done
 
-      - name: Publish release
+      - name: Publish GitHub release
+        if: github.server_url == 'https://github.com'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --verify-tag --generate-notes
+
+      - name: Publish Gitea release
+        if: github.server_url != 'https://github.com'
         uses: https://gitea.com/actions/gitea-release-action@v1.3.6
         with:
           files: |-

@@ -64,6 +64,8 @@ def test_workflows_run_the_regular_blender_suite():
         encoding="utf-8"
     )
     assert "uv run pack" in release
+    assert "gh release create" in release
+    assert "gitea-release-action" in release
 
 
 def test_generated_node_asset_is_ignored_and_untracked():

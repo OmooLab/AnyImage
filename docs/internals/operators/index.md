@@ -13,4 +13,4 @@
 | `operators/remove_background.py` | [Remove Background](remove-background.md) |
 | `operators/upscale.py` | [Upscale](upscale.md) |
 
-单文件功能按业务命名；复杂功能包在 `operators.py` 定义 Operator 和入口协调逻辑，交互式工具同时定义 WorkSpaceTool，其余模块承载具体实现。包的 `__init__.py` 汇总导出与 `CLASSES` 注册清单，类型在 `operators/__init__.py` 和扩展 `__init__.py` 汇总注册。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。
+单文件功能按业务命名；复杂功能包在 `operators.py` 定义 Operator 和入口协调逻辑，其余模块承载具体实现。包的 `__init__.py` 汇总导出与 `CLASSES` 注册清单，类型在 `operators/__init__.py` 和扩展 `__init__.py` 汇总注册。交互式工具的 WorkspaceTool 统一定义和注册于 `tools.py`。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。

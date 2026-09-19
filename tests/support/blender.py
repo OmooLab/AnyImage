@@ -113,6 +113,8 @@ class BlenderTestCase(unittest.TestCase):
         sys.path.insert(0, str(SOURCE_ROOT))
         cls.paths_before_import = tuple(sys.path)
         cls.anyimage = importlib.import_module("anyimage")
+        cls.tools = importlib.import_module("anyimage.tools")
+        cls.keymaps = importlib.import_module("anyimage.keymaps")
         cls.runtime = importlib.import_module("anyimage.runtime")
         cls.ai_setup = importlib.import_module("anyimage.operators.ai_setup")
         cls.ai = importlib.import_module("anyimage.common.ai")

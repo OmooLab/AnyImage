@@ -1,6 +1,6 @@
 # Mask Alpha 编辑
 
-`operators/mask_tool.py` 定义 `EditImageAlpha` 和 `MaskTool`，使用 `common/viewport.py` 的 `ImageGesture` 管理 Lasso、Brush 与 Polyline。
+`operators/mask_tool.py` 定义 `EditImageAlpha`，使用 `common/viewport.py` 的 `ImageGesture` 管理 Lasso、Brush 与 Polyline；`tools.py` 定义对应的 `MaskTool`。
 
 ```mermaid
 flowchart TD

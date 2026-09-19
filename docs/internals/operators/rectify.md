@@ -1,6 +1,6 @@
 # Rectify 透视校正
 
-`operators/rectify_tool/operators.py` 定义 `RectifyImagePerspective` 与 `RectifyTool`，将图片内的四角区域校正为矩形。`geometry.py` 负责四角验证与像素校正，`preview.py` 负责预览图、Overlay 和宽高比控制，`__init__.py` 导出类型及注册清单。
+`operators/rectify_tool/operators.py` 定义 `RectifyImagePerspective`，将图片内的四角区域校正为矩形。`geometry.py` 负责四角验证与像素校正，`preview.py` 负责预览图、Overlay 和宽高比控制，`__init__.py` 导出 Operator 及注册清单；`tools.py` 定义对应的 `RectifyTool`。
 
 ```mermaid
 flowchart TD

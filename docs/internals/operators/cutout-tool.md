@@ -1,6 +1,6 @@
 # Cutout
 
-Cutout 在静态 Image Empty 上圈定 Selection，按轮廓创建 Flat、Solid、Depth Symmetry 或 Depth Solid。入口位于 `operators/cutout_tool/operators.py`，Shape 菜单位于 `interaction.py`，预设标识与节点组对应关系位于 `shape.py`。
+Cutout 在静态 Image Empty 上圈定 Selection，按轮廓创建 Flat、Solid、Depth Symmetry 或 Depth Solid。Operator 入口位于 `operators/cutout_tool/operators.py`，WorkspaceTool 声明位于 `tools.py`，Shape 菜单位于 `interaction.py`，预设标识与节点组对应关系位于 `shape.py`。
 
 ```mermaid
 flowchart TD

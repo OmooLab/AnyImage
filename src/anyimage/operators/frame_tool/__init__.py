@@ -1,7 +1,7 @@
-"""Frame conversion operators and workspace tool."""
+"""Frame conversion operators."""
 
-from .operators import FrameImages, FrameTool
+from .operators import FrameImages
 
 CLASSES = (FrameImages,)
 
-__all__ = ("CLASSES", "FrameImages", "FrameTool")
+__all__ = ("CLASSES", "FrameImages")

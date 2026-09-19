@@ -18,7 +18,6 @@ from ...common.viewport import (
     draw_dashed_line,
     draw_polygon_fill,
     drawing_in_region,
-    image_edit_drag_keymap,
     image_edit_poll,
     rectangle_screen_path,
     report_image_edit_exception,
@@ -251,14 +250,3 @@ class FrameImages(bpy.types.Operator):
             self._finish(context)
             return {"FINISHED"}
         return {"PASS_THROUGH"}
-
-
-class FrameTool(bpy.types.WorkSpaceTool):
-    bl_space_type = "VIEW_3D"
-    bl_context_mode = "OBJECT"
-    bl_idname = FRAME_TOOL_ID
-    bl_label = "Frame"
-    bl_description = "Draw a rectangle to combine selected images into one image from the current view."
-    bl_icon = "ops.sculpt.border_mask"
-    bl_operator = FrameImages.bl_idname
-    bl_keymap = image_edit_drag_keymap(FrameImages.bl_idname)

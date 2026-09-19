@@ -12,7 +12,6 @@ from ...common.viewport import (
     draw_polygon_fill,
     drawing_in_region,
     image_edit_poll,
-    image_edit_point_keymap,
     report_image_edit_exception,
     resolve_image_edit_click,
     screen_path_to_image_pixels,
@@ -399,14 +398,3 @@ class RectifyImagePerspective(bpy.types.Operator):
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
         return {"FINISHED"}
-
-
-class RectifyTool(bpy.types.WorkSpaceTool):
-    bl_space_type = "VIEW_3D"
-    bl_context_mode = "OBJECT"
-    bl_idname = RECTIFY_TOOL_ID
-    bl_label = "Rectify"
-    bl_description = "Select four corners of an image area to correct its perspective into a rectangle."
-    bl_icon = "ops.sculpt.line_project"
-    bl_operator = RectifyImagePerspective.bl_idname
-    bl_keymap = image_edit_point_keymap(RectifyImagePerspective.bl_idname)

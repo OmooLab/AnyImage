@@ -1,7 +1,7 @@
-"""Perspective correction operators and workspace tool."""
+"""Perspective correction operators."""
 
-from .operators import RectifyImagePerspective, RectifyTool
+from .operators import RectifyImagePerspective
 
 CLASSES = (RectifyImagePerspective,)
 
-__all__ = ("CLASSES", "RectifyImagePerspective", "RectifyTool")
+__all__ = ("CLASSES", "RectifyImagePerspective")

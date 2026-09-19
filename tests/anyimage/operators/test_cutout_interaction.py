@@ -167,7 +167,9 @@ def test_cutout_lasso_submission_passes_only_the_selected_path(monkeypatch):
 
 
 def test_cutout_tool_starts_on_press_and_keeps_shift_selection():
-    keymap = cutout_main.CutoutTool.bl_keymap
+    from anyimage.tools import CutoutTool
+
+    keymap = CutoutTool.bl_keymap
     assert keymap[0][1]["value"] == "PRESS"
     assert len(keymap) == 2
     assert keymap[1][0] == "view3d.select"

@@ -27,8 +27,6 @@ from ...server.media.resolution import (
     MIN_MAX_AI_INPUT_SIZE,
 )
 from ...common.ai import (
-    draw_ai_property,
-    draw_ai_setup,
     invoke_ai_setup_if_needed,
     moge2_parameters,
     production_device,
@@ -52,7 +50,6 @@ from ...common.color_image import (
 )
 from ...common.viewport import (
     ImageGesture,
-    image_edit_point_keymap,
     report_image_edit_exception,
 )
 from ...common.selection import (
@@ -463,25 +460,3 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
             gesture=self.gesture,
         )
         return {"FINISHED"}
-
-
-class CutoutTool(bpy.types.WorkSpaceTool):
-    bl_space_type = "VIEW_3D"
-    bl_context_mode = "OBJECT"
-    bl_idname = "anyimage.cutout_lasso"
-    bl_label = "Cutout"
-    bl_description = "Select an Image Empty area with a lasso or polyline and choose a mesh shape"
-    bl_icon = "ops.mesh.primitive_sphere_add_gizmo"
-    bl_operator = SelectCutoutSelection.bl_idname
-    bl_keymap = image_edit_point_keymap(
-        SelectCutoutSelection.bl_idname,
-    )
-
-    def draw_settings(context, layout, _tool):
-        settings = context.scene.anyimage_settings
-        layout.prop(settings, "cutout_gesture")
-        layout.prop(settings, "cutout_edge_length")
-        layout.prop(settings, "cutout_fine_outline")
-        layout.prop(settings, "cutout_alpha_threshold")
-        status = draw_ai_setup(layout)
-        draw_ai_property(layout, settings, "cutout_generate_normal", status)

@@ -61,15 +61,15 @@ class AddonRegistrationTest(BlenderTestCase):
             self.rectify.RectifyImagePerspective,
             self.anyimage.CLASSES,
         )
-        mask_tool = self.edit_mask.MaskTool
+        mask_tool = self.tools.MaskTool
         self.assertNotIn(mask_tool, self.anyimage.CLASSES)
         self.assertEqual(mask_tool.bl_operator, operator.bl_idname)
         self.assertEqual(operator.bl_options, {"UNDO"})
-        frame_tool = self.image_frame.FrameTool
+        frame_tool = self.tools.FrameTool
         self.assertNotIn(frame_tool, self.anyimage.CLASSES)
         self.assertEqual(frame_tool.bl_operator, frame_operator.bl_idname)
         self.assertEqual(frame_operator.bl_options, {"UNDO"})
-        rectify_tool = self.rectify.RectifyTool
+        rectify_tool = self.tools.RectifyTool
         self.assertNotIn(rectify_tool, self.anyimage.CLASSES)
         self.assertEqual(
             rectify_tool.bl_operator,
@@ -77,7 +77,7 @@ class AddonRegistrationTest(BlenderTestCase):
         )
 
     def test_mask_tool_settings_follow_the_active_gesture(self):
-        mask_tool = self.edit_mask.MaskTool
+        mask_tool = self.tools.MaskTool
         settings_value = SimpleNamespace(
             mask_gesture="LASSO",
             mask_mode="SET",
@@ -107,11 +107,11 @@ class AddonRegistrationTest(BlenderTestCase):
 
     def test_registration_and_reverse_cleanup_preserve_other_addons(self):
         self.assertIn(
-            self.anyimage.clipboard_image.PasteClipboardImage,
+            self.keymaps.PasteClipboardImage,
             self.anyimage.CLASSES,
         )
         self.assertIn(
-            self.anyimage.clipboard_image.TrackNativeCopy,
+            self.keymaps.TrackNativeCopy,
             self.anyimage.CLASSES,
         )
         existing_context_draw = object()
@@ -129,28 +129,28 @@ class AddonRegistrationTest(BlenderTestCase):
             self.registered_tools,
             [
                 (
-                    self.image_frame.FrameTool,
+                    self.tools.FrameTool,
                     {
                         "group": True,
                         "separator": True,
                     },
                 ),
                 (
-                    self.edit_mask.MaskTool,
+                    self.tools.MaskTool,
                     {
-                        "after": {self.image_frame.FrameTool.bl_idname},
+                        "after": {self.tools.FrameTool.bl_idname},
                         "separator": False,
                     },
                 ),
                 (
-                    self.rectify.RectifyTool,
+                    self.tools.RectifyTool,
                     {
-                        "after": {self.edit_mask.MaskTool.bl_idname},
+                        "after": {self.tools.MaskTool.bl_idname},
                         "separator": False,
                     },
                 ),
                 (
-                    self.anyimage.CutoutTool,
+                    self.tools.CutoutTool,
                     {},
                 ),
             ],

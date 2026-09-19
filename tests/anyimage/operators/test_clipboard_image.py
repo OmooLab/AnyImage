@@ -56,14 +56,13 @@ class ClipboardImageTest(BlenderTestCase):
                 addon=SimpleNamespace(keymaps=keymaps),
             ),
         )
-        clipboard_image = self.clipboard_image
         with patch.object(
             self.fake_bpy.context,
             "window_manager",
             window_manager,
             create=True,
         ):
-            clipboard_image.register_keymaps()
+            self.keymaps.register()
             items = [
                 item
                 for keymap in keymaps.items
@@ -80,7 +79,7 @@ class ClipboardImageTest(BlenderTestCase):
             )
             modifier = "oskey" if sys.platform == "darwin" else "ctrl"
             self.assertTrue(all(getattr(item, modifier) for item in items))
-            clipboard_image.unregister_keymaps()
+            self.keymaps.unregister()
 
         self.assertTrue(
             all(not keymap.keymap_items.items for keymap in keymaps.items)

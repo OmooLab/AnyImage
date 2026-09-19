@@ -15,7 +15,6 @@ from ..common.selection import (
 from ..common.viewport import (
     brush_footprint_polygons,
     ImageGesture,
-    image_edit_point_keymap,
     report_image_edit_exception,
     screen_path_to_image_pixels,
 )
@@ -150,22 +149,3 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
         return {"FINISHED"}
-
-
-class MaskTool(bpy.types.WorkSpaceTool):
-    bl_space_type = "VIEW_3D"
-    bl_context_mode = "OBJECT"
-    bl_idname = MASK_TOOL_ID
-    bl_label = "Mask"
-    bl_description = "Hide or reveal image areas with a lasso, brush, or polyline."
-    bl_icon = "ops.sculpt.lasso_mask"
-    bl_operator = EditImageAlpha.bl_idname
-    bl_cursor = "PAINT_CROSS"
-    bl_keymap = image_edit_point_keymap(EditImageAlpha.bl_idname)
-
-    def draw_settings(context, layout, _tool):
-        settings = context.scene.anyimage_settings
-        layout.prop(settings, "mask_gesture")
-        layout.prop(settings, "mask_mode", expand=True, icon_only=True)
-        if settings.mask_gesture == "BRUSH":
-            layout.prop(settings, "mask_radius")

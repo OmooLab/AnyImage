@@ -1,5 +1,3 @@
-import sys
-
 import bpy
 
 from .actions import (
@@ -19,7 +17,6 @@ from .clipboard import (
 )
 
 
-_keymap_items = []
 _native_copy_token = None
 
 
@@ -148,55 +145,7 @@ class PasteClipboardImage(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def unregister_keymaps():
-    global _native_copy_token
-    for keymap, keymap_item in _keymap_items:
-        keymap.keymap_items.remove(keymap_item)
-    _keymap_items.clear()
-    _native_copy_token = None
-
-
 def _should_defer_to_native_paste():
     if _native_copy_token is None:
         return False
     return clipboard_change_token() == _native_copy_token
-
-
-def register_keymaps():
-    if not clipboard_image_supported():
-        return
-
-    window_manager = getattr(bpy.context, "window_manager", None)
-    keyconfigs = getattr(window_manager, "keyconfigs", None)
-    addon_keyconfig = getattr(keyconfigs, "addon", None)
-    if addon_keyconfig is None:
-        return
-
-    keymap_definitions = (
-        ("3D View", "VIEW_3D"),
-        ("Node Editor", "NODE_EDITOR"),
-    )
-    for keymap_name, space_type in keymap_definitions:
-        keymap = addon_keyconfig.keymaps.new(
-            name=keymap_name,
-            space_type=space_type,
-        )
-        modifiers = (
-            {"oskey": True}
-            if sys.platform == "darwin"
-            else {"ctrl": True}
-        )
-        keymap_item = keymap.keymap_items.new(
-            PasteClipboardImage.bl_idname,
-            "V",
-            "PRESS",
-            **modifiers,
-        )
-        _keymap_items.append((keymap, keymap_item))
-        copy_keymap_item = keymap.keymap_items.new(
-            TrackNativeCopy.bl_idname,
-            "C",
-            "PRESS",
-            **modifiers,
-        )
-        _keymap_items.append((keymap, copy_keymap_item))

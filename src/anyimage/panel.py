@@ -1,5 +1,6 @@
 import bpy
 
+from .operators.ai_setup import ClearModels, SetupAIEnvironment
 from .runtime import runtime
 
 class ServerPanel(bpy.types.Panel):
@@ -21,7 +22,7 @@ class ServerPanel(bpy.types.Panel):
             setup_row = layout.row()
             setup_row.enabled = not busy
             setup_row.operator(
-                "anyimage.setup_ai_environment",
+                SetupAIEnvironment.bl_idname,
                 text="Set Up AI Server…",
                 icon="IMPORT",
             )
@@ -101,7 +102,7 @@ class ServerPanel(bpy.types.Panel):
             clear = cached_row.row(align=True)
             clear.enabled = state == "READY"
             clear.operator(
-                "anyimage.clear_models",
+                ClearModels.bl_idname,
                 text="",
                 icon="TRASH",
             )

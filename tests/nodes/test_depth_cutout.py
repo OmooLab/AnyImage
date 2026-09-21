@@ -1,9 +1,118 @@
 """Behavior checks for the Depth Cutout balloon and shell shapes."""
+from collections import Counter
+
 import bpy
 import numpy as np
 import pytest
 
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
+
+
+def assert_no_boundary_ear_triangles(faces):
+    edges = Counter(
+        tuple(sorted((a, b)))
+        for face in faces
+        for a, b in zip(face, (*face[1:], face[0]))
+    )
+    boundary = {edge for edge, count in edges.items() if count == 1}
+    assert not [
+        face for face in faces
+        if len(face) == 3
+        and sum(
+            tuple(sorted((a, b))) in boundary
+            for a, b in zip(face, (*face[1:], face[0]))
+        ) >= 2
+    ]
+
+
+def test_depth_limit_keeps_threshold_points_and_deletes_points_beyond_it():
+    from tests.support.depth_surface import surface, evaluated
+
+    obj, set_value = surface(step=6.0, resolution=6)
+    set_value("Reference Depth", 1.0)
+    set_value("Depth Limit", 6.0)
+    complete, complete_faces = evaluated(obj)
+    assert complete[:, 1].max() == pytest.approx(6.0)
+
+    set_value("Depth Limit", 5.9)
+    limited, limited_faces = evaluated(obj)
+    assert limited[:, 1].max() <= 5.9
+    assert len(limited) < len(complete)
+    assert len(limited_faces) < len(complete_faces)
+    assert_no_boundary_ear_triangles(limited_faces)
+
+
+def test_depth_limit_uses_reference_and_depth_scale_projected_position():
+    from tests.support.depth_surface import surface, evaluated
+
+    obj, set_value = surface(step=6.0, resolution=6)
+    set_value("Depth Limit", 2.0)
+    limited, _ = evaluated(obj)
+
+    set_value("Reference Depth", 6.0)
+    shifted, _ = evaluated(obj)
+    assert len(shifted) > len(limited)
+    assert shifted[:, 1].max() == pytest.approx(1.0)
+
+    set_value("Reference Depth", 4.0)
+    set_value("Depth Scale", 0.5)
+    scaled, _ = evaluated(obj)
+    assert len(scaled) == len(shifted)
+    assert scaled[:, 1].max() == pytest.approx(1.5)
+
+
+@pytest.mark.parametrize("thickness", (0.0, 0.2))
+def test_depth_limit_removes_far_surface_before_shell_thickness(thickness):
+    from tests.support.depth_surface import assert_closed, surface, evaluated
+
+    obj, set_value = surface(step=6.0, resolution=8)
+    set_value("Depth Limit", 2.0)
+    set_value("Thickness", thickness)
+    points, faces = evaluated(obj)
+
+    assert len(faces) > 0
+    assert points[:, 0].max() <= 1.0 + 1e-6
+    if thickness:
+        assert_closed(faces)
+
+
+def test_depth_limit_tapers_balloon_profile_and_closes_the_cut_edge():
+    from tests.support.depth_surface import evaluated, surface
+
+    obj, set_value = surface(step=6.0, resolution=8)
+    profile = obj.data.attributes.new("o_balloon", "FLOAT", "POINT")
+    profile.data.foreach_set("value", np.ones(len(obj.data.vertices), dtype=np.float32))
+    set_value("Mode", 0)
+    set_value("Depth Limit", 2.0)
+    set_value("Thickness", 0.0)
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = result.to_mesh()
+    try:
+        values = np.asarray([item.value for item in mesh.attributes["o_balloon"].data])
+        uv = np.zeros((len(mesh.vertices), 2), dtype=np.float32)
+        for loop in mesh.loops:
+            uv[loop.vertex_index] = mesh.uv_layers["UVMap"].data[loop.index].uv
+        cut = (
+            np.isclose(uv[:, 0], uv[:, 0].max(), atol=1e-6)
+            & (uv[:, 1] > 1e-3)
+            & (uv[:, 1] < 1.0 - 1e-3)
+        )
+        assert cut.any()
+        assert np.allclose(values[cut], 0.0, atol=1e-6)
+    finally:
+        result.to_mesh_clear()
+
+    modifier = obj.modifiers[0]
+    set_modifier_input(
+        modifier,
+        modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE"),
+        0.5,
+    )
+    obj.update_tag(refresh={"DATA"})
+    bpy.context.view_layer.update()
+    points, faces = evaluated(obj)
+    assert len(faces) > 0
+    assert np.isfinite(points).all()
 
 
 @pytest.mark.parametrize("mode", [0, 1])

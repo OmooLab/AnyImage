@@ -182,6 +182,13 @@ def test_depth_surface_object_evaluates(gesture):
     assert modifier_value(modifier, reference_id) == pytest.approx(
         modifier_value(modifier, scale_id)
     )
+    assert modifier_value(
+        modifier,
+        object_data.modifier_input_identifier(modifier.node_group, "Depth Limit"),
+    ) == pytest.approx(
+        (depth_data.DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
+        * modifier_value(modifier, scale_id)
+    )
     object_data.set_modifier_input(
         modifier,
         object_data.modifier_input_identifier(modifier.node_group, "Boundary Smooth"),
@@ -324,7 +331,9 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert value(modifier, "Mode") == (1 if gesture == "POLYLINE" else 0)
     for subtype in ("NONE", "DISTANCE"):
         assert value(modifier, "Thickness", subtype) == 0
-    initialized = {"Mode", "Depth Scale", "Uniform Scale", "Reference Depth", "Depth Image"}
+    initialized = {
+        "Mode", "Depth Scale", "Uniform Scale", "Reference Depth", "Depth Limit", "Depth Image",
+    }
     for socket in modifier.node_group.interface.items_tree:
         if (socket.item_type == "SOCKET" and socket.in_out == "INPUT"
                 and socket.name not in initialized
@@ -333,6 +342,21 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert isinstance(value(modifier, "Depth Image"), bpy.types.Image)
     assert value(modifier, "Uniform Scale") > 0
     assert value(modifier, "Reference Depth") > 0
+    reference_mask = cutout_geometry.build_reference_mask(
+        selection_values,
+        depth_image.size,
+    )
+    model_reference = value(modifier, "Reference Depth") / value(modifier, "Uniform Scale")
+    expected_limit = max(
+        (
+            depth_data.DEPTH_LIMIT_MEDIAN_FACTOR
+            * depth_data.median_depth(depth_image, reference_mask)
+            - model_reference
+        )
+        * value(modifier, "Uniform Scale"),
+        0.0,
+    )
+    assert value(modifier, "Depth Limit") == pytest.approx(expected_limit)
     assert not np.allclose(value(symmetry, "Direction"), (0, 1, 0))
     crop_center = Vector(((local_bounds[0] + local_bounds[1]) / 2,
                           (local_bounds[2] + local_bounds[3]) / 2, 0))

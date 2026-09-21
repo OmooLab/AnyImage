@@ -19,7 +19,7 @@ def test_saved_parameter_descriptions_match_definitions():
         "O Image Depth Plane": {"Subdivide", "Thickness", "Depth Split", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Image Relief Plane": {"Subdivide", "Thickness", "Depth Direction", "Depth Offset"},
         "O Image Cutout": {"Thickness"},
-        "O Image Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Edge Turn", "Front Inflation"},
+        "O Image Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Edge Turn", "Front Inflation", "Depth Limit"},
         "O Image Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
         "O Image Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Image Layer": {"Alpha Fix", "Normal Scale", "Bump Scale", "Object Space"},
@@ -31,10 +31,18 @@ def test_saved_parameter_descriptions_match_definitions():
         for group in groups:
             if group.name not in parameters:
                 continue
-            sockets = [
+            inputs = [
                 item for item in group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"
-                and item.name in parameters[group.name]
+            ]
+            if group.name == "O Image Depth Cutout":
+                split = next(item for item in inputs if item.name == "Depth Split")
+                limit = next(item for item in inputs if item.name == "Depth Limit")
+                assert not limit.parent.name
+                assert limit.min_value == -1.0
+                assert inputs.index(limit) == inputs.index(split) + 1
+            sockets = [
+                item for item in inputs if item.name in parameters[group.name]
             ]
             assert {item.name for item in sockets} == parameters[group.name]
             assert all(item.description for item in sockets), group.name
@@ -83,6 +91,7 @@ def test_geometry_attribute_contract_includes_nested_groups():
         "UVMap": ("FLOAT2", "CORNER"),
         "o_balloon": ("FLOAT", "POINT"),
         "_o_depth_cut": ("BOOLEAN", "CORNER"),
+        "_o_depth_limit_boundary": ("BOOLEAN", "POINT"),
             "_o_front_normal": ("FLOAT_VECTOR", "POINT"),
         "_o_symmetry_weld": ("BOOLEAN", "FACE"),
         "o_depth_rotation": ("FLOAT_VECTOR", "FACE"),

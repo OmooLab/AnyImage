@@ -9,6 +9,7 @@ CUTOUT_SHAPE_BUTTONS = (
     ("DEPTH_SYMMETRY", "META_BALL"),
     ("DEPTH_SOLID", "SURFACE_NCURVE"),
 )
+CUTOUT_SHAPE_OPERATOR_ID = "anyimage.cutout_selection_to_shape"
 
 
 def _pie_button(
@@ -25,7 +26,7 @@ def _pie_button(
     gesture,
 ):
     operator = pie.operator(
-        "anyimage.cutout_selection_to_shape",
+        CUTOUT_SHAPE_OPERATOR_ID,
         text=label,
         icon=icon,
     )

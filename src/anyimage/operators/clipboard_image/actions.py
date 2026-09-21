@@ -57,9 +57,12 @@ def target_for_context(context):
     area = getattr(context, "area", None)
     area_type = getattr(area, "type", None)
     if area_type == "VIEW_3D":
-        if getattr(context, "mode", "OBJECT") in BRUSH_TEXTURE_MODES:
+        mode = getattr(context, "mode", "OBJECT")
+        if mode in BRUSH_TEXTURE_MODES:
             return "TOOL_TEXTURE"
-        return "PLANE"
+        if mode == "OBJECT":
+            return "PLANE"
+        return None
     if area_type != "NODE_EDITOR":
         return None
 

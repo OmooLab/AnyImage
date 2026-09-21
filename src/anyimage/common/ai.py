@@ -16,10 +16,12 @@ from ..runtime import runtime
 
 
 def draw_ai_setup(layout):
+    from ..operators.ai_setup import SetupAIEnvironment
+
     status = ai_status()
     if not status["ready"]:
         layout.operator(
-            "anyimage.setup_ai_environment",
+            SetupAIEnvironment.bl_idname,
             text=ai_setup_label(status),
             icon="IMPORT",
         )

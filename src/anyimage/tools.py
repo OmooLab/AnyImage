@@ -72,10 +72,10 @@ class CutoutTool(bpy.types.WorkSpaceTool):
 
 
 TOOLS = (
-    (FrameTool, {"separator": True, "group": True}),
+    (CutoutTool, {"separator": True, "group": True}),
+    (FrameTool, {"after": {CutoutTool.bl_idname}, "separator": False}),
     (MaskTool, {"after": {FrameTool.bl_idname}, "separator": False}),
     (RectifyTool, {"after": {MaskTool.bl_idname}, "separator": False}),
-    (CutoutTool, {}),
 )
 
 

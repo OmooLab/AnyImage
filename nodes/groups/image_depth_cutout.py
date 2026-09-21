@@ -8,7 +8,10 @@ from ..common.nodes import (
 )
 from ..common.boundary_smoothing import smooth_cut_boundary
 from ..common.cutout import _position_field, _shade_output
-from ..common.depth_surface import _math, project_depth_surface, build_surface_camera, split_depth_surface, sample_face_camera
+from ..common.depth_surface import (
+    _math, build_surface_camera, limit_depth_surface, project_depth_surface,
+    sample_face_camera, split_depth_surface,
+)
 from ..common.smoothing import edge_boundary_field
 from ..common.cutout_boundary import remove_boundary_triangles, taper_split_profile
 
@@ -208,13 +211,31 @@ def _build_depth_surface(group, geometry, controls):
         group, geometry, sample_face_camera(group, image), split, controls.outputs["Reference Depth"],
         controls.outputs["Depth Scale"], triangles=True,
     )
+    geometry, cut_vertex, previous_boundary, has_limited = limit_depth_surface(
+        group, geometry, corner_camera, cut_vertex,
+        scale, controls.outputs["Reference Depth"], controls.outputs["Depth Scale"],
+        controls.outputs["Depth Limit"],
+    )
+    # Split and Depth Limit can both leave triangular ears whose three vertices
+    # lie on the open boundary. Clean the combined result once.
     geometry = remove_boundary_triangles(group, geometry)
     boundary = edge_boundary_field(group.nodes, group.links)
     rim = evaluate_field(group, boundary, "FLOAT", "POINT")
-    cut = evaluate_field(
-        group, boolean_node(group, "AND", boundary, cut_vertex), "FLOAT", "POINT",
+    limit_boundary = boolean_node(
+        group, "AND", has_limited,
+        boolean_node(
+            group, "AND", boundary, boolean_node(group, "NOT", previous_boundary),
+        ),
     )
-    # Only the Depth Split cuts taper the profile; the outline keeps its thickness.
+    cut = evaluate_field(
+        group,
+        boolean_node(
+            group, "AND", boundary,
+            boolean_node(group, "OR", cut_vertex, limit_boundary),
+        ),
+        "FLOAT", "POINT",
+    )
+    # Depth Split and Depth Limit cuts taper the profile; the original outline keeps its thickness.
     geometry = taper_split_profile(group, geometry, cut)
     camera = build_surface_camera(
         group, _position_field(group, image), corner_camera, cut_vertex, split,
@@ -222,7 +243,7 @@ def _build_depth_surface(group, geometry, controls):
     projection = project_depth_surface(
         group, geometry, camera, scale, controls.outputs["Reference Depth"], controls.outputs["Depth Scale"],
     )
-    projection = smooth_cut_boundary(group, projection, cut_vertex, boundary=rim)
+    projection = smooth_cut_boundary(group, projection, cut, boundary=rim)
     # Clamped depth pixels can collapse adjacent outline samples after projection.
     edge = group.nodes.new("GeometryNodeInputMeshEdgeVertices")
     length = group.nodes.new("ShaderNodeVectorMath")
@@ -308,6 +329,7 @@ def build_image_depth_cutout_group():
     float_input(group, 'Shell Thickness', 0.0, maximum=1.0, subtype='DISTANCE').description = 'Add thickness behind the original surface while keeping the front surface in place.'
     float_input(group, 'Depth Scale', 1.0, maximum=2.0)
     float_input(group, 'Depth Split', 0.1, maximum=1, subtype='FACTOR').description = 'Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.'
+    float_input(group, 'Depth Limit', 1.0, minimum=-1.0, subtype='DISTANCE').description = 'Remove faces whose center lies beyond this distance behind the reference plane.'
     options = group.interface.new_panel(name='Options', default_closed=True)
     boundary_smooth = interface_socket(group, 'Boundary Smooth', 'INPUT', 'NodeSocketInt', options)
     boundary_smooth.default_value, boundary_smooth.min_value, boundary_smooth.max_value = 4, 0, 16

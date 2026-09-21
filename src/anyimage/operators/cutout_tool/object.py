@@ -6,8 +6,10 @@ import bpy
 
 from ...common.coordinate import canonical_direction_to_symmetry_legacy
 from ...common.depth import (
+    DEPTH_LIMIT_MEDIAN_FACTOR,
     depth_uniform_scale,
     fit_symmetry_depth_direction,
+    median_depth,
     reference_depth,
 )
 from ...common.material import create_image_material
@@ -115,15 +117,15 @@ def create_shape_object(
             scene=context.scene,
         )
         depth_reference = None
+        depth_limit = None
         uniform_scale = None
         depth_direction = None
         if shape in DEPTH_CUTOUT_SHAPES:
             if depth_image is None or depth_metadata is None:
                 raise ValueError("Depth Shape requires a Depth texture and metadata")
-            model_reference = reference_depth(
-                depth_image,
-                build_reference_mask(content_values, depth_image.size),
-            )
+            reference_mask = build_reference_mask(content_values, depth_image.size)
+            model_reference = reference_depth(depth_image, reference_mask)
+            model_median = median_depth(depth_image, reference_mask)
             uniform_scale = depth_uniform_scale(
                 source_object,
                 depth_metadata,
@@ -131,6 +133,11 @@ def create_shape_object(
                 bounds,
             )
             depth_reference = model_reference * uniform_scale
+            depth_limit = max(
+                (DEPTH_LIMIT_MEDIAN_FACTOR * model_median - model_reference)
+                * uniform_scale,
+                0.0,
+            )
             if shape == "DEPTH_SYMMETRY":
                 depth_direction = canonical_direction_to_symmetry_legacy(
                     fit_symmetry_depth_direction(
@@ -208,6 +215,7 @@ def create_shape_object(
                 ("Depth Scale", 1.0),
                 ("Uniform Scale", uniform_scale),
                 ("Reference Depth", depth_reference),
+                ("Depth Limit", depth_limit),
                 ("Depth Image", depth_image),
             ):
                 set_modifier_input(

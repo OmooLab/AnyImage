@@ -52,6 +52,28 @@ def edge_band(faces, seeds, rings=2):
     return selected
 
 
+def vertex_uv(obj):
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = result.to_mesh()
+    try:
+        values = np.zeros((len(mesh.vertices), 2))
+        for loop in mesh.loops:
+            values[loop.vertex_index] = mesh.uv_layers["UVMap"].data[loop.index].uv
+        return values
+    finally:
+        result.to_mesh_clear()
+
+
+def corner_mask(faces, vertices):
+    return np.isin(np.concatenate(faces), np.fromiter(vertices, dtype=np.int64))
+
+
+def uv_delta(after, before):
+    delta = after - before
+    delta[:, 0] -= np.round(delta[:, 0])
+    return delta
+
+
 def test_cutout_boundary_smooth_defaults_to_four():
     obj, _ = surface()
     socket = next(
@@ -65,6 +87,7 @@ def test_cutout_boundary_smooth_defaults_to_four():
 def test_smoothing_reduces_stairs_without_leaving_two_ring_band():
     obj, set_value = diagonal_surface(triangles=True)
     original, faces = evaluated(obj)
+    original_uv = vertex_uv(obj)
     boundary = boundary_neighbors(faces)
     outer = np.isclose(original[:, 0], 0) | np.isclose(original[:, 0], 2)
     outer |= np.isclose(original[:, 2], 0) | np.isclose(original[:, 2], 1)
@@ -74,9 +97,16 @@ def test_smoothing_reduces_stairs_without_leaving_two_ring_band():
     assert movable.any() and (~movable).any()
     set_value("Boundary Smooth", 16)
     smoothed, result_faces = evaluated(obj)
+    smoothed_uv = vertex_uv(obj)
     assert result_faces == faces
     np.testing.assert_array_equal(smoothed[~movable], original[~movable])
+    np.testing.assert_array_equal(smoothed_uv[~movable], original_uv[~movable])
     assert np.max(np.linalg.norm(smoothed - original, axis=1)) > 0.005
+    uv_motion = np.linalg.norm(smoothed_uv[movable] - original_uv[movable], axis=1)
+    maximum_uv_motion = np.max(uv_motion)
+    assert 1e-4 < maximum_uv_motion < 0.25, (
+        maximum_uv_motion, np.max(np.abs(smoothed_uv[movable] - original_uv[movable]), axis=0)
+    )
     nearby = [i for i in band if i not in boundary and not outer[i]]
     assert np.max(np.linalg.norm(smoothed[nearby] - original[nearby], axis=1)) > 1e-4
     before, after = [], []
@@ -89,6 +119,7 @@ def test_smoothing_reduces_stairs_without_leaving_two_ring_band():
     assert sum(after) < 0.8 * sum(before)
     set_value("Boundary Smooth", 0)
     np.testing.assert_array_equal(evaluated(obj)[0], original)
+    np.testing.assert_array_equal(vertex_uv(obj), original_uv)
 
 
 def test_smoothing_without_split_moves_outline_only_within_boundary_band():
@@ -107,7 +138,7 @@ def test_smoothing_without_split_moves_outline_only_within_boundary_band():
     np.testing.assert_array_equal(evaluated(obj)[0], original)
 
 
-def test_panorama_smoothing_preserves_interior_and_uvs():
+def test_panorama_smoothing_relaxes_boundary_uvs_only():
     from tests.nodes.test_image_depth_panorama import panorama, evaluated as panorama_mesh
 
     yy, xx = np.mgrid[:64, :128]
@@ -123,11 +154,13 @@ def test_panorama_smoothing_preserves_interior_and_uvs():
     assert np.isfinite(result).all()
     assert result_faces == faces
     np.testing.assert_array_equal(result[interior], original[interior])
-    np.testing.assert_array_equal(result_uv, uv)
+    band_corners = corner_mask(faces, band)
+    np.testing.assert_allclose(uv_delta(result_uv[~band_corners], uv[~band_corners]), 0, atol=1e-7)
+    assert np.max(np.linalg.norm(uv_delta(result_uv[band_corners], uv[band_corners]), axis=1)) > 1e-4
     assert np.max(np.linalg.norm(result-original, axis=1)) > 1e-4
 
 
-def test_plane_edge_smoothing_preserves_uvs_and_closes_thickness():
+def test_plane_edge_smoothing_relaxes_uvs_and_closes_thickness():
     from tests.support.planes import create_surface, evaluated as plane_mesh
 
     obj, set_value, _, inputs, image = create_surface("DEPTH")
@@ -145,7 +178,16 @@ def test_plane_edge_smoothing_preserves_uvs_and_closes_thickness():
     set_value("Boundary Smooth", 4)
     result, result_faces, result_uv, *_ = plane_mesh(obj)
     assert result_faces == faces
-    np.testing.assert_array_equal(result_uv, uv)
+    boundary = boundary_neighbors(faces)
+    band = edge_band(faces, boundary)
+    band_corners = corner_mask(faces, band)
+    np.testing.assert_array_equal(result_uv[~band_corners], uv[~band_corners])
+    uv_motion = np.linalg.norm(result_uv[band_corners] - uv[band_corners], axis=1)
+    maximum_uv_motion = np.max(uv_motion)
+    assert 1e-4 < maximum_uv_motion < 0.25, (
+        maximum_uv_motion,
+        np.max(np.abs(result_uv[band_corners] - uv[band_corners]), axis=0),
+    )
     assert np.max(np.linalg.norm(result-original, axis=1)) > 1e-4
     set_value("Thickness", 0.03)
     assert_closed(plane_mesh(obj)[1])
@@ -175,7 +217,9 @@ def test_validity_cut_smoothing_preserves_original_outline_and_interior():
     set_value("Boundary Smooth", 5)
     after, result_faces, result_uv, *_ = plane_mesh(obj)
     assert result_faces == faces
-    np.testing.assert_array_equal(result_uv, uv)
+    fixed_corners = corner_mask(faces, np.flatnonzero(fixed))
+    np.testing.assert_array_equal(result_uv[fixed_corners], uv[fixed_corners])
+    assert np.max(np.linalg.norm(result_uv[~fixed_corners] - uv[~fixed_corners], axis=1)) > 1e-4
     np.testing.assert_array_equal(after[fixed], before[fixed])
     assert np.max(np.linalg.norm(after-before, axis=1)) > 1e-4
     before_bends, after_bends = [], []
@@ -204,6 +248,8 @@ def test_panorama_validity_cut_smoothing_stays_in_two_ring_band():
     set_value("Boundary Smooth", 5)
     after, result_faces, result_uv = panorama_mesh(obj)
     assert result_faces == faces
-    np.testing.assert_array_equal(result_uv, uv)
+    band_corners = corner_mask(faces, band)
+    np.testing.assert_allclose(uv_delta(result_uv[~band_corners], uv[~band_corners]), 0, atol=1e-7)
+    assert np.max(np.linalg.norm(uv_delta(result_uv[band_corners], uv[band_corners]), axis=1)) > 1e-4
     np.testing.assert_array_equal(after[outside], before[outside])
     assert np.max(np.linalg.norm(after-before, axis=1)) > 1e-4

@@ -1,5 +1,8 @@
-"""Build shared boundary fields and pinned position smoothing."""
+"""Build shared boundary fields and pinned surface smoothing."""
 from .nodes import evaluate_field, sample_field
+
+
+UV_ATTRIBUTE = "UVMap"
 
 
 def edge_boundary_field(nodes, links):
@@ -42,14 +45,110 @@ def edge_boundary_field(nodes, links):
 
 
 def _multiply(group, a, b):
+    return _math(group, "MULTIPLY", a, b)
+
+
+def _math(group, operation, *values):
     node = group.nodes.new("ShaderNodeMath")
-    node.operation = "MULTIPLY"
-    for index, value in enumerate((a, b)):
+    node.operation = operation
+    for index, value in enumerate(values):
         if isinstance(value, (int, float)):
             node.inputs[index].default_value = value
         else:
             group.links.new(value, node.inputs[index])
     return node.outputs[0]
+
+
+def _smooth_uv(group, geometry, influence, boundary_points=None):
+    """Relax UVs as temporary point positions while preserving wrapped U seams."""
+    nodes, links = group.nodes, group.links
+    uv = nodes.new("GeometryNodeInputNamedAttribute")
+    uv.data_type = "FLOAT_VECTOR"
+    uv.inputs["Name"].default_value = UV_ATTRIBUTE
+    axes = nodes.new("ShaderNodeSeparateXYZ")
+    links.new(uv.outputs["Attribute"], axes.inputs[0])
+
+    angle = _math(group, "MULTIPLY", axes.outputs["X"], 2.0 * 3.141592653589793)
+    sine = _math(group, "SINE", angle)
+    cosine = _math(group, "COSINE", angle)
+    point_sine = evaluate_field(group, sine, "FLOAT", "POINT")
+    point_cosine = evaluate_field(group, cosine, "FLOAT", "POINT")
+    point_v = evaluate_field(group, axes.outputs["Y"], "FLOAT", "POINT")
+    wrapped_u = _math(
+        group, "DIVIDE", _math(group, "ARCTAN2", point_cosine, point_sine),
+        2.0 * 3.141592653589793,
+    )
+    point_u = evaluate_field(group, axes.outputs["X"], "FLOAT", "POINT")
+    statistics = nodes.new("GeometryNodeAttributeStatistic")
+    statistics.data_type, statistics.domain = "FLOAT", "POINT"
+    links.new(geometry, statistics.inputs["Geometry"])
+    links.new(point_u, statistics.inputs["Attribute"])
+    periodic = _math(
+        group, "MAXIMUM",
+        _math(group, "LESS_THAN", statistics.outputs["Min"], 0.0),
+        _math(group, "GREATER_THAN", statistics.outputs["Max"], 1.0),
+    )
+    choose_u = nodes.new("GeometryNodeSwitch")
+    choose_u.input_type = "FLOAT"
+    links.new(periodic, choose_u.inputs["Switch"])
+    links.new(point_u, choose_u.inputs["False"])
+    links.new(wrapped_u, choose_u.inputs["True"])
+    uv_position = nodes.new("ShaderNodeCombineXYZ")
+    links.new(choose_u.outputs[0], uv_position.inputs["X"])
+    links.new(point_v, uv_position.inputs["Z"])
+    uv_geometry = nodes.new("GeometryNodeSetPosition")
+    links.new(geometry, uv_geometry.inputs["Geometry"])
+    links.new(uv_position.outputs["Vector"], uv_geometry.inputs["Position"])
+    position = nodes.new("GeometryNodeInputPosition")
+    smooth = nodes.new("GeometryNodeBlurAttribute")
+    smooth.data_type = "FLOAT_VECTOR"
+    smooth.inputs["Iterations"].default_value = 1
+    smooth.inputs["Weight"].default_value = 1.0
+    links.new(position.outputs["Position"], smooth.inputs["Value"])
+    target = sample_field(
+        group, uv_geometry.outputs["Geometry"], smooth.outputs["Value"], "FLOAT_VECTOR",
+    )
+    if boundary_points is not None:
+        choose = nodes.new("GeometryNodeSwitch")
+        choose.input_type = "VECTOR"
+        links.new(boundary_points, choose.inputs["Switch"])
+        links.new(target, choose.inputs["False"])
+        links.new(
+            _boundary_target(group, uv_geometry.outputs["Geometry"], uv_geometry.outputs["Geometry"], boundary_points),
+            choose.inputs["True"],
+        )
+        target = choose.outputs["Output"]
+    target = evaluate_field(group, target, "FLOAT_VECTOR", "POINT")
+    target_axes = nodes.new("ShaderNodeSeparateXYZ")
+    links.new(target, target_axes.inputs[0])
+    def mix(current, target):
+        difference = _math(group, "SUBTRACT", target, current)
+        return _math(group, "ADD", current, _math(group, "MULTIPLY", difference, influence))
+
+    linear_difference = _math(group, "SUBTRACT", target_axes.outputs["X"], axes.outputs["X"])
+    wrapped_difference = _math(
+        group, "SUBTRACT", linear_difference, _math(group, "ROUND", linear_difference),
+    )
+    u_difference = nodes.new("GeometryNodeSwitch")
+    u_difference.input_type = "FLOAT"
+    links.new(periodic, u_difference.inputs["Switch"])
+    links.new(linear_difference, u_difference.inputs["False"])
+    links.new(wrapped_difference, u_difference.inputs["True"])
+    value = nodes.new("ShaderNodeCombineXYZ")
+    links.new(
+        _math(
+            group, "ADD", axes.outputs["X"],
+            _math(group, "MULTIPLY", u_difference.outputs[0], influence),
+        ),
+        value.inputs["X"],
+    )
+    links.new(mix(axes.outputs["Y"], target_axes.outputs["Z"]), value.inputs["Y"])
+    store = nodes.new("GeometryNodeStoreNamedAttribute")
+    store.data_type, store.domain = "FLOAT2", "CORNER"
+    store.inputs["Name"].default_value = UV_ATTRIBUTE
+    links.new(geometry, store.inputs["Geometry"])
+    links.new(value.outputs["Vector"], store.inputs["Value"])
+    return store.outputs["Geometry"]
 
 
 def _boundary_target(group, geometry, current, boundary_points):
@@ -100,7 +199,7 @@ def pinned_smooth(
     pin_boundary=True,
     pin_sharp=True,
 ):
-    """Smooth positions toward a pinned target inside an influence region.
+    """Smooth positions and existing corner UVs inside an influence region.
 
     ``weight`` is the smoothing weight: each point moves that share of the way
     to the target every iteration, scaled further by the sharpness of the
@@ -163,7 +262,11 @@ def pinned_smooth(
     set_position = nodes.new("GeometryNodeSetPosition")
     links.new(current, set_position.inputs["Geometry"])
     links.new(offset.outputs[0], set_position.inputs["Offset"])
-    links.new(set_position.outputs["Geometry"], repeat_output.inputs["Geometry"])
+    smoothed = _smooth_uv(
+        group, set_position.outputs["Geometry"], weight,
+        boundary_points if pin_boundary else None,
+    )
+    links.new(smoothed, repeat_output.inputs["Geometry"])
 
     enabled = nodes.new("GeometryNodeSwitch")
     enabled.input_type = "GEOMETRY"

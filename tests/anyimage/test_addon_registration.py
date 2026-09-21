@@ -110,10 +110,6 @@ class AddonRegistrationTest(BlenderTestCase):
             self.keymaps.PasteClipboardImage,
             self.anyimage.CLASSES,
         )
-        self.assertIn(
-            self.keymaps.TrackNativeCopy,
-            self.anyimage.CLASSES,
-        )
         existing_context_draw = object()
         existing_outliner_draw = object()
         existing_node_draw = object()
@@ -129,10 +125,17 @@ class AddonRegistrationTest(BlenderTestCase):
             self.registered_tools,
             [
                 (
-                    self.tools.FrameTool,
+                    self.tools.CutoutTool,
                     {
                         "group": True,
                         "separator": True,
+                    },
+                ),
+                (
+                    self.tools.FrameTool,
+                    {
+                        "after": {self.tools.CutoutTool.bl_idname},
+                        "separator": False,
                     },
                 ),
                 (
@@ -148,10 +151,6 @@ class AddonRegistrationTest(BlenderTestCase):
                         "after": {self.tools.MaskTool.bl_idname},
                         "separator": False,
                     },
-                ),
-                (
-                    self.tools.CutoutTool,
-                    {},
                 ),
             ],
         )

@@ -119,16 +119,6 @@ def clipboard_image_supported():
     )
 
 
-def clipboard_change_token():
-    if sys.platform != "win32":
-        return None
-
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
-    user32.GetClipboardSequenceNumber.argtypes = []
-    user32.GetClipboardSequenceNumber.restype = wintypes.DWORD
-    return user32.GetClipboardSequenceNumber()
-
-
 def _read_windows_clipboard_image():
     user32 = ctypes.WinDLL("user32", use_last_error=True)
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)

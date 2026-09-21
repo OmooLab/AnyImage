@@ -1,12 +1,8 @@
-from .operators import (
-    PasteClipboardImage,
-    TrackNativeCopy,
-)
+from .operators import PasteClipboardImage
 
-CLASSES = (TrackNativeCopy, PasteClipboardImage)
+CLASSES = (PasteClipboardImage,)
 
 __all__ = (
     "CLASSES",
     "PasteClipboardImage",
-    "TrackNativeCopy",
 )

@@ -8,6 +8,7 @@ from .smoothing import edge_boundary_field
 
 
 CUT_ATTRIBUTE = "_o_depth_cut"
+LIMIT_BOUNDARY_ATTRIBUTE = "_o_depth_limit_boundary"
 
 
 def _math(group, operation, a, b=None):
@@ -279,6 +280,45 @@ def split_depth_surface(group, geometry, face_camera, strength, reference_depth,
     links.new(geometry, choose.inputs["False"])
     links.new(_remove_strip_faces(group, split.outputs["Mesh"], triangles=triangles), choose.inputs["True"])
     return choose.outputs["Output"], face_camera, cut
+
+
+def limit_depth_surface(
+    group, geometry, face_camera, cut_vertex,
+    uniform_scale, reference_depth, depth_scale, depth_limit,
+):
+    """Delete far geometry and preserve the prior boundary for cut detection."""
+    nodes, links = group.nodes, group.links
+    axes = nodes.new("ShaderNodeSeparateXYZ")
+    links.new(face_camera, axes.inputs["Vector"])
+    face_y = _math(
+        group, "MULTIPLY",
+        _math(
+            group, "SUBTRACT",
+            _math(group, "MULTIPLY", axes.outputs["Z"], uniform_scale),
+            reference_depth,
+        ),
+        depth_scale,
+    )
+    limited = compare_node(group, "GREATER_THAN", face_y, depth_limit)
+    statistics = nodes.new("GeometryNodeAttributeStatistic")
+    statistics.data_type, statistics.domain = "FLOAT", "FACE"
+    links.new(geometry, statistics.inputs["Geometry"])
+    links.new(limited, statistics.inputs["Attribute"])
+    has_limited = compare_node(group, "GREATER_THAN", statistics.outputs["Max"], 0.0)
+    marked, previous_boundary = store_boolean_attribute(
+        group, geometry, LIMIT_BOUNDARY_ATTRIBUTE,
+        edge_boundary_field(nodes, links),
+    )
+    delete = nodes.new("GeometryNodeDeleteGeometry")
+    delete.domain, delete.mode = "FACE", "ALL"
+    links.new(marked, delete.inputs["Geometry"])
+    links.new(limited, delete.inputs["Selection"])
+    choose = nodes.new("GeometryNodeSwitch")
+    choose.input_type = "GEOMETRY"
+    links.new(has_limited, choose.inputs["Switch"])
+    links.new(geometry, choose.inputs["False"])
+    links.new(delete.outputs["Geometry"], choose.inputs["True"])
+    return choose.outputs["Output"], cut_vertex, previous_boundary, has_limited
 
 
 def build_surface_camera(group, original, separated, cut_vertex, strength):

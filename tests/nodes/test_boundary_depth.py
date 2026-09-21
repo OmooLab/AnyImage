@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from tests.support.depth_surface import evaluated
-from tests.nodes.test_boundary_smoothing import boundary_neighbors, edge_band
+from tests.nodes.test_boundary_smoothing import boundary_neighbors, corner_mask, edge_band, uv_delta
 
 
 
@@ -57,7 +57,15 @@ def test_plane_validity_hole_blurs_depth_and_protects_rectangle():
     set_value("Boundary Smooth", 12)
     after, result_faces, result_uv, *_ = plane_mesh(obj)
     assert faces == result_faces
-    np.testing.assert_array_equal(result_uv, uv)
+    band = edge_band(faces, boundary_neighbors(faces))
+    band_corners = corner_mask(faces, band)
+    np.testing.assert_array_equal(result_uv[~band_corners], uv[~band_corners])
+    uv_motion = np.linalg.norm(result_uv[band_corners] - uv[band_corners], axis=1)
+    maximum_uv_motion = np.max(uv_motion)
+    assert 1e-4 < maximum_uv_motion < 0.25, (
+        maximum_uv_motion,
+        np.max(np.abs(result_uv[band_corners] - uv[band_corners]), axis=0),
+    )
     assert after[:, 1].max() < before[:, 1].max() - .1
     protected = np.any(np.isclose(uv, 0) | np.isclose(uv, 1), axis=1)
     corners = np.concatenate(faces)
@@ -88,7 +96,13 @@ def test_panorama_blurs_opening_radially(region):
     set_value("Boundary Smooth", 12)
     after, result_faces, result_uv = panorama_mesh(obj)
     assert result_faces == faces
-    np.testing.assert_array_equal(result_uv, uv)
+    band = edge_band(faces, boundary_neighbors(faces))
+    band_corners = corner_mask(faces, band)
+    np.testing.assert_allclose(uv_delta(result_uv[~band_corners], uv[~band_corners]), 0, atol=1e-7)
+    delta = uv_delta(result_uv[band_corners], uv[band_corners])
+    assert np.max(np.linalg.norm(delta, axis=1)) > 1e-4
+    if region == "seam":
+        assert np.max(np.abs(delta[:, 0])) < 0.25
     radii = np.linalg.norm(before, axis=1)
     smoothed = np.linalg.norm(after, axis=1)
     rim = list(boundary_neighbors(faces))

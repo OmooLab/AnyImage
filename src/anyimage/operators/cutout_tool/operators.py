@@ -62,7 +62,7 @@ from .geometry import (
     build_base_shape,
     effective_cutout_edge_length,
 )
-from .interaction import open_shape_pie
+from .interaction import CUTOUT_SHAPE_OPERATOR_ID, open_shape_pie
 from .object import (
     NormalMode,
     create_shape_object,
@@ -195,7 +195,7 @@ def cutout_geometry_settings(context):
 
 
 class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
-    bl_idname = "anyimage.cutout_selection_to_shape"
+    bl_idname = CUTOUT_SHAPE_OPERATOR_ID
     bl_label = "Cutout Selection to Shape"
     bl_description = "Build the image selection as a Cutout shape"
     bl_options = {"INTERNAL"}

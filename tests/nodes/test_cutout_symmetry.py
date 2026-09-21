@@ -159,6 +159,15 @@ def _evaluated(obj):
     return points, faces, marker
 
 
+def _evaluated_uv(obj):
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = result.to_mesh()
+    try:
+        return np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
+    finally:
+        result.to_mesh_clear()
+
+
 def _open_edges(faces):
     counts = Counter(
         tuple(sorted((a, b))) for f in faces for a, b in zip(f, (*f[1:], f[0]))
@@ -238,11 +247,16 @@ def test_merge_distance_snaps_the_welded_band(symmetry):
 
 def test_fill_smooth_relaxes_the_junction_band(symmetry):
     obj, _cutout, _mirror, _cutout_setter, mirror_setter = symmetry
+    for item in obj.data.uv_layers["UVMap"].data:
+        item.uv.x += 0.1 * item.uv.y**2
+    obj.data.update()
     mirror_setter("Fill Sides", True)
     mirror_setter("Smooth", 0)
     plain_points, plain_faces, plain_marker = _evaluated(obj)
+    plain_uv = _evaluated_uv(obj)
     mirror_setter("Smooth", 4)
     smooth_points, smooth_faces, smooth_marker = _evaluated(obj)
+    smooth_uv = _evaluated_uv(obj)
     tolerance = _tolerance(plain_points)
 
     for points, faces in ((plain_points, plain_faces), (smooth_points, smooth_faces)):
@@ -255,6 +269,10 @@ def test_fill_smooth_relaxes_the_junction_band(symmetry):
     plain_band = _positions(plain_points[np.abs(plain_points[:, 0]) <= band])
     smooth_band = _positions(smooth_points[np.abs(smooth_points[:, 0]) <= band])
     assert plain_band != smooth_band
+    assert np.isfinite(smooth_uv).all()
+    assert {tuple(np.round(value, 5)) for value in smooth_uv} != {
+        tuple(np.round(value, 5)) for value in plain_uv
+    }
     assert cKDTree(smooth_points).query(smooth_points * (-1, 1, 1))[0].max() < 1e-5
 
 

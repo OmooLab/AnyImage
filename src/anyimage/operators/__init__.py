@@ -1,4 +1,5 @@
 from .remove_background import RemoveImageBackground, RunBackgroundRemoval
+from .activate_workspace_tool import ActivateWorkspaceTool
 from .cutout_tool import CLASSES as CUTOUT_CLASSES
 from .frame_tool import CLASSES as FRAME_CLASSES
 from .mask_tool import EditImageAlpha
@@ -16,6 +17,7 @@ from .convert_to_panorama import CLASSES as PANORAMA_CLASSES
 
 
 CLASSES = (
+    ActivateWorkspaceTool,
     *PANORAMA_CLASSES,
     *PLANE_CLASSES,
     *CUTOUT_CLASSES,

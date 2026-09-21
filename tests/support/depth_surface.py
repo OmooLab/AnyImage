@@ -62,6 +62,7 @@ def surface(*, step=6.0, size=1.0, resolution=2):
         ("Depth Image", image),
         ("Uniform Scale", size),
         ("Reference Depth", size * (1 + step / 2)),
+        ("Depth Limit", 1e9),
         ("Depth Scale", 1.0),
         ("Thickness", 0.0),
         ("Front Inflation", 0.0),

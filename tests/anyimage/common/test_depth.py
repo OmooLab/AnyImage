@@ -14,6 +14,7 @@ from anyimage.common.depth import (
     fit_depth_direction,
     fit_symmetry_depth_direction,
     load_depth_metadata,
+    median_depth,
     reference_depth,
 )
 from tests.support.image_objects import _depth_image
@@ -143,6 +144,23 @@ def test_reference_depth_falls_back_to_the_baseline_without_a_selection():
     )
 
     assert reference_depth(transparent) == pytest.approx(REFERENCE_DEPTH_BASELINE)
+
+
+def test_median_depth_uses_the_reference_validity_and_selection_domain():
+    depth = np.asarray(((1.0, 3.0, 5.0, np.nan),), dtype=np.float32)
+    alpha = np.asarray(((1.0, 1.0, 1.0, 1.0),), dtype=np.float32)
+    image = _camera_depth_image(depth, alpha)
+
+    assert median_depth(image) == pytest.approx(3.0)
+    assert median_depth(image, ((False, True, True, True),)) == pytest.approx(4.0)
+
+
+def test_median_depth_falls_back_without_usable_selected_depth():
+    image = _camera_depth_image(((2.0, 4.0),), ((1.0, 0.0),))
+
+    assert median_depth(image, ((False, True),)) == pytest.approx(
+        REFERENCE_DEPTH_BASELINE
+    )
 
 
 def test_symmetry_depth_direction_fits_a_sloped_base_plane():

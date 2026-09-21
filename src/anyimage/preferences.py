@@ -235,6 +235,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
     )
 
     def draw(self, _context):
+        from .operators.ai_setup import SetupAIEnvironment
         from .properties import ai_setup_label, ai_status, model_catalog
         from .runtime import runtime
 
@@ -249,7 +250,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
             setup_row = server_row.row(align=True)
             setup_row.enabled = not runtime.server_busy()
             setup_row.operator(
-                "anyimage.setup_ai_environment",
+                SetupAIEnvironment.bl_idname,
                 text=ai_setup_label(status),
                 icon="IMPORT",
             )
@@ -332,6 +333,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
 
     @staticmethod
     def _draw_model_status(layout, model, ready_label):
+        from .operators.ai_setup import DownloadModel
         from .runtime import runtime
 
         row = layout.row(align=True)
@@ -344,7 +346,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         download_row = row.row(align=True)
         download_row.enabled = not runtime.server_busy()
         operator = download_row.operator(
-            "anyimage.download_model",
+            DownloadModel.bl_idname,
             text="Download",
             icon="IMPORT",
         )

@@ -91,6 +91,10 @@ uv run --group models model sync
 ## Blender 开发规范
 
 - 扩展级设置及其读取入口统一放在 `preferences.py`；使用 `addon_preferences()` 读取
+- Blender 类型的 `bl_idname` 和 `bl_label` 在类型定义处直接声明；共享协议确有循环依赖时可由定义和消费者共同引用单一常量
+- `layout.operator`、keymap、`WorkSpaceTool.bl_operator`、注册关系等声明式消费者应引用项目类型的 `bl_idname`，不重复写项目内 ID 字符串
+- UI 使用目标类型的默认名称时省略 `text`，由 Blender 读取 `bl_label`；仅在动态名称、上下文简称或语义不同时显式设置 `text`
+- `bpy.ops` 执行调用保持原生命名空间写法；外部依赖或运行时动态生成且无可引用类型的 Operator 使用字符串 ID
 - Job 参数使用可序列化的普通字典；Blender 数据只能在主线程的 Operator 响应阶段读写
 - 新增或修改 Blender 类型时同步检查 `src/anyimage/__init__.py` 的注册与逆序注销，并补充对应测试
 - 依赖版本、wheel 或 Manifest 改变时同步检查 `pyproject.toml`、`uv.lock`、`blender_manifest.toml` 和打包测试

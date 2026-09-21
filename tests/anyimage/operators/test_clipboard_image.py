@@ -72,13 +72,13 @@ class ClipboardImageTest(BlenderTestCase):
                 [item.idname for item in items],
                 [
                     "anyimage.paste_clipboard_image",
-                    "anyimage.track_native_copy",
                     "anyimage.paste_clipboard_image",
-                    "anyimage.track_native_copy",
                 ],
             )
             modifier = "oskey" if sys.platform == "darwin" else "ctrl"
             self.assertTrue(all(getattr(item, modifier) for item in items))
+            self.assertTrue(all(item.shift for item in items))
+            self.assertTrue(all(item.type == "V" for item in items))
             self.keymaps.unregister()
 
         self.assertTrue(
@@ -137,6 +137,20 @@ class ClipboardImageTest(BlenderTestCase):
         )
 
         self.assertIsNone(self.actions.target_for_context(context))
+
+    def test_rejects_unsupported_view_modes(self):
+        for mode in (
+            "EDIT_MESH",
+            "POSE",
+            "EDIT_GREASE_PENCIL",
+            "PAINT_GREASE_PENCIL",
+        ):
+            with self.subTest(mode=mode):
+                context = self.make_context("VIEW_3D", mode=mode)
+                self.assertIsNone(self.actions.target_for_context(context))
+                self.assertFalse(
+                    self.clipboard_image.PasteClipboardImage.poll(context)
+                )
 
     def test_node_type_follows_the_world_space(self):
         self.assertEqual(
@@ -200,34 +214,6 @@ class ClipboardImageTest(BlenderTestCase):
             (2 / 3, 1.0),
         )
 
-    def test_native_copy_defers_paste_until_the_clipboard_changes(self):
-        clipboard_image = self.clipboard_image
-        original_token = clipboard_image._native_copy_token
-        try:
-            clipboard_image._native_copy_token = 41
-            with patch.object(
-                clipboard_image,
-                "clipboard_change_token",
-                return_value=41,
-            ):
-                self.assertTrue(clipboard_image._should_defer_to_native_paste())
-            with patch.object(
-                clipboard_image,
-                "clipboard_change_token",
-                return_value=42,
-            ):
-                self.assertFalse(clipboard_image._should_defer_to_native_paste())
-            with patch.object(
-                clipboard_image,
-                "clipboard_change_token",
-                return_value=73,
-            ):
-                result = clipboard_image.TrackNativeCopy().execute(None)
-            self.assertEqual(result, {"PASS_THROUGH"})
-            self.assertEqual(clipboard_image._native_copy_token, 73)
-        finally:
-            clipboard_image._native_copy_token = original_token
-
     def test_reference_image_uses_drag_and_drop_size(self):
         reference = SimpleNamespace(select_set=Mock())
         objects = SimpleNamespace(new=Mock(return_value=reference))
@@ -266,11 +252,6 @@ class ClipboardImageTest(BlenderTestCase):
 
         clipboard_image = self.clipboard_image
         with (
-            patch.object(
-                clipboard_image,
-                "_should_defer_to_native_paste",
-                return_value=False,
-            ),
             patch.object(
                 clipboard_image,
                 "read_clipboard_image",

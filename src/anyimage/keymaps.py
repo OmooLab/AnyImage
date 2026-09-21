@@ -2,7 +2,7 @@ import sys
 
 import bpy
 
-from .operators.clipboard_image import PasteClipboardImage, TrackNativeCopy
+from .operators.clipboard_image import PasteClipboardImage
 
 
 _items = []
@@ -13,12 +13,7 @@ CLIPBOARD_SHORTCUTS = (
         "idname": PasteClipboardImage.bl_idname,
         "type": "V",
         "value": "PRESS",
-        **_PRIMARY_MODIFIER,
-    },
-    {
-        "idname": TrackNativeCopy.bl_idname,
-        "type": "C",
-        "value": "PRESS",
+        "shift": True,
         **_PRIMARY_MODIFIER,
     },
 )

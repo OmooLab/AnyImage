@@ -11,26 +11,9 @@ from .actions import (
 from .clipboard import (
     ClipboardImageError,
     ClipboardImageUnavailable,
-    clipboard_change_token,
     clipboard_image_supported,
     read_clipboard_image,
 )
-
-
-_native_copy_token = None
-
-
-class TrackNativeCopy(bpy.types.Operator):
-    bl_idname = "anyimage.track_native_copy"
-    bl_label = "Track Native Copy"
-    bl_description = "Preserve Blender's native copy and paste priority"
-    bl_options = {"INTERNAL"}
-
-    def execute(self, _context):
-        global _native_copy_token
-
-        _native_copy_token = clipboard_change_token()
-        return {"PASS_THROUGH"}
 
 
 class PasteClipboardImage(bpy.types.Operator):
@@ -101,9 +84,6 @@ class PasteClipboardImage(bpy.types.Operator):
             self.layout.prop(self, "shadeless")
 
     def _paste(self, context, event=None):
-        if _should_defer_to_native_paste():
-            return {"PASS_THROUGH"}
-
         if not self.paste_target:
             self.paste_target = target_for_context(context) or ""
 
@@ -143,9 +123,3 @@ class PasteClipboardImage(bpy.types.Operator):
 
         self.report({"INFO"}, f"Pasted and packed {image.name}")
         return {"FINISHED"}
-
-
-def _should_defer_to_native_paste():
-    if _native_copy_token is None:
-        return False
-    return clipboard_change_token() == _native_copy_token

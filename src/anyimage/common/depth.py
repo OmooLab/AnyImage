@@ -13,6 +13,7 @@ REFERENCE_DEPTH_PERCENTILE = 95.0
 DEPTH_ALPHA_THRESHOLD = 0.95
 REFERENCE_DEPTH_RANGE_FACTOR = 1.1
 REFERENCE_DEPTH_BASELINE = 8.0
+DEPTH_LIMIT_MEDIAN_FACTOR = 1.2
 FLAT_DEPTH_DIRECTION = (0.0, 1.0, 0.0)
 
 
@@ -69,6 +70,30 @@ def camera_depth_values(image):
     return pixels[..., 2], pixels[..., 3] > DEPTH_ALPHA_THRESHOLD
 
 
+def _selected_depth_values(image, mask=None):
+    """Return valid camera depths inside an optional selection mask."""
+    import numpy as np
+
+    depth, valid = camera_depth_values(image)
+    usable = valid & np.isfinite(depth) & (depth > 0.0)
+    if mask is not None:
+        mask = np.asarray(mask, dtype=bool)
+        if mask.shape != depth.shape:
+            raise ValueError("Depth reference mask dimensions do not match")
+        usable &= mask
+    return depth[usable]
+
+
+def median_depth(image, mask=None):
+    """Return the median valid camera depth inside an optional selection."""
+    import numpy as np
+
+    values = _selected_depth_values(image, mask)
+    if not values.size:
+        return REFERENCE_DEPTH_BASELINE
+    return float(np.median(values))
+
+
 def reference_depth(image, mask=None):
     """Return the upper-percentile camera depth of a loaded Depth texture.
 
@@ -80,14 +105,7 @@ def reference_depth(image, mask=None):
     """
     import numpy as np
 
-    depth, valid = camera_depth_values(image)
-    usable = valid & np.isfinite(depth) & (depth > 0.0)
-    if mask is not None:
-        mask = np.asarray(mask, dtype=bool)
-        if mask.shape != depth.shape:
-            raise ValueError("Depth reference mask dimensions do not match")
-        usable &= mask
-    values = depth[usable]
+    values = _selected_depth_values(image, mask)
     if not values.size:
         return REFERENCE_DEPTH_BASELINE
     near = values[

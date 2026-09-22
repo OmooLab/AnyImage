@@ -1,10 +1,8 @@
 # 🖼️ AnyImage
 
-[中文文档](https://docs.omoolab.xyz/anyimage/latest/)
-
 ##IMAGE is All You Need
 
-![cover](https://docs.omoolab.xyz/anyimage/latest/assets/cover.png)
+![cover](assets/cover.png)
 
 AnyImage is an image toolkit for Blender by OmooLab. It turns images into more than references: paste an image, select what you need, and transform it into a scene element with materials, contours, and depth.
 

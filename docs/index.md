@@ -1,13 +1,14 @@
 # 🖼️ AnyImage
 
-**IMAGE is All You Need**  
-*图，就够了~*
+## IMAGE is All You Need
+
+![cover](assets/cover.png)
 
 AnyImage 是 OmooLab 为 Blender 准备的图片工具。它让图片不再只是参考图：粘贴进来，选出需要的部分，再把它变成带材质、轮廓与深度的场景元素。
 
 ## 从图片直接开始
 
-在 3D View 或 Node Editor 中按 **Ctrl+V**（macOS 为 **Cmd+V**），剪贴板里的图片会直接进入当前工作区。不必先保存文件，也不用中断正在进行的搭建。
+在 3D View 或 Node Editor 中按 **Ctrl+Shift+V**（macOS 为 **Cmd+Shift+V**），剪贴板里的图片会直接进入当前工作区。不必先保存文件，也不用中断正在进行的搭建。
 
 已有图片同样可以继续使用。选中 Image Empty 后，右键打开 **AnyImage** 菜单，常用操作都在这里。
 
@@ -51,10 +52,3 @@ AnyImage 是 OmooLab 为 Blender 准备的图片工具。它让图片不再只�
     <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.linux-x64.zip" download="AnyImage.v1.0.1.linux-x64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
   </div>
 </div>
-
-
-复制一张图片。在 Blender 的 3D View 中按 **Ctrl+V**（macOS 为 **Cmd+V**）。
-
-选中图片并右键，打开 **AnyImage**，选择 **Convert to Plane**。
-
-使用 Depth Plane、Remove Background 或 Upscale 时，按提示安装 AI Environment 即可。

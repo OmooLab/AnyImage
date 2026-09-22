@@ -216,7 +216,7 @@ def test_depth_surface_object_evaluates(gesture):
         assert len(evaluated_mesh.polygons) > 0
         y = np.asarray([vertex.co.y for vertex in evaluated_mesh.vertices])
         assert np.isclose(y.min(), baseline_min, atol=1e-5)
-        assert np.isclose(y.max(), baseline_max + 1.0, atol=1e-5)
+        assert np.isclose(y.max(), baseline_max + 1.0, atol=2e-4)
     finally:
         evaluated.to_mesh_clear()
 

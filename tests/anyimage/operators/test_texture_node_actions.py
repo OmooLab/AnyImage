@@ -81,7 +81,7 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
     ]
     assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
     menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
-    layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname, text="AnyImage", icon="PLUGIN")
+    layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname, icon="PLUGIN")
     texture.image = None
     layout.menu.reset_mock()
     menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)

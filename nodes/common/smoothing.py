@@ -60,7 +60,7 @@ def _math(group, operation, *values):
 
 
 def _smooth_uv(group, geometry, influence, boundary_points=None):
-    """Relax UVs as temporary point positions while preserving wrapped U seams."""
+    """Relax UVs as temporary point positions."""
     nodes, links = group.nodes, group.links
     uv = nodes.new("GeometryNodeInputNamedAttribute")
     uv.data_type = "FLOAT_VECTOR"
@@ -68,33 +68,10 @@ def _smooth_uv(group, geometry, influence, boundary_points=None):
     axes = nodes.new("ShaderNodeSeparateXYZ")
     links.new(uv.outputs["Attribute"], axes.inputs[0])
 
-    angle = _math(group, "MULTIPLY", axes.outputs["X"], 2.0 * 3.141592653589793)
-    sine = _math(group, "SINE", angle)
-    cosine = _math(group, "COSINE", angle)
-    point_sine = evaluate_field(group, sine, "FLOAT", "POINT")
-    point_cosine = evaluate_field(group, cosine, "FLOAT", "POINT")
-    point_v = evaluate_field(group, axes.outputs["Y"], "FLOAT", "POINT")
-    wrapped_u = _math(
-        group, "DIVIDE", _math(group, "ARCTAN2", point_cosine, point_sine),
-        2.0 * 3.141592653589793,
-    )
     point_u = evaluate_field(group, axes.outputs["X"], "FLOAT", "POINT")
-    statistics = nodes.new("GeometryNodeAttributeStatistic")
-    statistics.data_type, statistics.domain = "FLOAT", "POINT"
-    links.new(geometry, statistics.inputs["Geometry"])
-    links.new(point_u, statistics.inputs["Attribute"])
-    periodic = _math(
-        group, "MAXIMUM",
-        _math(group, "LESS_THAN", statistics.outputs["Min"], 0.0),
-        _math(group, "GREATER_THAN", statistics.outputs["Max"], 1.0),
-    )
-    choose_u = nodes.new("GeometryNodeSwitch")
-    choose_u.input_type = "FLOAT"
-    links.new(periodic, choose_u.inputs["Switch"])
-    links.new(point_u, choose_u.inputs["False"])
-    links.new(wrapped_u, choose_u.inputs["True"])
+    point_v = evaluate_field(group, axes.outputs["Y"], "FLOAT", "POINT")
     uv_position = nodes.new("ShaderNodeCombineXYZ")
-    links.new(choose_u.outputs[0], uv_position.inputs["X"])
+    links.new(point_u, uv_position.inputs["X"])
     links.new(point_v, uv_position.inputs["Z"])
     uv_geometry = nodes.new("GeometryNodeSetPosition")
     links.new(geometry, uv_geometry.inputs["Geometry"])
@@ -125,23 +102,8 @@ def _smooth_uv(group, geometry, influence, boundary_points=None):
         difference = _math(group, "SUBTRACT", target, current)
         return _math(group, "ADD", current, _math(group, "MULTIPLY", difference, influence))
 
-    linear_difference = _math(group, "SUBTRACT", target_axes.outputs["X"], axes.outputs["X"])
-    wrapped_difference = _math(
-        group, "SUBTRACT", linear_difference, _math(group, "ROUND", linear_difference),
-    )
-    u_difference = nodes.new("GeometryNodeSwitch")
-    u_difference.input_type = "FLOAT"
-    links.new(periodic, u_difference.inputs["Switch"])
-    links.new(linear_difference, u_difference.inputs["False"])
-    links.new(wrapped_difference, u_difference.inputs["True"])
     value = nodes.new("ShaderNodeCombineXYZ")
-    links.new(
-        _math(
-            group, "ADD", axes.outputs["X"],
-            _math(group, "MULTIPLY", u_difference.outputs[0], influence),
-        ),
-        value.inputs["X"],
-    )
+    links.new(mix(axes.outputs["X"], target_axes.outputs["X"]), value.inputs["X"])
     links.new(mix(axes.outputs["Y"], target_axes.outputs["Z"]), value.inputs["Y"])
     store = nodes.new("GeometryNodeStoreNamedAttribute")
     store.data_type, store.domain = "FLOAT2", "CORNER"

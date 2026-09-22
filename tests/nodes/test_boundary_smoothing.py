@@ -122,6 +122,21 @@ def test_smoothing_reduces_stairs_without_leaving_two_ring_band():
     np.testing.assert_array_equal(vertex_uv(obj), original_uv)
 
 
+def test_cutout_uv_smoothing_tolerates_small_out_of_range_values():
+    obj, set_value = diagonal_surface(triangles=True)
+    for value in obj.data.uv_layers["UVMap"].data:
+        if value.uv.x > 0.999:
+            value.uv.x += 1e-7
+    obj.data.update()
+    original = vertex_uv(obj)
+
+    set_value("Boundary Smooth", 4)
+    smoothed = vertex_uv(obj)
+
+    assert np.isfinite(smoothed).all()
+    assert np.max(np.abs(smoothed - original)) < 0.1
+
+
 def test_smoothing_without_split_moves_outline_only_within_boundary_band():
     obj, set_value = diagonal_surface()
     set_value("Depth Split", 0)

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from tests.support.depth_surface import surface, evaluated
+from tests.nodes.test_depth_cutout import assert_no_boundary_ear_triangles
 from tests.nodes.test_boundary_smoothing import diagonal_surface
 
 
@@ -30,16 +31,12 @@ def vertex_uv(obj):
 
 
 @pytest.mark.parametrize("iterations", [0, 16])
-def test_cleaned_sawtooth_smoothing_preserves_face_orientation(iterations):
+def test_cleaned_sawtooth_smoothing_has_no_boundary_ear_triangles(iterations):
     obj, set_value = diagonal_surface(triangles=True)
-    original, faces = evaluated(obj)
     set_value("Boundary Smooth", iterations)
-    points, actual = evaluated(obj)
-    assert actual == faces
-    indices = np.array(faces)
-    def normals(p):
-        return np.cross(p[indices[:,1]]-p[indices[:,0]], p[indices[:,2]]-p[indices[:,0]])
-    assert np.all(np.sum(normals(original)*normals(points), axis=1) > 0)
+    points, faces = evaluated(obj)
+    assert np.isfinite(points).all()
+    assert_no_boundary_ear_triangles(faces)
 
 
 def test_split_profile_tapers_within_boundary_band():

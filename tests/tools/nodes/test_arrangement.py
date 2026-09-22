@@ -113,7 +113,7 @@ def _surface(node_group):
     image.pixels.foreach_set(pixels.ravel())
     values = {"Subdivide": 1, "Thickness": 0.2, "Depth Image": image,
               "Uniform Scale": 1.0, "Reference Depth": 2.5, "Depth Scale": 0.8,
-              "Edge Turn": 2, "Depth Split": 0.25,
+              "Edge Turn": 1, "Depth Split": 0.25,
               "Offset": 0.5}
     mode = None
     for item in node_group.interface.items_tree:

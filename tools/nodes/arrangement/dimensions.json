@@ -61,6 +61,7 @@
     "GeometryNodeSetShadeSmooth": 1,
     "GeometryNodeSimulationInput": 0,
     "GeometryNodeSimulationOutput": 3,
+    "GeometryNodeSortElements": 2,
     "GeometryNodeSplitEdges": 0,
     "GeometryNodeStoreNamedAttribute": 2,
     "GeometryNodeSwitch": 1,

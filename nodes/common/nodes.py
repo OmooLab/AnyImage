@@ -145,6 +145,13 @@ def read_vector_attribute(group, name):
     return node.outputs["Attribute"]
 
 
+def read_int_attribute(group, name):
+    node = group.nodes.new("GeometryNodeInputNamedAttribute")
+    node.data_type = "INT"
+    node.inputs["Name"].default_value = name
+    return node.outputs["Attribute"]
+
+
 def store_float_attribute(group, geometry, name, value, domain="POINT"):
     node = group.nodes.new("GeometryNodeStoreNamedAttribute")
     node.domain, node.data_type = domain, "FLOAT"
@@ -163,6 +170,18 @@ def store_vector_attribute(group, geometry, name, value, domain="POINT"):
     node.inputs["Name"].default_value = name
     group.links.new(geometry, node.inputs["Geometry"])
     group.links.new(value, node.inputs["Value"])
+    return node.outputs["Geometry"]
+
+
+def store_int_attribute(group, geometry, name, value, domain="POINT"):
+    node = group.nodes.new("GeometryNodeStoreNamedAttribute")
+    node.domain, node.data_type = domain, "INT"
+    node.inputs["Name"].default_value = name
+    group.links.new(geometry, node.inputs["Geometry"])
+    if isinstance(value, int):
+        node.inputs["Value"].default_value = value
+    else:
+        group.links.new(value, node.inputs["Value"])
     return node.outputs["Geometry"]
 
 

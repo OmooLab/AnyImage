@@ -3,24 +3,30 @@ import bpy
 from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME
 from ..common.nodes import (
     interface_socket, group_input, float_input, boolean_node, read_float_attribute, read_vector_attribute,
-    store_float_attribute, store_vector_attribute, remove_attribute_pattern,
-    prepare_node_group, evaluate_field, compare_node,
+    read_int_attribute, store_float_attribute, store_vector_attribute, store_int_attribute,
+    store_boolean_attribute, remove_attribute_pattern, prepare_node_group, evaluate_field,
+    compare_node, sample_field,
 )
-from ..common.boundary_smoothing import smooth_cut_boundary
+from ..common.boundary_smoothing import cut_boundary_influence
 from ..common.cutout import _position_field, _shade_output
 from ..common.depth_surface import (
     _math, build_surface_camera, limit_depth_surface, project_depth_surface,
     sample_face_camera, split_depth_surface,
 )
-from ..common.smoothing import edge_boundary_field
+from ..common.smoothing import edge_boundary_field, pinned_smooth
 from ..common.cutout_boundary import remove_boundary_triangles, taper_split_profile
 
 
 NODE_GROUP_NAME = "O Image Depth Cutout"
 FRONT_NORMAL_ATTRIBUTE = "_o_front_normal"
+BOUNDARY_SMOOTH_WEIGHT_ATTRIBUTE = "_o_boundary_smooth_weight"
+CUT_BOUNDARY_ATTRIBUTE = "_o_cut_boundary"
+LEAF_ID_ATTRIBUTE = "_o_leaf_id"
+LEAF_SOURCE_INDEX_ATTRIBUTE = "_o_leaf_source_index"
+REAR_TARGET_ATTRIBUTE = "_o_rear_target"
 BALLOON_THICKNESS_BASE = 1.0
 NORMAL_SMOOTH_ITERATIONS = 256
-SOLID_WELD_SCALE = 1e-3
+SOLID_WELD_SCALE = 1e-4
 
 
 def build_normal_weight(group, is_shell, profile):
@@ -116,7 +122,7 @@ def build_inflation_amount(group, controls, is_shell):
     return amount.outputs[0]
 
 
-def build_solid(group, surface, amount, normal, is_shell, controls, weld_distance):
+def build_solid(group, surface, amount, normal, is_shell, has_thickness, controls, weld_distance):
     """Inflate the projected surface into a front leaf, wall and rear leaf."""
     nodes, links = group.nodes, group.links
 
@@ -147,14 +153,11 @@ def build_solid(group, surface, amount, normal, is_shell, controls, weld_distanc
     links.new(surface, front.inputs["Geometry"])
     links.new(offset(front_amount.outputs[0]), front.inputs["Offset"])
 
-    # The rear leaf inflates along the negated front direction, straight from the
-    # untouched surface so the front offset cannot drag it along.
+    # Match the Faces Extrude displacement domain while keeping an open rear leaf.
     span = _math(group, "MULTIPLY", amount, -1.0)
-    extrude = nodes.new("GeometryNodeExtrudeMesh")
-    extrude.mode = "FACES"
-    extrude.inputs["Individual"].default_value = False
-    links.new(surface, extrude.inputs["Mesh"])
-    links.new(offset(span), extrude.inputs["Offset"])
+    rear = nodes.new("GeometryNodeSetPosition")
+    links.new(surface, rear.inputs["Geometry"])
+    links.new(evaluate_field(group, offset(span), "FLOAT_VECTOR", "FACE"), rear.inputs["Offset"])
 
     # The rear surface smooths in proportion to its thickness and the balloon profile,
     # so thin shells and cut boundaries keep their exact positions.
@@ -165,14 +168,14 @@ def build_solid(group, surface, amount, normal, is_shell, controls, weld_distanc
     links.new(controls.outputs["Shell Thickness"], thickness.inputs["True"])
     weight = _math(
         group, "MULTIPLY", _math(group, "MINIMUM", thickness.outputs[0], 1.0),
-        read_float_attribute(group, "o_balloon"),
+        _math(group, "POWER", read_float_attribute(group, "o_balloon"), 0.5),
     )
     position = nodes.new("GeometryNodeInputPosition")
     blur = nodes.new("GeometryNodeBlurAttribute")
     blur.data_type = "FLOAT_VECTOR"
     blur.inputs["Weight"].default_value = 1.0
     links.new(position.outputs["Position"], blur.inputs["Value"])
-    links.new(group_input(nodes, {"Back Smooth"}).outputs["Back Smooth"], blur.inputs["Iterations"])
+    links.new(group_input(nodes, {"Rear Smooth"}).outputs["Rear Smooth"], blur.inputs["Iterations"])
     difference = nodes.new("ShaderNodeVectorMath")
     difference.operation = "SUBTRACT"
     links.new(blur.outputs["Value"], difference.inputs[0])
@@ -182,23 +185,93 @@ def build_solid(group, surface, amount, normal, is_shell, controls, weld_distanc
     links.new(difference.outputs["Vector"], smooth_offset.inputs[0])
     links.new(weight, smooth_offset.inputs[3])
     smoothed = nodes.new("GeometryNodeSetPosition")
-    links.new(extrude.outputs["Mesh"], smoothed.inputs["Geometry"])
+    links.new(rear.outputs["Geometry"], smoothed.inputs["Geometry"])
     links.new(smooth_offset.outputs["Vector"], smoothed.inputs["Offset"])
+    flipped_rear = nodes.new("GeometryNodeFlipFaces")
+    links.new(smoothed.outputs["Geometry"], flipped_rear.inputs["Mesh"])
 
-    # Extruding against the normal leaves the rear leaf and wall facing inward.
-    flipped = nodes.new("GeometryNodeFlipFaces")
-    links.new(smoothed.outputs["Geometry"], flipped.inputs["Mesh"])
-    rear = store_float_attribute(
-        group, flipped.outputs["Mesh"], NORMAL_REDUCTION_ATTRIBUTE_NAME, 1.0,
+    marked_front = store_int_attribute(
+        group, front.outputs["Geometry"], LEAF_ID_ATTRIBUTE, 0,
+    )
+    marked_rear = store_int_attribute(
+        group, flipped_rear.outputs["Mesh"], LEAF_ID_ATTRIBUTE, 1,
+    )
+    leaves = nodes.new("GeometryNodeJoinGeometry")
+    links.new(marked_front, leaves.inputs["Geometry"])
+    links.new(marked_rear, leaves.inputs["Geometry"])
+    smoothing_input = nodes.new("GeometryNodeSwitch")
+    smoothing_input.input_type = "GEOMETRY"
+    links.new(has_thickness, smoothing_input.inputs["Switch"])
+    links.new(marked_front, smoothing_input.inputs["False"])
+    links.new(leaves.outputs["Geometry"], smoothing_input.inputs["True"])
+    smoothed_leaves = pinned_smooth(
+        group,
+        smoothing_input.outputs[0],
+        group_input(nodes, {"Boundary Smooth"}).outputs["Boundary Smooth"],
+        read_float_attribute(group, BOUNDARY_SMOOTH_WEIGHT_ATTRIBUTE),
+    )
+    is_rear = compare_node(
+        group, "EQUAL", read_int_attribute(group, LEAF_ID_ATTRIBUTE), 1, data_type="INT",
+    )
+    separate = nodes.new("GeometryNodeSeparateGeometry")
+    separate.domain = "POINT"
+    links.new(smoothed_leaves, separate.inputs["Geometry"])
+    links.new(is_rear, separate.inputs["Selection"])
+    rear_geometry = separate.outputs["Selection"]
+    front_leaf = separate.outputs["Inverted"]
+
+    # Normalize the lookup order by the source index, then store the absolute rear
+    # target on the front before extracting its boundary edges.
+    rear_lookup = nodes.new("GeometryNodeSortElements")
+    rear_lookup.domain = "POINT"
+    links.new(rear_geometry, rear_lookup.inputs["Geometry"])
+    links.new(read_int_attribute(group, LEAF_SOURCE_INDEX_ATTRIBUTE), rear_lookup.inputs["Sort Weight"])
+    position = nodes.new("GeometryNodeInputPosition")
+    rear_position = sample_field(
+        group, rear_lookup.outputs["Geometry"], position.outputs["Position"], "FLOAT_VECTOR",
+        index=read_int_attribute(group, LEAF_SOURCE_INDEX_ATTRIBUTE),
+    )
+    front_geometry = store_vector_attribute(
+        group, front_leaf, REAR_TARGET_ATTRIBUTE, rear_position,
+    )
+
+    boundary = edge_boundary_field(nodes, links)
+
+    # Edges Extrude builds only the wall topology. Its Offset is edge-domain, so
+    # the generated top points are explicitly placed at their propagated targets.
+    extrude = nodes.new("GeometryNodeExtrudeMesh")
+    extrude.mode = "EDGES"
+    extrude.inputs["Offset"].default_value = (0.0, -1.0, 0.0)
+    links.new(front_geometry, extrude.inputs["Mesh"])
+    links.new(boundary, extrude.inputs["Selection"])
+    place_top = nodes.new("GeometryNodeSetPosition")
+    links.new(extrude.outputs["Mesh"], place_top.inputs["Geometry"])
+    links.new(extrude.outputs["Top"], place_top.inputs["Selection"])
+    links.new(read_vector_attribute(group, REAR_TARGET_ATTRIBUTE), place_top.inputs["Position"])
+    sides = nodes.new("GeometryNodeSeparateGeometry")
+    sides.domain = "FACE"
+    links.new(place_top.outputs["Geometry"], sides.inputs["Geometry"])
+    links.new(extrude.outputs["Side"], sides.inputs["Selection"])
+
+    back = nodes.new("GeometryNodeJoinGeometry")
+    links.new(rear_geometry, back.inputs["Geometry"])
+    links.new(sides.outputs["Selection"], back.inputs["Geometry"])
+    back_geometry = store_float_attribute(
+        group, back.outputs["Geometry"], NORMAL_REDUCTION_ATTRIBUTE_NAME, 1.0,
     )
     join = nodes.new("GeometryNodeJoinGeometry")
-    links.new(front.outputs["Geometry"], join.inputs["Geometry"])
-    links.new(rear, join.inputs["Geometry"])
+    links.new(front_geometry, join.inputs["Geometry"])
+    links.new(back_geometry, join.inputs["Geometry"])
     merge = nodes.new("GeometryNodeMergeByDistance")
     merge.mode = "ALL"
     links.new(weld_distance, merge.inputs["Distance"])
     links.new(join.outputs["Geometry"], merge.inputs["Geometry"])
-    return merge.outputs["Geometry"]
+    result = nodes.new("GeometryNodeSwitch")
+    result.input_type = "GEOMETRY"
+    links.new(has_thickness, result.inputs["Switch"])
+    links.new(front_leaf, result.inputs["False"])
+    links.new(merge.outputs["Geometry"], result.inputs["True"])
+    return result.outputs[0]
 
 
 def _build_depth_surface(group, geometry, controls):
@@ -220,7 +293,6 @@ def _build_depth_surface(group, geometry, controls):
     # lie on the open boundary. Clean the combined result once.
     geometry = remove_boundary_triangles(group, geometry)
     boundary = edge_boundary_field(group.nodes, group.links)
-    rim = evaluate_field(group, boundary, "FLOAT", "POINT")
     limit_boundary = boolean_node(
         group, "AND", has_limited,
         boolean_node(
@@ -237,13 +309,15 @@ def _build_depth_surface(group, geometry, controls):
     )
     # Depth Split and Depth Limit cuts taper the profile; the original outline keeps its thickness.
     geometry = taper_split_profile(group, geometry, cut)
+    geometry, cut_boundary = store_boolean_attribute(
+        group, geometry, CUT_BOUNDARY_ATTRIBUTE, cut,
+    )
     camera = build_surface_camera(
         group, _position_field(group, image), corner_camera, cut_vertex, split,
     )
     projection = project_depth_surface(
         group, geometry, camera, scale, controls.outputs["Reference Depth"], controls.outputs["Depth Scale"],
     )
-    projection = smooth_cut_boundary(group, projection, cut, boundary=rim)
     # Clamped depth pixels can collapse adjacent outline samples after projection.
     edge = group.nodes.new("GeometryNodeInputMeshEdgeVertices")
     length = group.nodes.new("ShaderNodeVectorMath")
@@ -259,6 +333,16 @@ def _build_depth_surface(group, geometry, controls):
     links.new(projection, merge.inputs["Geometry"])
     links.new(_math(group, "MULTIPLY", typical.outputs["Mean"], 1e-6), merge.inputs["Distance"])
     projection = merge.outputs["Geometry"]
+    projection = store_float_attribute(
+        group,
+        projection,
+        BOUNDARY_SMOOTH_WEIGHT_ATTRIBUTE,
+        cut_boundary_influence(group, cut_boundary),
+    )
+    source_index = group.nodes.new("GeometryNodeInputIndex")
+    projection = store_int_attribute(
+        group, projection, LEAF_SOURCE_INDEX_ATTRIBUTE, source_index.outputs["Index"],
+    )
     # The mode field is shared by the thickness and direction choices.
     mode = group.nodes.new("GeometryNodeMenuSwitch")
     mode.data_type = "BOOLEAN"
@@ -304,15 +388,10 @@ def _build_depth_surface(group, geometry, controls):
     solid = build_solid(
         group, projection, amount,
         read_vector_attribute(group, FRONT_NORMAL_ATTRIBUTE),
-        is_shell, controls,
+        is_shell, has_thickness, controls,
         _math(group, "MULTIPLY", typical.outputs["Mean"], SOLID_WELD_SCALE),
     )
-    shaped = group.nodes.new("GeometryNodeSwitch")
-    shaped.input_type = "GEOMETRY"
-    links.new(has_thickness, shaped.inputs["Switch"])
-    links.new(projection, shaped.inputs["False"])
-    links.new(solid, shaped.inputs["True"])
-    return remove_attribute_pattern(group, shaped.outputs[0], "_o_*")
+    return remove_attribute_pattern(group, solid, "_o_*")
 
 
 def build_image_depth_cutout_group():
@@ -334,10 +413,10 @@ def build_image_depth_cutout_group():
     boundary_smooth = interface_socket(group, 'Boundary Smooth', 'INPUT', 'NodeSocketInt', options)
     boundary_smooth.default_value, boundary_smooth.min_value, boundary_smooth.max_value = 4, 0, 16
     boundary_smooth.description = 'Smooth geometry near the original outline and Depth Split edges. Zero disables boundary smoothing.'
-    back_smooth = interface_socket(group, 'Back Smooth', 'INPUT', 'NodeSocketInt', options)
-    back_smooth.default_value, back_smooth.min_value, back_smooth.max_value = 8, 0, 16
-    back_smooth.description = 'Soften the rear surface where the balloon is thick. The effect follows Thickness and the balloon profile, so thin geometry and cut boundaries keep their positions.'
-    float_input(group, 'Edge Turn', 2.0, minimum=-3.0, maximum=3.0, parent=options).description = 'Turn the outline direction: zero follows the smoothed normal, one reaches the island average normal, two mirrors the smoothed normal across it, and higher or negative values keep turning either way.'
+    rear_smooth = interface_socket(group, 'Rear Smooth', 'INPUT', 'NodeSocketInt', options)
+    rear_smooth.default_value, rear_smooth.min_value, rear_smooth.max_value = 8, 0, 16
+    rear_smooth.description = 'Soften the rear surface where the balloon is thick. The strength follows the square root of the balloon profile for a flatter transition while thin geometry and cut boundaries keep their positions.'
+    float_input(group, 'Edge Turn', 1.0, minimum=-3.0, maximum=3.0, parent=options).description = 'Turn the outline direction: zero follows the smoothed normal, one reaches the island average normal, two mirrors the smoothed normal across it, and higher or negative values keep turning either way.'
     float_input(group, 'Front Inflation', 0.2, maximum=1, subtype='FACTOR', parent=options).description = 'Control how much the front surface bulges in Balloon mode, as a share of the balloon thickness. Zero keeps the original front surface.'
     float_input(group, 'Reference Depth', 1.0, subtype='DISTANCE', parent=options)
     data = group.interface.new_panel(name='Data', default_closed=True)

@@ -510,4 +510,4 @@ def project_depth_surface(
     links.new(geometry, project_geometry.inputs["Geometry"])
     links.new(surface_position.outputs["Vector"], project_geometry.inputs["Position"])
 
-    return remove_attribute_pattern(group, project_geometry.outputs["Geometry"], "_o_*")
+    return remove_attribute_pattern(group, project_geometry.outputs["Geometry"], "_o_depth_*")

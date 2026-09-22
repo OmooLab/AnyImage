@@ -1473,7 +1473,7 @@
 
 <h1 id="_1">节点资产</h1>
 <h2 id="_2">资产清单</h2>
-<p>节点组由 <code>tools/nodes/groups/</code> 中的构建模块定义。</p>
+<p>节点组由 <code>nodes/groups/</code> 中的构建模块定义，共用构建逻辑位于 <code>nodes/common/</code>。</p>
 <table>
 <thead>
 <tr>
@@ -1525,7 +1525,7 @@
 </tbody>
 </table>
 <h2 id="_3">构建节点资产</h2>
-<p>生产节点组由 <code>uv run node-group build</code> 构建到 <code>src/anyimage/assets/O_AnyImage.blend</code></p>
+<p>生产节点组由 <code>uv run --group blender node-group build</code> 构建到 <code>src/anyimage/assets/O_AnyImage.blend</code>。该文件是 Git 忽略的发布构建产物；CI 与本地发布都从节点源码重新生成。</p>
 <p>节点组规则：</p>
 <ul>
 <li>字段默认直接连接，多个消费者可复用同一输出；按消费位置的几何、域、类型和输入属性版本验证求值等价性</li>
@@ -1542,15 +1542,12 @@
 <li>接口或布局变更须验证 socket 顺序与结构、未使用输出隐藏及几何求值；纯布局变更比较运算、默认值和实际连接，确认功能不变</li>
 </ul>
 <h2 id="_4">构建资产脚本</h2>
-<p><code>tools/nodes/build.py</code> 按依赖顺序构建资产，调用 <code>arrangement/</code> 统一排列几何节点组后保存。<code>common/</code> 提供共用构建函数：<code>nodes.py</code> 创建接口与节点，<code>depth_surface.py</code>、<code>cutout.py</code> 等组装几何，<code>shader.py</code> 构建材质着色节点，<code>material_slots.py</code> 继承几何材质槽；<code>tools/nodes/preview/</code> 导出交互预览。</p>
-<p>保存后，<code>check.py</code> 在独立 Blender 进程中重新加载资产并做基本几何求值。接口、默认值和详细几何行为由 <code>tests/</code> 检查。</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>node-group<span class="w"> </span>build<span class="w"> </span>--blender<span class="w"> </span><span class="s2">&quot;/path/to/blender&quot;</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>node-group<span class="w"> </span>build<span class="w"> </span>--skip-tests
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>run<span class="w"> </span>node-group<span class="w"> </span>check
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>uv<span class="w"> </span>run<span class="w"> </span>node-group<span class="w"> </span>preview
-</span></code></pre></div>
-<p>脚本按 <code>--blender</code>、环境变量 <code>BLENDER_BIN</code>、项目 <code>.env</code>、<code>PATH</code> 的顺序查找 Blender。无法自动找到时，在项目根目录的 <code>.env</code> 中配置：</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>BLENDER_BIN=&quot;/absolute/path/to/blender&quot;
+<p><code>tools/nodes/build.py</code> 按依赖顺序加载 <code>nodes/groups/</code> 的定义，调用 <code>arrangement/</code> 统一排列几何节点组后保存。<code>nodes/common/</code> 提供共用构建函数：<code>nodes.py</code> 创建接口与节点，<code>depth_surface.py</code>、<code>cutout.py</code> 等组装几何，<code>shader.py</code> 构建材质着色节点，<code>material_slots.py</code> 继承几何材质槽；<code>tools/nodes/preview/</code> 导出交互预览。</p>
+<p>命令通过当前 uv Python 的独立子进程执行构建、检查和预览，<code>bpy</code> 由 <code>blender</code> dependency group 提供。保存后，<code>check.py</code> 重新加载资产并做基本几何求值；<code>tests/nodes/</code> 覆盖节点定义行为，<code>tests/tools/nodes/</code> 覆盖工具行为。CI 使用同一入口先生成资产，再运行常规测试和打包。</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>build
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>build<span class="w"> </span>--skip-tests
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>check
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>preview
 </span></code></pre></div>
 
 

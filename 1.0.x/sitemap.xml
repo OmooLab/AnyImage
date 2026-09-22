@@ -2,280 +2,280 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/getting-started/installation/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/getting-started/installation/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/getting-started/installation/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/architecture/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/architecture/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/architecture/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/common/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/common/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/common/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/development/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/development/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/development/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/node-assets/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/node-assets/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/node-assets/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/outputs/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/outputs/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/outputs/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/runtime/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/runtime/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/runtime/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/ai-setup/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/ai-setup/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/ai-setup/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/clipboard-image/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/clipboard-image/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/clipboard-image/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/convert-to-panorama/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/convert-to-panorama/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/convert-to-panorama/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/convert-to-plane/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/convert-to-plane/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/convert-to-plane/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/cutout-tool/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/cutout-tool/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/cutout-tool/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/frame/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/frame/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/frame/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/mask/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/mask/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/mask/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/rectify/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/rectify/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/rectify/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/remove-background/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/remove-background/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/remove-background/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/upscale/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/upscale/"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.xen/internals/operators/upscale/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.x"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/getting-started/installation/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/getting-started/installation/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xgetting-started/installation/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/architecture/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/architecture/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/architecture/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/common/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/common/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/common/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/development/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/development/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/development/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/node-assets/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/node-assets/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/node-assets/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/outputs/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/outputs/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/outputs/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/runtime/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/runtime/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/runtime/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/ai-setup/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/ai-setup/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/ai-setup/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/clipboard-image/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/clipboard-image/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/clipboard-image/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/convert-to-panorama/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/convert-to-panorama/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/convert-to-panorama/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/convert-to-plane/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/convert-to-plane/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/convert-to-plane/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/cutout-tool/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/cutout-tool/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/cutout-tool/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/frame/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/frame/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/frame/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/mask/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/mask/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/mask/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/rectify/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/rectify/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/rectify/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/remove-background/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/remove-background/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/remove-background/"/>
     </url>
     <url>
         <loc>https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/upscale/</loc>
-        <lastmod>2026-09-18</lastmod>
+        <lastmod>2026-09-22</lastmod>
         <changefreq>daily</changefreq>
         <xhtml:link rel="alternate" hreflang="en" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/internals/operators/upscale/"/>
         <xhtml:link rel="alternate" hreflang="zh" href="https://docs.omoolab.xyz/anyimage/1.0.xinternals/operators/upscale/"/>

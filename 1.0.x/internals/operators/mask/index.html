@@ -1361,7 +1361,7 @@
 
 
 <h1 id="mask-alpha">Mask Alpha 编辑</h1>
-<p><code>operators/mask_tool.py</code> 定义 <code>EditImageAlpha</code> 和 <code>MaskTool</code>，使用 <code>common/viewport.py</code> 的 <code>ImageGesture</code> 管理 Lasso、Brush 与 Polyline。</p>
+<p><code>operators/mask_tool.py</code> 定义 <code>EditImageAlpha</code>，使用 <code>common/viewport.py</code> 的 <code>ImageGesture</code> 管理 Lasso、Brush 与 Polyline；<code>tools.py</code> 定义对应的 <code>MaskTool</code>。</p>
 <pre class="mermaid"><code>flowchart TD
     A[冻结 Scene 的 Gesture、Mode、Radius] --&gt; B[屏幕手势与 Overlay]
     B --&gt; C[完成后投影并生成覆盖 M]

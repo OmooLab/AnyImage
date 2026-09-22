@@ -1361,7 +1361,7 @@
 
 
 <h1 id="frame">Frame 多图合成</h1>
-<p><code>operators/frame_tool/operators.py</code> 定义 <code>FrameImages</code> 和 <code>FrameTool</code>。<code>projection.py</code> 负责视图投影、交叠和结果平面定位，<code>compositing.py</code> 负责像素深度排序与边界覆盖采样，<code>__init__.py</code> 导出类型及注册清单。Frame 将选中的静态 Image Empty 按当前视图合成为一张图片。</p>
+<p><code>operators/frame_tool/operators.py</code> 定义 <code>FrameImages</code>。<code>projection.py</code> 负责视图投影、交叠和结果平面定位，<code>compositing.py</code> 负责像素深度排序与边界覆盖采样，<code>__init__.py</code> 导出 Operator 及注册清单。<code>tools.py</code> 定义对应的 <code>FrameTool</code>。Frame 将选中的静态 Image Empty 按当前视图合成为一张图片。</p>
 <pre class="mermaid"><code>flowchart TD
     A[拖出屏幕矩形] --&gt; B[冻结视图矩阵并收集选中静态图片]
     B --&gt; C[检查矩形与 active 图片的有效投射交集]

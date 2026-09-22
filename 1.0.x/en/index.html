@@ -31,7 +31,7 @@
     
     
       
-        <title>AnyImage - AnyImage 文档</title>
+        <title>🖼️ AnyImage - AnyImage 文档</title>
       
     
     
@@ -127,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              AnyImage
+              🖼️ AnyImage
             
           </span>
         </div>
@@ -1324,6 +1324,58 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#image-is-all-you-need" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IMAGE is All You Need
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#start-directly-from-an-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Start directly from an image
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-image-multiple-spatial-forms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One image, multiple spatial forms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1339,44 +1391,48 @@
 
 
 
-<h1 id="anyimage">AnyImage</h1>
-<p>把图片里的空间感带进 Blender。</p>
-<p>AnyImage 是一款 Blender 扩展，可以粘贴和编辑图片、创建普通 Plane 或 Depth Plane、从局部选区生成 Cutout Shape，并在独立 AI Environment 中完成去背景与高清放大。</p>
+<h1 id="anyimage">🖼️ AnyImage</h1>
+<h2 id="image-is-all-you-need">IMAGE is All You Need</h2>
+<p><img alt="cover" src="../assets/cover.png" /></p>
+<p>AnyImage is an image toolkit for Blender by OmooLab. It turns images into more than references: paste an image, select what you need, and transform it into a scene element with materials, contours, and depth.</p>
+<h2 id="start-directly-from-an-image">Start directly from an image</h2>
+<p>Press <strong>Ctrl+Shift+V</strong> in the 3D View or Node Editor (<strong>Cmd+Shift+V</strong> on macOS) to paste an image from the clipboard directly into the current workspace. There is no need to save the image first or interrupt your workflow.</p>
+<p>You can also continue working with existing images. Select an Image Empty, right-click to open the <strong>AnyImage</strong> menu, and access the most common actions from there.</p>
+<h2 id="one-image-multiple-spatial-forms">One image, multiple spatial forms</h2>
 <ul>
-<li>按 <strong>Ctrl+V</strong>（macOS 为 <strong>Cmd+V</strong>）把剪贴板图片粘贴到当前编辑器</li>
-<li>用 <strong>Plane</strong> 创建可调厚度和细分的图片网格</li>
-<li>用 <strong>Depth Plane</strong> 把静态图片转换为可调节的立体面片</li>
-<li>用 <strong>Cutout</strong> 从套索选区生成 Surface、Balloon 与两种 Depth Shape</li>
-<li>用 <strong>Frame</strong> 从当前视角重新取景并合并 Image Empty，用 <strong>Mask</strong> 的 Lasso、Brush 或 Polyline 编辑 Alpha；Brush 拖动时以红色或灰色填充预览准确范围，释放后提交；用 <strong>Rectify</strong> 校正透视</li>
-<li>用 <strong>Remove Background / Upscale</strong> 处理单图、视频和序列帧</li>
+<li><strong>Plane / Depth Plane</strong>: Turn an image into a flat or dimensional plane.</li>
+<li><strong>Cutout</strong>: Select a subject and create a Surface, Balloon, or Depth Shape.</li>
+<li><strong>Image tools</strong>: Reframe images, edit transparent areas, correct perspective, remove backgrounds, and upscale.</li>
 </ul>
+<h2 id="quick-start">Quick start</h2>
+<p>Drag the button below into the Blender window to install. The first drag prompts you to add the AnyImage extension repository. Confirm it, then drag the button again.</p>
 <div class="anyimage-install">
   <div class="anyimage-install-item" data-platform="windows-x64">
     <div class="anyimage-install-group">
       <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.1.windows-x64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=windows-x64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>拖入 Blender 安装</span>
+        <i class="i-move"></i><span>Drag into Blender to install</span>
       </button>
       <div class="anyimage-install-platform"><strong>Windows</strong> – 78.3&nbsp;MB</div>
     </div>
-    <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.windows-x64.zip" download="AnyImage.v1.0.1.windows-x64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
+    <small class="anyimage-install-note">…or <a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.windows-x64.zip" download="AnyImage.v1.0.1.windows-x64.zip">download</a> and use <a href="https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a></small>
   </div>
   <div class="anyimage-install-item" data-platform="macos-arm64">
     <div class="anyimage-install-group">
       <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.1.macos-arm64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=macos-arm64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>拖入 Blender 安装</span>
+        <i class="i-move"></i><span>Drag into Blender to install</span>
       </button>
       <div class="anyimage-install-platform"><strong>macOS<span class="anyimage-install-platform-rest"> - Apple Silicon</span></strong> – 57.5&nbsp;MB</div>
     </div>
-    <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.macos-arm64.zip" download="AnyImage.v1.0.1.macos-arm64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
+    <small class="anyimage-install-note">…or <a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.macos-arm64.zip" download="AnyImage.v1.0.1.macos-arm64.zip">download</a> and use <a href="https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a></small>
   </div>
   <div class="anyimage-install-item" data-platform="linux-x64">
     <div class="anyimage-install-group">
       <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.1.linux-x64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=linux-x64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>拖入 Blender 安装</span>
+        <i class="i-move"></i><span>Drag into Blender to install</span>
       </button>
       <div class="anyimage-install-platform"><strong>Linux</strong> – 71.0&nbsp;MB</div>
     </div>
-    <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.linux-x64.zip" download="AnyImage.v1.0.1.linux-x64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
+    <small class="anyimage-install-note">…or <a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.linux-x64.zip" download="AnyImage.v1.0.1.linux-x64.zip">download</a> and use <a href="https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a></small>
   </div>
 </div>
 

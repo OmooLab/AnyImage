@@ -1475,6 +1475,14 @@
 <td>Scene 手势状态、模型状态查询、枚举与 Operator 属性构造</td>
 </tr>
 <tr>
+<td><code>tools.py</code></td>
+<td>3D View WorkspaceTool 声明、顺序与注册</td>
+</tr>
+<tr>
+<td><code>keymaps.py</code></td>
+<td>扩展快捷键的注册与清理</td>
+</tr>
+<tr>
 <td><code>common/</code></td>
 <td>Blender 侧公共能力</td>
 </tr>
@@ -1489,7 +1497,7 @@
 </tbody>
 </table>
 <h2 id="_2">注册与配置</h2>
-<p>注销先关闭 Runtime、快捷键与工具，再移除菜单和 Scene 属性，按 <code>CLASSES</code> 逆序注销类型。设备、存储目录、模型、材质显示适配和功能上限统一通过 <code>preferences.py</code> 读取。</p>
+<p>顶层入口注册类型后，通过 <code>tools.py</code> 统一注册 WorkspaceTool，通过 <code>keymaps.py</code> 统一注册快捷键。注销按相反生命周期关闭 Runtime、快捷键与工具，再移除菜单和 Scene 属性，按 <code>CLASSES</code> 逆序注销类型。设备、存储目录、模型、材质显示适配和功能上限统一通过 <code>preferences.py</code> 读取。</p>
 <p><strong>Maximum AI Input Size</strong> 限制模型分析输入和 Upscale 可提交源图的长边；<strong>Maximum Frame Resolution</strong> 限制 Frame 输出长边；<strong>Minimum Relative Edge Length</strong> 与 <strong>Boundary Padding</strong> 控制 Cutout 的网格密度和轮廓边界采样。</p>
 <h2 id="_3">执行边界</h2>
 <pre class="mermaid"><code>flowchart TD

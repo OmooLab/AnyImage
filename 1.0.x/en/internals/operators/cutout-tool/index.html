@@ -1452,7 +1452,7 @@
 
 
 <h1 id="cutout">Cutout</h1>
-<p>Cutout 在静态 Image Empty 上圈定 Selection，按轮廓创建 Flat、Solid、Depth Symmetry 或 Depth Solid。入口位于 <code>operators/cutout_tool/operators.py</code>，Shape 菜单位于 <code>interaction.py</code>，预设标识与节点组对应关系位于 <code>shape.py</code>。</p>
+<p>Cutout 在静态 Image Empty 上圈定 Selection，按轮廓创建 Flat、Solid、Depth Symmetry 或 Depth Solid。Operator 入口位于 <code>operators/cutout_tool/operators.py</code>，WorkspaceTool 声明位于 <code>tools.py</code>，Shape 菜单位于 <code>interaction.py</code>，预设标识与节点组对应关系位于 <code>shape.py</code>。</p>
 <pre class="mermaid"><code>flowchart TD
     A[Lasso 或 Polyline 提交 SelectionPath] --&gt; B[选择 Shape]
     B --&gt; C[栅格化 SelectionMask 并读取源 RGBA]

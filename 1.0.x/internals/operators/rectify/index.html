@@ -1361,7 +1361,7 @@
 
 
 <h1 id="rectify">Rectify 透视校正</h1>
-<p><code>operators/rectify_tool/operators.py</code> 定义 <code>RectifyImagePerspective</code> 与 <code>RectifyTool</code>，将图片内的四角区域校正为矩形。<code>geometry.py</code> 负责四角验证与像素校正，<code>preview.py</code> 负责预览图、Overlay 和宽高比控制，<code>__init__.py</code> 导出类型及注册清单。</p>
+<p><code>operators/rectify_tool/operators.py</code> 定义 <code>RectifyImagePerspective</code>，将图片内的四角区域校正为矩形。<code>geometry.py</code> 负责四角验证与像素校正，<code>preview.py</code> 负责预览图、Overlay 和宽高比控制，<code>__init__.py</code> 导出 Operator 及注册清单；<code>tools.py</code> 定义对应的 <code>RectifyTool</code>。</p>
 <pre class="mermaid"><code>flowchart TD
     A[点选四角] --&gt; B[规范为凸 Quad 并检查图片交叠]
     B --&gt; C[512×512 预览与宽高比调整]

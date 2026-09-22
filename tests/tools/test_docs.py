@@ -63,7 +63,7 @@ class DocumentationCommandTest(unittest.TestCase):
                 "--push",
                 "--allow-empty",
                 "--remote",
-                "omoolab",
+                "github",
                 documentation_version(),
                 "latest",
             ),

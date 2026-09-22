@@ -4,7 +4,7 @@ site_author: OmooLab
 site_description: AnyImage 是一款将图片、视频和序列帧转换为立体面片的 Blender 扩展。
 
 repo_name: OmooLab/AnyImage
-repo_url: https://git.omoolab.xyz/icrdr/AnyImage
+repo_url: https://github.com/OmooLab/AnyImage
 
 nav:
   - AnyImage:

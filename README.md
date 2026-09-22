@@ -22,4 +22,4 @@ You can also continue working with existing images. Select an Image Empty, right
 
 ## Quick start
 
-[拖拽安装](https://docs.omoolab.xyz/anyimage/latest/getting-started/installation/)
+[Installation](https://docs.omoolab.xyz/anyimage/latest/getting-started/installation/)

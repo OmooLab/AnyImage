@@ -11,7 +11,7 @@ DOCUMENTATION_COMMANDS = {
     "dev": ("mkdocs", "serve"),
 }
 MIKE_DEPLOY_COMMAND = ("mike", "deploy", "--update-aliases")
-DOCUMENTATION_REMOTE = "omoolab"
+DOCUMENTATION_REMOTE = "github"
 
 
 def project_version():

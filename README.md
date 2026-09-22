@@ -2,7 +2,7 @@
 
 [中文文档](https://docs.omoolab.xyz/anyimage/latest/)
 
-##IMAGE is All You Need
+## IMAGE is All You Need
 
 ![cover](https://docs.omoolab.xyz/anyimage/latest/assets/cover.png)
 
@@ -22,34 +22,4 @@ You can also continue working with existing images. Select an Image Empty, right
 
 ## Quick start
 
-Drag the button below into the Blender window to install. The first drag prompts you to add the AnyImage extension repository. Confirm it, then drag the button again.
-
-<div class="anyimage-install">
-  <div class="anyimage-install-item" data-platform="windows-x64">
-    <div class="anyimage-install-group">
-      <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.1.windows-x64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=windows-x64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>Drag into Blender to install</span>
-      </button>
-      <div class="anyimage-install-platform"><strong>Windows</strong> – 78.3&nbsp;MB</div>
-    </div>
-    <small class="anyimage-install-note">…or <a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.windows-x64.zip" download="AnyImage.v1.0.1.windows-x64.zip">download</a> and use <a href="https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a></small>
-  </div>
-  <div class="anyimage-install-item" data-platform="macos-arm64">
-    <div class="anyimage-install-group">
-      <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.1.macos-arm64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=macos-arm64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>Drag into Blender to install</span>
-      </button>
-      <div class="anyimage-install-platform"><strong>macOS<span class="anyimage-install-platform-rest"> - Apple Silicon</span></strong> – 57.5&nbsp;MB</div>
-    </div>
-    <small class="anyimage-install-note">…or <a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.macos-arm64.zip" download="AnyImage.v1.0.1.macos-arm64.zip">download</a> and use <a href="https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a></small>
-  </div>
-  <div class="anyimage-install-item" data-platform="linux-x64">
-    <div class="anyimage-install-group">
-      <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.1.linux-x64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=linux-x64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>Drag into Blender to install</span>
-      </button>
-      <div class="anyimage-install-platform"><strong>Linux</strong> – 71.0&nbsp;MB</div>
-    </div>
-    <small class="anyimage-install-note">…or <a href="https://extensions.omoolab.xyz/AnyImage.v1.0.1.linux-x64.zip" download="AnyImage.v1.0.1.linux-x64.zip">download</a> and use <a href="https://docs.blender.org/manual/en/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a></small>
-  </div>
-</div>
+[拖拽安装](https://docs.omoolab.xyz/anyimage/latest/getting-started/installation/)

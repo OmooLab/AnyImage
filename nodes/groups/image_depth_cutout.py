@@ -26,7 +26,6 @@ LEAF_SOURCE_INDEX_ATTRIBUTE = "_o_leaf_source_index"
 REAR_TARGET_ATTRIBUTE = "_o_rear_target"
 BALLOON_THICKNESS_BASE = 1.0
 NORMAL_SMOOTH_ITERATIONS = 256
-SOLID_WELD_SCALE = 1e-4
 
 
 def build_normal_weight(group, is_shell, profile):
@@ -122,7 +121,7 @@ def build_inflation_amount(group, controls, is_shell):
     return amount.outputs[0]
 
 
-def build_solid(group, surface, amount, normal, is_shell, has_thickness, controls, weld_distance):
+def build_solid(group, surface, amount, normal, is_shell, has_thickness, controls):
     """Inflate the projected surface into a front leaf, wall and rear leaf."""
     nodes, links = group.nodes, group.links
 
@@ -264,7 +263,7 @@ def build_solid(group, surface, amount, normal, is_shell, has_thickness, control
     links.new(back_geometry, join.inputs["Geometry"])
     merge = nodes.new("GeometryNodeMergeByDistance")
     merge.mode = "ALL"
-    links.new(weld_distance, merge.inputs["Distance"])
+    merge.inputs["Distance"].default_value = 1e-6
     links.new(join.outputs["Geometry"], merge.inputs["Geometry"])
     result = nodes.new("GeometryNodeSwitch")
     result.input_type = "GEOMETRY"
@@ -318,27 +317,25 @@ def _build_depth_surface(group, geometry, controls):
     projection = project_depth_surface(
         group, geometry, camera, scale, controls.outputs["Reference Depth"], controls.outputs["Depth Scale"],
     )
-    # Clamped depth pixels can collapse adjacent outline samples after projection.
-    edge = group.nodes.new("GeometryNodeInputMeshEdgeVertices")
-    length = group.nodes.new("ShaderNodeVectorMath")
-    length.operation = "DISTANCE"
-    links.new(edge.outputs["Position 1"], length.inputs[0])
-    links.new(edge.outputs["Position 2"], length.inputs[1])
-    typical = group.nodes.new("GeometryNodeAttributeStatistic")
-    typical.data_type, typical.domain = "FLOAT", "EDGE"
-    links.new(projection, typical.inputs["Geometry"])
-    links.new(length.outputs["Value"], typical.inputs["Attribute"])
-    merge = group.nodes.new("GeometryNodeMergeByDistance")
-    merge.mode = "CONNECTED"
-    links.new(projection, merge.inputs["Geometry"])
-    links.new(_math(group, "MULTIPLY", typical.outputs["Mean"], 1e-6), merge.inputs["Distance"])
-    projection = merge.outputs["Geometry"]
-    projection = store_float_attribute(
+    weighted_projection = store_float_attribute(
         group,
         projection,
         BOUNDARY_SMOOTH_WEIGHT_ATTRIBUTE,
         cut_boundary_influence(group, cut_boundary),
     )
+    smooth_enabled = compare_node(
+        group,
+        "GREATER_THAN",
+        controls.outputs["Boundary Smooth"],
+        0,
+        data_type="INT",
+    )
+    boundary_weight = group.nodes.new("GeometryNodeSwitch")
+    boundary_weight.input_type = "GEOMETRY"
+    links.new(smooth_enabled, boundary_weight.inputs["Switch"])
+    links.new(projection, boundary_weight.inputs["False"])
+    links.new(weighted_projection, boundary_weight.inputs["True"])
+    projection = boundary_weight.outputs["Output"]
     source_index = group.nodes.new("GeometryNodeInputIndex")
     projection = store_int_attribute(
         group, projection, LEAF_SOURCE_INDEX_ATTRIBUTE, source_index.outputs["Index"],
@@ -381,15 +378,20 @@ def _build_depth_surface(group, geometry, controls):
     )
     # The rear leaf inflates along the negated front direction, so one direction is
     # carried across the extrusion instead of being re-evaluated on the moved surface.
-    projection = store_vector_attribute(
+    normal_projection = store_vector_attribute(
         group, projection, FRONT_NORMAL_ATTRIBUTE,
         build_normal_direction(group, controls, smoothed, average, weight),
     )
+    normal_enabled = group.nodes.new("GeometryNodeSwitch")
+    normal_enabled.input_type = "GEOMETRY"
+    links.new(has_thickness, normal_enabled.inputs["Switch"])
+    links.new(projection, normal_enabled.inputs["False"])
+    links.new(normal_projection, normal_enabled.inputs["True"])
+    projection = normal_enabled.outputs["Output"]
     solid = build_solid(
         group, projection, amount,
         read_vector_attribute(group, FRONT_NORMAL_ATTRIBUTE),
         is_shell, has_thickness, controls,
-        _math(group, "MULTIPLY", typical.outputs["Mean"], SOLID_WELD_SCALE),
     )
     return remove_attribute_pattern(group, solid, "_o_*")
 

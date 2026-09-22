@@ -279,7 +279,7 @@ def _relax_fill(group, geometry, fill, smooth):
     """Relax the fill faces on the welded mesh and fade outward from them."""
     return pinned_smooth(
         group, geometry, smooth, _falloff(group, fill, SMOOTH_RINGS),
-        weight=0.2, pin_boundary=False,
+        weight=0.2, pin_boundary=False, cache_region=True,
     )
 
 
@@ -320,8 +320,6 @@ def build_image_cutout_symmetry_group():
     smooth = interface_socket(group, 'Smooth', 'INPUT', 'NodeSocketInt', options)
     smooth.default_value, smooth.min_value, smooth.max_value = 4, 0, 16
     smooth.description = 'Smooth the cut ring and the fill band around the outline and the fill, each over four rings. Zero keeps both raw.'
-    merge = float_input(group, 'Merge Distance', 0.001, minimum=0, subtype='DISTANCE', parent=options)
-    merge.description = 'Weld mirrored geometry within this distance of the symmetry plane; boundaries farther away get filled.'
     interface_socket(group, 'Geometry', 'OUTPUT', 'NodeSocketGeometry')
     nodes, links = group.nodes, group.links
     inputs = group_input(nodes, set()).outputs
@@ -335,8 +333,7 @@ def build_image_cutout_symmetry_group():
     statistics.data_type, statistics.domain = 'FLOAT', 'EDGE'
     links.new(aligned, statistics.inputs['Geometry'])
     links.new(edge_length.outputs['Value'], statistics.inputs['Attribute'])
-    # 合并距离同时决定平面的贴合带和补面边界，两者一致才不会留下细小补面。
-    merge_distance = _math(group, 'MAXIMUM', inputs['Merge Distance'], 1e-6)
+    merge_distance = 1e-6
     beyond = _beyond_plane_field(group, merge_distance)
     on_plane = _on_plane_field(group, merge_distance)
     retract = boolean_node(group, 'OR', on_plane, beyond)
@@ -350,15 +347,12 @@ def build_image_cutout_symmetry_group():
     shade.domain = 'FACE'
     links.new(front, shade.inputs['Geometry'])
     front = store_float_attribute(group, shade.outputs[0], FACE_ATTRIBUTE, 1., domain='FACE')
-    front = _relax_seam(group, front, seam_field, retract, inputs['Smooth'])
+    front = _relax_seam(
+        group, front, seam_field, retract, inputs['Smooth'],
+    )
     # 松弛会把点压回平面，贴平的面和内部贴平边要在松弛之后再清一次。
     front = _delete_flat_faces(group, front, merge_distance)
     front = _delete_crease_faces(group, front, merge_distance)
-    fill_iterations = nodes.new('GeometryNodeSwitch')
-    fill_iterations.input_type = 'INT'
-    fill_iterations.inputs['False'].default_value = 0
-    links.new(inputs['Fill Sides'], fill_iterations.inputs['Switch'])
-    links.new(inputs['Smooth'], fill_iterations.inputs['True'])
     # 切口环本身贴在对称面上并靠镜像焊住，只有不落在这条环上的边界边才需要补面。
     wall = nodes.new('FunctionNodeBooleanMath')
     wall.operation = 'AND'
@@ -386,7 +380,15 @@ def build_image_cutout_symmetry_group():
     # 平面附近的点已经折到平面上，接缝两侧位置重合；合并只作用在这条带内。
     merged = _merge_points(group, join.outputs[0], on_plane, merge_distance)
     # 先让镜像焊住接缝，再松弛补面和它外侧的衔接带。
-    geometry = _relax_fill(group, merged, fill, fill_iterations.outputs[0])
+    relaxed_fill = _relax_fill(
+        group, merged, fill, inputs['Smooth'],
+    )
+    fill_enabled = nodes.new('GeometryNodeSwitch')
+    fill_enabled.input_type = 'GEOMETRY'
+    links.new(inputs['Fill Sides'], fill_enabled.inputs['Switch'])
+    links.new(merged, fill_enabled.inputs['False'])
+    links.new(relaxed_fill, fill_enabled.inputs['True'])
+    geometry = fill_enabled.outputs['Output']
     geometry = store_float_attribute(group, geometry, AXIS_ATTRIBUTE, 1., domain='FACE')
     orient = nodes.new('GeometryNodeTransform')
     orient.inputs['Rotation'].default_value = Matrix.Rotation(1.5707963267948966, 4, 'Z').to_euler()

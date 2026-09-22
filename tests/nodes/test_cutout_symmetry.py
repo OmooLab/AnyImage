@@ -104,7 +104,6 @@ def test_symmetry_interface_and_cutout_defaults(symmetry):
         "Scale",
         "Fill Sides",
         "Smooth",
-        "Merge Distance",
     ]
     assert tuple(mirror_inputs[1].default_value) == (0, 0, 1)
     assert mirror_inputs[3].default_value == 1
@@ -114,8 +113,49 @@ def test_symmetry_interface_and_cutout_defaults(symmetry):
     assert mirror_inputs[3].max_value == 2
     assert mirror_inputs[4].default_value is True
     assert mirror_inputs[5].default_value == 4
-    assert mirror_inputs[6].default_value == pytest.approx(0.001)
-    assert mirror_inputs[6].min_value == 0
+
+    stores = {
+        node.inputs["Name"].default_value: node
+        for node in mirror.node_group.nodes
+        if node.bl_idname == "GeometryNodeStoreNamedAttribute"
+    }
+    assert stores["_o_pinned_smooth_region_point"].domain == "POINT"
+    assert stores["_o_pinned_smooth_region_corner"].domain == "CORNER"
+    uv_stores = [
+        node for node in mirror.node_group.nodes
+        if node.bl_idname == "GeometryNodeStoreNamedAttribute"
+        and node.inputs["Name"].default_value == "UVMap"
+    ]
+    assert len(uv_stores) == 2
+    for store in uv_stores:
+        uv_switch = next(
+            link.to_node for link in store.outputs["Geometry"].links
+            if link.to_node.bl_idname == "GeometryNodeSwitch"
+            and link.to_socket.name == "True"
+        )
+        iteration_limit = uv_switch.inputs["Switch"].links[0].from_node
+        assert iteration_limit.bl_idname == "FunctionNodeCompare"
+        assert iteration_limit.data_type == "INT"
+        assert iteration_limit.operation == "LESS_THAN"
+        assert next(
+            socket for socket in iteration_limit.inputs
+            if socket.identifier == "B_INT"
+        ).default_value == 4
+        assert next(
+            socket for socket in iteration_limit.inputs
+            if socket.identifier == "A_INT"
+        ).links[0].from_socket.name == "Iteration"
+    assert not [
+        node for node in mirror.node_group.nodes
+        if node.bl_idname == "GeometryNodeSwitch" and node.input_type == "INT"
+    ]
+    merges = [
+        node for node in mirror.node_group.nodes
+        if node.bl_idname == "GeometryNodeMergeByDistance"
+    ]
+    assert len(merges) == 1
+    assert not merges[0].inputs["Distance"].is_linked
+    assert merges[0].inputs["Distance"].default_value == pytest.approx(1e-6)
 
     cutout_names = {
         item.name
@@ -220,28 +260,24 @@ def test_disabled_fill_keeps_the_welded_seam(symmetry):
     assert not any(plane[edge[0]] and plane[edge[1]] for edge in open_edges)
 
 
-def test_merge_distance_snaps_the_welded_band(symmetry):
-    """合并距离决定平面附近折平还是补面：带内直接焊住，带外的开口才补。"""
+def test_fixed_merge_distance_welds_the_seam(symmetry):
     obj, _cutout, _mirror, _cutout_setter, mirror_setter = symmetry
-    mirror_setter("Merge Distance", 0.05, subtype="DISTANCE")
     points, faces, marker = _evaluated(obj)
-    band = np.abs(points[:, 0]) < 0.05
+    tolerance = _tolerance(points)
+    band = np.abs(points[:, 0]) <= tolerance
 
     assert_closed(faces)
     assert band.any()
-    # 补面墙体从带外开口挤向对称面，因此每张补面至少跨过半个合并距离。
     for face, value in zip(faces, marker):
         if value == 3:
-            assert np.abs(points[list(face)][:, 0]).max() > 0.025
+            assert np.abs(points[list(face)][:, 0]).max() > tolerance
 
     mirror_setter("Fill Sides", False)
     points, faces, _marker = _evaluated(obj)
-    band = np.abs(points[:, 0]) < 0.05
-
-    # 合并距离之内的点全部折到对称面上，接缝直接焊住。
-    assert np.abs(points[band][:, 0]).max() < _tolerance(points)
+    tolerance = _tolerance(points)
     assert not any(
-        np.abs(points[list(edge)][:, 0]).max() < 0.05 for edge in _open_edges(faces)
+        np.abs(points[list(edge)][:, 0]).max() <= tolerance
+        for edge in _open_edges(faces)
     )
 
 
@@ -274,6 +310,7 @@ def test_fill_smooth_relaxes_the_junction_band(symmetry):
         tuple(np.round(value, 5)) for value in plain_uv
     }
     assert cKDTree(smooth_points).query(smooth_points * (-1, 1, 1))[0].max() < 1e-5
+
 
 
 def test_object_normal_attributes_follow_final_orientation(symmetry):

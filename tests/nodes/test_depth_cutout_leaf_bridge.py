@@ -297,6 +297,23 @@ def test_depth_cutout_uses_preflipped_leaves_and_one_shared_repeat():
     ]
 
     assert len(repeat_inputs) == len(repeat_outputs) == 1
+    repeat_nodes = {
+        node for node in group.nodes
+        if _has_node_path(group, repeat_inputs[0], node)
+        and _has_node_path(group, node, repeat_outputs[0])
+    }
+    assert not {
+        "GeometryNodeSeparateGeometry",
+        "GeometryNodeSampleNearest",
+        "GeometryNodeSampleIndex",
+        "GeometryNodeInputMeshEdgeNeighbors",
+        "GeometryNodeInputMeshVertexNeighbors",
+    } & {node.bl_idname for node in repeat_nodes}
+    assert not [
+        node for node in repeat_nodes
+        if node.bl_idname == "GeometryNodeBlurAttribute"
+        and node.data_type == "FLOAT"
+    ]
     assert len(flips) == 1
     assert _has_node_path(group, flips[0], repeat_inputs[0])
     assert any(_has_node_path(group, repeat_outputs[0], node) for node in separates)
@@ -304,11 +321,31 @@ def test_depth_cutout_uses_preflipped_leaves_and_one_shared_repeat():
         _has_node_path(group, repeat_outputs[0], extrude)
         for extrude in extrudes
     )
-    assert {node.mode for node in merges} == {"CONNECTED", "ALL"}
+    assert len(merges) == 1
+    assert merges[0].mode == "ALL"
+    assert not merges[0].inputs["Distance"].is_linked
+    assert merges[0].inputs["Distance"].default_value == pytest.approx(1e-6)
     assert "_o_leaf_cut" not in stored_names | read_names
     assert "_o_cut_boundary" in stored_names
     assert "_o_boundary_smooth_weight" in stored_names & read_names
-    assert removed_names == {"_o_depth_*", "_o_*"}
+    assert {
+        "_o_pinned_smooth_boundary",
+        "_o_pinned_smooth_normalization",
+    } <= stored_names
+    assert "_o_pinned_smooth_normalization" in read_names
+    assert removed_names == {"_o_depth_*", "_o_pinned_smooth_*", "_o_*"}
+
+    for name in ("_o_boundary_smooth_weight", "_o_front_normal"):
+        store = next(
+            node for node in group.nodes
+            if node.bl_idname == "GeometryNodeStoreNamedAttribute"
+            and node.inputs["Name"].default_value == name
+        )
+        assert any(
+            link.to_node.bl_idname == "GeometryNodeSwitch"
+            and link.to_socket.name == "True"
+            for link in store.outputs["Geometry"].links
+        )
     assert "Back Smooth" not in inputs
     assert inputs["Rear Smooth"].default_value == 8
     assert inputs["Edge Turn"].default_value == pytest.approx(1.0)

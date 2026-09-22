@@ -6,6 +6,8 @@ import bpy
 import bmesh
 import numpy as np
 
+from nodes.common.nodes import evaluate_field
+from nodes.common.smoothing import _blur, _boundary_target, edge_boundary_field
 from tests.support.depth_surface import surface, evaluated, assert_closed
 
 
@@ -72,6 +74,61 @@ def uv_delta(after, before):
     delta = after - before
     delta[:, 0] -= np.round(delta[:, 0])
     return delta
+
+
+def test_normalized_boundary_target_matches_boundary_mesh_blur():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    group = bpy.data.node_groups.new("Normalized Boundary Target", "GeometryNodeTree")
+    group.interface.new_socket(
+        name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry",
+    )
+    group.interface.new_socket(
+        name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry",
+    )
+    source = group.nodes.new("NodeGroupInput")
+    output = group.nodes.new("NodeGroupOutput")
+    boundary = evaluate_field(
+        group, edge_boundary_field(group.nodes, group.links), "BOOLEAN", "POINT",
+    )
+    normalization = _blur(group, boundary, "FLOAT", weight=0.5)
+    position = group.nodes.new("GeometryNodeInputPosition")
+    target = _boundary_target(
+        group, position.outputs["Position"], boundary, normalization,
+    )
+    store = group.nodes.new("GeometryNodeStoreNamedAttribute")
+    store.data_type, store.domain = "FLOAT_VECTOR", "POINT"
+    store.inputs["Name"].default_value = "boundary_target"
+    group.links.new(source.outputs["Geometry"], store.inputs["Geometry"])
+    group.links.new(target, store.inputs["Value"])
+    group.links.new(store.outputs["Geometry"], output.inputs["Geometry"])
+
+    points = np.array([
+        (0.0, 0.0, 0.0), (1.0, 0.2, 0.0), (2.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0), (1.0, 0.4, 1.0), (2.0, 0.0, 1.0),
+        (0.0, 0.0, 2.0), (1.0, 0.0, 2.0), (2.0, 0.0, 2.0),
+    ])
+    faces = [(0, 1, 4, 3), (1, 2, 5, 4), (3, 4, 7, 6), (4, 5, 8, 7)]
+    mesh = bpy.data.meshes.new("Normalized Boundary Target")
+    mesh.from_pydata(points, [], faces)
+    obj = bpy.data.objects.new("Normalized Boundary Target", mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.modifiers.new("Normalized Boundary Target", "NODES").node_group = group
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    evaluated_mesh = result.to_mesh()
+    try:
+        actual = np.array([
+            value.vector[:] for value in evaluated_mesh.attributes["boundary_target"].data
+        ])
+    finally:
+        result.to_mesh_clear()
+
+    neighbors = boundary_neighbors(faces)
+    for index, adjacent in neighbors.items():
+        boundary_adjacent = [neighbor for neighbor in adjacent if neighbor in neighbors]
+        expected = (
+            points[index] + 0.5 * points[boundary_adjacent].sum(axis=0)
+        ) / (1.0 + 0.5 * len(boundary_adjacent))
+        np.testing.assert_allclose(actual[index], expected, atol=1e-6)
 
 
 def test_cutout_boundary_smooth_defaults_to_four():

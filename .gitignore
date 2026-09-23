@@ -393,3 +393,5 @@ vite.config.ts.timestamp-*
 .vite/
 
 models/
+contents/
+spaces/

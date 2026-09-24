@@ -43,7 +43,7 @@ def create_panorama_from_result(context, result, operator):
             context.collection.objects.link(obj)
             obj.location = source.matrix_world.translation
             obj.scale = source.matrix_world.to_scale()
-            obj["anyimage_mesh_shape"] = "PANORAMA"
+            obj["o_image_object"] = True
             modifier = obj.modifiers.new(group.name, "NODES")
             modifier.node_group = group
             modifier.show_group_selector = False

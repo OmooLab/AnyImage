@@ -28,7 +28,8 @@ def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surf
     result = conversion.create_depth_plane_object(
         bpy.context, source, 2, material, image, metadata, "DEPTH")
     assert result.name == "Offset Image"
-    assert result["anyimage_mesh_shape"] == "DEPTH_PLANE"
+    assert result["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in result
     assert bpy.context.view_layer.objects.active == result
     expected = sorted(tuple(matrix @ Vector((x, y, 0)))
                       for x in bounds[:2] for y in bounds[2:])

@@ -2,7 +2,12 @@ import bpy
 
 from . import tools
 from .common.image import is_image_empty
-from .common.image_target import active_texture_node, image_edit_owner, owner_image
+from .common.image_target import (
+    active_texture_node,
+    image_edit_owner,
+    is_image_object,
+    owner_image,
+)
 from .operators.activate_workspace_tool import ActivateWorkspaceTool
 from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIEnvironment
 from .operators.convert_to_panorama import ConvertToPanorama
@@ -75,6 +80,14 @@ class AnyImageTextureNodeMenu(bpy.types.Menu):
         draw_image_actions(self.layout, context)
 
 
+class AnyImageObjectMenu(bpy.types.Menu):
+    bl_idname = "ANYIMAGE_MT_object_context"
+    bl_label = "AnyImage"
+
+    def draw(self, context):
+        draw_image_actions(self.layout, context)
+
+
 def draw_image_actions(layout, context):
     from .properties import ai_setup_label, ai_status
 
@@ -118,6 +131,13 @@ def draw_image_context_menu(self, context):
     if not is_image_empty(context.object):
         return
     self.layout.menu(AnyImageImageMenu.bl_idname, icon="PLUGIN")
+    self.layout.separator()
+
+
+def draw_image_object_context_menu(self, context):
+    if not is_image_object(getattr(context, "object", None)):
+        return
+    self.layout.menu(AnyImageObjectMenu.bl_idname, icon="PLUGIN")
     self.layout.separator()
 
 

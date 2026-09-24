@@ -4,6 +4,37 @@ from tests.support.blender import BlenderTestCase
 
 
 class ImageMenuTest(BlenderTestCase):
+    def test_marked_mesh_draws_object_image_menu(self):
+        calls = []
+        layout = SimpleNamespace(
+            menu=lambda identifier, **options: calls.append((identifier, options)),
+            separator=lambda: calls.append(("separator", {})),
+        )
+
+        class ImageObject(dict):
+            type = "MESH"
+
+        marked = ImageObject(o_image_object=True)
+        context = SimpleNamespace(object=marked)
+        self.anyimage.draw_image_object_context_menu(
+            SimpleNamespace(layout=layout),
+            context,
+        )
+        self.assertEqual(
+            calls,
+            [
+                (self.anyimage.AnyImageObjectMenu.bl_idname, {"icon": "PLUGIN"}),
+                ("separator", {}),
+            ],
+        )
+
+        calls.clear()
+        self.anyimage.draw_image_object_context_menu(
+            SimpleNamespace(layout=layout),
+            SimpleNamespace(object=ImageObject()),
+        )
+        self.assertEqual(calls, [])
+
     def test_view_3d_image_menu_offers_tools_and_ai_actions(self):
         calls, labels, operators = self.draw_menu(
             {

@@ -33,7 +33,8 @@ def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
         material,
     )
 
-    assert result["anyimage_mesh_shape"] == "PLANE"
+    assert result["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in result
     assert len(result.data.vertices) == 4
     assert len(result.data.polygons) == 1
     assert all(polygon.use_smooth for polygon in result.data.polygons)
@@ -126,7 +127,8 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
         plane_material,
     )
     assert_centered(plane, plane_bounds, plane_matrix)
-    assert plane["anyimage_mesh_shape"] == "PLANE"
+    assert plane["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in plane
 
     depth_source = create_source("Centered Depth Plane")
     depth_bounds = image_data.image_empty_bounds(depth_source)
@@ -147,7 +149,8 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
         "DEPTH",
     )
     assert_centered(depth_plane, depth_bounds, depth_matrix)
-    assert depth_plane["anyimage_mesh_shape"] == "DEPTH_PLANE"
+    assert depth_plane["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in depth_plane
     depth_modifier = depth_plane.modifiers[0]
     assert depth_modifier.node_group == saved
     assert saved.name == "O Image Depth Plane"
@@ -194,7 +197,8 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
         ),
         "RELIEF",
     )
-    assert result["anyimage_mesh_shape"] == "RELIEF_PLANE"
+    assert result["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in result
     assert result.modifiers[0].node_group.name == "O Image Relief Plane"
     modifier = result.modifiers[0]
     group = modifier.node_group

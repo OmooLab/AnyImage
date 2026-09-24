@@ -490,7 +490,8 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
     result = bpy.context.view_layer.objects.active
     assert result is not source
     assert result.type == "MESH"
-    assert result["anyimage_mesh_shape"] == "FLAT"
+    assert result["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in result
     modifier = result.modifiers[0]
     assert modifier.node_group.name == cutout_shape.CUTOUT_NODE_GROUP_NAMES["FLAT"]
     assert len(result.data.vertices) > 4

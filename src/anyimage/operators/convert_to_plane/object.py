@@ -43,7 +43,7 @@ def create_plane_object(context, source_object, subdivisions, material):
     try:
         for polygon in plane.data.polygons:
             polygon.use_smooth = True
-        plane["anyimage_mesh_shape"] = "PLANE"
+        plane["o_image_object"] = True
         return finalize_object_result(context, source_object, plane)
     except Exception:
         mesh = plane.data
@@ -77,7 +77,7 @@ def create_depth_plane_object(
         plane = bpy.data.objects.new(source_name, mesh)
         context.collection.objects.link(plane)
         plane.matrix_world = build_image_plane_matrix(source_object.matrix_world, bounds)
-        plane["anyimage_mesh_shape"] = f"{plane_type}_PLANE"
+        plane["o_image_object"] = True
 
         modifier = plane.modifiers.new(name=node_group.name, type="NODES")
         modifier.node_group = node_group

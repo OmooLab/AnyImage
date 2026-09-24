@@ -17,30 +17,34 @@ TBD - created by archiving change organize-tool-cli. Update Purpose after archiv
 
 ### Requirement: Build and check node groups
 
-`node-group build` SHALL 依次构建资产、校验保存的资产、运行全量 pytest；`node-group check` SHALL 仅执行后两步。两者 SHALL 支持 `--blender` 选择 Blender，支持 `--skip-tests` 仅跳过 pytest。
+`node-group build` SHALL 使用当前 Python 环境中的 `bpy`，通过独立 Python 子进程依次构建资产、校验保存的资产、运行 `tests/nodes` 与 `tests/tools/nodes`；`node-group check` SHALL 仅执行后两步。两者 SHALL 支持 `--skip-tests` 仅跳过节点相关 pytest，且 SHALL 不查找或启动外部 Blender 可执行程序。
 
 #### Scenario: Build assets
-- **WHEN** 用户运行 `uv run node-group build`
-- **THEN** 更新 O_AnyImage.blend，并在资产校验和全量测试成功后成功退出
+- **WHEN** 用户运行 `uv run --group blender node-group build`
+- **THEN** 使用固定 bpy 环境更新 O_AnyImage.blend，并在独立进程的资产校验和节点相关测试成功后成功退出
 
 #### Scenario: Check existing assets
-- **WHEN** 用户运行 `uv run node-group check`
-- **THEN** 检查已有资产并运行全量测试，资产文件内容保持原样
+- **WHEN** 用户运行 `uv run --group blender node-group check`
+- **THEN** 使用固定 bpy 环境检查已有资产并运行节点相关测试，资产文件内容保持原样
 
 #### Scenario: Skip Python tests
 - **WHEN** build 或 check 指定 `--skip-tests`
-- **THEN** 仍执行资产校验，跳过 pytest
+- **THEN** 仍执行独立进程的资产校验，跳过 pytest
 
 #### Scenario: Stop after failure
 - **WHEN** 构建、校验或测试任一步失败
 - **THEN** 命令非零退出且不执行后续步骤
 
+#### Scenario: Missing bpy environment
+- **WHEN** 当前 Python 环境无法导入 bpy
+- **THEN** 命令非零退出并提示使用 `--group blender`，不尝试查找外部 Blender
+
 ### Requirement: Preview node groups
 
-`node-group preview` SHALL 从当前源码在内存中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--blender`、`--output PATH`、`--no-open` 和 `--fragment`。
+`node-group preview` SHALL 使用当前 Python 环境中的 `bpy`，从当前源码在独立 Python 子进程中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--output PATH`、`--no-open` 和 `--fragment`，不支持选择外部 Blender 可执行程序。
 
 #### Scenario: Preview current source
-- **WHEN** 用户运行 `uv run node-group preview`
+- **WHEN** 用户运行 `uv run --group blender node-group preview`
 - **THEN** 生成当前源码的可查看 HTML 并尝试打开浏览器
 
 #### Scenario: Save without opening
@@ -78,4 +82,20 @@ TBD - created by archiving change organize-tool-cli. Update Purpose after archiv
 #### Scenario: Export fails
 - **WHEN** 源权重准备、转换或产物校验失败
 - **THEN** 命令非零退出，失败产物不替换正式目标
+
+### Requirement: Capability-specific test commands
+
+项目 SHALL 提供明确的 uv 命令分别运行常规 CI 测试、本地 AI 测试和本地全量测试。命令 SHALL 使用默认 `dev` 并显式增加所需能力组，不要求传入 `--no-default-groups`。
+
+#### Scenario: Run regular validation
+- **WHEN** 开发者运行常规验证命令
+- **THEN** 命令安装核心与 Blender 能力并执行所有非 AI 测试
+
+#### Scenario: Run AI validation locally
+- **WHEN** 开发者运行 AI 验证命令
+- **THEN** 命令安装 AI 能力并仅执行 AI 测试
+
+#### Scenario: Run full validation locally
+- **WHEN** 开发者运行全量验证命令
+- **THEN** 命令安装 Blender 与 AI 能力并执行全部测试
 

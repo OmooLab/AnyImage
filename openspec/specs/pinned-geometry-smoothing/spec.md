@@ -52,41 +52,42 @@ TBD - created by archiving change pin-geometry-node-smoothing. Update Purpose af
 
 ### Requirement: 作用范围保持渐变语义
 
-`Boundary Smooth`、`Fill Smooth`、`Seam Smooth` SHALL 继续表示平滑生效的渐变区域与迭代次数，落在范围外的顶点 MUST 保持原位。
+`Boundary Smooth`、`Fill Smooth`、`Seam Smooth` SHALL 继续表示平滑生效的渐变区域与迭代次数，落在范围外的顶点及其 Face Corner UV MUST 保持原值。
 
 #### Scenario: 范围外不动
 
 - **WHEN** 任一平滑的迭代次数大于 0
 - **THEN** 落在渐变范围外的顶点位置与输入完全一致
-- **AND** 拓扑与 UV 保持不变
+- **AND** 对应 UV、拓扑与其他属性保持不变
 
 #### Scenario: Cutout 轮廓与切边权重差异
 
 - **WHEN** Depth Cutout 同时存在原始轮廓与 Split 切边
-- **THEN** Split 切边使用完整权重
-- **AND** 原始轮廓使用 0.1 倍权重
+- **THEN** Split 切边的 Position 与 UV 使用完整权重
+- **AND** 仅受原始轮廓影响的 Position 与 UV 使用 0.1 倍权重
 - **AND** Depth Plane 与 Panorama 的轮廓权重保持 1.0
 
 #### Scenario: 关闭平滑
 
 - **WHEN** 迭代次数为 0
-- **THEN** 输出几何与未平滑的基线完全一致
+- **THEN** 输出几何、UV 与未平滑的基线完全一致
 
 ### Requirement: 共享平滑实现
 
-`common/smoothing.py` SHALL 提供单一的平滑构建函数：pin 形态使用边界条带目标与锐度系数，普通形态只使用邻域平均目标。各节点组只提供几何、迭代次数、作用范围、权重、可移动分量与是否 pin；系统 MUST NOT 为单个节点组保留独立的平滑实现或旧偏移路径。
+`common/smoothing.py` SHALL 提供单一的平滑构建函数：pin 形态使用边界条带目标与锐度系数，普通形态只使用邻域平均目标；输入存在 `UVMap` 时，该函数 SHALL 同步构建 seam-aware Face Corner UV 松弛。各节点组只提供几何、迭代次数、作用范围、权重、可移动分量与是否 pin；系统 MUST NOT 为单个节点组保留独立的位置或 UV 平滑实现。
 
 #### Scenario: 站点调用一致
 
-- **WHEN** 任一节点组构建顶点位置平滑
+- **WHEN** 任一节点组通过 `pinned_smooth` 构建表面平滑
 - **THEN** 该组只传入几何、迭代次数、作用范围、权重、允许移动的分量与是否 pin
-- **AND** 边界条带分支、锐度权重与普通邻域平均目标由共享实现生成
+- **AND** Position 与 UV 的边界条带分支、锐度权重及普通邻域平均目标由共享实现生成
 
 #### Scenario: 对称平面约束
 
 - **WHEN** `O Image Cutout Symmetry` 应用 Fill 或 Seam 平滑
-- **THEN** 位移限制在对称平面内的分量
-- **AND** 镜像焊接与闭合性保持不变
+- **THEN** Position 位移限制在对称平面内的分量
+- **AND** UV 按同一作用范围松弛且不受位置分量约束
+- **AND** 镜像焊接、UV seam 与闭合性保持不变
 
 ### Requirement: 属性平滑保持现状
 
@@ -106,4 +107,69 @@ TBD - created by archiving change pin-geometry-node-smoothing. Update Purpose af
 - **WHEN** 执行节点资产构建并在独立 Blender 进程重新加载
 - **THEN** 资产与源码构建结果通过相同的行为验证
 - **AND** Capture Attribute 检查通过
+
+### Requirement: Pinned smoothing 同步松弛 UV
+
+`pinned_smooth` SHALL 在逐轮松弛顶点位置时同步松弛输入几何已有的 `UVMap`。UV SHALL 使用与 Position 相同的迭代次数、作用范围、最终权重及 boundary pin 选择；系统 MUST 保持 `UVMap` 的 `FLOAT2` Face Corner 语义，且 MUST NOT 跨 UV seam 或 UV island 混合坐标。
+
+#### Scenario: 边界位置与 UV 同步变平滑
+
+- **WHEN** 输入具有 `UVMap`，平滑次数大于 0，且阶梯状边界落在作用范围内
+- **THEN** 边界 Position 与对应 UV 均按共享权重逐轮松弛
+- **AND** UV 边界的折角量相对输入降低
+
+#### Scenario: Panorama seam 保持隔离
+
+- **WHEN** `pinned_smooth` 的作用范围经过同一空间位置上的不连续 Face Corner UV
+- **THEN** seam 两侧分别在各自 UV island 内松弛
+- **AND** 系统不把接近 0 与接近 1 的 U 值直接平均到纹理中部
+
+### Requirement: 边界目标使用归一化掩码平滑
+
+`pinned_smooth` SHALL 在原拓扑上以归一化边界掩码 Blur 计算 Position 与 UV 的边界目标，并 SHALL 在同一轮迭代中共享边界归一化字段。边界目标 MUST NOT 依赖临时分离几何、最近点查找或索引回采样。
+
+#### Scenario: Position 与 UV 共享边界归一化
+
+- **WHEN** Pin Boundary 开启且 Position 与 `UVMap` 同步松弛
+- **THEN** 两者分别平滑自身的边界掩码值
+- **AND** 两者使用同一个已平滑边界掩码作为归一化分母
+
+#### Scenario: 边界条带结果保持等价
+
+- **WHEN** 输入包含阶梯轮廓、切边或多个断开的 leaf
+- **THEN** 边界点目标与权重 `0.5` 的边界子网格一步 Blur 在浮点容差内一致
+
+#### Scenario: Position 与 UV 使用同一轮权重
+
+- **WHEN** Pin Sharp 与作用范围共同影响一次迭代
+- **THEN** Position 和 UV 从更新前的同一份 Geometry 求值目标与最终权重
+
+### Requirement: 固定边界字段只在循环外求值一次
+
+`pinned_smooth` SHALL 在 Repeat Zone 前计算边界点掩码及其归一化分母，并通过内部临时属性供所有迭代复用。循环结束后 MUST 移除这些属性。
+
+#### Scenario: 多次边界平滑
+
+- **WHEN** Boundary Smooth 大于一
+- **THEN** Repeat Zone 内不包含边界检测或标量边界归一化 Blur
+- **AND** Position 与 UV 的每轮值 Blur 继续使用当前迭代几何
+
+### Requirement: Fill influence caches both consumer domains
+
+Shared pinned smoothing SHALL support caching a fixed influence before the repeat as separate Point and Corner internal attributes. Position SHALL consume the Point value, UV SHALL consume the Corner value, and both attributes MUST be removed after the repeat.
+
+#### Scenario: Cached Fill smoothing preserves output
+
+- **WHEN** `O Image Cutout Symmetry` applies Fill smoothing
+- **THEN** cached and uncached results have identical Position, UV, topology, and loop order
+
+### Requirement: UV relaxation is capped at four iterations
+
+Shared pinned smoothing SHALL update UV only during the first four repeat iterations. Position smoothing SHALL continue for the full requested iteration count.
+
+#### Scenario: High smoothing count
+
+- **WHEN** the requested smoothing count is greater than four
+- **THEN** UV Store Named Attribute evaluates exactly four times
+- **AND** later repeat iterations update Position without updating UV
 

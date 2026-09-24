@@ -4,8 +4,10 @@ from . import keymaps, tools
 from .operators.clipboard_image import CLASSES as CLIPBOARD_CLASSES
 from .menu import (
     AnyImageImageMenu,
+    AnyImageObjectMenu,
     AnyImageTextureNodeMenu,
     draw_image_context_menu,
+    draw_image_object_context_menu,
     draw_texture_node_context_menu,
 )
 from .operators import CLASSES as OPERATOR_CLASSES
@@ -21,6 +23,7 @@ CLASSES = (
     *CLIPBOARD_CLASSES,
     *OPERATOR_CLASSES,
     AnyImageImageMenu,
+    AnyImageObjectMenu,
     AnyImageTextureNodeMenu,
     ServerPanel,
 )
@@ -32,7 +35,9 @@ def register():
     tools.register()
     bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=AnyImageSettings)
     bpy.types.VIEW3D_MT_object_context_menu.prepend(draw_image_context_menu)
+    bpy.types.VIEW3D_MT_object_context_menu.prepend(draw_image_object_context_menu)
     bpy.types.OUTLINER_MT_object.prepend(draw_image_context_menu)
+    bpy.types.OUTLINER_MT_object.prepend(draw_image_object_context_menu)
     bpy.types.NODE_MT_context_menu.prepend(draw_texture_node_context_menu)
     keymaps.register()
     runtime.register()
@@ -43,7 +48,9 @@ def unregister():
     keymaps.unregister()
     tools.unregister()
     bpy.types.NODE_MT_context_menu.remove(draw_texture_node_context_menu)
+    bpy.types.OUTLINER_MT_object.remove(draw_image_object_context_menu)
     bpy.types.OUTLINER_MT_object.remove(draw_image_context_menu)
+    bpy.types.VIEW3D_MT_object_context_menu.remove(draw_image_object_context_menu)
     bpy.types.VIEW3D_MT_object_context_menu.remove(draw_image_context_menu)
     if hasattr(bpy.types.Scene, "anyimage_settings"):
         del bpy.types.Scene.anyimage_settings

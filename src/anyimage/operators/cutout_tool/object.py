@@ -177,7 +177,7 @@ def create_shape_object(
                 mesh_object.matrix_world
                 @ Matrix.Rotation(-1.5707963267948966, 4, "Z")
             )
-        mesh_object["anyimage_mesh_shape"] = shape
+        mesh_object["o_image_object"] = True
         node_group = load_cutout_node_group("DEPTH_SOLID" if shape == "DEPTH_SYMMETRY" else shape)
         modifier = mesh_object.modifiers.new(name=node_group.name, type="NODES")
         modifier.node_group = node_group

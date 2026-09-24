@@ -116,6 +116,8 @@ def test_result_replaces_source_with_zero_rotation_and_emission_material(source,
     undo = Mock(return_value={"FINISHED"})
     monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=undo))))
     obj = conversion.create_panorama_from_result(bpy.context, result, operator)
+    assert obj["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in obj
     assert obj.modifiers[0].node_group == saved
     assert saved.name == "O Image Depth Panorama"
     assert obj.name == operator.source_object_name and obj.type == "MESH"

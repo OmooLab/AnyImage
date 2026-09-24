@@ -156,17 +156,24 @@ class AddonRegistrationTest(BlenderTestCase):
         )
         self.assertEqual(len(self.status_bar_draws), 1)
         self.assertEqual(self.status_bar_draws[0]._owner, "anyimage")
-        self.assertIs(
-            self.context_menu_draws[0],
-            self.anyimage.draw_image_context_menu,
+        self.assertEqual(
+            self.context_menu_draws[:2],
+            [
+                self.anyimage.draw_image_object_context_menu,
+                self.anyimage.draw_image_context_menu,
+            ],
         )
-        self.assertIs(
-            self.outliner_menu_draws[0],
-            self.anyimage.draw_image_context_menu,
+        self.assertEqual(
+            self.outliner_menu_draws[:2],
+            [
+                self.anyimage.draw_image_object_context_menu,
+                self.anyimage.draw_image_context_menu,
+            ],
         )
 
         self.assertEqual(self.node_menu_draws, [self.anyimage.draw_texture_node_context_menu, existing_node_draw])
         self.assertIn(self.anyimage.AnyImageTextureNodeMenu, self.registered)
+        self.assertIn(self.anyimage.AnyImageObjectMenu, self.registered)
 
         unregister_order = []
         original_unregister = self.fake_bpy.utils.unregister_class

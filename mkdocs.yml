@@ -6,11 +6,18 @@ site_description: AnyImage 是一款将图片、视频和序列帧转换为立�
 repo_name: OmooLab/AnyImage
 repo_url: https://github.com/OmooLab/AnyImage
 
+exclude_docs: |
+  includes/
+
 nav:
   - AnyImage:
       - index.md
   - 开始使用:
-      - 安装与首次配置: getting-started/installation.md
+      - 安装: installation.md
+      - Cutout: cutout.md
+      - Remove Background 与 Upscale: ai-image-tools.md
+      - Convert To: convert-to.md
+      - 其他图片工具: image-tools.md
   - 内部实现:
       - 总览: internals/index.md
       - 程序架构: internals/architecture.md

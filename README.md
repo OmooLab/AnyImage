@@ -2,7 +2,7 @@
 
 [中文文档](https://docs.omoolab.xyz/anyimage/latest/)
 
-## IMAGE is All You Need
+## IMAGE IS ALL YOU NEED
 
 ![cover](https://docs.omoolab.xyz/anyimage/latest/assets/cover.png)
 
@@ -22,4 +22,4 @@ You can also continue working with existing images. Select an Image Empty, right
 
 ## Quick start
 
-[Installation](https://docs.omoolab.xyz/anyimage/latest/getting-started/installation/)
+[Installation](https://docs.omoolab.xyz/anyimage/latest/installation/)

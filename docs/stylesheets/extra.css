@@ -107,18 +107,6 @@
   cursor: move;
 }
 
-.anyimage-install-platform {
-  text-align: center;
-}
-
-.anyimage-install-platform strong {
-  font-weight: 600;
-}
-
-.anyimage-install-platform-rest {
-  font-weight: 400;
-}
-
 .anyimage-install small.anyimage-install-note {
   display: block;
   width: 100%;

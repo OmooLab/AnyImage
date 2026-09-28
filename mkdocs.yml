@@ -10,18 +10,17 @@ exclude_docs: |
   includes/
 
 nav:
-  - AnyImage:
-      - index.md
   - 开始使用:
+      - index.md
       - 安装: installation.md
-      - Cutout: cutout.md
-      - Remove Background 与 Upscale: ai-image-tools.md
-      - Convert To: convert-to.md
-      - 其他图片工具: image-tools.md
+      - 剪出工具: cutout.md
+      - 图片处理: ai-image-tools.md
+      - 空间转化: convert-to.md
+      - 图片工具: image-tools.md
   - 内部实现:
       - 总览: internals/index.md
       - 程序架构: internals/architecture.md
-      - Common 公共函数: internals/common.md
+      - 公共函数: internals/common.md
       - 基础设施:
           - Job Runtime 与 Server: internals/runtime.md
           - Job 产物: internals/outputs.md

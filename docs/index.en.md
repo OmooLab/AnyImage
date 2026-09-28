@@ -17,9 +17,3 @@ You can also continue working with existing images. Select an Image Empty, right
 - **Plane / Depth Plane**: Turn an image into a flat or dimensional plane.
 - **Cutout**: Select a subject and create a Surface, Balloon, or Depth Shape.
 - **Image tools**: Reframe images, edit transparent areas, correct perspective, remove backgrounds, and upscale.
-
-## Quick start
-
-Drag the button below into the Blender window to install. The first drag prompts you to add the AnyImage extension repository. Confirm it, then drag the button again.
-
---8<-- "docs/includes/install.html"

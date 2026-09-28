@@ -2,6 +2,9 @@
 
 ## IMAGE IS ALL YOU NEED
 
+细胞模CG交流QQ群：854629000
+有问题群里沟通~
+
 ![cover](assets/cover.png)
 
 AnyImage 是为 Blender 准备的图片工具组。让图片不再只是参考图：粘贴进来，选出需要的部分，再把它变成带材质、轮廓与深度的场景元素。
@@ -17,10 +20,3 @@ AnyImage 是为 Blender 准备的图片工具组。让图片不再只是参考�
 - **Plane / Depth Plane**：把图片变成平面或立体面片。
 - **Cutout**：圈选主体，创建 Surface、Balloon 或 Depth Shape。
 - **图片工具**：重新取景、编辑透明区域、校正透视、去背景和高清放大。
-
-## 快速开始
-
-按住下方按钮并拖到 Blender 窗口即可安装。首次拖入会提示添加 AnyImage 扩展仓库，确认后再拖入一次。
-
-
---8<-- "docs/includes/install.html"

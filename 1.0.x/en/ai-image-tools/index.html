@@ -12,35 +12,35 @@
         <meta name="author" content="OmooLab">
       
       
-        <link rel="canonical" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/getting-started/installation/">
+        <link rel="canonical" href="https://docs.omoolab.xyz/anyimage/1.0.x/en/ai-image-tools/">
       
       
-        <link rel="prev" href="../../">
+        <link rel="prev" href="../cutout/">
       
       
-        <link rel="next" href="../../internals/">
+        <link rel="next" href="../convert-to/">
       
       
         
-          <link rel="alternate" href="../../../getting-started/installation/" hreflang="zh">
+          <link rel="alternate" href="../../ai-image-tools/" hreflang="zh">
         
           <link rel="alternate" href="./" hreflang="en">
         
       
       
-      <link rel="icon" href="../../../assets/favicon.png">
+      <link rel="icon" href="../../assets/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>安装与首次配置 - AnyImage 文档</title>
+        <title>Remove Background 与 Upscale - AnyImage 文档</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -59,13 +59,13 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#_1" class="md-skip">
+        <a href="#remove-background-upscale" class="md-skip">
           Skip to content
         </a>
       
@@ -110,9 +110,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../" title="AnyImage 文档" class="md-header__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
+    <a href="../" title="AnyImage 文档" class="md-header__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -129,7 +129,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              安装与首次配置
+              Remove Background 与 Upscale
             
           </span>
         </div>
@@ -186,7 +186,7 @@
       <ul class="md-select__list">
         
           <li class="md-select__item">
-            <a href="../../../getting-started/installation/" hreflang="zh" class="md-select__link">
+            <a href="../../ai-image-tools/" hreflang="zh" class="md-select__link">
               中文
             </a>
           </li>
@@ -272,7 +272,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../" class="md-tabs__link">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -296,7 +296,7 @@
     
     
       <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+        <a href="../installation/" class="md-tabs__link">
           
   
   
@@ -318,7 +318,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../internals/" class="md-tabs__link">
+        <a href="../internals/" class="md-tabs__link">
           
   
   
@@ -360,9 +360,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../" title="AnyImage 文档" class="md-nav__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
+    <a href="../" title="AnyImage 文档" class="md-nav__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     AnyImage 文档
@@ -412,7 +412,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -461,6 +461,14 @@
   
     
     
+      
+        
+      
+        
+      
+        
+      
+        
       
         
       
@@ -516,6 +524,62 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安装
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cutout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cutout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -535,7 +599,7 @@
   <span class="md-ellipsis">
     
   
-    安装与首次配置
+    Remove Background 与 Upscale
   
 
     
@@ -553,7 +617,7 @@
   <span class="md-ellipsis">
     
   
-    安装与首次配置
+    Remove Background 与 Upscale
   
 
     
@@ -579,10 +643,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#remove-background" class="md-nav__link">
     <span class="md-ellipsis">
       
-        检查扩展偏好设置
+        Remove Background
       
     </span>
   </a>
@@ -590,32 +654,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ai-environment" class="md-nav__link">
+  <a href="#upscale" class="md-nav__link">
     <span class="md-ellipsis">
       
-        配置 AI Environment
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        确认安装完成
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        下一步
+        Upscale
       
     </span>
   </a>
@@ -626,6 +668,62 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../convert-to/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Convert To
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../image-tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    其他图片工具
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -678,7 +776,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../internals/" class="md-nav__link ">
+            <a href="../internals/" class="md-nav__link ">
               
   
   
@@ -722,7 +820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/architecture/" class="md-nav__link">
+      <a href="../internals/architecture/" class="md-nav__link">
         
   
   
@@ -750,7 +848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/common/" class="md-nav__link">
+      <a href="../internals/common/" class="md-nav__link">
         
   
   
@@ -836,7 +934,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/runtime/" class="md-nav__link">
+      <a href="../internals/runtime/" class="md-nav__link">
         
   
   
@@ -864,7 +962,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/outputs/" class="md-nav__link">
+      <a href="../internals/outputs/" class="md-nav__link">
         
   
   
@@ -943,7 +1041,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../internals/operators/" class="md-nav__link ">
+            <a href="../internals/operators/" class="md-nav__link ">
               
   
   
@@ -987,7 +1085,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/ai-setup/" class="md-nav__link">
+      <a href="../internals/operators/ai-setup/" class="md-nav__link">
         
   
   
@@ -1015,7 +1113,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/clipboard-image/" class="md-nav__link">
+      <a href="../internals/operators/clipboard-image/" class="md-nav__link">
         
   
   
@@ -1043,7 +1141,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/convert-to-plane/" class="md-nav__link">
+      <a href="../internals/operators/convert-to-plane/" class="md-nav__link">
         
   
   
@@ -1071,7 +1169,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/convert-to-panorama/" class="md-nav__link">
+      <a href="../internals/operators/convert-to-panorama/" class="md-nav__link">
         
   
   
@@ -1099,7 +1197,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/cutout-tool/" class="md-nav__link">
+      <a href="../internals/operators/cutout-tool/" class="md-nav__link">
         
   
   
@@ -1127,7 +1225,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/frame/" class="md-nav__link">
+      <a href="../internals/operators/frame/" class="md-nav__link">
         
   
   
@@ -1155,7 +1253,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/mask/" class="md-nav__link">
+      <a href="../internals/operators/mask/" class="md-nav__link">
         
   
   
@@ -1183,7 +1281,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/rectify/" class="md-nav__link">
+      <a href="../internals/operators/rectify/" class="md-nav__link">
         
   
   
@@ -1211,7 +1309,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/remove-background/" class="md-nav__link">
+      <a href="../internals/operators/remove-background/" class="md-nav__link">
         
   
   
@@ -1239,7 +1337,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/operators/upscale/" class="md-nav__link">
+      <a href="../internals/operators/upscale/" class="md-nav__link">
         
   
   
@@ -1333,7 +1431,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/development/" class="md-nav__link">
+      <a href="../internals/development/" class="md-nav__link">
         
   
   
@@ -1361,7 +1459,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/node-assets/" class="md-nav__link">
+      <a href="../internals/node-assets/" class="md-nav__link">
         
   
   
@@ -1424,10 +1522,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#remove-background" class="md-nav__link">
     <span class="md-ellipsis">
       
-        检查扩展偏好设置
+        Remove Background
       
     </span>
   </a>
@@ -1435,32 +1533,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ai-environment" class="md-nav__link">
+  <a href="#upscale" class="md-nav__link">
     <span class="md-ellipsis">
       
-        配置 AI Environment
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        确认安装完成
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        下一步
+        Upscale
       
     </span>
   </a>
@@ -1487,73 +1563,16 @@
   
 
 
-<h1 id="_1">安装与首次配置</h1>
-<p>页面会按当前系统显示对应的安装包，按住按钮拖到 Blender 窗口任意位置即可安装。首次拖入会提示添加 AnyImage 扩展仓库，确认后重新拖入一次，之后升级同样直接拖入。</p>
-<div class="anyimage-install">
-  <div class="anyimage-install-item" data-platform="windows-x64">
-    <div class="anyimage-install-group">
-      <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.2.windows-x64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=windows-x64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>拖入 Blender 安装</span>
-      </button>
-      <div class="anyimage-install-platform"><strong>Windows</strong> – 78.3&nbsp;MB</div>
-    </div>
-    <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.2.windows-x64.zip" download="AnyImage.v1.0.2.windows-x64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
-  </div>
-  <div class="anyimage-install-item" data-platform="macos-arm64">
-    <div class="anyimage-install-group">
-      <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.2.macos-arm64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=macos-arm64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>拖入 Blender 安装</span>
-      </button>
-      <div class="anyimage-install-platform"><strong>macOS<span class="anyimage-install-platform-rest"> - Apple Silicon</span></strong> – 57.5&nbsp;MB</div>
-    </div>
-    <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.2.macos-arm64.zip" download="AnyImage.v1.0.2.macos-arm64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
-  </div>
-  <div class="anyimage-install-item" data-platform="linux-x64">
-    <div class="anyimage-install-group">
-      <button type="button" draggable="true" class="anyimage-install-button" data-install-url="https://extensions.omoolab.xyz/AnyImage.v1.0.2.linux-x64.zip?repository=.%2Findex.json&amp;blender_version_min=4.5.0&amp;platforms=linux-x64&amp;python_versions=3.11%2C3.13">
-        <i class="i-move"></i><span>拖入 Blender 安装</span>
-      </button>
-      <div class="anyimage-install-platform"><strong>Linux</strong> – 71.0&nbsp;MB</div>
-    </div>
-    <small class="anyimage-install-note">…或<a href="https://extensions.omoolab.xyz/AnyImage.v1.0.2.linux-x64.zip" download="AnyImage.v1.0.2.linux-x64.zip">下载</a>后通过 <a href="https://docs.blender.org/manual/zh-hans/latest/editors/preferences/extensions.html#install" target="_blank">Install from Disk</a> 安装</small>
-  </div>
-</div>
-
-<h2 id="_2">检查扩展偏好设置</h2>
-<p>AnyImage 的扩展偏好设置按功能分组。Environment 区包含：</p>
-<ul>
-<li><strong>Storage Root</strong>：保存运行环境、模型和任务文件的位置。默认是用户目录下的 <code>.anyimage</code>，一般无需修改。</li>
-<li><strong>Device</strong>：正式转换任务使用的计算设备。Apple Silicon Mac 默认使用 CPU，Windows 默认使用 DirectML；也可手动选择其他可用设备。</li>
-</ul>
-<p>macOS arm64 提供 <strong>CPU</strong> 与 <strong>CoreML</strong>。CoreML 由系统在 Apple CPU、GPU 与 Neural Engine 之间调度，不是 PyTorch MPS backend，也不表示只使用 GPU；它的实际速度取决于模型。</p>
-<p>Environment 检测后显示 Diagnostics。Depth &amp; Normal、Remove Background、Upscale 与 Cutout 是默认展开的可折叠功能区，各自包含对应设置和模型状态。其中：</p>
-<ul>
-<li><strong>Default Upscale Model</strong>：Upscale 使用的模型，默认是 General WDN x4v3。</li>
-<li><strong>Maximum AI Input Size</strong>：Upscale、Depth 与 Normal Map 的 AI 输入长边上限，默认 2048 px；颜色贴图保留原始分辨率。</li>
-<li><strong>Maximum Cutout Mesh Resolution</strong>：所有 Cutout Shape 的网格采样长边上限，默认 1024，独立于 AI 输入尺寸。</li>
-</ul>
-<p>Depth &amp; Normal 提供三档 MoGe-2，Depth Plane 与 Cutout Depth / Normal Map 共用当前选择。可选模型的 <strong>Ready</strong> 状态或 <strong>Download</strong> 按钮位于选择项下方；Cutout 区提供独立网格上限与 Balloon Profile。</p>
-<p>如果准备把 Storage Root 放到其他磁盘，建议在首次安装 Environment 之前修改。更换目录后，旧目录中的环境和模型不会自动移动。</p>
-<h2 id="ai-environment">配置 AI Environment</h2>
-<p>选中 Image Empty，在右键 <strong>AnyImage</strong> 子菜单中点击 <strong>Set Up AI Environment…</strong>；也可以在 AnyImage 扩展偏好设置中点击同名按钮。</p>
-<p>确认安装前，对话框会说明以下内容：</p>
-<ul>
-<li>安装独立 Python、ONNX Runtime 与支持包，并下载 <strong>MoGe-2 ViT-S Normal</strong>、<strong>BEN2 Base</strong> 和 <strong>Real-ESRGAN General WDN x4v3</strong>。</li>
-<li>默认模型合计约 360 MB；连同 Environment 预计需要约 600 MB 下载量和约 1 GB 磁盘空间。</li>
-<li>根据网络速度，首次安装通常需要 5–20 分钟。</li>
-<li><strong>Use Mirror</strong> 只让 uv、Python 和 Python 包使用国内镜像；模型下载源保持不变。</li>
-</ul>
-<p>安装过程中请保持 Blender 打开。状态栏会显示当前阶段、进度和下载速度。</p>
-<p>如果 Environment 已安装但任一默认模型缺失，入口会改为 <strong>Download Required Models…</strong>；对话框列出缺失模型和下载体积，确认后只下载缺失模型，不会重装 Environment 或重复下载已就绪内容。</p>
-<h2 id="_3">确认安装完成</h2>
-<p>完成后可以用以下方式确认：</p>
-<ul>
-<li>AnyImage 扩展偏好设置中的 MoGe-2 ViT-S Normal、BEN2 Base 和 Real-ESRGAN General WDN x4v3 显示 <strong>Ready</strong>。</li>
-<li>选中 Image Empty 后，右键菜单底部显示 <strong>AI Environment Settings…</strong>。</li>
-</ul>
-<p>点击 <strong>Convert to Depth Plane</strong>、<strong>Remove Background</strong> 或 <strong>Upscale</strong> 时，AnyImage 会根据状态进入 <strong>Set Up AI Environment…</strong> 或 <strong>Download Required Models…</strong>。普通 Plane、Image 编辑和基础 Cutout Surface / Balloon 直接在 Blender 中执行。</p>
-<h2 id="_4">下一步</h2>
-<p>继续阅读<a href="quick-start.md">五分钟上手</a>，用一张图片完成第一次转换。</p>
+<h1 id="remove-background-upscale">Remove Background 与 Upscale</h1>
+<p>Remove Background 可以在 Cutout 前清理背景，Upscale 则可以让 Cutout 使用更清晰的贴图。</p>
+<p>第一次使用 AI 功能时，按提示完成 <strong>Set Up AI Server</strong>。准备完成后，再次执行需要的功能。</p>
+<h2 id="remove-background">Remove Background</h2>
+<p>选中图片，右键打开 <strong>AnyImage &gt; Remove Background</strong>。确认模型后，等待处理完成，背景会变为透明。</p>
+<p><img alt="Remove Background 前后对比" src="" /></p>
+<p>现在再使用 Cutout，只需沿主体大致圈选，透明区域不会进入最终形状。</p>
+<h2 id="upscale">Upscale</h2>
+<p>选中已经创建的 Cutout 对象，右键打开 <strong>AnyImage &gt; Upscale</strong>。菜单会显示处理后的尺寸，完成后 Cutout 会使用放大后的图片。</p>
+<p><img alt="Upscale 前后细节对比" src="" /></p>
 
 
 
@@ -1583,7 +1602,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../../" class="md-footer__link md-footer__link--prev" aria-label="Previous: 🖼️ AnyImage">
+          <a href="../cutout/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Cutout">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1593,20 +1612,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                🖼️ AnyImage
+                Cutout
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../internals/" class="md-footer__link md-footer__link--next" aria-label="Next: 总览">
+          <a href="../convert-to/" class="md-footer__link md-footer__link--next" aria-label="Next: Convert To">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                总览
+                Convert To
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -1647,12 +1666,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["header.autohide", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "content.code.copy", "content.code.select"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["header.autohide", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "content.code.copy", "content.code.select"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
-        <script src="../../../javascripts/extra.js"></script>
+        <script src="../../javascripts/extra.js"></script>
       
     
   </body>

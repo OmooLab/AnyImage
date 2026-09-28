@@ -12,35 +12,35 @@
         <meta name="author" content="OmooLab">
       
       
-        <link rel="canonical" href="https://docs.omoolab.xyz/anyimage/1.0.x/internals/operators/convert-to-panorama/">
+        <link rel="canonical" href="https://docs.omoolab.xyz/anyimage/1.0.x/cutout/">
       
       
-        <link rel="prev" href="../convert-to-plane/">
+        <link rel="prev" href="../installation/">
       
       
-        <link rel="next" href="../cutout-tool/">
+        <link rel="next" href="../ai-image-tools/">
       
       
         
           <link rel="alternate" href="./" hreflang="zh">
         
-          <link rel="alternate" href="../../../en/internals/operators/convert-to-panorama/" hreflang="en">
+          <link rel="alternate" href="../en/cutout/" hreflang="en">
         
       
       
-      <link rel="icon" href="../../../assets/favicon.png">
+      <link rel="icon" href="../assets/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
-        <title>Convert to Panorama - AnyImage 文档</title>
+        <title>Cutout - AnyImage 文档</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -59,11 +59,11 @@
       
     
     
-      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#panorama" class="md-skip">
+        <a href="#cutout" class="md-skip">
           跳转至
         </a>
       
@@ -108,9 +108,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="页眉">
-    <a href="../../.." title="AnyImage 文档" class="md-header__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
+    <a href=".." title="AnyImage 文档" class="md-header__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -127,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Convert to Panorama
+              Cutout
             
           </span>
         </div>
@@ -190,7 +190,7 @@
           </li>
         
           <li class="md-select__item">
-            <a href="../../../en/internals/operators/convert-to-panorama/" hreflang="en" class="md-select__link">
+            <a href="../en/cutout/" hreflang="en" class="md-select__link">
               English
             </a>
           </li>
@@ -270,7 +270,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../.." class="md-tabs__link">
+        <a href=".." class="md-tabs__link">
           
   
   
@@ -288,11 +288,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../../installation/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../installation/" class="md-tabs__link">
           
   
   
@@ -310,13 +312,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../internals/" class="md-tabs__link">
           
   
   
@@ -358,9 +358,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="导航栏" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="AnyImage 文档" class="md-nav__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
+    <a href=".." title="AnyImage 文档" class="md-nav__button md-logo" aria-label="AnyImage 文档" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../assets/logo.png" alt="logo">
 
     </a>
     AnyImage 文档
@@ -410,7 +410,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../.." class="md-nav__link ">
+            <a href=".." class="md-nav__link ">
               
   
   
@@ -453,8 +453,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -472,19 +474,22 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
             
   
   
@@ -502,7 +507,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -520,7 +525,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         
   
   
@@ -545,10 +550,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../cutout/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cutout
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -564,6 +596,48 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        圈选主体
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        选择形状
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -576,7 +650,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../ai-image-tools/" class="md-nav__link">
+      <a href="../ai-image-tools/" class="md-nav__link">
         
   
   
@@ -604,7 +678,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../convert-to/" class="md-nav__link">
+      <a href="../convert-to/" class="md-nav__link">
         
   
   
@@ -632,7 +706,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../image-tools/" class="md-nav__link">
+      <a href="../image-tools/" class="md-nav__link">
         
   
   
@@ -664,8 +738,6 @@
       
   
   
-    
-  
   
   
     
@@ -689,23 +761,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../" class="md-nav__link ">
+            <a href="../internals/" class="md-nav__link ">
               
   
   
@@ -723,13 +792,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -749,7 +818,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../architecture/" class="md-nav__link">
+      <a href="../internals/architecture/" class="md-nav__link">
         
   
   
@@ -777,7 +846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../common/" class="md-nav__link">
+      <a href="../internals/common/" class="md-nav__link">
         
   
   
@@ -817,20 +886,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
         
           
-          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
             
   
   
@@ -866,7 +932,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../runtime/" class="md-nav__link">
+      <a href="../internals/runtime/" class="md-nav__link">
         
   
   
@@ -894,7 +960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../outputs/" class="md-nav__link">
+      <a href="../internals/outputs/" class="md-nav__link">
         
   
   
@@ -927,8 +993,6 @@
                 
   
   
-    
-  
   
   
     
@@ -964,21 +1028,18 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../internals/operators/" class="md-nav__link ">
               
   
   
@@ -996,13 +1057,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1022,7 +1083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ai-setup/" class="md-nav__link">
+      <a href="../internals/operators/ai-setup/" class="md-nav__link">
         
   
   
@@ -1050,7 +1111,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../clipboard-image/" class="md-nav__link">
+      <a href="../internals/operators/clipboard-image/" class="md-nav__link">
         
   
   
@@ -1078,7 +1139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../convert-to-plane/" class="md-nav__link">
+      <a href="../internals/operators/convert-to-plane/" class="md-nav__link">
         
   
   
@@ -1103,19 +1164,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../internals/operators/convert-to-panorama/" class="md-nav__link">
         
   
   
@@ -1131,7 +1183,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -1144,7 +1195,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cutout-tool/" class="md-nav__link">
+      <a href="../internals/operators/cutout-tool/" class="md-nav__link">
         
   
   
@@ -1172,7 +1223,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../frame/" class="md-nav__link">
+      <a href="../internals/operators/frame/" class="md-nav__link">
         
   
   
@@ -1200,7 +1251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mask/" class="md-nav__link">
+      <a href="../internals/operators/mask/" class="md-nav__link">
         
   
   
@@ -1228,7 +1279,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rectify/" class="md-nav__link">
+      <a href="../internals/operators/rectify/" class="md-nav__link">
         
   
   
@@ -1256,7 +1307,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../remove-background/" class="md-nav__link">
+      <a href="../internals/operators/remove-background/" class="md-nav__link">
         
   
   
@@ -1284,7 +1335,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../upscale/" class="md-nav__link">
+      <a href="../internals/operators/upscale/" class="md-nav__link">
         
   
   
@@ -1332,20 +1383,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_6" >
         
           
-          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3_6" id="__nav_3_6_label" tabindex="0">
             
   
   
@@ -1381,7 +1429,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../development/" class="md-nav__link">
+      <a href="../internals/development/" class="md-nav__link">
         
   
   
@@ -1409,7 +1457,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../node-assets/" class="md-nav__link">
+      <a href="../internals/node-assets/" class="md-nav__link">
         
   
   
@@ -1465,6 +1513,36 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        圈选主体
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        选择形状
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1483,15 +1561,21 @@
   
 
 
-<h1 id="panorama">Panorama 转换</h1>
-<p><code>operators/convert_to_panorama/</code> 将静态等距柱状 Image Empty 转换为径向深度表面，提交前裁剪出最大居中 2:1 区域。<code>operators.py</code> 提交任务，<code>object.py</code> 导入对象，<code>__init__.py</code> 汇总导出与注册清单。</p>
-<pre class="mermaid"><code>flowchart TD
-    A[准备颜色与分析图] --&gt; B[generate-panorama-geometry]
-    B --&gt; C[采样 12 个透视视图并推理]
-    C --&gt; D[融合径向距离与有效性]
-    D --&gt; E[写出 depth.exr 与 depth.json]
-    E --&gt; F[创建材质与 O Image Depth Panorama]</code></pre>
-<p>任务使用 Preferences 选择的几何模型。源颜色由 Blender 侧保存，Server 的 <code>geometry/panorama.py</code> 负责视图采样与距离融合，<code>jobs/panorama.py</code> 编排推理和产物写入。</p>
+<h1 id="cutout">Cutout</h1>
+<p>Cutout 可以圈出图片中的主体，并把它变成一个独立形状。</p>
+<p>背景比较复杂时，可以先用 <strong>Remove Background</strong> 得到透明背景，轮廓会更容易选择。</p>
+<h2 id="_1">圈选主体</h2>
+<p>选中 Image Empty，右键打开 <strong>AnyImage &gt; Cutout</strong>。</p>
+<p>在顶部工具设置中选择 <strong>Lasso</strong> 或 <strong>Polyline</strong>，然后沿主体轮廓圈选。完成后，从弹出的菜单中选择形状。</p>
+<p><img alt="使用 Lasso 圈选主体，并打开 Cutout Shape 菜单" src="" /></p>
+<h2 id="_2">选择形状</h2>
+<ul>
+<li><strong>Flat</strong>：平面的剪贴形状。</li>
+<li><strong>Solid</strong>：带厚度的剪贴形状。</li>
+<li><strong>Depth Symmetry</strong>：前后对称的深度形状。</li>
+<li><strong>Depth Solid</strong>：按图片深度生成的立体形状。</li>
+</ul>
+<p>如果轮廓太粗或细节太多，可以调整顶部的 <strong>Edge Length</strong> 和 <strong>Fine Outline</strong>，再重新圈选。</p>
 
 
 
@@ -1521,7 +1605,7 @@
       <nav class="md-footer__inner md-grid" aria-label="页脚" >
         
           
-          <a href="../convert-to-plane/" class="md-footer__link md-footer__link--prev" aria-label="上一页: Convert to Plane">
+          <a href="../installation/" class="md-footer__link md-footer__link--prev" aria-label="上一页: 安装">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1531,20 +1615,20 @@
                 上一页
               </span>
               <div class="md-ellipsis">
-                Convert to Plane
+                安装
               </div>
             </div>
           </a>
         
         
           
-          <a href="../cutout-tool/" class="md-footer__link md-footer__link--next" aria-label="下一页: Cutout Tool">
+          <a href="../ai-image-tools/" class="md-footer__link md-footer__link--next" aria-label="下一页: Remove Background 与 Upscale">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 下一页
               </span>
               <div class="md-ellipsis">
-                Cutout Tool
+                Remove Background 与 Upscale
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -1585,12 +1669,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["header.autohide", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "content.code.copy", "content.code.select"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["header.autohide", "navigation.footer", "navigation.indexes", "navigation.sections", "navigation.tabs", "navigation.tabs.sticky", "content.code.copy", "content.code.select"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
-        <script src="../../../javascripts/extra.js"></script>
+        <script src="../javascripts/extra.js"></script>
       
     
   </body>

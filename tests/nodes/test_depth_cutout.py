@@ -235,22 +235,38 @@ def test_balloon_shell_converges_to_front_with_thickness():
     np.testing.assert_allclose(gaps[1] / gaps[0], 0.1, rtol=0.02)
 
 
-def test_depth_cutout_normal_reduction_uses_point_domain():
+@pytest.mark.parametrize("mode", (0, 1))
+def test_depth_cutout_normal_reduction_caps_depth_scale_at_one(mode):
     from tests.support.depth_surface import surface
 
-    obj, set_value = surface()
+    obj, set_value = surface(step=0)
+    obj.data.attributes.new("o_balloon", "FLOAT", "POINT").data.foreach_set(
+        "value", np.full(len(obj.data.vertices), 0.4),
+    )
+    modifier = obj.modifiers[0]
+    set_modifier_input(
+        modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE"), 0.3,
+    )
     set_value("Thickness", 0.3)
-    bpy.context.view_layer.update()
-    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    mesh = evaluated.to_mesh()
-    try:
-        attribute = mesh.attributes["o_normal_reduction"]
-        assert attribute.domain == "POINT"
-        values = [item.value for item in attribute.data]
-        assert 0.0 in values and 1.0 in values
-        assert all(np.isfinite(values))
-    finally:
-        evaluated.to_mesh_clear()
+    set_value("Mode", mode)
+    reductions = []
+    for scale in (0.0, 0.5, 1.0, 2.0):
+        set_value("Depth Scale", scale)
+        result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        mesh = result.to_mesh()
+        try:
+            attribute = mesh.attributes["o_normal_reduction"]
+            assert attribute.domain == "POINT"
+            values = np.array([item.value for item in attribute.data])
+            assert np.isfinite(values).all()
+            assert np.all((values >= 0) & (values <= 1))
+            reductions.append(values)
+        finally:
+            result.to_mesh_clear()
+    np.testing.assert_array_equal(reductions[0], 1.0)
+    np.testing.assert_allclose(reductions[1], (1 + reductions[2]) / 2, atol=1e-6)
+    np.testing.assert_array_equal(reductions[2], reductions[3])
+    assert reductions[2].min() < 1 and reductions[2].max() == 1
 
 
 def test_zero_thickness_short_circuits_shell_without_warnings():

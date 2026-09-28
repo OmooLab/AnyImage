@@ -630,8 +630,13 @@ def _build_depth_surface(group, geometry, controls):
     )
     reduction = _math(
         group, "SUBTRACT", 1.0,
-        _math(group, "MULTIPLY", controls.outputs["Depth Scale"], normal_strength),
+        _math(
+            group, "MULTIPLY",
+            _math(group, "MINIMUM", controls.outputs["Depth Scale"], 1.0),
+            normal_strength,
+        ),
     )
+    reduction.node.use_clamp = True
     projection = store_float_attribute(
         group, projection, NORMAL_REDUCTION_ATTRIBUTE_NAME, reduction,
     )

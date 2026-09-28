@@ -173,16 +173,6 @@ def test_normalized_boundary_target_matches_boundary_mesh_blur():
         np.testing.assert_allclose(actual[index], expected, atol=1e-6)
 
 
-def test_cutout_boundary_smooth_defaults_to_four():
-    obj, _ = surface()
-    socket = next(
-        item for item in obj.modifiers[0].node_group.interface.items_tree
-        if item.item_type == "SOCKET" and item.in_out == "INPUT" and item.name == "Boundary Smooth"
-    )
-    assert socket.default_value == 4
-    assert (socket.min_value, socket.max_value) == (0, 16)
-
-
 def test_smoothing_reduces_stairs_without_leaving_four_ring_band():
     obj, set_value = diagonal_surface(triangles=True)
     original, faces = evaluated(obj)
@@ -194,9 +184,12 @@ def test_smoothing_reduces_stairs_without_leaving_four_ring_band():
     band = edge_band(faces, boundary, rings=4)
     movable = np.array([i in band for i in range(len(original))])
     assert movable.any() and (~movable).any()
+    set_value("Boundary Smooth", 4)
+    four_iteration_uv = vertex_uv(obj)
     set_value("Boundary Smooth", 16)
     smoothed, result_faces = evaluated(obj)
     smoothed_uv = vertex_uv(obj)
+    np.testing.assert_array_equal(smoothed_uv, four_iteration_uv)
     assert result_faces == faces
     np.testing.assert_array_equal(smoothed[~movable], original[~movable])
     np.testing.assert_array_equal(smoothed_uv[~movable], original_uv[~movable])

@@ -1,5 +1,6 @@
 """Check the saved library's public inventory and persistence."""
 import bpy
+import pytest
 from anyimage.common.node import node_asset_path
 from tools.nodes.check import GEOMETRY_NAMES
 
@@ -11,7 +12,7 @@ def test_saved_assets_evaluate():
     check_asset_library(node_asset_path())
 
 
-def test_saved_parameter_descriptions_match_definitions():
+def test_saved_parameter_interfaces_match_definitions():
     from tools.nodes.build import build_node_groups
 
     parameters = {
@@ -26,7 +27,7 @@ def test_saved_parameter_descriptions_match_definitions():
         "O Image Depth Layer": {"Bump Scale"},
     }
 
-    def descriptions(groups):
+    def interfaces(groups):
         result = {}
         for group in groups:
             if group.name not in parameters:
@@ -38,6 +39,14 @@ def test_saved_parameter_descriptions_match_definitions():
             if group.name == "O Image Depth Cutout":
                 names = [item.name for item in inputs]
                 assert "Side Roundness" not in names and "Edge Turn" not in names
+                controls = {item.name: item for item in inputs}
+                bias = controls["Normal Bias"]
+                assert (bias.default_value, bias.min_value, bias.max_value) == (0, -2, 2)
+                assert controls["Rear Smooth"].default_value == 8
+                smooth = controls["Boundary Smooth"]
+                assert (smooth.default_value, smooth.min_value, smooth.max_value) == (4, 0, 16)
+                thicknesses = [item for item in inputs if item.name == "Thickness"]
+                assert len(thicknesses) == 2 and all(item.default_value == 0 for item in thicknesses)
                 inflation = next(item for item in inputs if item.name == "Front Inflation")
                 thickness = next(item for item in inputs if item.name == "Thickness" and item.subtype == "NONE")
                 assert not inflation.parent.name
@@ -48,21 +57,39 @@ def test_saved_parameter_descriptions_match_definitions():
                 assert not limit.parent.name
                 assert limit.min_value == -1.0
                 assert inputs.index(limit) == inputs.index(split) + 1
+            elif group.name == "O Image Cutout Symmetry":
+                assert [item.name for item in inputs] == [
+                    "Geometry", "Direction", "Offset", "Scale", "Fill Sides", "Smooth",
+                ]
+                assert tuple(inputs[1].default_value) == (0, 0, 1)
+                for item, expected in zip(inputs[2:], [(0, -10, 10), (1, 0, 2), (True,), (4, 0, 16)]):
+                    values = tuple(getattr(item, key) for key in ("default_value", "min_value", "max_value")
+                                   if hasattr(item, key))
+                    assert values == pytest.approx(expected)
             sockets = [
                 item for item in inputs if item.name in parameters[group.name]
             ]
             assert {item.name for item in sockets} == parameters[group.name]
             assert all(item.description for item in sockets), group.name
-            result[group.name] = [(item.identifier, item.name, item.description) for item in sockets]
+            result[group.name] = [
+                (
+                    inputs.index(item), item.identifier, item.name, item.description,
+                    item.parent.name, item.socket_type,
+                    tuple(item.default_value) if item.socket_type == "NodeSocketVector" else item.default_value,
+                    getattr(item, "min_value", None), getattr(item, "max_value", None),
+                    getattr(item, "subtype", None),
+                )
+                for item in sockets
+            ]
         assert result.keys() == parameters.keys()
         return result
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    expected = descriptions(build_node_groups())
+    expected = interfaces(build_node_groups())
     bpy.ops.wm.read_factory_settings(use_empty=True)
     with bpy.data.libraries.load(str(node_asset_path())) as (library, target):
         target.node_groups = list(library.node_groups)
-    assert descriptions(target.node_groups) == expected
+    assert interfaces(target.node_groups) == expected
 
 
 def test_geometry_nodes_contribute_to_output():

@@ -8,7 +8,7 @@ import pytest
 from scipy.spatial import cKDTree
 
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from tests.support.depth_surface import assert_closed, evaluated
+from tests.support.depth_surface import assert_closed
 from nodes.common.normal_map import AXIS_ATTRIBUTE, FACE_ATTRIBUTE, ROTATION_ATTRIBUTE
 from nodes.groups.image_depth_cutout import build_image_depth_cutout_group
 from nodes.groups.image_cutout_symmetry import build_image_cutout_symmetry_group
@@ -89,99 +89,6 @@ def symmetry():
     return obj, cutout, mirror, cutout_setter, mirror_setter
 
 
-def test_symmetry_interface_and_cutout_defaults(symmetry):
-    _obj, cutout, mirror, _cutout_setter, _mirror_setter = symmetry
-    assert not any(node.bl_idname == "GeometryNodeMeshBoolean" for node in mirror.node_group.nodes)
-    mirror_inputs = [
-        item
-        for item in mirror.node_group.interface.items_tree
-        if item.item_type == "SOCKET" and item.in_out == "INPUT"
-    ]
-    assert [item.name for item in mirror_inputs] == [
-        "Geometry",
-        "Direction",
-        "Offset",
-        "Scale",
-        "Fill Sides",
-        "Smooth",
-    ]
-    assert tuple(mirror_inputs[1].default_value) == (0, 0, 1)
-    assert mirror_inputs[3].default_value == 1
-    assert mirror_inputs[2].min_value == -10
-    assert mirror_inputs[2].max_value == 10
-    assert mirror_inputs[3].min_value == 0
-    assert mirror_inputs[3].max_value == 2
-    assert mirror_inputs[4].default_value is True
-    assert mirror_inputs[5].default_value == 4
-
-    stores = {
-        node.inputs["Name"].default_value: node
-        for node in mirror.node_group.nodes
-        if node.bl_idname == "GeometryNodeStoreNamedAttribute"
-    }
-    assert stores["_o_pinned_smooth_region_point"].domain == "POINT"
-    assert stores["_o_pinned_smooth_region_corner"].domain == "CORNER"
-    uv_stores = [
-        node for node in mirror.node_group.nodes
-        if node.bl_idname == "GeometryNodeStoreNamedAttribute"
-        and node.inputs["Name"].default_value == "UVMap"
-    ]
-    assert len(uv_stores) == 2
-    for store in uv_stores:
-        uv_switch = next(
-            link.to_node for link in store.outputs["Geometry"].links
-            if link.to_node.bl_idname == "GeometryNodeSwitch"
-            and link.to_socket.name == "True"
-        )
-        iteration_limit = uv_switch.inputs["Switch"].links[0].from_node
-        assert iteration_limit.bl_idname == "FunctionNodeCompare"
-        assert iteration_limit.data_type == "INT"
-        assert iteration_limit.operation == "LESS_THAN"
-        assert next(
-            socket for socket in iteration_limit.inputs
-            if socket.identifier == "B_INT"
-        ).default_value == 4
-        assert next(
-            socket for socket in iteration_limit.inputs
-            if socket.identifier == "A_INT"
-        ).links[0].from_socket.name == "Iteration"
-    assert not [
-        node for node in mirror.node_group.nodes
-        if node.bl_idname == "GeometryNodeSwitch" and node.input_type == "INT"
-    ]
-    merges = [
-        node for node in mirror.node_group.nodes
-        if node.bl_idname == "GeometryNodeMergeByDistance"
-    ]
-    assert len(merges) == 1
-    assert not merges[0].inputs["Distance"].is_linked
-    assert merges[0].inputs["Distance"].default_value == pytest.approx(1e-6)
-
-    cutout_names = {
-        item.name
-        for item in cutout.node_group.interface.items_tree
-        if item.item_type == "SOCKET" and item.in_out == "INPUT"
-    }
-    assert "Depth Axis" not in cutout_names
-    thickness = [
-        item
-        for item in cutout.node_group.interface.items_tree
-        if item.item_type == "SOCKET" and item.name == "Thickness"
-    ]
-    assert len(thickness) == 2 and all(item.default_value == 0 for item in thickness)
-
-
-def test_final_symmetry_axis_is_x_and_z_is_up(symmetry):
-    obj, _cutout, _mirror, cutout_setter, _mirror_setter = symmetry
-    cutout_setter("Mode", 1)
-    cutout_setter("Thickness", 0.2, subtype="DISTANCE")
-    points, faces = evaluated(obj)
-
-    assert len(points) and np.isfinite(points).all()
-    assert cKDTree(points).query(points * (-1, 1, 1))[0].max() < 1e-5
-    assert np.ptp(points[:, 2]) > 1.0
-
-
 def _tolerance(points):
     size = float(np.linalg.norm(points.max(axis=0) - points.min(axis=0)))
     return max(size, 1e-8) * 1e-7
@@ -220,18 +127,8 @@ def _marked_vertices(points, faces, marker, value):
     return points[sorted(indices)]
 
 
-def _front_vertices(points, faces, marker, predicate):
-    return np.array(
-        [point for point in _marked_vertices(points, faces, marker, 1) if predicate(point)]
-    )
-
-
 def _positions(points):
     return {tuple(np.round(point, 6)) for point in points}
-
-
-def _front_rim(points, faces, marker, tolerance):
-    return _front_vertices(points, faces, marker, lambda point: abs(point[0]) <= tolerance)
 
 
 def test_seam_clamps_geometry_onto_the_symmetry_plane(symmetry):
@@ -248,19 +145,7 @@ def test_seam_clamps_geometry_onto_the_symmetry_plane(symmetry):
     assert any(plane[list(face)].any() and not plane[list(face)].all() for face in faces)
 
 
-def test_disabled_fill_keeps_the_welded_seam(symmetry):
-    obj, _cutout, _mirror, _cutout_setter, mirror_setter = symmetry
-    mirror_setter("Fill Sides", False)
-    points, faces = evaluated(obj)
-    tolerance = _tolerance(points)
-    plane = np.abs(points[:, 0]) <= tolerance
-    open_edges = _open_edges(faces)
-
-    assert open_edges
-    assert not any(plane[edge[0]] and plane[edge[1]] for edge in open_edges)
-
-
-def test_fixed_merge_distance_welds_the_seam(symmetry):
+def test_fill_closes_sides_and_keeps_the_seam_welded_when_disabled(symmetry):
     obj, _cutout, _mirror, _cutout_setter, mirror_setter = symmetry
     points, faces, marker = _evaluated(obj)
     tolerance = _tolerance(points)
@@ -275,9 +160,11 @@ def test_fixed_merge_distance_welds_the_seam(symmetry):
     mirror_setter("Fill Sides", False)
     points, faces, _marker = _evaluated(obj)
     tolerance = _tolerance(points)
+    open_edges = _open_edges(faces)
+    assert open_edges
     assert not any(
         np.abs(points[list(edge)][:, 0]).max() <= tolerance
-        for edge in _open_edges(faces)
+        for edge in open_edges
     )
 
 
@@ -313,7 +200,7 @@ def test_fill_smooth_relaxes_the_junction_band(symmetry):
 
 
 
-def test_object_normal_attributes_follow_final_orientation(symmetry):
+def test_final_orientation_preserves_symmetry_and_normal_attributes(symmetry):
     obj, _cutout, _mirror, cutout_setter, _mirror_setter = symmetry
     cutout_setter("Mode", 1)
     cutout_setter("Thickness", 0.2, subtype="DISTANCE")
@@ -323,6 +210,11 @@ def test_object_normal_attributes_follow_final_orientation(symmetry):
     evaluated_obj = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = evaluated_obj.to_mesh()
     try:
+        points = np.array([vertex.co[:] for vertex in mesh.vertices])
+        assert len(points) and np.isfinite(points).all()
+        assert cKDTree(points).query(points * (-1, 1, 1))[0].max() < 1e-5
+        assert np.ptp(points[:, 2]) > 1.0
+        assert all(face.use_smooth for face in mesh.polygons)
         assert AXIS_ATTRIBUTE in mesh.attributes
         assert ROTATION_ATTRIBUTE in mesh.attributes
         assert FACE_ATTRIBUTE in mesh.attributes

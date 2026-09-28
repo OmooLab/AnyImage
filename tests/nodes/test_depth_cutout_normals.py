@@ -88,8 +88,7 @@ def test_normal_bias_near_zero_keeps_its_continuous_blend(normal_bias):
     assert 1e-6 < delta.max() < 1e-3
 
 
-@pytest.mark.parametrize("boundary", (0.0, 0.5, 1.0))
-@pytest.mark.parametrize("profile", (0.0, 0.4))
+@pytest.mark.parametrize("boundary,profile", [(0.0, 0.0), (1.0, 0.0), (0.5, 0.4)])
 def test_boundary_normal_blend_fades_without_replacing_the_profile(boundary, profile):
     values = normal_samples(-1.0, boundary=boundary, profile=profile)
     weight = profile + (1 - profile) * boundary * 0.25

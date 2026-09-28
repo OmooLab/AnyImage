@@ -93,11 +93,14 @@ def _remove_triangle_strip_faces(group, geometry):
         links.new(corner, node.inputs["Corner Index"])
         return node.outputs["Vertex Index"]
 
+    edge_faces = nodes.new("GeometryNodeInputMeshEdgeNeighbors").outputs["Face Count"]
+    face_vertices = nodes.new("GeometryNodeInputMeshFaceNeighbors").outputs["Vertex Count"]
+    is_triangle = equals(face_vertices, 3)
+
     def boundary(corner):
         edge = nodes.new("GeometryNodeEdgesOfCorner")
         links.new(corner, edge.inputs["Corner Index"])
-        count = nodes.new("GeometryNodeInputMeshEdgeNeighbors")
-        return equals(sample(count.outputs["Face Count"], edge.outputs["Next Edge Index"], "EDGE"), 1)
+        return equals(sample(edge_faces, edge.outputs["Next Edge Index"], "EDGE"), 1)
 
     edge_index = nodes.new("GeometryNodeInputIndex")
     sides = []
@@ -108,8 +111,7 @@ def _remove_triangle_strip_faces(group, geometry):
         corner = corners.outputs["Corner Index"]
         face_index = nodes.new("GeometryNodeFaceOfCorner")
         links.new(corner, face_index.inputs["Corner Index"])
-        face_size = nodes.new("GeometryNodeInputMeshFaceNeighbors")
-        triangle = equals(sample(face_size.outputs["Vertex Count"], face_index.outputs["Face Index"], "FACE"), 3)
+        triangle = sample(is_triangle, face_index.outputs["Face Index"], "FACE", "BOOLEAN")
         end, tip = offset_corner(corner, 1), offset_corner(corner, 2)
         sides.append((triangle, vertex(corner), vertex(tip), boundary(end), boundary(tip)))
     a, b = sides
@@ -124,43 +126,33 @@ def _remove_triangle_strip_faces(group, geometry):
         boolean_node(group, "AND", a[3], b[4]),
         boolean_node(group, "AND", a[4], b[3]),
     )
-    pair = boolean_node(
-        group, "OR",
-        boolean_node(group, "AND", same_direction, reverse_order),
-        boolean_node(group, "AND", boolean_node(group, "NOT", same_direction), same_order),
-    )
-    neighbors = nodes.new("GeometryNodeInputMeshEdgeNeighbors")
+    pair_switch = nodes.new("GeometryNodeSwitch")
+    pair_switch.input_type = "BOOLEAN"
+    links.new(same_direction, pair_switch.inputs["Switch"])
+    links.new(same_order, pair_switch.inputs["False"])
+    links.new(reverse_order, pair_switch.inputs["True"])
+    pair = pair_switch.outputs[0]
     for condition in (
-        equals(neighbors.outputs["Face Count"], 2),
+        equals(edge_faces, 2),
         a[0],
         b[0],
-        boolean_node(group, "NOT", equals(a[2], b[2])),
+        compare_node(group, "NOT_EQUAL", a[2], b[2], data_type="INT"),
     ):
         pair = boolean_node(group, "AND", pair, condition)
 
-    face_index = nodes.new("GeometryNodeInputIndex")
-    corners = nodes.new("GeometryNodeCornersOfFace")
-    links.new(face_index.outputs[0], corners.inputs["Face Index"])
-    boundary_count, paired = None, None
-    for offset in range(3):
-        corner = offset_corner(corners.outputs["Corner Index"], offset)
-        edge = nodes.new("GeometryNodeEdgesOfCorner")
-        links.new(corner, edge.inputs["Corner Index"])
-        match = sample(pair, edge.outputs["Next Edge Index"], "EDGE", "BOOLEAN")
-        paired = match if paired is None else boolean_node(group, "OR", paired, match)
-        rim = boundary(corner)
-        if boundary_count is None:
-            boundary_count = rim
-        else:
-            add = nodes.new("FunctionNodeIntegerMath")
-            add.operation = "ADD"
-            links.new(boundary_count, add.inputs[0])
-            links.new(rim, add.inputs[1])
-            boundary_count = add.outputs[0]
+    # Float adaptation averages incident edge flags: positive means any, one means all.
+    paired = compare_node(
+        group, "GREATER_THAN",
+        evaluate_field(group, evaluate_field(group, pair, "FLOAT", "EDGE"), "FLOAT", "FACE"), 0.0,
+    )
+    rim = equals(edge_faces, 1)
+    all_boundary = compare_node(
+        group, "GREATER_THAN",
+        evaluate_field(group, evaluate_field(group, rim, "FLOAT", "EDGE"), "FLOAT", "FACE"), 0.99999,
+    )
     selected = boolean_node(
-        group, "AND",
-        equals(corners.outputs["Total"], 3),
-        boolean_node(group, "OR", paired, equals(boundary_count, 3)),
+        group, "AND", is_triangle,
+        boolean_node(group, "OR", paired, all_boundary),
     )
     delete = nodes.new("GeometryNodeDeleteGeometry")
     delete.domain, delete.mode = "FACE", "ALL"

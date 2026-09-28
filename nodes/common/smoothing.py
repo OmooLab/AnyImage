@@ -108,15 +108,8 @@ def _smooth_uv(
     uv = nodes.new("GeometryNodeInputNamedAttribute")
     uv.data_type = "FLOAT_VECTOR"
     uv.inputs["Name"].default_value = UV_ATTRIBUTE
-    axes = nodes.new("ShaderNodeSeparateXYZ")
-    links.new(uv.outputs["Attribute"], axes.inputs[0])
-
-    point_u = evaluate_field(group, axes.outputs["X"], "FLOAT", "POINT")
-    point_v = evaluate_field(group, axes.outputs["Y"], "FLOAT", "POINT")
-    uv_position = nodes.new("ShaderNodeCombineXYZ")
-    links.new(point_u, uv_position.inputs["X"])
-    links.new(point_v, uv_position.inputs["Y"])
-    target = _blur(group, uv_position.outputs["Vector"], "FLOAT_VECTOR")
+    point_uv = evaluate_field(group, uv.outputs["Attribute"], "FLOAT_VECTOR", "POINT")
+    target = _blur(group, point_uv, "FLOAT_VECTOR")
     if boundary_points is not None:
         choose = nodes.new("GeometryNodeSwitch")
         choose.input_type = "VECTOR"
@@ -125,7 +118,7 @@ def _smooth_uv(
         links.new(
             _boundary_target(
                 group,
-                uv_position.outputs["Vector"],
+                point_uv,
                 boundary_points,
                 boundary_normalization,
             ),
@@ -133,15 +126,18 @@ def _smooth_uv(
         )
         target = choose.outputs["Output"]
     target = evaluate_field(group, target, "FLOAT_VECTOR", "POINT")
-    target_axes = nodes.new("ShaderNodeSeparateXYZ")
-    links.new(target, target_axes.inputs[0])
-    def mix(current, target):
-        difference = _math(group, "SUBTRACT", target, current)
-        return _math(group, "ADD", current, _math(group, "MULTIPLY", difference, influence))
-
-    value = nodes.new("ShaderNodeCombineXYZ")
-    links.new(mix(axes.outputs["X"], target_axes.outputs["X"]), value.inputs["X"])
-    links.new(mix(axes.outputs["Y"], target_axes.outputs["Y"]), value.inputs["Y"])
+    difference = nodes.new("ShaderNodeVectorMath")
+    difference.operation = "SUBTRACT"
+    links.new(target, difference.inputs[0])
+    links.new(uv.outputs["Attribute"], difference.inputs[1])
+    offset = nodes.new("ShaderNodeVectorMath")
+    offset.operation = "SCALE"
+    links.new(difference.outputs["Vector"], offset.inputs[0])
+    links.new(influence, offset.inputs[3])
+    value = nodes.new("ShaderNodeVectorMath")
+    value.operation = "ADD"
+    links.new(uv.outputs["Attribute"], value.inputs[0])
+    links.new(offset.outputs["Vector"], value.inputs[1])
     store = nodes.new("GeometryNodeStoreNamedAttribute")
     store.data_type, store.domain = "FLOAT2", "CORNER"
     store.inputs["Name"].default_value = UV_ATTRIBUTE

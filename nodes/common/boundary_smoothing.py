@@ -20,8 +20,8 @@ def _gated(group, value, blocked, *, default):
     return node.outputs[0]
 
 
-def boundary_influence(group, protected=False, *, boundary=None):
-    """Fade a boundary field through two rings while excluding protected points."""
+def boundary_influence(group, protected=False, *, boundary=None, iterations=2):
+    """Fade a boundary field through neighboring rings while excluding protected points."""
     nodes, links = group.nodes, group.links
     if boundary is None:
         boundary = edge_boundary_field(nodes, links)
@@ -29,7 +29,7 @@ def boundary_influence(group, protected=False, *, boundary=None):
     cut = _gated(group, boundary, protected, default=0.0)
     blur = nodes.new("GeometryNodeBlurAttribute")
     blur.data_type = "FLOAT"
-    blur.inputs["Iterations"].default_value = 2
+    blur.inputs["Iterations"].default_value = iterations
     blur.inputs["Weight"].default_value = 1
     links.new(cut, blur.inputs["Value"])
     mixed = _math(group, "MAXIMUM", cut, blur.outputs["Value"])

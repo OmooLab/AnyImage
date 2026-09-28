@@ -116,8 +116,8 @@ def test_depth_limit_tapers_balloon_profile_and_closes_the_cut_edge():
 
 
 @pytest.mark.parametrize("mode", [0, 1])
-def test_edge_turn_reshapes_thickness_without_moving_zero_thickness(mode):
-    """Edge Turn swings the wall direction and leaves zero thickness untouched."""
+def test_normal_bias_reshapes_thickness_without_moving_zero_thickness(mode):
+    """Normal Bias swings the wall direction and leaves zero thickness untouched."""
     from tests.support.depth_surface import surface, evaluated
 
     obj, set_value = surface(step=1, resolution=10)
@@ -129,21 +129,21 @@ def test_edge_turn_reshapes_thickness_without_moving_zero_thickness(mode):
     set_value("Front Inflation", .2)
     modifier = obj.modifiers[0]
     thickness = modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE" if mode else "NONE")
-    turn = modifier_input_identifier(modifier.node_group, "Edge Turn")
+    bias = modifier_input_identifier(modifier.node_group, "Normal Bias")
 
-    def result(amount, edge_turn):
+    def result(amount, normal_bias):
         set_modifier_input(modifier, thickness, amount)
-        set_modifier_input(modifier, turn, edge_turn)
+        set_modifier_input(modifier, bias, normal_bias)
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
         return evaluated(obj)
 
-    plain, faces = result(0, 0)
-    turned, turned_faces = result(0, 2)
+    plain, faces = result(0, -1)
+    turned, turned_faces = result(0, 1)
     np.testing.assert_array_equal(plain, turned)
     assert faces == turned_faces
-    plain, faces = result(1, 0)
-    turned, turned_faces = result(1, 2)
+    plain, faces = result(1, -1)
+    turned, turned_faces = result(1, 1)
     assert faces == turned_faces
     assert np.isfinite(turned).all()
     assert np.max(np.abs(plain - turned)) > 1e-5
@@ -171,7 +171,7 @@ def test_shell_offset_scales_with_thickness_and_ignores_reference():
         from scipy.spatial import cKDTree
         distances, indices = cKDTree(adjusted_front).query(points)
         np.testing.assert_allclose(np.sort(distances)[:len(front)], 0, atol=2e-6)
-        rear = distances > thickness * .5
+        rear = distances > thickness * .75
         assert rear.sum() == len(front)
         order = np.argsort(indices[rear])
         return ((points[rear] - adjusted_front[indices[rear]]) / thickness)[order], faces
@@ -201,7 +201,9 @@ def test_shell_thickness_extends_behind_the_tilted_front():
     points, _ = evaluated(obj)
     front_set = {tuple(point) for point in front}
     assert front_set <= {tuple(point) for point in points}
-    assert not np.allclose(points[len(front) :], front, atol=1e-6)
+    from scipy.spatial import cKDTree
+    distances, _ = cKDTree(front).query(points)
+    assert distances.max() > 0.1
 
 
 def test_balloon_shell_converges_to_front_with_thickness():

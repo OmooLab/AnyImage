@@ -19,7 +19,7 @@ def test_saved_parameter_descriptions_match_definitions():
         "O Image Depth Plane": {"Subdivide", "Thickness", "Depth Split", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Image Relief Plane": {"Subdivide", "Thickness", "Depth Direction", "Depth Offset"},
         "O Image Cutout": {"Thickness"},
-        "O Image Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Rear Smooth", "Edge Turn", "Front Inflation", "Depth Limit"},
+        "O Image Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Rear Smooth", "Normal Bias", "Front Inflation", "Depth Limit"},
         "O Image Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
         "O Image Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Image Layer": {"Alpha Fix", "Normal Scale", "Bump Scale", "Object Space"},
@@ -36,6 +36,13 @@ def test_saved_parameter_descriptions_match_definitions():
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"
             ]
             if group.name == "O Image Depth Cutout":
+                names = [item.name for item in inputs]
+                assert "Side Roundness" not in names and "Edge Turn" not in names
+                inflation = next(item for item in inputs if item.name == "Front Inflation")
+                thickness = next(item for item in inputs if item.name == "Thickness" and item.subtype == "NONE")
+                assert not inflation.parent.name
+                assert abs(inflation.default_value - 0.3) < 1e-6
+                assert inputs.index(inflation) == inputs.index(thickness) + 1
                 split = next(item for item in inputs if item.name == "Depth Split")
                 limit = next(item for item in inputs if item.name == "Depth Limit")
                 assert not limit.parent.name
@@ -93,15 +100,18 @@ def test_geometry_attribute_contract_includes_nested_groups():
         "_o_depth_cut": ("BOOLEAN", "CORNER"),
         "_o_depth_limit_boundary": ("BOOLEAN", "POINT"),
         "_o_boundary_smooth_weight": ("FLOAT", "POINT"),
+        "_o_boundary_falloff": ("FLOAT", "POINT"),
         "_o_cut_boundary": ("BOOLEAN", "POINT"),
         "_o_front_normal": ("FLOAT_VECTOR", "POINT"),
         "_o_leaf_id": ("INT", "POINT"),
+        "_o_side_ring_target": ("FLOAT_VECTOR", "POINT"),
         "_o_leaf_source_index": ("INT", "POINT"),
         "_o_pinned_smooth_boundary": ("BOOLEAN", "POINT"),
         "_o_pinned_smooth_normalization": ("FLOAT", "POINT"),
         "_o_pinned_smooth_region_point": ("FLOAT", "POINT"),
         "_o_pinned_smooth_region_corner": ("FLOAT", "CORNER"),
-        "_o_rear_target": ("FLOAT_VECTOR", "POINT"),
+        "_o_side_base_uv": ("FLOAT_VECTOR", "POINT"),
+        "_o_side_top_uv": ("FLOAT_VECTOR", "POINT"),
         "_o_symmetry_weld": ("BOOLEAN", "FACE"),
         "o_depth_rotation": ("FLOAT_VECTOR", "FACE"),
         "o_depth_face": ("FLOAT", "FACE"),

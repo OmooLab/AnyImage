@@ -6,7 +6,13 @@ import numpy as np
 import pytest
 
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from nodes.common.boundary_smoothing import smooth_cut_boundary
+from nodes.common.boundary_smoothing import boundary_influence, smooth_cut_boundary
+from nodes.common.nodes import store_float_attribute
+from nodes.groups.image_depth_cutout import (
+    BOUNDARY_FALLOFF_ATTRIBUTE,
+    SIDE_UV_INFLUENCE_ITERATIONS,
+    prepare_bridge_uv,
+)
 from tests.nodes.test_boundary_smoothing import boundary_neighbors
 from tests.support.depth_surface import assert_closed, evaluated, surface
 
@@ -95,6 +101,15 @@ def _evaluated(obj):
         result.to_mesh_clear()
 
 
+def _evaluated_corner_uv(obj):
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = result.to_mesh()
+    try:
+        return np.array([loop.uv[:] for loop in mesh.uv_layers["UVMap"].data])
+    finally:
+        result.to_mesh_clear()
+
+
 def _evaluated_leaf_points(obj):
     result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = result.to_mesh()
@@ -129,6 +144,18 @@ def _face_domain_rear(name, *, flip):
         group.links.new(output, flipped.inputs["Mesh"])
         output = flipped.outputs["Mesh"]
     group.links.new(output, result)
+    return group
+
+
+def _bridge_uv_group(name):
+    group, geometry, result = _geometry_group(name)
+    geometry = store_float_attribute(
+        group,
+        geometry,
+        BOUNDARY_FALLOFF_ATTRIBUTE,
+        boundary_influence(group, iterations=SIDE_UV_INFLUENCE_ITERATIONS),
+    )
+    group.links.new(prepare_bridge_uv(group, geometry, 1.0), result)
     return group
 
 
@@ -202,62 +229,81 @@ def test_face_domain_rear_offset_and_flip_preserve_positions():
         assert np.dot(_normal(plain_points, plain_face), _normal(flipped_points, flipped_face)) < -0.999
 
 
-def test_edge_extrude_top_reposition_keeps_per_point_targets():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    points = np.array([
-        (0.0, 0.0, 0.0),
-        (2.0, 0.0, 0.0),
-        (2.5, 0.0, 1.0),
-        (-0.5, 0.0, 1.5),
-    ])
-    offsets = np.array([
-        (0.1, -0.4, 0.2),
-        (-0.2, -0.7, 0.1),
-        (0.3, -1.0, -0.2),
-        (-0.1, -0.5, 0.4),
-    ])
-    edges = [(0, 1), (1, 2), (2, 3), (3, 0)]
-    group, geometry, result = _geometry_group("Edge Extrude Top Reposition")
-    attribute = group.nodes.new("GeometryNodeInputNamedAttribute")
-    attribute.data_type = "FLOAT_VECTOR"
-    attribute.inputs["Name"].default_value = "target_position"
-    extrude = group.nodes.new("GeometryNodeExtrudeMesh")
-    extrude.mode = "EDGES"
-    extrude.inputs["Offset"].default_value = (0.0, -1.0, 0.0)
-    group.links.new(geometry, extrude.inputs["Mesh"])
-    set_position = group.nodes.new("GeometryNodeSetPosition")
-    group.links.new(extrude.outputs["Mesh"], set_position.inputs["Geometry"])
-    group.links.new(extrude.outputs["Top"], set_position.inputs["Selection"])
-    group.links.new(attribute.outputs["Attribute"], set_position.inputs["Position"])
-    top = group.nodes.new("GeometryNodeSeparateGeometry")
-    top.domain = "EDGE"
-    group.links.new(set_position.outputs["Geometry"], top.inputs["Geometry"])
-    group.links.new(extrude.outputs["Top"], top.inputs["Selection"])
-    group.links.new(top.outputs["Selection"], result)
-
-    obj = _object(points, edges, [], group)
-    target = obj.data.attributes.new("target_position", "FLOAT_VECTOR", "POINT")
-    target.data.foreach_set("vector", (points + offsets).ravel())
-    obj.data.update()
-    bpy.context.view_layer.update()
-    result_points, _, result_edges = _evaluated(obj)
-    assert len(result_edges) == len(edges)
-    np.testing.assert_allclose(
-        _sorted_rows(result_points), _sorted_rows(points + offsets), atol=1e-6,
-    )
-
-
 def test_depth_cutout_bridge_matches_source_leaf_topology():
     obj, set_value = surface(step=0, resolution=8)
     front, front_faces = evaluated(obj)
+    boundary_point_count = len(boundary_neighbors(front_faces))
     boundary_edge_count = sum(len(neighbors) for neighbors in boundary_neighbors(front_faces).values()) // 2
     set_value("Thickness", 0.2)
     points, faces = evaluated(obj)
 
-    assert len(points) == 2 * len(front)
-    assert len(faces) == 2 * len(front_faces) + boundary_edge_count
+    assert len(points) == 2 * len(front) + boundary_point_count
+    assert len(faces) == 2 * len(front_faces) + 2 * boundary_edge_count
     assert_closed(faces)
     _assert_oriented_closed(faces)
+
+
+def test_leaf_uv_pull_fades_through_four_boundary_rings_and_preserves_the_core():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    size = 13
+    points = np.array([(x, 0.0, z) for z in range(size) for x in range(size)], dtype=float)
+    faces = []
+    for z in range(size - 1):
+        for x in range(size - 1):
+            a = z * size + x
+            faces.append((a, a + 1, a + size + 1, a + size))
+    obj = _object(points, [], faces, _bridge_uv_group("Leaf Boundary UV Pull"))
+    uv_layer = obj.data.uv_layers.new(name="UVMap")
+    original = np.empty((len(obj.data.loops), 2), dtype=float)
+    for loop in obj.data.loops:
+        point = obj.data.vertices[loop.vertex_index].co
+        value = (point.x / (size - 1), point.z / (size - 1))
+        uv_layer.data[loop.index].uv = value
+        original[loop.index] = value
+    obj.data.update()
+    bpy.context.view_layer.update()
+
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = result.to_mesh()
+    try:
+        pulled = np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
+        vertices = np.array([loop.vertex_index for loop in mesh.loops])
+        coordinates = points[vertices][:, (0, 2)]
+        boundary = np.any((coordinates == 0) | (coordinates == size - 1), axis=1)
+        core = np.all((coordinates >= 5) & (coordinates <= size - 6), axis=1)
+        assert np.max(np.abs(pulled[boundary] - original[boundary])) > 1e-4
+        np.testing.assert_allclose(pulled[core], original[core], atol=1e-7)
+        assert np.all(pulled[coordinates[:, 0] == 0, 0] >= -1e-7)
+        assert np.all(pulled[coordinates[:, 0] == size - 1, 0] <= 1.0 + 1e-7)
+        assert np.all(pulled[coordinates[:, 1] == 0, 1] >= -1e-7)
+        assert np.all(pulled[coordinates[:, 1] == size - 1, 1] <= 1.0 + 1e-7)
+    finally:
+        result.to_mesh_clear()
+
+
+def test_depth_cutout_bridge_keeps_side_uv_inside_the_image():
+    obj, set_value = surface(step=0, resolution=8)
+    set_value("Boundary Smooth", 0)
+    _front, front_faces = evaluated(obj)
+    boundary_edge_count = sum(len(neighbors) for neighbors in boundary_neighbors(front_faces).values()) // 2
+    set_value("Thickness", 0.2)
+    solid_uv = _evaluated_corner_uv(obj)
+    _points, solid_faces = evaluated(obj)
+
+    assert len(solid_faces) == 2 * len(front_faces) + 2 * boundary_edge_count
+    solid_face_uv = solid_uv.reshape(-1, 4, 2)
+    assert np.all(solid_face_uv >= -1e-6)
+    assert np.all(solid_face_uv <= 1.0 + 1e-6)
+    side_uv = solid_face_uv[-2 * boundary_edge_count:]
+    assert len(side_uv) == 2 * boundary_edge_count
+    side_areas = np.abs(
+        np.sum(
+            side_uv[:, :, 0] * np.roll(side_uv[:, :, 1], -1, axis=1)
+            - side_uv[:, :, 1] * np.roll(side_uv[:, :, 0], -1, axis=1),
+            axis=1,
+        )
+    ) / 2
+    assert np.all(side_areas > 1e-10)
 
 
 def test_depth_cutout_uses_preflipped_leaves_and_one_shared_repeat():
@@ -317,10 +363,51 @@ def test_depth_cutout_uses_preflipped_leaves_and_one_shared_repeat():
     assert len(flips) == 1
     assert _has_node_path(group, flips[0], repeat_inputs[0])
     assert any(_has_node_path(group, repeat_outputs[0], node) for node in separates)
-    assert any(
-        _has_node_path(group, repeat_outputs[0], extrude)
-        for extrude in extrudes
-    )
+    assert len(extrudes) == 1
+    assert all(_has_node_path(group, repeat_outputs[0], extrude) for extrude in extrudes)
+    uv_blurs = [
+        node for node in group.nodes
+        if node.bl_idname == "GeometryNodeBlurAttribute"
+        and node.data_type == "FLOAT_VECTOR"
+            and node.inputs["Iterations"].default_value == 4
+            and node.inputs["Weight"].default_value == pytest.approx(1.0)
+    ]
+    uv_influence_blurs = [
+        node for node in group.nodes
+        if node.bl_idname == "GeometryNodeBlurAttribute"
+        and node.data_type == "FLOAT"
+        and node.inputs["Iterations"].default_value == 4
+        and node.inputs["Weight"].default_value == pytest.approx(1.0)
+    ]
+    thickness_fades = [
+        node for node in group.nodes
+        if node.bl_idname == "ShaderNodeMapRange"
+        and node.interpolation_type == "SMOOTHSTEP"
+        and node.clamp
+        and node.inputs["From Max"].default_value == pytest.approx(1.0)
+    ]
+    thickness_powers = [
+        node for node in group.nodes
+        if node.bl_idname == "ShaderNodeMath"
+        and node.operation == "POWER"
+        and node.inputs[1].default_value == pytest.approx(0.5)
+        and any(
+            link.from_node in thickness_fades
+            for link in node.inputs[0].links
+        )
+    ]
+    assert len(uv_blurs) == 1
+    assert len(uv_influence_blurs) >= 2
+    assert len(thickness_fades) == 1
+    assert len(thickness_powers) == 1
+    for name in ("_o_side_base_uv", "_o_side_top_uv"):
+        stores = [
+            node for node in group.nodes
+            if node.bl_idname == "GeometryNodeStoreNamedAttribute"
+            and node.inputs["Name"].default_value == name
+        ]
+        assert len(stores) == 1
+        assert all(_has_node_path(group, stores[0], extrude) for extrude in extrudes)
     assert len(merges) == 1
     assert merges[0].mode == "ALL"
     assert not merges[0].inputs["Distance"].is_linked
@@ -328,14 +415,18 @@ def test_depth_cutout_uses_preflipped_leaves_and_one_shared_repeat():
     assert "_o_leaf_cut" not in stored_names | read_names
     assert "_o_cut_boundary" in stored_names
     assert "_o_boundary_smooth_weight" in stored_names & read_names
+    assert "_o_boundary_falloff" in stored_names & read_names
     assert {
         "_o_pinned_smooth_boundary",
         "_o_pinned_smooth_normalization",
     } <= stored_names
     assert "_o_pinned_smooth_normalization" in read_names
-    assert removed_names == {"_o_depth_*", "_o_pinned_smooth_*", "_o_*"}
+    assert removed_names == {
+        "_o_depth_*", "_o_pinned_smooth_*", "_o_*",
+        "_o_cut_boundary*", "_o_front_normal*", "_o_boundary_smooth_weight*",
+    }
 
-    for name in ("_o_boundary_smooth_weight", "_o_front_normal"):
+    for name in ("_o_boundary_falloff", "_o_boundary_smooth_weight", "_o_front_normal"):
         store = next(
             node for node in group.nodes
             if node.bl_idname == "GeometryNodeStoreNamedAttribute"
@@ -348,8 +439,12 @@ def test_depth_cutout_uses_preflipped_leaves_and_one_shared_repeat():
         )
     assert "Back Smooth" not in inputs
     assert inputs["Rear Smooth"].default_value == 8
-    assert inputs["Edge Turn"].default_value == pytest.approx(1.0)
-    assert len(profile_powers) == 1
+    assert "Side Roundness" not in inputs
+    assert "Edge Turn" not in inputs
+    assert inputs["Normal Bias"].default_value == pytest.approx(0.0)
+    assert inputs["Normal Bias"].min_value == pytest.approx(-2.0)
+    assert inputs["Normal Bias"].max_value == pytest.approx(2.0)
+    assert len(profile_powers) == 2
 
 
 @pytest.mark.parametrize("boundary", ("split", "limit"))
@@ -360,11 +455,12 @@ def test_depth_cutout_bridge_closes_generated_boundaries(boundary):
     else:
         set_value("Depth Limit", 2.0)
     front, front_faces = evaluated(obj)
+    boundary_point_count = len(boundary_neighbors(front_faces))
     boundary_edge_count = sum(len(neighbors) for neighbors in boundary_neighbors(front_faces).values()) // 2
     set_value("Thickness", 0.2)
     points, faces = evaluated(obj)
-    assert len(points) <= 2 * len(front)
-    assert len(faces) == 2 * len(front_faces) + boundary_edge_count
+    assert len(points) <= 2 * len(front) + boundary_point_count
+    assert len(faces) == 2 * len(front_faces) + 2 * boundary_edge_count
     assert_closed(faces)
     _assert_oriented_closed(faces)
 
@@ -385,11 +481,12 @@ def test_depth_cutout_bridge_closes_hole_boundaries():
     bpy.context.view_layer.update()
 
     front, front_faces = evaluated(obj)
+    boundary_point_count = len(boundary_neighbors(front_faces))
     boundary_edge_count = sum(len(neighbors) for neighbors in boundary_neighbors(front_faces).values()) // 2
     set_value("Thickness", 0.2)
     points, faces = evaluated(obj)
-    assert len(points) == 2 * len(front)
-    assert len(faces) == 2 * len(front_faces) + boundary_edge_count
+    assert len(points) == 2 * len(front) + boundary_point_count
+    assert len(faces) == 2 * len(front_faces) + 2 * boundary_edge_count
     assert_closed(faces)
     _assert_oriented_closed(faces)
 
@@ -398,11 +495,12 @@ def test_depth_cutout_bridge_scales_beyond_4096_source_points():
     obj, set_value = surface(step=0, resolution=46)
     front, front_faces = evaluated(obj)
     assert len(front) > 4096
+    boundary_point_count = len(boundary_neighbors(front_faces))
     boundary_edge_count = sum(len(neighbors) for neighbors in boundary_neighbors(front_faces).values()) // 2
     set_value("Thickness", 0.02)
     points, faces = evaluated(obj)
-    assert len(points) == 2 * len(front)
-    assert len(faces) == 2 * len(front_faces) + boundary_edge_count
+    assert len(points) == 2 * len(front) + boundary_point_count
+    assert len(faces) == 2 * len(front_faces) + 2 * boundary_edge_count
     assert_closed(faces)
     _assert_oriented_closed(faces)
 

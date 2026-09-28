@@ -200,6 +200,8 @@ def test_depth_surface_object_evaluates(gesture):
         baseline_y = np.asarray([vertex.co.y for vertex in baseline_mesh.vertices])
         baseline_min = baseline_y.min()
         baseline_max = baseline_y.max()
+        island_normal = np.asarray([vertex.normal[:] for vertex in baseline_mesh.vertices]).sum(axis=0)
+        island_normal /= np.linalg.norm(island_normal)
     finally:
         evaluated.to_mesh_clear()
 
@@ -216,7 +218,8 @@ def test_depth_surface_object_evaluates(gesture):
         assert len(evaluated_mesh.polygons) > 0
         y = np.asarray([vertex.co.y for vertex in evaluated_mesh.vertices])
         assert np.isclose(y.min(), baseline_min, atol=1e-5)
-        assert np.isclose(y.max(), baseline_max + 1.0, atol=2e-4)
+        # Default Normal Bias extrudes along the island normal, including its tilt.
+        assert np.isclose(y.max(), baseline_max - island_normal[1], atol=2e-4)
     finally:
         evaluated.to_mesh_clear()
 

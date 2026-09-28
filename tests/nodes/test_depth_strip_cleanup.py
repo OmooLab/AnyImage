@@ -1,9 +1,52 @@
 """Evaluate opposite-boundary cleanup on explicit mesh topology."""
 
-import bmesh
 import bpy
+import bmesh
 import numpy as np
 import pytest
+
+from nodes.common.depth_surface import _remove_triangle_strip_faces
+
+
+@pytest.mark.parametrize("faces,retained", [
+    pytest.param([], [], id="empty"),
+    pytest.param([(0, 1, 2)], [], id="isolated-triangle"),
+    pytest.param([(0, 1, 2), (0, 2, 3)], [], id="strip-pair"),
+    pytest.param([(0, 1, 2), (3, 2, 0)], [], id="reversed-strip-pair"),
+    pytest.param([(0, 1, 2), (1, 0, 3, 4)], [0, 1], id="triangle-next-to-quad"),
+    pytest.param([(0, 1, 2), (1, 0, 3), (0, 1, 4)], [0, 1, 2], id="nonmanifold-edge"),
+    pytest.param([(0, 1, 2), (2, 1, 0)], [0, 1], id="coincident-triangles"),
+    pytest.param(
+        [(0, 2, 4), (0, 1, 2), (2, 3, 4), (4, 5, 0)],
+        [0, 1, 2, 3], id="boundary-vertices-without-boundary-strips",
+    ),
+])
+def test_triangle_cleanup_preserves_unmatched_faces(faces, retained):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    group = bpy.data.node_groups.new("Triangle Cleanup", "GeometryNodeTree")
+    for direction in ("INPUT", "OUTPUT"):
+        group.interface.new_socket(
+            name="Geometry", in_out=direction, socket_type="NodeSocketGeometry",
+        )
+    source = group.nodes.new("NodeGroupInput")
+    output = group.nodes.new("NodeGroupOutput")
+    geometry = _remove_triangle_strip_faces(group, source.outputs["Geometry"])
+    group.links.new(geometry, output.inputs["Geometry"])
+    angles = np.arange(6) * np.pi / 3
+    mesh = bpy.data.meshes.new("Triangle Cleanup")
+    mesh.from_pydata([(np.cos(a), np.sin(a), 0) for a in angles], [], faces)
+    mesh.attributes.new("face_id", "INT", "FACE").data.foreach_set("value", np.arange(len(faces)))
+    obj = bpy.data.objects.new("Triangle Cleanup", mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.modifiers.new("Triangle Cleanup", "NODES").node_group = group
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    evaluated = result.to_mesh()
+    try:
+        actual = [item.value for item in evaluated.attributes["face_id"].data] if evaluated.polygons else []
+        assert actual == retained
+    finally:
+        result.to_mesh_clear()
+
 
 @pytest.mark.parametrize("kind", ["plane", "cutout"])
 def test_strips_are_removed_before_projection(kind):

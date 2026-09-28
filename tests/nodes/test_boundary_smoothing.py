@@ -7,7 +7,7 @@ import bmesh
 import numpy as np
 
 from nodes.common.nodes import evaluate_field
-from nodes.common.smoothing import _blur, _boundary_target, edge_boundary_field
+from nodes.common.smoothing import _blur, _boundary_target, _smooth_uv, edge_boundary_field
 from tests.support.depth_surface import surface, evaluated, assert_closed
 
 
@@ -76,6 +76,48 @@ def uv_delta(after, before):
     return delta
 
 
+def test_uv_smoothing_blends_from_each_corner_across_a_seam():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    group = bpy.data.node_groups.new("Corner UV Smoothing", "GeometryNodeTree")
+    for direction in ("INPUT", "OUTPUT"):
+        group.interface.new_socket(
+            name="Geometry", in_out=direction, socket_type="NodeSocketGeometry",
+        )
+    source = group.nodes.new("NodeGroupInput")
+    output = group.nodes.new("NodeGroupOutput")
+    influence = group.nodes.new("GeometryNodeInputNamedAttribute")
+    influence.data_type = "FLOAT"
+    influence.inputs["Name"].default_value = "influence"
+    geometry = _smooth_uv(group, source.outputs["Geometry"], influence.outputs["Attribute"])
+    group.links.new(geometry, output.inputs["Geometry"])
+
+    mesh = bpy.data.meshes.new("Corner UV Smoothing")
+    mesh.from_pydata(
+        [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)],
+        [], [(0, 1, 2), (0, 2, 3)],
+    )
+    original = np.array([(0, 0), (1, 0), (1, 1), (2, 0), (3, 1), (2, 1)])
+    weights = np.array([0, 0.25, 1, 0.5, 0, 0.75])
+    mesh.uv_layers.new(name="UVMap").data.foreach_set("uv", original.ravel())
+    mesh.attributes.new("influence", "FLOAT", "CORNER").data.foreach_set("value", weights)
+    obj = bpy.data.objects.new("Corner UV Smoothing", mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.modifiers.new("Corner UV Smoothing", "NODES").node_group = group
+    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    evaluated_mesh = result.to_mesh()
+    try:
+        actual = np.array([item.uv[:] for item in evaluated_mesh.uv_layers["UVMap"].data])
+    finally:
+        result.to_mesh_clear()
+
+    # Average incident corner UVs to points, then include each point and its neighbors.
+    point_targets = np.array([(1.5, 0.5), (4 / 3, 1 / 3), (1.5, 0.5), (5 / 3, 2 / 3)])
+    targets = point_targets[[0, 1, 2, 0, 2, 3]]
+    expected = original + (targets - original) * weights[:, None]
+    np.testing.assert_allclose(actual, expected, atol=1e-6)
+    np.testing.assert_array_equal(actual[weights == 0], original[weights == 0])
+
+
 def test_normalized_boundary_target_matches_boundary_mesh_blur():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     group = bpy.data.node_groups.new("Normalized Boundary Target", "GeometryNodeTree")
@@ -141,7 +183,7 @@ def test_cutout_boundary_smooth_defaults_to_four():
     assert (socket.min_value, socket.max_value) == (0, 16)
 
 
-def test_smoothing_reduces_stairs_without_leaving_two_ring_band():
+def test_smoothing_reduces_stairs_without_leaving_four_ring_band():
     obj, set_value = diagonal_surface(triangles=True)
     original, faces = evaluated(obj)
     original_uv = vertex_uv(obj)
@@ -149,7 +191,7 @@ def test_smoothing_reduces_stairs_without_leaving_two_ring_band():
     outer = np.isclose(original[:, 0], 0) | np.isclose(original[:, 0], 2)
     outer |= np.isclose(original[:, 2], 0) | np.isclose(original[:, 2], 1)
     cut = {i for i in boundary if not outer[i]}
-    band = edge_band(faces, boundary)
+    band = edge_band(faces, boundary, rings=4)
     movable = np.array([i in band for i in range(len(original))])
     assert movable.any() and (~movable).any()
     set_value("Boundary Smooth", 16)
@@ -201,7 +243,7 @@ def test_smoothing_without_split_moves_outline_only_within_boundary_band():
     set_value("Boundary Smooth", 16)
     result, result_faces = evaluated(obj)
     boundary = boundary_neighbors(faces)
-    band = edge_band(faces, boundary)
+    band = edge_band(faces, boundary, rings=4)
     outside = [i for i in range(len(original)) if i not in band]
     assert np.max(np.linalg.norm(result[list(boundary)] - original[list(boundary)], axis=1)) > 1e-4
     np.testing.assert_array_equal(result[outside], original[outside])

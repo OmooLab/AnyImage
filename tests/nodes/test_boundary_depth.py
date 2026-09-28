@@ -32,7 +32,7 @@ def test_cutout_fine_outline_smooths_only_within_boundary_band():
     set_value("Boundary Smooth", 12)
     after, result_faces = evaluated(obj)
     assert result_faces == original_faces
-    band = edge_band(original_faces, boundary_neighbors(original_faces))
+    band = edge_band(original_faces, boundary_neighbors(original_faces), rings=4)
     interior = [i for i in range(len(before)) if i not in band]
     assert interior
     np.testing.assert_array_equal(after[interior], before[interior])

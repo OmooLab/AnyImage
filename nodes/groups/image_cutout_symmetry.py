@@ -70,30 +70,6 @@ def _align_front(group, geometry, controls):
     return store.outputs['Geometry']
 
 
-def _boundary_edge_field(group):
-    """Report one on edges that carry a single face."""
-    neighbors = group.nodes.new('GeometryNodeInputMeshEdgeNeighbors')
-    return compare_node(group, 'EQUAL', neighbors.outputs['Face Count'], 1, data_type='INT')
-
-
-def _beyond_plane_field(group, distance):
-    """Report the points sitting farther than the weld distance past the plane."""
-    nodes = group.nodes
-    position = nodes.new('GeometryNodeInputPosition')
-    components = nodes.new('ShaderNodeSeparateXYZ')
-    group.links.new(position.outputs[0], components.inputs[0])
-    return compare_node(group, 'GREATER_THAN', components.outputs['Y'], distance)
-
-
-def _on_plane_field(group, distance):
-    """Report the points sitting within the weld distance of the plane."""
-    nodes = group.nodes
-    position = nodes.new('GeometryNodeInputPosition')
-    components = nodes.new('ShaderNodeSeparateXYZ')
-    group.links.new(position.outputs[0], components.inputs[0])
-    return compare_node(group, 'LESS_THAN', _math(group, 'ABSOLUTE', components.outputs['Y']), distance)
-
-
 def _merge_points(group, geometry, selection, distance):
     """Weld the selected points that share a position."""
     nodes, links = group.nodes, group.links
@@ -123,59 +99,45 @@ def _delete_beyond_plane(group, geometry, beyond):
     return _delete_faces(group, geometry, evaluate_field(group, beyond, 'BOOLEAN', 'POINT'))
 
 
-def _corner_edge(group, corner, offset, value):
-    """Read an edge value at one corner around a face."""
+def _face_edge_fields(group):
+    """Map face corners to edges while keeping the first four corners."""
     nodes, links = group.nodes, group.links
-    shifted = nodes.new('GeometryNodeOffsetCornerInFace')
-    links.new(corner, shifted.inputs['Corner Index'])
-    shifted.inputs['Offset'].default_value = offset
-    edges = nodes.new('GeometryNodeEdgesOfCorner')
-    links.new(shifted.outputs['Corner Index'], edges.inputs['Corner Index'])
-    sample = nodes.new('GeometryNodeFieldAtIndex')
-    sample.data_type, sample.domain = 'BOOLEAN', 'EDGE'
-    links.new(value, sample.inputs['Value'])
-    links.new(edges.outputs['Next Edge Index'], sample.inputs['Index'])
-    return sample.outputs['Value']
-
-
-def _boundary_edge_count(group):
-    """Count the edges carrying a single face around each face."""
-    nodes, links = group.nodes, group.links
-    boundary = _boundary_edge_field(group)
     index = nodes.new('GeometryNodeInputIndex')
-    corners = nodes.new('GeometryNodeCornersOfFace')
-    links.new(index.outputs[0], corners.inputs['Face Index'])
-    # 第四个偏移在三角形上绕回第一条边，按角数把它归零。
-    quad = compare_node(group, 'GREATER_THAN', corners.outputs['Total'], 3, data_type='INT')
-    count = None
-    for offset in range(4):
-        term = _corner_edge(group, corners.outputs['Corner Index'], offset, boundary)
-        if offset == 3:
-            masked = nodes.new('GeometryNodeSwitch')
-            masked.input_type = 'FLOAT'
-            masked.inputs['False'].default_value = 0.0
-            links.new(quad, masked.inputs['Switch'])
-            links.new(term, masked.inputs['True'])
-            term = masked.outputs['Output']
-        count = term if count is None else _math(group, 'ADD', count, term)
-    return count
+    corner = nodes.new('GeometryNodeFaceOfCorner')
+    links.new(index.outputs[0], corner.inputs['Corner Index'])
+    first_four = compare_node(group, 'LESS_THAN', corner.outputs['Index in Face'], 4, data_type='INT')
+    edges = nodes.new('GeometryNodeEdgesOfCorner')
+    links.new(index.outputs[0], edges.inputs['Corner Index'])
+    face = nodes.new('GeometryNodeInputMeshFaceNeighbors')
+    return edges.outputs['Next Edge Index'], first_four, face.outputs['Vertex Count']
 
 
-def _delete_bridge_faces(group, geometry):
+def _face_edge_count(group, value, face_edges):
+    """Count matching edges among a face's first four corners."""
+    edge_index, first_four, vertex_count = face_edges
+    sample = group.nodes.new('GeometryNodeFieldAtIndex')
+    sample.data_type, sample.domain = 'BOOLEAN', 'EDGE'
+    group.links.new(value, sample.inputs['Value'])
+    group.links.new(edge_index, sample.inputs['Index'])
+    selected = boolean_node(group, 'AND', sample.outputs['Value'], first_four)
+    corners = evaluate_field(group, selected, 'FLOAT', 'CORNER')
+    mean = evaluate_field(group, corners, 'FLOAT', 'FACE')
+    return _math(group, 'MULTIPLY', mean, vertex_count)
+
+
+def _delete_bridge_faces(group, geometry, boundary, face_edges):
     """Delete the faces left bridging two openings of a cut."""
-    return _delete_faces(group, geometry, compare_node(group, 'GREATER_THAN', _boundary_edge_count(group), 1.5))
+    count = _face_edge_count(group, boundary, face_edges)
+    return _delete_faces(group, geometry, compare_node(group, 'GREATER_THAN', count, 1.5))
 
 
-def _delete_flat_faces(group, geometry, distance):
+def _delete_flat_faces(group, geometry, height, distance):
     """Delete the faces lying on the symmetry plane; they mirror onto themselves."""
     nodes, links = group.nodes, group.links
-    position = nodes.new('GeometryNodeInputPosition')
-    components = nodes.new('ShaderNodeSeparateXYZ')
-    links.new(position.outputs[0], components.inputs[0])
     normal = nodes.new('GeometryNodeInputNormal')
     normal_axes = nodes.new('ShaderNodeSeparateXYZ')
     links.new(normal.outputs[0], normal_axes.inputs[0])
-    center = evaluate_field(group, _math(group, 'ABSOLUTE', components.outputs['Y']), 'FLOAT', 'FACE')
+    center = evaluate_field(group, height, 'FLOAT', 'FACE')
     return _delete_faces(
         group, geometry,
         boolean_node(
@@ -186,33 +148,15 @@ def _delete_flat_faces(group, geometry, distance):
     )
 
 
-def _delete_crease_faces(group, geometry, distance):
+def _delete_crease_faces(group, geometry, edge_height, face_count, face_edges, distance):
     """Delete the faces the fold leaves sharing an interior edge on the plane."""
-    nodes, links = group.nodes, group.links
-    heights = _edge_abs_y(group)
-    plane = nodes.new('FunctionNodeBooleanMath')
-    plane.operation = 'AND'
-    links.new(compare_node(group, 'LESS_THAN', heights[0], distance), plane.inputs[0])
-    links.new(compare_node(group, 'LESS_THAN', heights[1], distance), plane.inputs[1])
-    neighbors = nodes.new('GeometryNodeInputMeshEdgeNeighbors')
-    crease = nodes.new('FunctionNodeBooleanMath')
-    crease.operation = 'AND'
-    links.new(plane.outputs[0], crease.inputs[0])
-    links.new(compare_node(group, 'EQUAL', neighbors.outputs['Face Count'], 2, data_type='INT'), crease.inputs[1])
-    index = nodes.new('GeometryNodeInputIndex')
-    corners = nodes.new('GeometryNodeCornersOfFace')
-    links.new(index.outputs[0], corners.inputs['Face Index'])
-    selected = None
-    for offset in range(4):
-        term = _corner_edge(group, corners.outputs['Corner Index'], offset, crease.outputs[0])
-        selected = term if selected is None else boolean_node(group, 'OR', selected, term)
-    return _delete_faces(group, geometry, selected)
-
-
-def _off_plane_edge_field(group, distance):
-    """Report one on edges that keep an endpoint farther than the weld distance."""
-    heights = _edge_abs_y(group)
-    return compare_node(group, 'GREATER_THAN', _math(group, 'MAXIMUM', heights[0], heights[1]), distance)
+    plane = compare_node(group, 'LESS_THAN', edge_height, distance)
+    crease = boolean_node(
+        group, 'AND', plane,
+        compare_node(group, 'EQUAL', face_count, 2, data_type='INT'),
+    )
+    count = _face_edge_count(group, crease, face_edges)
+    return _delete_faces(group, geometry, compare_node(group, 'GREATER_THAN', count, 0.0))
 
 
 def _edge_abs_y(group):
@@ -235,10 +179,10 @@ def _mirror(group, geometry):
     return flip.outputs[0]
 
 
-def _seam_field(group, distance):
+def _seam_field(group, on_plane):
     """Report the cut ring the folded front leaves on the symmetry plane."""
     boundary = evaluate_field(group, edge_boundary_field(group.nodes, group.links), 'BOOLEAN', 'POINT')
-    return boolean_node(group, 'AND', boundary, _on_plane_field(group, distance))
+    return boolean_node(group, 'AND', boundary, on_plane)
 
 
 def _falloff(group, center, rings):
@@ -250,29 +194,23 @@ def _falloff(group, center, rings):
     return _math(group, 'MAXIMUM', center, blur.outputs[0])
 
 
-def _snap_to_plane(group, geometry, selection):
+def _snap_to_plane(group, geometry, selection, target):
     """Move the selected points onto the symmetry plane."""
     nodes, links = group.nodes, group.links
-    position = nodes.new('GeometryNodeInputPosition')
-    components = nodes.new('ShaderNodeSeparateXYZ')
-    links.new(position.outputs[0], components.inputs[0])
-    target = nodes.new('ShaderNodeCombineXYZ')
-    links.new(components.outputs['X'], target.inputs['X'])
-    links.new(components.outputs['Z'], target.inputs['Z'])
     place = nodes.new('GeometryNodeSetPosition')
     links.new(geometry, place.inputs['Geometry'])
     links.new(selection, place.inputs['Selection'])
-    links.new(target.outputs[0], place.inputs['Position'])
+    links.new(target, place.inputs['Position'])
     return place.outputs[0]
 
 
-def _relax_seam(group, geometry, seam, retract, smooth):
+def _relax_seam(group, geometry, seam, retract, smooth, plane_position):
     """Relax the cut seam in three dimensions and keep the cut on the plane."""
     relaxed = pinned_smooth(
         group, geometry, smooth, _falloff(group, seam, SMOOTH_RINGS),
         pin_boundary=True,
     )
-    return _snap_to_plane(group, relaxed, boolean_node(group, 'OR', seam, retract))
+    return _snap_to_plane(group, relaxed, boolean_node(group, 'OR', seam, retract), plane_position)
 
 
 def _relax_fill(group, geometry, fill, smooth):
@@ -283,7 +221,7 @@ def _relax_fill(group, geometry, fill, smooth):
     )
 
 
-def _build_wall(group, front, boundary):
+def _build_wall(group, front, boundary, plane_position):
     """Close the selected boundary edges onto the symmetry plane and mark the fill."""
     nodes, links = group.nodes, group.links
     extrude = nodes.new('GeometryNodeExtrudeMesh')
@@ -291,7 +229,7 @@ def _build_wall(group, front, boundary):
     extrude.inputs['Offset Scale'].default_value = 0
     links.new(front, extrude.inputs['Mesh'])
     links.new(boundary, extrude.inputs['Selection'])
-    geometry = _snap_to_plane(group, extrude.outputs['Mesh'], extrude.outputs['Top'])
+    geometry = _snap_to_plane(group, extrude.outputs['Mesh'], extrude.outputs['Top'], plane_position)
     # 挤出之后再标记补面：范围就是补面本身连同它的边界线，挤出不会改变它。
     fill = evaluate_field(group, extrude.outputs['Side'], 'BOOLEAN', 'POINT')
     geometry, fill = store_boolean_attribute(group, geometry, WELD_ATTRIBUTE, fill, domain='FACE')
@@ -334,40 +272,48 @@ def build_image_cutout_symmetry_group():
     links.new(aligned, statistics.inputs['Geometry'])
     links.new(edge_length.outputs['Value'], statistics.inputs['Attribute'])
     merge_distance = 1e-6
-    beyond = _beyond_plane_field(group, merge_distance)
-    on_plane = _on_plane_field(group, merge_distance)
+    position = nodes.new('GeometryNodeInputPosition')
+    components = nodes.new('ShaderNodeSeparateXYZ')
+    links.new(position.outputs[0], components.inputs[0])
+    height = _math(group, 'ABSOLUTE', components.outputs['Y'])
+    beyond = compare_node(group, 'GREATER_THAN', components.outputs['Y'], merge_distance)
+    on_plane = compare_node(group, 'LESS_THAN', height, merge_distance)
+    plane_position = nodes.new('ShaderNodeCombineXYZ')
+    links.new(components.outputs['X'], plane_position.inputs['X'])
+    links.new(components.outputs['Z'], plane_position.inputs['Z'])
+    plane_position = plane_position.outputs[0]
+    neighbors = nodes.new('GeometryNodeInputMeshEdgeNeighbors')
+    face_count = neighbors.outputs['Face Count']
+    face_edges = _face_edge_fields(group)
+    edge_height = _math(group, 'MAXIMUM', *_edge_abs_y(group))
     retract = boolean_node(group, 'OR', on_plane, beyond)
-    is_boundary = _boundary_edge_field(group)
+    is_boundary = compare_node(group, 'EQUAL', face_count, 1, data_type='INT')
     front = _delete_beyond_plane(group, aligned, beyond)
-    front = _delete_bridge_faces(group, front)
+    front = _delete_bridge_faces(group, front, is_boundary, face_edges)
     # 贴合带内和跨界保留的面都折回对称面，切口环因此落在平面上。
-    front = _snap_to_plane(group, front, retract)
-    seam_field = _seam_field(group, merge_distance)
+    front = _snap_to_plane(group, front, retract, plane_position)
+    seam_field = _seam_field(group, on_plane)
     shade = nodes.new('GeometryNodeSetShadeSmooth')
     shade.domain = 'FACE'
     links.new(front, shade.inputs['Geometry'])
     front = store_float_attribute(group, shade.outputs[0], FACE_ATTRIBUTE, 1., domain='FACE')
     front = _relax_seam(
-        group, front, seam_field, retract, inputs['Smooth'],
+        group, front, seam_field, retract, inputs['Smooth'], plane_position,
     )
     # 松弛会把点压回平面，贴平的面和内部贴平边要在松弛之后再清一次。
-    front = _delete_flat_faces(group, front, merge_distance)
-    front = _delete_crease_faces(group, front, merge_distance)
+    front = _delete_flat_faces(group, front, height, merge_distance)
+    front = _delete_crease_faces(group, front, edge_height, face_count, face_edges, merge_distance)
     # 切口环本身贴在对称面上并靠镜像焊住，只有不落在这条环上的边界边才需要补面。
     wall = nodes.new('FunctionNodeBooleanMath')
     wall.operation = 'AND'
     links.new(is_boundary, wall.inputs[0])
-    links.new(_off_plane_edge_field(group, merge_distance), wall.inputs[1])
-    walled, fill = _build_wall(group, front, wall.outputs[0])
-    wall_shade = nodes.new('GeometryNodeSetShadeSmooth')
-    wall_shade.domain = 'FACE'
-    links.new(compare_node(group, 'EQUAL', read_float_attribute(group, FACE_ATTRIBUTE), 3), wall_shade.inputs['Selection'])
-    links.new(walled, wall_shade.inputs['Geometry'])
+    links.new(compare_node(group, 'GREATER_THAN', edge_height, merge_distance), wall.inputs[1])
+    walled, fill = _build_wall(group, front, wall.outputs[0], plane_position)
     body = nodes.new('GeometryNodeSwitch')
     body.input_type = 'GEOMETRY'
     links.new(inputs['Fill Sides'], body.inputs['Switch'])
     links.new(front, body.inputs['False'])
-    links.new(wall_shade.outputs[0], body.inputs['True'])
+    links.new(walled, body.inputs['True'])
     mark_back = nodes.new('GeometryNodeStoreNamedAttribute')
     mark_back.data_type, mark_back.domain = 'FLOAT', 'FACE'
     mark_back.inputs['Name'].default_value = FACE_ATTRIBUTE
@@ -394,9 +340,6 @@ def build_image_cutout_symmetry_group():
     orient.inputs['Rotation'].default_value = Matrix.Rotation(1.5707963267948966, 4, 'Z').to_euler()
     links.new(geometry, orient.inputs['Geometry'])
     # Fade the material normal map near the symmetry plane so the weld shades smoother.
-    position = nodes.new('GeometryNodeInputPosition')
-    components = nodes.new('ShaderNodeSeparateXYZ')
-    links.new(position.outputs[0], components.inputs[0])
     ramp = nodes.new('ShaderNodeMapRange')
     ramp.interpolation_type = 'SMOOTHSTEP'
     ramp.clamp = True

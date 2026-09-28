@@ -56,7 +56,10 @@ def _assign_uv(mesh, uv):
     uv_layer = mesh.uv_layers.new(name="UVMap")
     loop_vertices = np.empty(len(mesh.loops), dtype=np.int32)
     mesh.loops.foreach_get("vertex_index", loop_vertices)
-    loop_uv = np.asarray(uv, dtype=np.float32)[loop_vertices]
+    source_uv = np.asarray(uv, dtype=np.float32)
+    atlas_uv = source_uv.copy()
+    atlas_uv[:, 1] = 0.5 + 0.5 * atlas_uv[:, 1]
+    loop_uv = atlas_uv[loop_vertices]
     uv_layer.data.foreach_set("uv", loop_uv.ravel())
 
 
@@ -123,7 +126,8 @@ def create_shape_object(
         if shape in DEPTH_CUTOUT_SHAPES:
             if depth_image is None or depth_metadata is None:
                 raise ValueError("Depth Shape requires a Depth texture and metadata")
-            reference_mask = build_reference_mask(content_values, depth_image.size)
+            front_size = depth_metadata["image_size"]
+            reference_mask = build_reference_mask(content_values, front_size)
             model_reference = reference_depth(depth_image, reference_mask)
             model_median = median_depth(depth_image, reference_mask)
             uniform_scale = depth_uniform_scale(

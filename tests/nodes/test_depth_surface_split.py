@@ -9,6 +9,23 @@ import pytest
 from tests.support.depth_surface import evaluated, surface
 
 
+def test_depth_plane_face_sampling_keeps_full_image_uv():
+    from tests.support.planes import create_surface
+
+    _obj, _set_value, _plane, _inputs, _image = create_surface("DEPTH")
+    group = bpy.data.node_groups["O Image Depth Plane"]
+    face_samples = [
+        node
+        for node in group.nodes
+        if node.bl_idname == "GeometryNodeImageTexture"
+        and node.inputs["Vector"].is_linked
+        and node.inputs["Vector"].links[0].from_node.bl_idname
+        == "GeometryNodeFieldOnDomain"
+    ]
+
+    assert len(face_samples) == 1
+
+
 @pytest.mark.parametrize("size", [0.01, 100.0])
 def test_split_mapping_and_uniform_scale(size):
     obj, set_value = surface(step=2.0, size=size)

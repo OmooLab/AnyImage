@@ -8,6 +8,79 @@ from tests.support.blender import BlenderTestCase
 
 
 class CutoutOperatorsTest(BlenderTestCase):
+    def test_cutout_pads_single_color_and_depth_before_building_atlases(self):
+        order = []
+        color = SimpleNamespace(size=(8, 4))
+        normal = SimpleNamespace(size=(8, 4))
+        depth = SimpleNamespace(size=(8, 4))
+        base_shape = SimpleNamespace(mask="Mask")
+        context = SimpleNamespace(scene=SimpleNamespace())
+
+        def pad(*args):
+            order.append(("pad", color.size, normal.size, depth.size, args))
+
+        def atlas(image, **options):
+            order.append(("atlas", image, options))
+            image.size = (8, 8)
+
+        with (
+            patch.object(
+                self.cutout_main, "effective_cutout_edge_length", return_value=0.1,
+            ),
+            patch.object(
+                self.cutout_main, "build_base_shape", return_value=base_shape,
+            ),
+            patch.object(self.cutout_main, "pad_cutout_images", side_effect=pad),
+            patch.object(
+                self.cutout_main, "create_cutout_texture_atlas", side_effect=atlas,
+            ),
+            patch.object(
+                self.cutout_main, "create_shape_object", return_value="Result",
+            ),
+            patch.object(
+                self.cutout_main.bpy,
+                "ops",
+                SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **_kwargs: {"FINISHED"})),
+                create=True,
+            ),
+        ):
+            result = self.cutout_main.create_cutout_shape(
+                context,
+                "Source",
+                "SOLID",
+                0.1,
+                "Content",
+                "Bounds",
+                color_image=color,
+                normal_image=normal,
+                normal_mode=self.cutout_main.NormalMode.TANGENT,
+                depth_image=depth,
+                depth_metadata="Metadata",
+            )
+
+        self.assertEqual(result, "Result")
+        self.assertEqual(
+            order[0],
+            (
+                "pad",
+                (8, 4),
+                (8, 4),
+                (8, 4),
+                (color, depth, "Metadata", "Mask", 0.5, 2.0),
+            ),
+        )
+        self.assertEqual(
+            order[1:],
+            [
+                ("atlas", color, {}),
+                (
+                    "atlas",
+                    normal,
+                    {"invert_rear_x": True},
+                ),
+            ],
+        )
+
     def test_cutout_gestures_start_on_empty_pick_and_lasso_finishes_on_release(self):
         viewport = importlib.import_module("anyimage.common.viewport")
         source = SimpleNamespace(name="Source", matrix_world="matrix", data=object())

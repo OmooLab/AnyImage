@@ -1,6 +1,6 @@
 """Share persistent face attributes between depth symmetry and image materials.
 
-Rotation stores pre-inversion Euler angles, face kind is 1/2/3 for front/back/wall,
+Rotation stores pre-inversion Euler angles, face kind is 1/2/3 for retained/mirrored/wall,
 and axis is 1 for the final +X orientation. Missing attributes mean identity.
 These FACE attributes stay on the output mesh for the material consumer.
 """
@@ -50,7 +50,7 @@ def transform_object_normal_color(group, color, strength):
     separate = nodes.new('ShaderNodeSeparateXYZ')
     links.new(rotate.outputs[0], separate.inputs[0])
     back = math('COMPARE', face.outputs['Fac'], 2.)
-    # Reflect the normal's Y component on the back.
+    # Reflect the normal's Y component on the mirrored side.
     difference = math('MULTIPLY', separate.outputs['Y'], -2.)
     correction = nodes.new('ShaderNodeMath')
     correction.operation = 'MULTIPLY_ADD'

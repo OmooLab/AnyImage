@@ -6,6 +6,7 @@ import numpy as np
 
 
 from tests.support.nodes import CUTOUT_BUILDERS
+from anyimage.common.object import modifier_input_identifier
 
 
 def surface(*, step=6.0, size=1.0, resolution=2):
@@ -33,7 +34,7 @@ def surface(*, step=6.0, size=1.0, resolution=2):
     uv = mesh.uv_layers.new(name="UVMap")
     for loop in mesh.loops:
         x, _y, z = points[loop.vertex_index]
-        uv.data[loop.index].uv = (x / (2 * size), z / size)
+        uv.data[loop.index].uv = (x / (2 * size), 0.5 + z / (2 * size))
     obj = bpy.data.objects.new("Step", mesh)
     bpy.context.collection.objects.link(obj)
     image = bpy.data.images.new("Camera", width=64, height=32, float_buffer=True)
@@ -53,8 +54,13 @@ def surface(*, step=6.0, size=1.0, resolution=2):
         if s.item_type == "SOCKET" and s.in_out == "INPUT"
     }
 
-    def set_value(name, value):
-        modifier[inputs[name]] = value
+    def set_value(name, value, subtype=None):
+        identifier = (
+            modifier_input_identifier(group, name, subtype=subtype)
+            if subtype is not None
+            else inputs[name]
+        )
+        modifier[identifier] = value
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
 

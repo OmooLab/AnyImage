@@ -28,7 +28,7 @@ WELD_ATTRIBUTE = '_o_symmetry_weld'
 SEAM_NORMAL_BAND = 4
 
 
-def _align_front(group, geometry, controls):
+def _align_source(group, geometry, controls):
     """Align existing geometry with the fixed XY symmetry plane."""
     nodes, links = group.nodes, group.links
     direction = symmetry_legacy_direction_to_canonical(group, controls['Direction'])
@@ -180,7 +180,7 @@ def _mirror(group, geometry):
 
 
 def _seam_field(group, on_plane):
-    """Report the cut ring the folded front leaves on the symmetry plane."""
+    """Report the cut ring the retained side leaves on the symmetry plane."""
     boundary = evaluate_field(group, edge_boundary_field(group.nodes, group.links), 'BOOLEAN', 'POINT')
     return boolean_node(group, 'AND', boundary, on_plane)
 
@@ -217,17 +217,17 @@ def _relax_fill(group, geometry, fill, smooth):
     """Relax the fill faces on the welded mesh and fade outward from them."""
     return pinned_smooth(
         group, geometry, smooth, _falloff(group, fill, SMOOTH_RINGS),
-        weight=0.2, pin_boundary=False, cache_region=True,
+        weight=0.2, pin_boundary=False, cache_region=True, smooth_uv=False,
     )
 
 
-def _build_wall(group, front, boundary, plane_position):
+def _build_wall(group, retained, boundary, plane_position):
     """Close the selected boundary edges onto the symmetry plane and mark the fill."""
     nodes, links = group.nodes, group.links
     extrude = nodes.new('GeometryNodeExtrudeMesh')
     extrude.mode = 'EDGES'
     extrude.inputs['Offset Scale'].default_value = 0
-    links.new(front, extrude.inputs['Mesh'])
+    links.new(retained, extrude.inputs['Mesh'])
     links.new(boundary, extrude.inputs['Selection'])
     geometry = _snap_to_plane(group, extrude.outputs['Mesh'], extrude.outputs['Top'], plane_position)
     # 挤出之后再标记补面：范围就是补面本身连同它的边界线，挤出不会改变它。
@@ -254,14 +254,14 @@ def build_image_cutout_symmetry_group():
     float_input(group, 'Offset', 0, minimum=-10, maximum=10, subtype='DISTANCE').description = 'Offset geometry along the aligned symmetry axis before scaling.'
     float_input(group, 'Scale', 1, maximum=2).description = 'Scale the offset geometry along the aligned symmetry axis.'
     options = group.interface.new_panel(name='Options', default_closed=True)
-    bool_input(group, 'Fill Sides', True, parent=options).description = 'Connect matching front and mirrored boundaries.'
+    bool_input(group, 'Fill Sides', True, parent=options).description = 'Connect matching retained and mirrored boundaries.'
     smooth = interface_socket(group, 'Smooth', 'INPUT', 'NodeSocketInt', options)
     smooth.default_value, smooth.min_value, smooth.max_value = 4, 0, 16
     smooth.description = 'Smooth the cut ring and the fill band around the outline and the fill, each over four rings. Zero keeps both raw.'
     interface_socket(group, 'Geometry', 'OUTPUT', 'NodeSocketGeometry')
     nodes, links = group.nodes, group.links
     inputs = group_input(nodes, set()).outputs
-    aligned = _align_front(group, inputs['Geometry'], inputs)
+    aligned = _align_source(group, inputs['Geometry'], inputs)
     edge = nodes.new('GeometryNodeInputMeshEdgeVertices')
     edge_length = nodes.new('ShaderNodeVectorMath')
     edge_length.operation = 'DISTANCE'
@@ -288,40 +288,40 @@ def build_image_cutout_symmetry_group():
     edge_height = _math(group, 'MAXIMUM', *_edge_abs_y(group))
     retract = boolean_node(group, 'OR', on_plane, beyond)
     is_boundary = compare_node(group, 'EQUAL', face_count, 1, data_type='INT')
-    front = _delete_beyond_plane(group, aligned, beyond)
-    front = _delete_bridge_faces(group, front, is_boundary, face_edges)
+    retained = _delete_beyond_plane(group, aligned, beyond)
+    retained = _delete_bridge_faces(group, retained, is_boundary, face_edges)
     # 贴合带内和跨界保留的面都折回对称面，切口环因此落在平面上。
-    front = _snap_to_plane(group, front, retract, plane_position)
+    retained = _snap_to_plane(group, retained, retract, plane_position)
     seam_field = _seam_field(group, on_plane)
     shade = nodes.new('GeometryNodeSetShadeSmooth')
     shade.domain = 'FACE'
-    links.new(front, shade.inputs['Geometry'])
-    front = store_float_attribute(group, shade.outputs[0], FACE_ATTRIBUTE, 1., domain='FACE')
-    front = _relax_seam(
-        group, front, seam_field, retract, inputs['Smooth'], plane_position,
+    links.new(retained, shade.inputs['Geometry'])
+    retained = store_float_attribute(group, shade.outputs[0], FACE_ATTRIBUTE, 1., domain='FACE')
+    retained = _relax_seam(
+        group, retained, seam_field, retract, inputs['Smooth'], plane_position,
     )
     # 松弛会把点压回平面，贴平的面和内部贴平边要在松弛之后再清一次。
-    front = _delete_flat_faces(group, front, height, merge_distance)
-    front = _delete_crease_faces(group, front, edge_height, face_count, face_edges, merge_distance)
+    retained = _delete_flat_faces(group, retained, height, merge_distance)
+    retained = _delete_crease_faces(group, retained, edge_height, face_count, face_edges, merge_distance)
     # 切口环本身贴在对称面上并靠镜像焊住，只有不落在这条环上的边界边才需要补面。
     wall = nodes.new('FunctionNodeBooleanMath')
     wall.operation = 'AND'
     links.new(is_boundary, wall.inputs[0])
     links.new(compare_node(group, 'GREATER_THAN', edge_height, merge_distance), wall.inputs[1])
-    walled, fill = _build_wall(group, front, wall.outputs[0], plane_position)
+    walled, fill = _build_wall(group, retained, wall.outputs[0], plane_position)
     body = nodes.new('GeometryNodeSwitch')
     body.input_type = 'GEOMETRY'
     links.new(inputs['Fill Sides'], body.inputs['Switch'])
-    links.new(front, body.inputs['False'])
+    links.new(retained, body.inputs['False'])
     links.new(walled, body.inputs['True'])
-    mark_back = nodes.new('GeometryNodeStoreNamedAttribute')
-    mark_back.data_type, mark_back.domain = 'FLOAT', 'FACE'
-    mark_back.inputs['Name'].default_value = FACE_ATTRIBUTE
-    mark_back.inputs['Value'].default_value = 2
-    links.new(_mirror(group, body.outputs[0]), mark_back.inputs['Geometry'])
-    links.new(compare_node(group, 'EQUAL', read_float_attribute(group, FACE_ATTRIBUTE), 1), mark_back.inputs['Selection'])
+    mark_mirrored = nodes.new('GeometryNodeStoreNamedAttribute')
+    mark_mirrored.data_type, mark_mirrored.domain = 'FLOAT', 'FACE'
+    mark_mirrored.inputs['Name'].default_value = FACE_ATTRIBUTE
+    mark_mirrored.inputs['Value'].default_value = 2
+    links.new(_mirror(group, body.outputs[0]), mark_mirrored.inputs['Geometry'])
+    links.new(compare_node(group, 'EQUAL', read_float_attribute(group, FACE_ATTRIBUTE), 1), mark_mirrored.inputs['Selection'])
     join = nodes.new('GeometryNodeJoinGeometry')
-    for geometry in (body.outputs[0], mark_back.outputs['Geometry']):
+    for geometry in (body.outputs[0], mark_mirrored.outputs['Geometry']):
         links.new(geometry, join.inputs[0])
     # 平面附近的点已经折到平面上，接缝两侧位置重合；合并只作用在这条带内。
     merged = _merge_points(group, join.outputs[0], on_plane, merge_distance)

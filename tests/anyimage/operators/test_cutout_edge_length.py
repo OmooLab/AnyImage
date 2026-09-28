@@ -125,6 +125,7 @@ def test_effective_length_report_and_geometry_build_share_value():
     content = np.ones((10, 10))
     with patch.object(operators, "effective_cutout_edge_length", return_value=20), \
          patch.object(operators, "build_base_shape") as build, \
+         patch.object(operators, "create_cutout_texture_atlas"), \
          patch.object(operators, "create_shape_object") as create, \
          patch.object(operators.bpy.ops.ed, "undo_push", return_value={"FINISHED"}):
         operators.create_cutout_shape(

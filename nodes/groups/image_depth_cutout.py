@@ -8,7 +8,9 @@ from ..common.nodes import (
     compare_node, sample_field,
 )
 from ..common.boundary_smoothing import boundary_influence
-from ..common.cutout import _position_field, _shade_output
+from ..common.cutout import (
+    _position_field, _shade_output, move_uv_to_lower_tile, source_depth_uv,
+)
 from ..common.depth_surface import (
     _math, build_surface_camera, limit_depth_surface, project_depth_surface,
     sample_face_camera, split_depth_surface,
@@ -477,8 +479,9 @@ def build_solid(
     back = nodes.new("GeometryNodeJoinGeometry")
     links.new(rear_geometry, back.inputs["Geometry"])
     links.new(sides, back.inputs["Geometry"])
+    back_uv = move_uv_to_lower_tile(group, back.outputs["Geometry"], is_rear)
     back_geometry = store_float_attribute(
-        group, back.outputs["Geometry"], NORMAL_REDUCTION_ATTRIBUTE_NAME, 1.0,
+        group, back_uv, NORMAL_REDUCTION_ATTRIBUTE_NAME, 1.0,
     )
     join = nodes.new("GeometryNodeJoinGeometry")
     links.new(front_geometry, join.inputs["Geometry"])
@@ -502,7 +505,11 @@ def _build_depth_surface(group, geometry, controls):
     image = controls.outputs["Depth Image"]
     scale = controls.outputs["Uniform Scale"]
     geometry, corner_camera, cut_vertex = split_depth_surface(
-        group, geometry, sample_face_camera(group, image), split, controls.outputs["Reference Depth"],
+        group,
+        geometry,
+        sample_face_camera(group, image, uv_mapper=source_depth_uv),
+        split,
+        controls.outputs["Reference Depth"],
         controls.outputs["Depth Scale"], triangles=True,
     )
     geometry, cut_vertex, previous_boundary, has_limited = limit_depth_surface(

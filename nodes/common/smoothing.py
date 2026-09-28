@@ -155,6 +155,7 @@ def pinned_smooth(
     pin_boundary=True,
     pin_sharp=True,
     cache_region=False,
+    smooth_uv=True,
 ):
     """Smooth positions and existing corner UVs inside an influence region.
 
@@ -178,20 +179,20 @@ def pinned_smooth(
             region,
             domain="POINT",
         )
-        corner_prepared = store_float_attribute(
-            group,
-            prepared,
-            PINNED_REGION_CORNER_ATTRIBUTE,
-            region,
-            domain="CORNER",
-        )
-        prepared = corner_prepared
         position_region = read_float_attribute(
             group, PINNED_REGION_POINT_ATTRIBUTE,
         )
-        uv_region = read_float_attribute(
-            group, PINNED_REGION_CORNER_ATTRIBUTE,
-        )
+        if smooth_uv:
+            prepared = store_float_attribute(
+                group,
+                prepared,
+                PINNED_REGION_CORNER_ATTRIBUTE,
+                region,
+                domain="CORNER",
+            )
+            uv_region = read_float_attribute(
+                group, PINNED_REGION_CORNER_ATTRIBUTE,
+            )
     boundary_points = None
     boundary_normalization = None
     if pin_boundary:
@@ -247,10 +248,11 @@ def pinned_smooth(
         links.new(smooth_normal.outputs["Value"], coherence.inputs[0])
         weight = _multiply(group, weight, coherence.outputs["Value"])
     position_weight = _multiply(group, weight, position_region)
-    uv_weight = (
-        _multiply(group, weight, uv_region)
-        if cache_region else position_weight
-    )
+    if smooth_uv:
+        uv_weight = (
+            _multiply(group, weight, uv_region)
+            if cache_region else position_weight
+        )
 
     difference = nodes.new("ShaderNodeVectorMath")
     difference.operation = "SUBTRACT"
@@ -260,31 +262,34 @@ def pinned_smooth(
     offset.operation = "SCALE"
     links.new(difference.outputs[0], offset.inputs[0])
     links.new(position_weight, offset.inputs[3])
-    smoothed_uv = _smooth_uv(
-        group,
-        current,
-        uv_weight,
-        boundary_points if pin_boundary else None,
-        boundary_normalization,
-    )
-    uv_iteration = nodes.new("FunctionNodeCompare")
-    uv_iteration.data_type = "INT"
-    uv_iteration.operation = "LESS_THAN"
-    uv_iteration_a = next(
-        socket for socket in uv_iteration.inputs if socket.identifier == "A_INT"
-    )
-    uv_iteration_b = next(
-        socket for socket in uv_iteration.inputs if socket.identifier == "B_INT"
-    )
-    uv_iteration_b.default_value = UV_SMOOTH_ITERATIONS
-    links.new(repeat_input.outputs["Iteration"], uv_iteration_a)
-    uv_enabled = nodes.new("GeometryNodeSwitch")
-    uv_enabled.input_type = "GEOMETRY"
-    links.new(uv_iteration.outputs["Result"], uv_enabled.inputs["Switch"])
-    links.new(current, uv_enabled.inputs["False"])
-    links.new(smoothed_uv, uv_enabled.inputs["True"])
+    iteration_geometry = current
+    if smooth_uv:
+        smoothed_uv = _smooth_uv(
+            group,
+            current,
+            uv_weight,
+            boundary_points if pin_boundary else None,
+            boundary_normalization,
+        )
+        uv_iteration = nodes.new("FunctionNodeCompare")
+        uv_iteration.data_type = "INT"
+        uv_iteration.operation = "LESS_THAN"
+        uv_iteration_a = next(
+            socket for socket in uv_iteration.inputs if socket.identifier == "A_INT"
+        )
+        uv_iteration_b = next(
+            socket for socket in uv_iteration.inputs if socket.identifier == "B_INT"
+        )
+        uv_iteration_b.default_value = UV_SMOOTH_ITERATIONS
+        links.new(repeat_input.outputs["Iteration"], uv_iteration_a)
+        uv_enabled = nodes.new("GeometryNodeSwitch")
+        uv_enabled.input_type = "GEOMETRY"
+        links.new(uv_iteration.outputs["Result"], uv_enabled.inputs["Switch"])
+        links.new(current, uv_enabled.inputs["False"])
+        links.new(smoothed_uv, uv_enabled.inputs["True"])
+        iteration_geometry = uv_enabled.outputs["Output"]
     set_position = nodes.new("GeometryNodeSetPosition")
-    links.new(uv_enabled.outputs["Output"], set_position.inputs["Geometry"])
+    links.new(iteration_geometry, set_position.inputs["Geometry"])
     links.new(offset.outputs[0], set_position.inputs["Offset"])
     links.new(set_position.outputs["Geometry"], repeat_output.inputs["Geometry"])
 

@@ -117,9 +117,14 @@ def test_ai_color_uses_submitted_crop_after_source_changes(source):
     bounds = (1, 0, 3, 2)
     expected = images.image_rgba(source)[:, 1:3].copy()
     with colors.material_color_image(source, bounds=bounds) as direct:
-        path = colors.prepare_material_color_input(source, bounds)
+        path = colors.prepare_material_color_input(
+            source, bounds,
+        )
         try:
-            assert colors.material_analysis_input(path) == path
+            analysis = colors.material_analysis_input(path)
+            assert analysis == path
+            with Image.open(analysis) as image:
+                assert image.size == (2, 2)
             source.pixels.foreach_set(np.zeros(32, np.float32))
             result, alpha, result_bounds = _generated_color_result(path, bounds)
             try:
@@ -169,4 +174,3 @@ def test_hdr_analysis_preview_is_separate_from_full_precision_color(source):
     finally:
         colors.cleanup_material_color_input(path)
     assert not preview.exists()
-

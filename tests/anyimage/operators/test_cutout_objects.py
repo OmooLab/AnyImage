@@ -60,6 +60,30 @@ def test_depth_result_image_loads_camera_exr_and_keeps_data_name(tmp_path):
     assert image.name == "Source_depth.exr"
 
 
+def test_cutout_depth_result_keeps_the_single_server_image(tmp_path):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    source_image = bpy.data.images.new("Source.png", width=2, height=2)
+    source = bpy.data.objects.new("Source", None)
+    source.data = source_image
+    points = np.arange(12, dtype=np.float32).reshape((2, 2, 3))
+    frame = GeometryFrame(
+        depth=points[..., 2],
+        validity=np.ones((2, 2), dtype=np.float32),
+        intrinsics=np.eye(3, dtype=np.float32),
+        points=points,
+    )
+    path = tmp_path / "depth.exr"
+    write_depth_texture(frame, path, alpha=np.ones((2, 2)))
+    metadata = _depth_metadata(np.eye(3), (2, 2))
+
+    image = depth_data.load_depth_result_image(path, source, metadata)
+
+    assert tuple(image.size) == (2, 2)
+    camera_depth, valid = depth_data.camera_depth_values(image)
+    np.testing.assert_array_equal(camera_depth, points[..., 2])
+    assert valid.all()
+
+
 def test_depth_texture_keeps_points_outside_positive_validity(tmp_path):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     source_image = bpy.data.images.new("Source.png", width=2, height=1)
@@ -265,7 +289,7 @@ def test_depth_surface_keeps_continuous_points_across_zero_validity_edge():
 
     assert np.isfinite(positions).all()
     assert np.ptp(positions[:, 0]) > 1.5
-    assert np.ptp(positions[:, 2]) > 1.5
+    assert np.ptp(positions[:, 2]) > 0.75
     assert np.ptp(positions[:, 1]) < 1e-4
 
 
@@ -517,14 +541,18 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
         if node.bl_idname == "ShaderNodeTexImage"
     )
     assert color_texture.image is not image
-    assert tuple(color_texture.image.size) == (64, 36)
-    copied = np.empty(36 * 64 * 4, dtype=np.float32)
+    assert tuple(color_texture.image.size) == (64, 72)
+    copied = np.empty(72 * 64 * 4, dtype=np.float32)
     color_texture.image.pixels.foreach_get(copied)
-    copied = copied.reshape((36, 64, 4))
+    copied = copied.reshape((72, 64, 4))
     assert np.allclose(copied[:, :, :3], 1.0)
     left, top, right, bottom = selection_mask.bounds
     assert np.allclose(
-        copied[:, :, 3], np.flipud(rgba[top:bottom, left:right, 3])
+        copied[:, :, 3],
+        np.concatenate([
+            np.fliplr(np.flipud(rgba[top:bottom, left:right, 3])),
+            np.flipud(rgba[top:bottom, left:right, 3]),
+        ]),
     )
 
 

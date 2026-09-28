@@ -47,7 +47,8 @@ def load_depth_result_image(path, source_object, metadata):
     """Load, validate, name, configure, and pack a generated Depth texture."""
     image = bpy.data.images.load(str(path), check_existing=False)
     try:
-        if tuple(int(value) for value in image.size) != metadata["image_size"]:
+        width, height = metadata["image_size"]
+        if tuple(int(value) for value in image.size) != (width, height):
             raise ValueError("Depth texture dimensions do not match its metadata")
         image.name = depth_data_name(source_object)
         image.colorspace_settings.name = "Non-Color"

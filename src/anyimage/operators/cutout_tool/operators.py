@@ -69,6 +69,7 @@ from .object import (
 )
 from .shape import CUTOUT_SHAPES, DEPTH_CUTOUT_SHAPES
 from .boundary_padding import pad_cutout_images
+from .texture import create_cutout_texture_atlas
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
@@ -131,6 +132,12 @@ def create_cutout_shape(
         0.5,
         boundary_padding,
     )
+    create_cutout_texture_atlas(color_image)
+    if normal_image is not None:
+        create_cutout_texture_atlas(
+            normal_image,
+            invert_rear_x=normal_mode == NormalMode.TANGENT,
+        )
     result = create_shape_object(
         context,
         source_object,
@@ -177,7 +184,8 @@ def _cutout_content_values(
 def _generated_color_result(input_path, source_bounds):
     image = load_material_color_image(input_path)
     try:
-        alpha = image_rgba(image)[:, :, 3]
+        rgba = image_rgba(image)
+        alpha = rgba[..., 3]
     except Exception:
         if image.users == 0:
             bpy.data.images.remove(image, do_unlink=True)
@@ -263,7 +271,11 @@ class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
                     selection_mask.values,
                     alpha_threshold=self.alpha_threshold,
                 )
-                with material_color_image(source_object.data, bounds=selection_mask.bounds, rgba=source_rgba) as color_image:
+                with material_color_image(
+                    source_object.data,
+                    bounds=selection_mask.bounds,
+                    rgba=source_rgba,
+                ) as color_image:
                     create_cutout_shape(
                         context, source_object, self.shape, self.edge_length,
                         content_values, selection_mask.bounds,
@@ -284,7 +296,9 @@ class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
             )
             self._selection_mask = selection_mask
             self.color_path = str(prepare_material_color_input(
-                source_object.data, selection_mask.bounds, source_rgba,
+                source_object.data,
+                selection_mask.bounds,
+                source_rgba,
             ))
             self.input_path = str(material_analysis_input(self.color_path))
         except (

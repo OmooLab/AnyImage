@@ -435,6 +435,7 @@ def create_image_edit_result(source_image, pixels, output_size):
         width=output_width,
         height=output_height,
         alpha=True,
+        float_buffer=bool(getattr(source_image, "is_float", False)),
     )
     try:
         image.colorspace_settings.name = source_image.colorspace_settings.name

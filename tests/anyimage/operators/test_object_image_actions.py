@@ -13,6 +13,7 @@ from anyimage.common.image_target import (
     object_color_texture,
 )
 from anyimage.operators import remove_background, upscale
+from anyimage.operators.color_reference import SetColorReference
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
 
@@ -225,12 +226,14 @@ def test_object_menu_and_operator_polls_use_marked_object():
     ):
         menu.AnyImageObjectMenu.draw(SimpleNamespace(layout=layout), context)
     assert [call.args[0] for call in layout.operator.call_args_list] == [
+        "anyimage.set_color_reference",
+        "anyimage.match_color_reference",
         "anyimage.remove_image_background",
         "anyimage.upscale_image",
         "anyimage.clear_models",
         "anyimage.open_ai_environment_settings",
     ]
-    assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
+    assert layout.operator.call_args_list[3].kwargs["text"] == "Upscale (8 × 6)"
 
     with patch.object(runtime, "server_busy", return_value=False), patch.object(
         upscale,
@@ -239,3 +242,17 @@ def test_object_menu_and_operator_polls_use_marked_object():
     ):
         assert remove_background.RemoveImageBackground.poll(context)
         assert upscale.UpscaleImage.poll(context)
+
+
+def test_object_color_image_can_be_set_as_reference():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    material, color = _material()
+    obj = _image_object(material)
+    context = _context(obj)
+    context.scene = SimpleNamespace(
+        anyimage_settings=SimpleNamespace(color_reference=None),
+    )
+
+    assert SetColorReference.poll(context)
+    assert SetColorReference.execute(SimpleNamespace(report=Mock()), context) == {"FINISHED"}
+    assert context.scene.anyimage_settings.color_reference == color

@@ -274,7 +274,7 @@ class ImageEditTarget:
                     self.owner, result_image, isolate_image=has_other_image_user(self.owner),
                 )
             return replace_empty_image(self.owner, result_image)
-        if self.object_owner is not None and _material_has_other_object_user(
+        if self.object_owner is not None and material_has_other_object_user(
             self.material,
             self.object_owner,
         ):
@@ -306,7 +306,8 @@ class ImageEditTarget:
             raise
 
 
-def _material_has_other_object_user(material, target):
+def material_has_other_object_user(material, target):
+    """Return whether another object uses the target object's material."""
     return any(
         obj != target
         and any(slot.material == material for slot in obj.material_slots)

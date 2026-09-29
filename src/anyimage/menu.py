@@ -11,6 +11,7 @@ from .common.image_target import (
 from .operators.activate_workspace_tool import ActivateWorkspaceTool
 from .operators.ai_setup import ClearModels, OpenAIEnvironmentSettings, SetupAIEnvironment
 from .operators.convert_to_panorama import ConvertToPanorama
+from .operators.color_reference import MatchColorReference, SetColorReference
 from .operators.convert_to_mesh import ConvertToMesh
 from .operators.convert_to_plane import (
     ConvertToDepthPlane,
@@ -96,6 +97,9 @@ def draw_image_actions(layout, context):
     from .properties import ai_setup_label, ai_status
 
     layout.operator_context = "INVOKE_DEFAULT"
+    layout.operator(SetColorReference.bl_idname, icon="EYEDROPPER")
+    layout.operator(MatchColorReference.bl_idname, icon="COLOR")
+    layout.separator()
     layout.operator(
         RemoveImageBackground.bl_idname,
         icon="IMAGE_ALPHA",

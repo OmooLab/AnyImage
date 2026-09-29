@@ -280,6 +280,7 @@ def cutout_edge_length_property(*, store_meters=False, **options):
 
 
 class AnyImageSettings(bpy.types.PropertyGroup):
+    color_reference: bpy.props.PointerProperty(type=bpy.types.Image)
     cutout_gesture: cutout_gesture_property()
     cutout_alpha_threshold: cutout_alpha_threshold_property()
     cutout_edge_length: cutout_edge_length_property(store_meters=True)

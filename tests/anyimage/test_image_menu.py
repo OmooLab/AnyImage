@@ -70,6 +70,9 @@ class ImageMenuTest(BlenderTestCase):
                 ("anyimage.convert_to_relief_plane", True),
                 ("anyimage.convert_to_panorama", True),
                 ("separator", True),
+                ("anyimage.set_color_reference", True),
+                ("anyimage.match_color_reference", True),
+                ("separator", True),
                 ("anyimage.remove_image_background", True),
                 ("anyimage.upscale_image", True),
                 ("separator", True),
@@ -127,7 +130,7 @@ class ImageMenuTest(BlenderTestCase):
         self.assertNotIn(("anyimage.activate_workspace_tool", True), calls)
         self.assertEqual(
             [operator.context for operator in operators],
-            ["INVOKE_DEFAULT"] * 8,
+            ["INVOKE_DEFAULT"] * 10,
         )
 
     def draw_menu(self, status, area_type="VIEW_3D"):

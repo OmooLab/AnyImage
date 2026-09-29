@@ -7,7 +7,10 @@ from pathlib import Path
 
 import bpy
 
-from .image import cleanup_image_input, image_base_name, image_is_packed, image_rgba, is_animated_image
+from .image import (
+    cleanup_image_input, image_base_name, image_is_packed, image_rgba,
+    is_animated_image,
+)
 
 
 def require_static_color_image(image):
@@ -65,11 +68,12 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
             save_hdr_result(cropped, path)
         else:
             _save_byte_color(cropped, path, source.colorspace_settings.name)
-        path.with_suffix(".json").write_text(json.dumps({
-            "name": image_base_name(source) + "_color" + suffix,
+        metadata = {
+            "name": f"{image_base_name(source)}_color{suffix}",
             "color_space": "Linear Rec.709" if source.is_float else source.colorspace_settings.name,
             "alpha_mode": "PREMUL" if source.is_float and source.alpha_mode == "STRAIGHT" else source.alpha_mode,
-        }), encoding="utf-8")
+        }
+        path.with_suffix(".json").write_text(json.dumps(metadata), encoding="utf-8")
         return path
     except Exception:
         cleanup_material_color_input(path)
@@ -119,10 +123,15 @@ def load_material_color_image(path):
 
 
 @contextmanager
-def material_color_image(source=None, *, bounds=None, rgba=None, input_path=None):
+def material_color_image(
+    source=None, *, bounds=None, rgba=None, input_path=None,
+):
     """Own a prepared color image through material creation and clean failed results."""
     owned = input_path is None
-    path = prepare_material_color_input(source, bounds, rgba) if owned else Path(input_path)
+    path = (
+        prepare_material_color_input(source, bounds, rgba)
+        if owned else Path(input_path)
+    )
     image = None
     try:
         image = load_material_color_image(path)

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
-from .onnx_moge2 import MAX_TOKENS, MIN_TOKENS, postprocess
+from .moge_geometry import MAX_TOKENS, MIN_TOKENS, postprocess
 from .onnx_runtime import create_session as create_runtime_session
 from .onnx_runtime import run_session
 
@@ -18,7 +18,11 @@ class Moge3Session:
 def create_session(model_directory, requested_device="auto"):
     directory = Path(model_directory)
     backbone = create_runtime_session(directory / "backbone.onnx", requested_device)
-    refiner = create_runtime_session(directory / "refiner.onnx", requested_device)
+    try:
+        refiner = create_runtime_session(directory / "refiner.onnx", requested_device)
+    except BaseException:
+        del backbone
+        raise
     return Moge3Session(backbone, refiner)
 
 
@@ -111,6 +115,7 @@ def infer(
     release_memory=True,
     fov_x=None,
     source_valid=None,
+    include_points=True,
 ):
     import numpy as np
 
@@ -156,4 +161,5 @@ def infer(
         },
         fov_x=fov_x,
         source_valid=source_valid,
+        include_points=include_points,
     )

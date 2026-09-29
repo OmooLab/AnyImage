@@ -165,10 +165,7 @@ class UpscaleOnnxTest(unittest.TestCase):
         with (
             patch.object(np, "pad", return_value=padded),
             patch.object(np, "empty", side_effect=MemoryError),
-            self.assertRaisesRegex(
-                RuntimeError,
-                "complete upscale result exceeded available system memory",
-            ),
+            self.assertRaises(MemoryError),
         ):
             onnx_upscale.infer(
                 FakeSession(),

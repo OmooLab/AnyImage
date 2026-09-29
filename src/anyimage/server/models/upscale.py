@@ -18,47 +18,35 @@ def infer_one(
 ):
     from PIL import Image
 
-    from .onnx_upscale import infer
+    from . import model_adapter
 
     if parameters["model"] not in UPSCALE_MODELS:
         raise ValueError(f"Unknown upscale model: {parameters['model']}")
 
-    model_directory = model_manager.directory(parameters["model"])
-    model = model_manager.get_upscale(
-        model_directory,
-        parameters["device"],
-    )
-    try:
-        with open_image(image_path) as opened:
-            source = limit_image(
-                opened,
-                parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE),
-            )
-            source_alpha = _source_alpha(source)
-            prediction = infer(
-                model,
-                source,
-                cancel_check=cancel_check,
-                release_memory=release_memory,
-                tile_border=48 if parameters["model"] == "HAT_GAN_X4_SHARPER" else 16,
-            )
-            prediction = prediction.resize(
-                (source.width * 2, source.height * 2),
-                Image.Resampling.LANCZOS,
-            )
-            if source_alpha is None:
-                return prediction
-            alpha = source_alpha.resize(
-                prediction.size,
-                Image.Resampling.LANCZOS,
-            )
-            prediction = prediction.convert("RGBA")
-            prediction.putalpha(alpha)
+    model, _load_ms = model_manager.get_session(parameters["model"], parameters["device"])
+    with open_image(image_path) as opened:
+        source = limit_image(
+            opened,
+            parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE),
+        )
+        source_alpha = _source_alpha(source)
+        prediction = model_adapter(parameters["model"]).infer(
+            model,
+            source,
+            cancel_check=cancel_check,
+            release_memory=release_memory,
+            tile_border=UPSCALE_MODELS[parameters["model"]].tile_border,
+        )
+        prediction = prediction.resize(
+            (source.width * 2, source.height * 2),
+            Image.Resampling.LANCZOS,
+        )
+        if source_alpha is None:
             return prediction
-    except MemoryError as error:
-        model_manager.release_upscale()
-        device = str(parameters.get("device", "selected device")).upper()
-        raise RuntimeError(
-            f"Upscale could not finish on {device}: {error}. "
-            "Reduce Maximum AI Input Size or select CPU, then try again."
-        ) from error
+        alpha = source_alpha.resize(
+            prediction.size,
+            Image.Resampling.LANCZOS,
+        )
+        prediction = prediction.convert("RGBA")
+        prediction.putalpha(alpha)
+        return prediction

@@ -29,13 +29,13 @@ def test_capability_groups_keep_ci_dependencies_small():
         configuration, "blender"
     )
     assert ci_packages.isdisjoint(
-        {"huggingface-hub", "onnx", "onnxruntime", "torch"}
+        {"onnx", "onnxruntime", "torch"}
     )
 
 
 def test_ai_and_model_groups_own_their_runtime_dependencies():
     configuration = project_configuration()
-    assert {"huggingface-hub", "onnxruntime"} <= group_packages(
+    assert {"onnxruntime"} <= group_packages(
         configuration, "ai"
     )
     assert {"onnx", "onnxruntime", "torch"} <= group_packages(

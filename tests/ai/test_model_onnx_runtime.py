@@ -32,7 +32,7 @@ class OnnxRuntimeTest(unittest.TestCase):
         runtime.SessionOptions = lambda: options
         runtime.ExecutionMode = SimpleNamespace(ORT_SEQUENTIAL="sequential")
         calls = []
-        runtime.InferenceSession = lambda path, **kwargs: calls.append(kwargs)
+        runtime.InferenceSession = lambda path, **kwargs: (calls.append(kwargs) or FakeSession(["DmlExecutionProvider"]))
         with patch.dict(sys.modules, {"onnxruntime": runtime}):
             onnx_runtime.create_session("model.onnx", "directml")
         self.assertFalse(options.enable_mem_pattern)
@@ -43,9 +43,7 @@ class OnnxRuntimeTest(unittest.TestCase):
         calls = []
         runtime = ModuleType("onnxruntime")
         runtime.get_available_providers = lambda: available
-        runtime.InferenceSession = lambda path, providers: calls.append(
-            (path, providers)
-        )
+        runtime.InferenceSession = lambda path, providers, **kwargs: (calls.append((path, providers)) or FakeSession(available))
         return runtime, calls
 
     def test_cuda_session_uses_shrinkable_arena(self):
@@ -272,3 +270,36 @@ class OnnxRuntimeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_explicit_device_disables_installed_runtime_creation_and_execution_fallback():
+    import onnxruntime
+    import pytest
+
+    calls = []
+
+    class ProbeSession(onnxruntime.InferenceSession):
+        def _create_inference_session(self, providers, provider_options, disabled_optimizers=None):
+            calls.append(providers)
+            self._fallback_providers = ["CPUExecutionProvider"]
+            if providers[0] != "CPUExecutionProvider":
+                raise RuntimeError("accelerator initialization failed")
+            self._providers = providers
+
+    with patch.object(onnxruntime, "get_available_providers", return_value=["CUDAExecutionProvider", "CPUExecutionProvider"]), patch.object(onnxruntime, "InferenceSession", ProbeSession):
+        with pytest.raises(RuntimeError, match="accelerator initialization failed"):
+            onnx_runtime.create_session("unused.onnx", "cuda")
+        assert len(calls) == 1
+        cpu = onnx_runtime.create_session("unused.onnx", "cpu")
+        assert cpu._enable_fallback is False
+        automatic = onnx_runtime.create_session("unused.onnx", "auto")
+        assert automatic.get_providers() == ["CPUExecutionProvider"]
+
+
+def test_explicit_device_rejects_session_without_requested_provider():
+    import onnxruntime
+    import pytest
+
+    with patch.object(onnxruntime, "get_available_providers", return_value=["CUDAExecutionProvider", "CPUExecutionProvider"]), patch.object(onnxruntime, "InferenceSession", return_value=FakeSession(["CPUExecutionProvider"])):
+        with pytest.raises(RuntimeError, match="CUDAExecutionProvider could not be initialized"):
+            onnx_runtime.create_session("unused.onnx", "cuda")

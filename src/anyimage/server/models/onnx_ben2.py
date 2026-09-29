@@ -2,12 +2,8 @@
 
 from pathlib import Path
 
-try:
-    from .onnx_runtime import create_session as create_runtime_session
-    from .onnx_runtime import run_session
-except ImportError:
-    from onnx_runtime import create_session as create_runtime_session
-    from onnx_runtime import run_session
+from .onnx_runtime import create_session as create_runtime_session
+from .onnx_runtime import run_session
 
 
 ONNX_PATH = Path("onnx/model_fp16.onnx")

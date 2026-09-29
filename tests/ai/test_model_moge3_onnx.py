@@ -2,9 +2,8 @@ from dataclasses import replace
 from unittest.mock import patch
 
 import numpy as np
-import pytest
 
-from server.models import moge, onnx_moge3
+from server.models import onnx_moge3
 from server import model_catalog, model_manager
 
 
@@ -54,7 +53,7 @@ def test_inference_runs_three_refinements_and_preserves_image_dimensions():
             side_effect=lambda value, **kwargs: (value, kwargs),
         ),
     ):
-        output, options = moge.infer_image(
+        output, options = onnx_moge3.infer(
             onnx_moge3.Moge3Session(backbone, refiner),
             np.zeros((7, 11, 3), np.float32),
             9,
@@ -77,7 +76,7 @@ def test_bilinear_resize_preserves_edges_and_pixel_centers():
 def test_moge3_requires_all_verified_model_files(tmp_path):
     model = replace(
         model_catalog.MOGE3_VITL,
-        r2_files=(
+        files=(
             (
                 "backbone.onnx",
                 1,
@@ -104,36 +103,8 @@ def test_moge3_requires_all_verified_model_files(tmp_path):
         assert not manager.ready("MOGE3_VITL")
 
 
-def test_cache_reuses_moge3_and_releases_it_when_switching():
-    cache = model_manager.ModelSessionCache()
-    session = onnx_moge3.Moge3Session(object(), object())
-    with patch.object(onnx_moge3, "create_session", return_value=session) as load:
-        assert cache.get_moge("moge-3-vitl-onnx", "cpu") is session
-        assert cache.get_moge("moge-3-vitl-onnx", "cpu") is session
-        load.assert_called_once()
-    from server.models import onnx_moge2
-
-    with patch.object(onnx_moge2, "create_session", return_value=object()):
-        assert cache.get_moge("moge-2-vits-normal-onnx", "cpu") is not session
-    cache.close()
-    assert cache.moge_model is None
-
-
 def test_moge3_catalog_uses_onnx_assets_and_geometry_family():
     model = model_catalog.get_downloadable_model("MOGE3_VITL")
-    assert model.ready_patterns == ("backbone.onnx", "refiner.onnx")
+    assert tuple(name for name, _, _ in model.files) == ("backbone.onnx", "refiner.onnx")
     assert model_catalog.model_record(model)["family"] == "moge"
     assert model.huggingface_repository == ""
-
-
-def test_cache_recovers_after_moge3_session_load_failure():
-    cache = model_manager.ModelSessionCache()
-    session = onnx_moge3.Moge3Session(object(), object())
-    with patch.object(
-        onnx_moge3, "create_session", side_effect=[RuntimeError("load failed"), session]
-    ):
-        with pytest.raises(RuntimeError, match="load failed"):
-            cache.get_moge("moge-3-vitl-onnx", "cpu")
-        assert cache.moge_model is None
-        assert cache.moge_key is None
-        assert cache.get_moge("moge-3-vitl-onnx", "cpu") is session

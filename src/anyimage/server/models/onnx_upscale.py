@@ -2,12 +2,8 @@
 
 from pathlib import Path
 
-try:
-    from .onnx_runtime import create_session as create_runtime_session
-    from .onnx_runtime import run_session
-except ImportError:
-    from onnx_runtime import create_session as create_runtime_session
-    from onnx_runtime import run_session
+from .onnx_runtime import create_session as create_runtime_session
+from .onnx_runtime import run_session
 
 
 SCALE = 4
@@ -85,48 +81,43 @@ def infer(session, image, cancel_check=None, *, release_memory=True, tile_border
     import numpy as np
     from PIL import Image
 
-    try:
-        source = np.asarray(image.convert("RGB"), dtype=np.uint8)
-        height, width = source.shape[:2]
-        if not 0 <= tile_border < TILE_SIZE // 2:
-            raise ValueError("Invalid upscale tile border")
-        core_size = TILE_SIZE - 2 * tile_border
-        extra_height = (-height) % core_size
-        extra_width = (-width) % core_size
-        padded = _pad_source(source, extra_height, extra_width, tile_border)
-        output = np.empty((height * SCALE, width * SCALE, 3), dtype=np.uint8)
-        for top in range(0, height, core_size):
-            core_height = min(core_size, height - top)
-            for left in range(0, width, core_size):
-                core_width = min(core_size, width - left)
-                if cancel_check is not None and cancel_check():
-                    raise RuntimeError("Task cancelled")
-                tile = Image.fromarray(
-                    padded[top : top + TILE_SIZE, left : left + TILE_SIZE],
-                    mode="RGB",
+    source = np.asarray(image.convert("RGB"), dtype=np.uint8)
+    height, width = source.shape[:2]
+    if not 0 <= tile_border < TILE_SIZE // 2:
+        raise ValueError("Invalid upscale tile border")
+    core_size = TILE_SIZE - 2 * tile_border
+    extra_height = (-height) % core_size
+    extra_width = (-width) % core_size
+    padded = _pad_source(source, extra_height, extra_width, tile_border)
+    output = np.empty((height * SCALE, width * SCALE, 3), dtype=np.uint8)
+    for top in range(0, height, core_size):
+        core_height = min(core_size, height - top)
+        for left in range(0, width, core_size):
+            core_width = min(core_size, width - left)
+            if cancel_check is not None and cancel_check():
+                raise RuntimeError("Task cancelled")
+            tile = Image.fromarray(
+                padded[top : top + TILE_SIZE, left : left + TILE_SIZE],
+                mode="RGB",
+            )
+            final_tile = (
+                release_memory
+                and top + core_size >= height
+                and left + core_size >= width
+            )
+            pixels = _prediction_pixels(
+                _run(
+                    session,
+                    preprocess(tile),
+                    release_memory=final_tile,
                 )
-                final_tile = (
-                    release_memory
-                    and top + core_size >= height
-                    and left + core_size >= width
-                )
-                pixels = _prediction_pixels(
-                    _run(
-                        session,
-                        preprocess(tile),
-                        release_memory=final_tile,
-                    )
-                )
-                border = tile_border * SCALE
-                output[
-                    top * SCALE : (top + core_height) * SCALE,
-                    left * SCALE : (left + core_width) * SCALE,
-                ] = pixels[
-                    border : border + core_height * SCALE,
-                    border : border + core_width * SCALE,
-                ]
-        return Image.fromarray(output, mode="RGB")
-    except MemoryError as error:
-        raise RuntimeError(
-            "the complete upscale result exceeded available system memory"
-        ) from error
+            )
+            border = tile_border * SCALE
+            output[
+                top * SCALE : (top + core_height) * SCALE,
+                left * SCALE : (left + core_width) * SCALE,
+            ] = pixels[
+                border : border + core_height * SCALE,
+                border : border + core_width * SCALE,
+            ]
+    return Image.fromarray(output, mode="RGB")

@@ -16,8 +16,13 @@ server = JobServer("AnyImage Job Server")
 def _run_model_job(handler, context, parameters):
     try:
         return handler(context, parameters)
-    except OnnxResourceError:
+    except (OnnxResourceError, MemoryError) as error:
         context.resource("model_manager").clear()
+        if isinstance(error, MemoryError):
+            raise RuntimeError(
+                "Model processing exceeded available system memory. "
+                "Reduce Maximum AI Input Size or model resolution, then try again."
+            ) from error
         raise
 
 

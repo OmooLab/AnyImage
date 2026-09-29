@@ -19,14 +19,8 @@ class FakeModels:
     def directory(self, _model):
         return self.model_directory
 
-    def get_background(self, _model_directory, _device):
-        from server.models.onnx_ben2 import create_session
-
-        return create_session(self.model_directory, "cpu"), 0.0
-
-
-    def get_upscale(self, _model_directory, _device):
-        return object()
+    def get_session(self, model_key, device):
+        return object(), 0.0
 
 
 class FakeJobContext:

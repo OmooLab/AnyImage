@@ -19,7 +19,7 @@ def test_models_dispatch_keep_alpha(tmp_path, key, kind):
     Image.new("RGBA", (7, 5), (60, 120, 180, 128)).save(source)
     manager = ModelManager(tmp_path / "models")
     context = FakeJobContext(tmp_path / "job", "remove-background", manager)
-    adapter = background.model_adapter(manager.directory(key))
+    adapter = background.model_adapter(key)
     parameters = {"input": str(source), "model": key, "device": "directml"}
     if kind == "alpha":
         parameters["output_kind"] = kind
@@ -47,7 +47,7 @@ def test_readiness_checks_model_and_license_corruption(tmp_path, key):
 
     content = b"verified"
     files = tuple((name, len(content), hashlib.sha256(content).hexdigest()) for name in ("model.onnx", "LICENSE.txt"))
-    spec = replace(model_catalog.get_downloadable_model(key), r2_files=files)
+    spec = replace(model_catalog.get_downloadable_model(key), files=files)
     directory = tmp_path / spec.directory_name
     directory.mkdir()
     manager = ModelManager(tmp_path)

@@ -392,6 +392,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-models/
-contents/
-spaces/
+/models/
+/contents/
+/spaces/

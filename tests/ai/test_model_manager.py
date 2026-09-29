@@ -1,306 +1,160 @@
-import sys
-import tempfile
-from pathlib import Path
-from types import ModuleType, SimpleNamespace
+import gc
+import hashlib
+import os
+import weakref
+from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
-from tests.anyimage.server.runtime_support import ServerTestCase
 
-class ModelManagerTest(ServerTestCase):
-    def seed_cache(self, cache):
-        cache.background_model = object()
-        cache.background_key = ("background", "directml")
-        cache.moge_model = object()
-        cache.moge_key = ("geometry", "directml")
-        cache.upscale_model = object()
-        cache.upscale_key = ("upscale", "directml")
+import pytest
 
-    def test_background_cache_switches_model_directory_and_device_and_closes(self):
-        from server.models import background
+from server import model_catalog
+from server.model_manager import ModelManager
+from server.models import model_adapter, onnx_moge3
+from server.models.onnx_runtime import OnnxResourceError
 
-        cache = self.create_cache()
-        loads = []
 
-        def create(directory, device):
-            result = object()
-            loads.append((str(directory), device, result))
+class Session:
+    pass
+
+
+@pytest.mark.parametrize("key", model_catalog.DOWNLOADABLE_MODELS)
+def test_session_reuses_model_and_applies_catalog_device(tmp_path, key):
+    manager = ModelManager(tmp_path)
+    spec = model_catalog.get_downloadable_model(key)
+    with patch.object(model_adapter(key), "create_session", return_value=Session()) as create:
+        first, _ = manager.get_session(key, "directml")
+        second, elapsed = manager.get_session(key, "directml")
+    assert first is second
+    assert elapsed == 0.0
+    create.assert_called_once_with(manager.directory(key), spec.device or "directml")
+    manager.close()
+    assert not any(manager.snapshot()["loaded"].values())
+
+
+def test_switching_model_or_device_releases_previous_session_before_loading(tmp_path):
+    manager = ModelManager(tmp_path)
+    references = []
+
+    def create(*args):
+        assert all(ref() is None for ref in references)
+        session = Session()
+        references.append(weakref.ref(session))
+        return session
+
+    with patch.object(model_adapter("MOGE2_VITS_NORMAL"), "create_session", side_effect=create):
+        manager.get_session("MOGE2_VITS_NORMAL", "cpu")
+        manager.get_session("MOGE2_VITS_NORMAL", "directml")
+        manager.get_session("MOGE2_VITB_NORMAL", "directml")
+    assert len(references) == 3
+
+
+def test_cache_keeps_three_families_and_only_replaces_selected_family(tmp_path):
+    manager = ModelManager(tmp_path)
+    keys = ("BEN2_BASE", "MOGE2_VITS_NORMAL", "REALESRGAN_X4PLUS")
+    for key in keys:
+        with patch.object(model_adapter(key), "create_session", side_effect=lambda *_: Session()):
+            manager.get_session(key, "cpu")
+    before = manager.snapshot()
+    with patch.object(model_adapter("MOGE3_VITL"), "create_session", return_value=Session()):
+        manager.get_session("MOGE3_VITL", "cpu")
+    assert manager.snapshot()["loaded"] == {**before["loaded"], "geometry": "moge-3-vitl-onnx"}
+
+
+@pytest.mark.parametrize("key", ("BEN2_BASE", "MOGE2_VITS_NORMAL", "REALESRGAN_X4PLUS"))
+@pytest.mark.parametrize("error_type", (OnnxResourceError, MemoryError))
+def test_resource_failure_releases_failed_frames_before_retry(tmp_path, key, error_type):
+    manager = ModelManager(tmp_path)
+    refs = []
+    attempts = []
+
+    def create(*args):
+        attempts.append(True)
+        if len(attempts) == 1:
+            partial_session = Session()
+            refs.append(weakref.ref(partial_session))
+            raise error_type("allocation failed")
+        assert refs[0]() is None
+        assert not any(manager.snapshot()["loaded"].values())
+        return Session()
+
+    with patch.object(model_adapter(key), "create_session", side_effect=create):
+        manager.get_session(key, "cpu")
+    assert len(attempts) == 2
+
+
+def test_failed_moge3_refiner_releases_backbone_even_while_error_is_retained(tmp_path):
+    refs = []
+
+    def create(path, device):
+        if path.name == "backbone.onnx":
+            result = Session()
+            refs.append(weakref.ref(result))
             return result
+        raise OnnxResourceError("refiner allocation failed")
 
-        with patch.object(background, "model_adapter", return_value=SimpleNamespace(create_session=create)):
-            first, _ = cache.get_background("a/birefnet-lite", "cpu")
-            assert cache.get_background("a/birefnet-lite", "cpu") == (first, 0.0)
-            second, _ = cache.get_background("a/BEN2-ONNX", "cpu")
-            third, _ = cache.get_background("a/birefnet-hr-matting", "cpu")
-            fourth, _ = cache.get_background("b/birefnet-hr-matting", "cpu")
-            assert cache.get_background("b/birefnet-hr-matting", "directml") == (fourth, 0.0)
-            fifth, _ = cache.get_background("b/birefnet-lite", "directml")
-        assert len(loads) == 5
-        assert len({id(item) for item in (first, second, third, fourth, fifth)}) == 5
-        assert cache.snapshot()["background"] == "birefnet-lite"
-        assert loads[2][1] == loads[3][1] == "cpu"
-        cache.close()
-        assert cache.background_model is None
-        assert cache.snapshot()["background"] == ""
-
-    def test_required_model_download_skips_ready_model(self):
-        manager = self.ModelManager(Path("."))
-        downloads = []
-        context = SimpleNamespace(progress=lambda *_args: None)
-        with (
-            patch.object(
-                manager,
-                "ready",
-                side_effect=lambda key: key == "BEN2_BASE",
-            ),
-            patch.object(
-                manager,
-                "_download",
-                side_effect=lambda _context, key, _progress: downloads.append(key),
-            ),
-        ):
-            result = manager.download_missing(
-                context,
-                ("MOGE2_VITS_NORMAL", "BEN2_BASE"),
-            )
-
-        self.assertEqual(downloads, ["MOGE2_VITS_NORMAL"])
-        self.assertEqual(result, {"downloaded": ["MOGE2_VITS_NORMAL"]})
+    with patch.object(onnx_moge3, "create_runtime_session", side_effect=create):
+        with pytest.raises(OnnxResourceError) as error:
+            onnx_moge3.create_session(tmp_path)
+    gc.collect()
+    assert error.value is not None
+    assert refs[0]() is None
 
 
-    def test_models_are_owned_by_the_server_resource(self):
-        with tempfile.TemporaryDirectory() as directory:
-            manager = self.ModelManager(Path(directory))
-            snapshot = manager.snapshot()
-        self.assertEqual(
-            snapshot,
-            {
-                "loaded": {
-                    "background": "",
-                    "geometry": "",
-                    "upscale": "",
-                }
-            },
-        )
-        self.assertIn("server.model_catalog", sys.modules)
+@pytest.mark.parametrize("error_type, attempts", ((OnnxResourceError, 2), (RuntimeError, 1)))
+def test_load_failure_has_bounded_retries_and_preserves_unrelated_cache(tmp_path, error_type, attempts):
+    manager = ModelManager(tmp_path)
+    with patch.object(model_adapter("BEN2_BASE"), "create_session", return_value=Session()):
+        manager.get_session("BEN2_BASE", "cpu")
+    with patch.object(model_adapter("MOGE3_VITL"), "create_session", side_effect=error_type("failed")) as create:
+        with pytest.raises(error_type):
+            manager.get_session("MOGE3_VITL", "cpu")
+    assert create.call_count == attempts
+    assert bool(manager.snapshot()["loaded"]["background"]) == (attempts == 1)
+    assert manager.snapshot()["loaded"]["geometry"] == ""
 
 
-    def test_background_model_is_reused_for_matching_runtime_key(self):
-        loads = []
-
-        ben2 = ModuleType("server.models.onnx_ben2")
-        ben2.create_session = lambda model_dir, device: (
-            loads.append((model_dir, device)) or object()
-        )
-        cache = self.create_cache()
-        device = SimpleNamespace(type="cuda")
-        with patch.dict(sys.modules, {"server.models.onnx_ben2": ben2}):
-            first, _load_ms = cache.get_background("BEN2-ONNX", device)
-            second, cached_load_ms = cache.get_background("BEN2-ONNX", device)
-
-        self.assertIs(first, second)
-        self.assertEqual(loads, [("BEN2-ONNX", "cuda")])
-        self.assertEqual(cache.snapshot()["background"], "BEN2-ONNX")
-        self.assertEqual(cached_load_ms, 0.0)
-
-
-    def test_model_cache_keeps_three_categories(self):
-        cache = self.create_cache()
-        ben2 = object()
-        old_moge = object()
-        upscale = object()
-        cache.background_model = ben2
-        cache.background_key = ("ben2", "cuda")
-        cache.moge_model = old_moge
-        cache.moge_key = ("old-moge", "cuda")
-        cache.upscale_model = upscale
-        cache.upscale_key = ("upscale", "cuda")
-        new_moge = object()
-        fake_moge = ModuleType("server.models.onnx_moge2")
-        fake_moge.create_session = lambda _model_dir, _device: new_moge
-        with patch.dict(sys.modules, {"server.models.onnx_moge2": fake_moge}):
-            self.assertIs(cache.get_moge("new-moge", "cuda"), new_moge)
-
-        self.assertIs(cache.background_model, ben2)
-        self.assertIs(cache.upscale_model, upscale)
-        self.assertEqual(cache.snapshot()["geometry"], "new-moge")
+@pytest.mark.parametrize("key", model_catalog.DOWNLOADABLE_MODELS)
+def test_ready_checks_every_declared_file_and_same_size_corruption(tmp_path, key):
+    spec = model_catalog.get_downloadable_model(key)
+    content = b"verified"
+    files = tuple((name, len(content), hashlib.sha256(content).hexdigest()) for name, _, _ in spec.files)
+    spec = replace(spec, files=files)
+    manager = ModelManager(tmp_path)
+    with patch.object(model_catalog, "get_downloadable_model", return_value=spec):
+        assert not manager.ready(key)
+        for name, _, _ in files:
+            path = manager.directory(key) / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        assert manager.ready(key)
+        path.write_bytes(b"damaged!")
+        assert not manager.ready(key)
 
 
-    def test_upscale_model_is_reused_for_matching_runtime_key(self):
-        loads = []
-        upscale = ModuleType("server.models.onnx_upscale")
-        upscale.create_session = lambda model_dir, device: (
-            loads.append((model_dir, device)) or object()
-        )
-        cache = self.create_cache()
-
-        with patch.dict(
-            sys.modules,
-            {"server.models.onnx_upscale": upscale},
-        ):
-            first = cache.get_upscale("model", "cpu")
-            second = cache.get_upscale("model", "cpu")
-
-        self.assertIs(first, second)
-        self.assertEqual(loads, [("model", "cpu")])
-        self.assertEqual(cache.snapshot()["upscale"], "model")
-
-    def test_resource_failure_clears_every_slot_and_retries_load_once(self):
-        error = self.onnx_runtime.OnnxResourceError("memory exhausted")
-        recovered = object()
-        upscale = ModuleType("server.models.onnx_upscale")
-        upscale.create_session = Mock(side_effect=[error, recovered])
-        cache = self.create_cache()
-        self.seed_cache(cache)
-
-        with patch.dict(sys.modules, {"server.models.onnx_upscale": upscale}):
-            result = cache.get_upscale("new-upscale", "directml")
-
-        self.assertIs(result, recovered)
-        self.assertEqual(upscale.create_session.call_count, 2)
-        self.assertEqual(
-            cache.snapshot(),
-            {"background": "", "geometry": "", "upscale": "new-upscale"},
-        )
-
-    def test_repeated_resource_failure_stops_after_one_retry(self):
-        error = self.onnx_runtime.OnnxResourceError("memory exhausted")
-        moge = ModuleType("server.models.onnx_moge2")
-        moge.create_session = Mock(side_effect=error)
-        cache = self.create_cache()
-        self.seed_cache(cache)
-
-        with (
-            patch.dict(sys.modules, {"server.models.onnx_moge2": moge}),
-            self.assertRaises(self.onnx_runtime.OnnxResourceError),
-        ):
-            cache.get_moge("new-moge", "directml")
-
-        self.assertEqual(moge.create_session.call_count, 2)
-        self.assertEqual(
-            cache.snapshot(),
-            {"background": "", "geometry": "", "upscale": ""},
-        )
-
-    def test_ordinary_load_failure_does_not_clear_other_categories(self):
-        from server.models import background
-
-        create = Mock(side_effect=RuntimeError("invalid model"))
-        cache = self.create_cache()
-        self.seed_cache(cache)
-
-        with (
-            patch.object(
-                background,
-                "model_adapter",
-                return_value=SimpleNamespace(create_session=create),
-            ),
-            self.assertRaisesRegex(RuntimeError, "invalid model"),
-        ):
-            cache.get_background("new-background", "directml")
-
-        self.assertEqual(create.call_count, 1)
-        self.assertEqual(cache.snapshot()["background"], "")
-        self.assertEqual(cache.snapshot()["geometry"], "geometry")
-        self.assertEqual(cache.snapshot()["upscale"], "upscale")
-
-    def test_every_model_category_uses_shared_load_recovery(self):
-        from server.models import background
-
-        background_adapter = SimpleNamespace(create_session=lambda *_args: object())
-        moge = ModuleType("server.models.onnx_moge2")
-        moge.create_session = lambda *_args: object()
-        upscale = ModuleType("server.models.onnx_upscale")
-        upscale.create_session = lambda *_args: object()
-        cache = self.create_cache()
-
-        with (
-            patch.object(background, "model_adapter", return_value=background_adapter),
-            patch.dict(
-                sys.modules,
-                {
-                    "server.models.onnx_moge2": moge,
-                    "server.models.onnx_upscale": upscale,
-                },
-            ),
-            patch.object(
-                cache,
-                "_load_session",
-                wraps=cache._load_session,
-            ) as load,
-        ):
-            cache.get_background("background", "cpu")
-            cache.get_moge("geometry", "cpu")
-            cache.get_upscale("upscale", "cpu")
-
-        self.assertEqual(load.call_count, 3)
+def test_verified_large_file_is_reused_until_identity_changes(tmp_path):
+    content = b"a" * (1024 * 1024)
+    spec = replace(model_catalog.BEN2_MODEL, files=(("model.onnx", len(content), hashlib.sha256(content).hexdigest()),))
+    manager = ModelManager(tmp_path)
+    directory = manager.directory(spec.key)
+    directory.mkdir()
+    path = directory / "model.onnx"
+    path.write_bytes(content)
+    os.utime(path, (1, 1))
+    with patch.object(model_catalog, "get_downloadable_model", return_value=spec), patch.object(hashlib, "file_digest", wraps=hashlib.file_digest) as digest:
+        assert manager.ready(spec.key)
+        assert manager.ready(spec.key)
+        assert digest.call_count == 1
+        path.write_bytes(b"b" * len(content))
+        assert not manager.ready(spec.key)
 
 
-    def test_inference_cleanup_keeps_every_cached_session(self):
-        class Session:
-            def get_providers(self):
-                return ["CUDAExecutionProvider"]
-
-            def run(self, _names, _feeds, run_options=None):
-                self.run_options = run_options
-                return [object()]
-
-        class RunOptions:
-            def add_run_config_entry(self, _key, _value):
-                return None
-
-        runtime = ModuleType("onnxruntime")
-        runtime.RunOptions = RunOptions
-        sessions = {
-            "ben2": Session(),
-            "moge2": Session(),
-            "upscale": Session(),
-        }
-        ben2 = ModuleType("server.models.onnx_ben2")
-        ben2.create_session = lambda _directory, _device: sessions["ben2"]
-        moge2 = ModuleType("server.models.onnx_moge2")
-        moge2.create_session = lambda _directory, _device: sessions["moge2"]
-        upscale = ModuleType("server.models.onnx_upscale")
-        upscale.create_session = lambda _directory, _device: sessions["upscale"]
-        cache = self.create_cache()
-
-        def assert_reused(first, getter, release_name):
-            with (
-                patch.dict(sys.modules, {"onnxruntime": runtime}),
-                patch.object(
-                    cache,
-                    release_name,
-                    wraps=getattr(cache, release_name),
-                ) as release,
-            ):
-                self.onnx_runtime.run_session(first, ["output"], {"input": 1})
-                second = getter()
-            self.assertIs(first, second)
-            release.assert_not_called()
-
-        with patch.dict(
-            sys.modules,
-            {
-                "server.models.onnx_ben2": ben2,
-                "server.models.onnx_moge2": moge2,
-                "server.models.onnx_upscale": upscale,
-            },
-        ):
-            first_ben2, _load_ms = cache.get_background("BEN2-ONNX", "cuda")
-            assert_reused(
-                first_ben2,
-                lambda: cache.get_background("BEN2-ONNX", "cuda")[0],
-                "release_background",
-            )
-
-            first_moge2 = cache.get_moge("moge2", "cuda")
-            assert_reused(
-                first_moge2,
-                lambda: cache.get_moge("moge2", "cuda"),
-                "release_geometry",
-            )
-
-            first_upscale = cache.get_upscale("upscale", "cuda")
-            assert_reused(
-                first_upscale,
-                lambda: cache.get_upscale("upscale", "cuda"),
-                "release_upscale",
-            )
+def test_required_downloads_skip_ready_models_and_aggregate_progress(tmp_path):
+    manager = ModelManager(tmp_path)
+    context = SimpleNamespace(progress=Mock())
+    with patch.object(manager, "ready", side_effect=lambda key: key == "BEN2_BASE"), patch.object(manager, "_download") as download:
+        result = manager.download_missing(context, ("BEN2_BASE", "MOGE3_VITL"))
+    assert result == {"downloaded": ["MOGE3_VITL"]}
+    assert download.call_args.args[1] == "MOGE3_VITL"
+    download.call_args.args[2](0.5, "loading")
+    context.progress.assert_called_once_with(0.5, "loading")

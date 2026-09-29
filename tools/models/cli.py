@@ -80,7 +80,7 @@ def hf_url(repository, filename):
 def catalog_model_files():
     files = []
     for key, model in DOWNLOADABLE_MODELS.items():
-        for filename, size, sha256 in model.r2_files:
+        for filename, size, sha256 in model.files:
             source_url = ""
             if model.huggingface_repository:
                 source_url = hf_url(model.huggingface_repository, filename)

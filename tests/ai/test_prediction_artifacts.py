@@ -7,7 +7,7 @@ from PIL import Image
 
 from server.geometry import prediction_artifacts as artifacts
 from server.models.geometry import GeometryFrame
-from server.models.onnx_moge2 import depth_to_points
+from server.models.moge_geometry import depth_to_points
 
 
 def make_frame(depth):

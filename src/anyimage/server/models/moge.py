@@ -1,5 +1,6 @@
 from ..media.input import open_image
 from .geometry import GeometryFrame
+from . import model_adapter
 
 
 def _pixel_intrinsics(intrinsics, image_size):
@@ -7,13 +8,9 @@ def _pixel_intrinsics(intrinsics, image_size):
 
     width, height = image_size
     result = np.asarray(intrinsics, dtype=np.float32).copy()
-    if (
-        0.0 <= float(result[0, 2]) <= 1.0
-        and 0.0 <= float(result[1, 2]) <= 1.0
-    ):
-        result[0] *= width
-        result[1] *= height
-        result[2] = (0.0, 0.0, 1.0)
+    result[0] *= width
+    result[1] *= height
+    result[2] = (0.0, 0.0, 1.0)
     return result
 
 
@@ -46,7 +43,7 @@ def infer(
     """Infer one image and return its geometry fields."""
     if cancel_check is not None:
         cancel_check()
-    prediction = infer_one(model_manager, parameters, image_path)
+    prediction = infer_one(model_manager, parameters, image_path, include_points=include_points)
     return _geometry_frame(prediction, include_points)
 
 
@@ -56,27 +53,17 @@ def infer_one(
     image_path,
     *,
     release_memory=True,
+    include_points=True,
 ):
     import numpy as np
 
-    model_directory = model_manager.directory(parameters["model"])
-    model = model_manager.get_moge(
-        model_directory,
-        parameters["device"],
-    )
+    model, _load_ms = model_manager.get_session(parameters["model"], parameters["device"])
     with open_image(image_path) as opened:
         image = np.asarray(opened.convert("RGB"), dtype=np.float32) / 255.0
-    return infer_image(
+    return model_adapter(parameters["model"]).infer(
         model,
         image,
         int(parameters["resolution_level"]),
         release_memory=release_memory,
+        include_points=include_points,
     )
-
-
-def infer_image(session, image, resolution_level, **options):
-    """Dispatch one RGB array to the selected MoGe ONNX model."""
-    from . import onnx_moge2, onnx_moge3
-
-    backend = onnx_moge3 if isinstance(session, onnx_moge3.Moge3Session) else onnx_moge2
-    return backend.infer(session, image, resolution_level, **options)

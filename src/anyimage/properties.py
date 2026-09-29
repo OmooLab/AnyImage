@@ -64,7 +64,13 @@ def models_status(refresh=False):
 
 def _model_files_ready(model):
     directory = runtime.storage_root() / "models" / model.directory_name
-    return all(any(directory.glob(pattern)) for pattern in model.ready_patterns)
+    try:
+        return all(
+            (directory / name).stat().st_size == size
+            for name, size, _checksum in model.files
+        )
+    except OSError:
+        return False
 
 
 def model_ready(model_key):
@@ -103,7 +109,7 @@ def ai_setup_label(status=None):
 
 def model_download_size(model_key):
     model = shared_model_catalog.get_downloadable_model(model_key)
-    return sum(size for _path, size, _checksum in model.r2_files)
+    return sum(size for _path, size, _checksum in model.files)
 
 
 def model_catalog():

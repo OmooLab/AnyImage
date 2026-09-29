@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
-from tests.anyimage.server.support import load_server_module, FakeJobContext
+from tests.anyimage.server.support import load_server_module, FakeJobContext, FakeModels
 
 
 class ServerJobsTest(unittest.TestCase):
@@ -78,7 +78,6 @@ class ServerJobsTest(unittest.TestCase):
             Image.new("RGBA", (2, 1), (255, 64, 32, 128)).save(input_path)
             context = FakeJobContext(root / "result", "remove-background")
             with (
-                patch.object(onnx_ben2, "create_session", return_value=object()),
                 patch.object(onnx_ben2, "infer_alpha", return_value=np.full((1, 2), 128 / 255, np.float32)) as infer,
                 patch.object(Image.Image, "save", autospec=True, side_effect=Image.Image.save) as save,
             ):
@@ -111,19 +110,20 @@ class ServerJobsTest(unittest.TestCase):
             input_path = Path(directory) / "input.png"
             Image.fromarray(source_pixels, mode="RGBA").save(input_path)
             with (
-                patch.object(onnx_ben2, "create_session", return_value=object()),
                 patch.object(onnx_ben2, "infer_alpha", side_effect=infer),
             ):
                 result, _load_ms, _inference_ms = self.background_model.infer_foreground(
                     input_path,
-                    "BEN2-ONNX",
+                    "BEN2_BASE",
                     "cpu",
+                    FakeModels(),
                     preserve_input_alpha=True,
                 )
                 raw_result, _load_ms, _inference_ms = self.background_model.infer_foreground(
                     input_path,
-                    "BEN2-ONNX",
+                    "BEN2_BASE",
                     "cpu",
+                    FakeModels(),
                 )
 
         inference_pixels = received[0]
@@ -150,7 +150,6 @@ class ServerJobsTest(unittest.TestCase):
             Image.new("RGB", (2, 1)).save(path)
             context = FakeJobContext(root / "result", "remove-background")
             with (
-                patch.object(onnx_ben2, "create_session", return_value=object()),
                 patch.object(onnx_ben2, "infer_alpha", return_value=alpha),
             ):
                 result = self.background.run(context, {"input": str(path), "model": "BEN2_BASE", "device": "cpu", "output_kind": "alpha"})

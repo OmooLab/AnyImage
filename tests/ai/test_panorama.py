@@ -24,7 +24,7 @@ def test_known_fov_recovers_shift_metric_and_excludes_invisible_points():
     points[:8] = np.nan
     raw = {"points": points[None], "normal": np.zeros_like(points)[None],
            "mask": np.ones((1, 64, 64)), "metric_scale": [1.5]}
-    prediction = onnx.postprocess(raw, fov_x=90, source_valid=visible)
+    prediction = load_server_module("models.moge_geometry").postprocess(raw, fov_x=90, source_valid=visible)
     np.testing.assert_allclose(prediction["depth"][visible], depth[visible] * 1.5, rtol=1e-5)
     assert not prediction["mask"][:8].any()
     assert np.isfinite(prediction["points"]).all()
@@ -52,7 +52,7 @@ def test_periodic_fusion_removes_view_scale_offsets():
 def panorama_job(tmp_path, monkeypatch):
     source = tmp_path / "source.png"
     context = FakeJobContext(tmp_path / "result", "generate-panorama-geometry",
-                             SimpleNamespace(directory=lambda _: tmp_path, get_moge=lambda *_: object()))
+                             SimpleNamespace(directory=lambda _: tmp_path, get_session=lambda *_: (object(), 0.0)))
     calls, pixels = [], []
 
     def infer(session, color, level, **options):
@@ -61,10 +61,10 @@ def panorama_job(tmp_path, monkeypatch):
         points = rays / np.linalg.norm(rays, axis=-1, keepdims=True) * 3
         return {"points": points, "mask": np.ones(color.shape[:2])}
 
-    monkeypatch.setattr(job, "infer", infer)
+    monkeypatch.setattr(onnx, "infer", infer)
     write = job.write_float_exr
     monkeypatch.setattr(job, "write_float_exr", lambda rgba, path: (pixels.append(rgba.copy()), write(rgba, path))[1])
-    parameters = {"input": str(source), "model": "MOGE2", "device": "cpu", "resolution_level": 3,
+    parameters = {"input": str(source), "model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 3,
                   "max_input_size": 32}
     return source, context, parameters, calls, pixels
 
@@ -117,7 +117,7 @@ def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind)
     Image.new("RGBA", (64 if kind != "wrong_ratio" else 32, 32),
               (255, 255, 255, 0 if kind == "transparent" else 255)).save(source)
     if kind == "invalid_model":
-        monkeypatch.setattr(job, "infer", lambda *a, **k: {"points": np.ones((32, 32, 3)), "mask": np.zeros((32, 32))})
+        monkeypatch.setattr(onnx, "infer", lambda *a, **k: {"points": np.ones((32, 32, 3)), "mask": np.zeros((32, 32))})
     if kind == "cancel":
         count = [0]
         def cancel():

@@ -2,55 +2,59 @@ import importlib
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from tests.support.blender import BlenderTestCase
 
 
 class AiSetupTest(BlenderTestCase):
-    def test_anyimage_post_install_is_ordinary_code_using_runtime_request(self):
-        calls = []
-        fake_runtime = SimpleNamespace(
-            request=lambda job_type, parameters: calls.append((job_type, parameters))
-        )
-        self.runtime.post_install(fake_runtime)
-        self.assertEqual(
-            calls,
-            [
-                ("download-model", {"model": "MOGE2_VITS_NORMAL"}),
-                ("download-model", {"model": "BIREFNET_LITE"}),
-                (
-                    "download-model",
-                    {"model": "REALESRGAN_GENERAL_WDN_X4V3"},
-                ),
-            ],
-        )
+    def test_post_install_downloads_only_missing_or_corrupt_models(self):
+        import hashlib
+        from dataclasses import replace
+        from server import app, model_catalog
+        from server.model_manager import ModelManager
 
+        content = b"verified"
+        specs = {
+            key: replace(
+                model_catalog.get_downloadable_model(key),
+                files=(("model.onnx", len(content), hashlib.sha256(content).hexdigest()),),
+            )
+            for key in model_catalog.DEFAULT_MODEL_KEYS
+        }
+        for state in ("ready", "missing", "corrupt"):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as directory:
+                manager = ModelManager(directory)
+                for spec in specs.values():
+                    path = manager.directory(spec.key) / "model.onnx"
+                    path.parent.mkdir(parents=True)
+                    path.write_bytes(content)
+                affected = model_catalog.DEFAULT_MODEL_KEYS[0]
+                path = manager.directory(affected) / "model.onnx"
+                if state == "missing":
+                    path.unlink()
+                elif state == "corrupt":
+                    path.write_bytes(b"damaged!")
+                context = SimpleNamespace(resource=lambda _: manager, progress=Mock())
 
-    def test_anyimage_post_install_names_each_failed_model(self):
-        calls = []
+                def request(job_type, parameters):
+                    self.assertEqual(job_type, "download-required-models")
+                    return app.download_required_models(context, parameters)
 
-        def request(_job_type, parameters):
-            calls.append(parameters["model"])
-            raise RuntimeError("network unavailable")
+                with (
+                    patch.dict(model_catalog.DOWNLOADABLE_MODELS, specs),
+                    patch.object(manager, "_download") as download,
+                ):
+                    self.runtime.post_install(SimpleNamespace(request=request))
+                self.assertEqual(
+                    [call.args[1] for call in download.call_args_list],
+                    [] if state == "ready" else [affected],
+                )
 
-        with self.assertRaisesRegex(
-            RuntimeError,
-            (
-                "MoGe-2 ViT-S Normal: network unavailable; "
-                "BiRefNet Lite: network unavailable; "
-                "Real-ESRGAN General WDN x4v3: network unavailable"
-            ),
-        ):
+    def test_post_install_propagates_model_preparation_failure(self):
+        request = Mock(side_effect=RuntimeError("network unavailable"))
+        with self.assertRaisesRegex(RuntimeError, "network unavailable"):
             self.runtime.post_install(SimpleNamespace(request=request))
-
-        self.assertEqual(
-            calls,
-            [
-                "MOGE2_VITS_NORMAL",
-                "BIREFNET_LITE",
-                "REALESRGAN_GENERAL_WDN_X4V3",
-            ],
-        )
+        request.assert_called_once()
 
 
     def test_required_model_operator_requests_all_default_models(self):
@@ -182,18 +186,23 @@ class AiSetupTest(BlenderTestCase):
         properties = importlib.import_module("anyimage.properties")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            moge = root / "models" / "moge-2-vits-normal-onnx"
-            lite = root / "models" / "birefnet-lite"
-            wdn = root / "models" / "realesr-general-wdn-x4v3"
-            moge.mkdir(parents=True)
-            lite.mkdir(parents=True)
-            wdn.mkdir(parents=True)
-            (moge / "model.onnx").touch()
-            (lite / "model.onnx").touch()
-            (lite / "LICENSE.txt").touch()
-            (wdn / "realesr-general-wdn-x4v3.onnx").touch()
+            from dataclasses import replace
+
+            catalog = properties.shared_model_catalog
+            specs = {
+                key: replace(catalog.get_downloadable_model(key), files=tuple(
+                    (name, 1, "unused") for name, _, _ in catalog.get_downloadable_model(key).files
+                ))
+                for key in catalog.DEFAULT_MODEL_KEYS
+            }
+            for spec in specs.values():
+                for name, _, _ in spec.files:
+                    path = root / "models" / spec.directory_name / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b"a")
 
             with (
+                patch.dict(catalog.DOWNLOADABLE_MODELS, specs),
                 patch.object(
                     self.anyimage.runtime,
                     "storage_root",
@@ -206,3 +215,5 @@ class AiSetupTest(BlenderTestCase):
                 ),
             ):
                 self.assertEqual(properties.ai_status()["missing_models"], ())
+                path.write_bytes(b"")
+                self.assertIn(spec.key, properties.ai_status()["missing_models"])

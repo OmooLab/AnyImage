@@ -2,7 +2,7 @@ import time
 
 from ..media.input import open_image, validate_input_path
 from ..model_catalog import BACKGROUND_MODELS
-from ..models.background import infer_alpha, infer_foreground, inference_device
+from ..models.background import infer_alpha, infer_foreground
 
 
 def run(context, parameters):
@@ -17,20 +17,18 @@ def run(context, parameters):
     output_directory.mkdir(parents=True, exist_ok=True)
     device = parameters["device"]
     model_manager = context.resource("model_manager")
-    model_directory = model_manager.directory(parameters["model"])
-    device = inference_device(model_directory, device)
     output_kind = parameters.get("output_kind", "foreground")
     if output_kind not in {"foreground", "alpha"}:
         raise ValueError(f"Unknown background removal output: {output_kind}")
 
     input_path = validate_input_path(parameters["input"])
-    context.progress(0.12, f"Loading {parameters['model']} for {device.upper()}")
+    context.progress(0.12, f"Loading {parameters['model']}")
     if output_kind == "alpha":
         import numpy as np
 
         with open_image(input_path) as source:
             alpha, load_ms, inference_ms = infer_alpha(
-                source, model_directory, device, model_cache=model_manager,
+                source, parameters["model"], device, model_manager=model_manager,
                 cancel_check=context.check_cancelled,
             )
         context.check_cancelled()
@@ -39,9 +37,9 @@ def run(context, parameters):
         context.progress(0.35, "Removing background")
         foreground, load_ms, inference_ms = infer_foreground(
             input_path,
-            model_directory,
+            parameters["model"],
             device,
-            model_cache=model_manager,
+            model_manager=model_manager,
             cancel_check=context.check_cancelled,
             preserve_input_alpha=True,
         )

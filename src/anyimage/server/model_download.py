@@ -1,7 +1,6 @@
 import hashlib
 import http.client
 import os
-import threading
 import time
 from pathlib import Path
 from urllib.parse import quote
@@ -41,248 +40,63 @@ _download_opener = build_opener(ProxyHandler(), _ShortConnectHTTPSHandler())
 
 
 class DownloadProgressReporter:
-    def __init__(
-        self,
-        progress_callback,
-        repository,
-        clock=time.monotonic,
-        start=0.05,
-        span=0.90,
-        label=None,
-    ):
+    def __init__(self, progress_callback, label, clock=time.monotonic):
         self.progress_callback = progress_callback
-        self.repository = repository
-        self.clock = clock
-        self.lock = threading.Lock()
-        self.start = start
-        self.span = span
         self.label = label
-        self.progress = start
+        self.clock = clock
+        self.progress = 0.05
         self.last_write_time = 0.0
-        self.started_at = self.clock()
+        self.started_at = clock()
 
-    def report(self, current, total, rate=None):
+    def report(self, current, total):
         if not total or current <= 0:
             return
-
-        factor = min(max(current / total, 0.0), 1.0)
-        progress = self.start + factor * self.span
+        factor = min(current / total, 1.0)
+        progress = 0.05 + factor * 0.90
         now = self.clock()
-        with self.lock:
-            if progress <= self.progress:
-                return
-            if now - self.last_write_time < 0.20 and factor < 1.0:
-                return
-            self.progress = progress
-            self.last_write_time = now
-            effective_rate = rate
-            elapsed = now - self.started_at
-            if not effective_rate and elapsed > 0:
-                effective_rate = current / elapsed
-            speed = format_rate(effective_rate) if effective_rate else ""
-            prefix = self.label or self.repository
-            message = f"Downloading {prefix}"
-            if speed:
-                message = f"{message} {speed}"
-            self.progress_callback(
-                progress,
-                message,
-            )
+        if progress <= self.progress or (
+            now - self.last_write_time < 0.20 and factor < 1.0
+        ):
+            return
+        self.progress = progress
+        self.last_write_time = now
+        elapsed = now - self.started_at
+        speed = f" {format_rate(current / elapsed)}" if elapsed > 0 else ""
+        self.progress_callback(progress, f"Downloading {self.label}{speed}")
 
 
-def create_download_progress_class(
-    progress_callback,
-    repository,
-    tqdm_type=None,
-    clock=time.monotonic,
-    start=0.05,
-    span=0.90,
-    label=None,
-):
-    if tqdm_type is None:
-        from tqdm.auto import tqdm as tqdm_type
-
-    reporter = DownloadProgressReporter(
-        progress_callback,
-        repository,
-        clock,
-        start,
-        span,
-        label,
-    )
-
-    class DownloadProgress(tqdm_type):
-        def __init__(self, *args, **kwargs):
-            description = str(kwargs.get("desc", ""))
-            # huggingface_hub 1.x 的字节进度条描述是 "Downloading (incomplete total...)"，
-            # 用前缀匹配而非精确匹配，否则真实下载进度会被忽略。
-            self.anyimage_reports_progress = (
-                description.startswith("Downloading")
-                or description.startswith("Fetching ")
-            )
-            super().__init__(*args, **kwargs)
-
-        def update(self, amount=1):
-            result = super().update(amount)
-            if self.anyimage_reports_progress:
-                reporter.report(self.n, self.total, self._download_rate())
-            return result
-
-        def refresh(self, *args, **kwargs):
-            result = super().refresh(*args, **kwargs)
-            if self.anyimage_reports_progress:
-                reporter.report(self.n, self.total, self._download_rate())
-            return result
-
-        def _download_rate(self):
-            try:
-                return getattr(self, "format_dict", {}).get("rate")
-            except Exception:
-                return None
-
-    return DownloadProgress
-
-
-def progress_range(args):
-    start = getattr(args, "progress_start", None)
-    end = getattr(args, "progress_end", None)
-    if start is not None and end is not None:
-        return float(start), float(end) - float(start)
-    return 0.05, 0.90
-
-
-def download_model(args):
-    label = getattr(args, "label", None) or args.repository
-    model_dir = Path(args.model_dir)
+def download_model(model, model_dir, progress, cancel_check):
+    """Download the catalog files from Hugging Face, then the R2 mirror."""
+    model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
-    start, span = progress_range(args)
-    r2_directory = getattr(args, "r2_directory", "")
-    r2_files = getattr(args, "r2_file", [])
-    if r2_directory and r2_files:
-        _download_declared_or_fail(
-            args,
-            model_dir,
-            label,
-            start,
-            span,
-        )
-        return
-    _download_snapshot_or_fail(args, model_dir, label, start, span)
-
-
-def _download_declared_or_fail(args, model_dir, label, start, span):
-    """Download declared files from Hugging Face when available, then R2."""
     sources = []
-    if args.repository:
-        sources.append((HF_ENDPOINT, download_from_hf, f"Downloading {label}"))
+    if model.huggingface_repository:
+        sources.append((
+            HF_ENDPOINT,
+            lambda filename: hf_file_url(model.huggingface_repository, filename),
+            model.label,
+        ))
     sources.append((
-            R2_ENDPOINT,
-            download_from_r2,
-            f"Downloading {label} (mirror)",
+        R2_ENDPOINT,
+        lambda filename: r2_file_url(model.r2_directory, filename),
+        f"{model.label} (mirror)",
     ))
     failures = []
-    for source, downloader, message in sources:
-        args.progress(start, message)
+    for source, url_builder, label in sources:
+        cancel_check()
+        progress(0.05, f"Downloading {label}")
         try:
-            downloader(
-                args,
-                model_dir,
-                start=start,
-                span=span,
-                label=label,
-            )
-            _verify_model_complete(
-                model_dir,
-                getattr(args, "required_pattern", None),
+            _download_declared_files(
+                model.files, model_dir, url_builder, progress, cancel_check, label,
             )
         except Exception as error:
-            cancel_check = getattr(args, "cancel_check", None)
-            if cancel_check is not None:
-                cancel_check()
+            cancel_check()
             failures.append((source, error))
             continue
-        args.progress(start + span, f"{label} ready")
+        progress(0.95, f"{model.label} ready")
         return
-    detail = "; ".join(
-        f"{source}: {error}" for source, error in failures
-    )
+    detail = "; ".join(f"{source}: {error}" for source, error in failures)
     raise RuntimeError(f"All download sources failed: {detail}")
-
-
-def _download_snapshot_or_fail(args, model_dir, label, start, span):
-    """Fallback download for repositories without declared files, via huggingface_hub."""
-    failures = []
-    try:
-        from huggingface_hub import snapshot_download
-    except Exception as error:
-        snapshot_download = None
-        failures.append((HF_ENDPOINT, error))
-    progress_class = None
-    if snapshot_download:
-        progress_class = create_download_progress_class(
-            args.progress,
-            args.repository,
-            start=start,
-            span=span,
-            label=label,
-        )
-    for endpoint in download_endpoints() if snapshot_download else ():
-        os.environ["HF_ENDPOINT"] = endpoint
-        # snapshot_download 先拉取文件清单并校验 ETag，还没有字节下载，
-        # 用 Checking 提示当前阶段，避免进度条看起来卡住。
-        message = f"Checking {label} files"
-        if endpoint != HF_ENDPOINT:
-            message = f"{message} (mirror)"
-        args.progress(start, message)
-        try:
-            snapshot_download(
-                repo_id=args.repository,
-                local_dir=model_dir,
-                tqdm_class=progress_class,
-                allow_patterns=args.allow_pattern or None,
-                endpoint=endpoint,
-            )
-            _verify_model_complete(
-                model_dir,
-                getattr(args, "required_pattern", None),
-            )
-        except Exception as error:
-            cancel_check = getattr(args, "cancel_check", None)
-            if cancel_check is not None:
-                cancel_check()
-            failures.append((endpoint, error))
-            continue
-        args.progress(start + span, f"{label} ready")
-        return
-    detail = "; ".join(
-        f"{source}: {error}" for source, error in failures
-    )
-    raise RuntimeError(f"All download sources failed: {detail}")
-
-
-def download_endpoints():
-    """Return the configured Hugging Face endpoint or official source."""
-    endpoint = os.environ.get("HF_ENDPOINT") or HF_ENDPOINT
-    return [endpoint.rstrip("/")]
-
-
-def _verify_model_complete(model_dir, required_patterns=None):
-    """Refuse to report success when the required model files are missing."""
-    model_dir = Path(model_dir)
-    required_patterns = required_patterns or (
-        "config.json",
-        "*.safetensors",
-    )
-    missing = [
-        pattern
-        for pattern in required_patterns
-        if not any(model_dir.glob(pattern))
-    ]
-    if missing:
-        raise RuntimeError(
-            "Model download reported success but files are missing: "
-            + ", ".join(missing)
-        )
 
 
 def _download_file_from_url(
@@ -291,49 +105,43 @@ def _download_file_from_url(
     expected_size,
     expected_checksum,
     progress=None,
-    retries=1,
     cancel_check=None,
 ):
     """Download and verify one model file atomically from a direct URL."""
     request = Request(url, headers={"User-Agent": "AnyImage"})
     opener = _download_opener.open if request.type == "https" else urlopen
-    last_error = None
-    for _attempt in range(retries):
-        temporary = destination.with_name(f"{destination.name}.part")
+    temporary = destination.with_name(f"{destination.name}.part")
+    try:
+        checksum = hashlib.sha256()
+        downloaded = 0
+        with opener(request) as response:
+            with open(temporary, "wb") as output:
+                while True:
+                    if cancel_check is not None:
+                        cancel_check()
+                    chunk = response.read(DOWNLOAD_CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    checksum.update(chunk)
+                    downloaded += len(chunk)
+                    if progress is not None:
+                        progress(len(chunk))
+        if downloaded != expected_size:
+            raise RuntimeError(
+                f"Size mismatch for {destination.name}: "
+                f"{downloaded} != {expected_size}"
+            )
+        if checksum.hexdigest().lower() != expected_checksum.lower():
+            raise RuntimeError(f"SHA-256 mismatch for {destination.name}")
+        temporary.replace(destination)
+        return
+    except BaseException:
         try:
-            checksum = hashlib.sha256()
-            downloaded = 0
-            with opener(request) as response:
-                with open(temporary, "wb") as output:
-                    while True:
-                        if cancel_check is not None:
-                            cancel_check()
-                        chunk = response.read(DOWNLOAD_CHUNK_SIZE)
-                        if not chunk:
-                            break
-                        output.write(chunk)
-                        checksum.update(chunk)
-                        downloaded += len(chunk)
-                        if progress is not None:
-                            progress(len(chunk))
-            if downloaded != expected_size:
-                raise RuntimeError(
-                    f"Size mismatch for {destination.name}: "
-                    f"{downloaded} != {expected_size}"
-                )
-            if checksum.hexdigest().lower() != expected_checksum.lower():
-                raise RuntimeError(f"SHA-256 mismatch for {destination.name}")
-            temporary.replace(destination)
-            return
-        except Exception as error:
-            if cancel_check is not None:
-                cancel_check()
-            last_error = error
-            try:
-                temporary.unlink()
-            except OSError:
-                pass
-    raise last_error
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def r2_file_url(directory, filename):
@@ -346,34 +154,9 @@ def hf_file_url(repository, filename):
     return f"{endpoint}/{repository}/resolve/main/{quote(filename)}"
 
 
-def _parse_declared_files(args):
-    selected = []
-    for value in args.r2_file:
-        filename, size, checksum = value.split("|", 2)
-        selected.append((filename, int(size), checksum))
-    return selected
-
-
-def _download_declared_files(
-    args,
-    model_dir,
-    url_builder,
-    start,
-    span,
-    label,
-    retries=1,
-):
-    """Download each declared file through url_builder with aggregated progress."""
-    repository = args.repository
-    selected = _parse_declared_files(args)
-    reporter = DownloadProgressReporter(
-        args.progress,
-        repository,
-        start=start,
-        span=span,
-        label=label or repository,
-    )
-    total_size = sum(size for _path, size, _checksum in selected)
+def _download_declared_files(files, model_dir, url_builder, progress, cancel_check, label):
+    reporter = DownloadProgressReporter(progress, label)
+    total_size = sum(size for _path, size, _checksum in files)
     downloaded = 0
 
     def on_chunk(count):
@@ -381,56 +164,13 @@ def _download_declared_files(
         downloaded += count
         reporter.report(downloaded, total_size)
 
-    for path, size, checksum in selected:
-        destination = Path(model_dir) / path
+    for path, size, checksum in files:
+        destination = model_dir / path
         destination.parent.mkdir(parents=True, exist_ok=True)
         _download_file_from_url(
-            url_builder(path),
-            destination,
-            size,
-            checksum,
-            progress=on_chunk,
-            retries=retries,
-            cancel_check=getattr(args, "cancel_check", None),
+            url_builder(path), destination, size, checksum,
+            progress=on_chunk, cancel_check=cancel_check,
         )
-
-
-def download_from_r2(
-    args,
-    model_dir,
-    start=0.05,
-    span=0.90,
-    label=None,
-):
-    """Download the declared model files from OmooLab R2."""
-    _download_declared_files(
-        args,
-        model_dir,
-        lambda filename: r2_file_url(args.r2_directory, filename),
-        start,
-        span,
-        f"{label} (mirror)" if label else "mirror",
-    )
-
-
-def download_from_hf(
-    args,
-    model_dir,
-    start=0.05,
-    span=0.90,
-    label=None,
-):
-    """Download the declared model files directly from Hugging Face resolve URLs."""
-    _download_declared_files(
-        args,
-        model_dir,
-        lambda filename: hf_file_url(args.repository, filename),
-        start,
-        span,
-        label,
-    )
-
-
 
 
 def format_rate(rate):

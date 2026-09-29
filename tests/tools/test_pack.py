@@ -146,6 +146,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                 self.assertIn("server/geometry/normal_texture.py", names)
                 self.assertIn("server/models/background.py", names)
                 self.assertIn("server/models/moge.py", names)
+                self.assertIn("server/models/moge_geometry.py", names)
                 self.assertIn("server/model_catalog.py", names)
                 self.assertIn("server/model_download.py", names)
                 self.assertIn("server/models/onnx_ben2.py", names)

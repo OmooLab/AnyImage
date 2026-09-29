@@ -99,13 +99,20 @@ def create_session(
         options.execution_mode = onnxruntime.ExecutionMode.ORT_SEQUENTIAL
         session_options["sess_options"] = options
     try:
-        return onnxruntime.InferenceSession(
+        session = onnxruntime.InferenceSession(
             str(path),
             providers=configured_providers,
+            enable_fallback=requested_device == "auto",
             **session_options,
         )
     except Exception as error:
         _raise_runtime_error(error, "load", "loading")
+    if requested_device != "auto" and providers[0] not in session.get_providers():
+        raise RuntimeError(
+            f"{requested_device.upper()} was requested but the ONNX Runtime "
+            f"provider {providers[0]} could not be initialized"
+        )
+    return session
 
 
 def run_session(

@@ -6,7 +6,7 @@ from ..geometry.depth_texture import write_float_exr
 from ..geometry.panorama import camera_bases, merge_distances, sample_panorama, view_rays
 from ..media.input import open_image, validate_input_path
 from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, normalized_max_input_size
-from ..models.moge import infer_image as infer
+from ..models import model_adapter
 
 
 def run(context, parameters):
@@ -29,6 +29,7 @@ def run(context, parameters):
         bases = camera_bases()
         rays = view_rays(size)
         distances, masks = [], []
+        adapter = model_adapter(parameters["model"])
         session = None
         for index, basis in enumerate(bases):
             context.check_cancelled()
@@ -41,9 +42,9 @@ def run(context, parameters):
                 masks.append(visible)
                 continue
             if session is None:
-                session = manager.get_moge(manager.directory(parameters["model"]), parameters["device"])
+                session, _load_ms = manager.get_session(parameters["model"], parameters["device"])
             color = sample_panorama(image[..., :3], directions) * alpha[..., None]
-            prediction = infer(session, color, parameters["resolution_level"],
+            prediction = adapter.infer(session, color, parameters["resolution_level"],
                                fov_x=90.0, source_valid=visible)
             distances.append(np.linalg.norm(prediction["points"], axis=-1))
             masks.append((prediction["mask"] > 0.5) & visible)

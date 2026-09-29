@@ -6,12 +6,13 @@ import bpy
 import numpy as np
 
 from ..common.color_match import (
-    COLOR_LIMITS,
-    LIGHTNESS_LIMITS,
-    extract_color_signature,
-    match_color_reference,
+    MIX_LIMITS,
+    apply_color_match,
+    build_color_match,
     resize_rgba_proxy,
 )
+from ..common.color_reference import get_color_reference
+from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
     create_image_edit_result,
     image_rgba,
@@ -95,7 +96,7 @@ class MatchColorReference(bpy.types.Operator):
 
     def execute(self, context):
         """Apply the default full-resolution match for direct execution."""
-        return MatchColorReference._commit(self, context, 0.5, 0.5)
+        return MatchColorReference._commit(self, context, 0.5)
 
     def invoke(self, context, event):
         """Start an interactive proxy preview."""
@@ -103,36 +104,36 @@ class MatchColorReference(bpy.types.Operator):
         self._preview_image = None
         self._handle = None
         self._space_type = None
+        self._timer = None
+        self._window_manager = context.window_manager
         try:
             if reference is None:
                 raise ValueError("Set a color reference before matching")
             self._target = ImageEditTarget.capture(context)
             if self._target.image == reference:
                 raise ValueError("The color reference and target must be different images")
-            self._reference_rgba = image_rgba(reference)
+            prepared = get_color_reference(reference)
+            self._reference = prepared
             self._reference_image = reference
             self._target_rgba = image_rgba(self._target.image)
-            self._reference_proxy = resize_rgba_proxy(self._reference_rgba)
-            self._target_proxy = resize_rgba_proxy(self._target_rgba)
-            self._reference_signature = extract_color_signature(
-                self._reference_rgba,
-                alpha_weighted=True,
+            self._preview_match = build_color_match(
+                prepared.transfer,
+                resize_rgba_proxy(image_rgba_to_linear(self._target.image, self._target_rgba)),
+                target_float=bool(self._target.image.is_float),
             )
-            self._target_signature = extract_color_signature(
-                self._target_rgba,
-                alpha_weighted=False,
-            )
-            self._color = 0.5
-            self._lightness = 0.5
+            self._mix = 0.5
             self._mouse_x = event.mouse_x
-            self._mouse_y = event.mouse_y
             preview_rgba = self._preview_pixels()
             self._preview_image = create_color_preview_image(
                 self._target.image, preview_rgba
             )
             self._last_preview_time = time.perf_counter()
+            self._preview_dirty = False
             self._area = getattr(context, "area", None)
             self._add_preview_handler(context)
+            self._timer = context.window_manager.event_timer_add(
+                self._PREVIEW_INTERVAL, window=context.window,
+            )
             context.window_manager.modal_handler_add(self)
             self._tag_redraw()
             return {"RUNNING_MODAL"}
@@ -147,33 +148,25 @@ class MatchColorReference(bpy.types.Operator):
             self._finish()
             return {"CANCELLED"}
         if event.value == "PRESS" and event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"}:
-            color = self._color
-            lightness = self._lightness
-            self._finish()
-            return self._commit(context, color, lightness, target=self._target)
-        if event.type != "MOUSEMOVE":
+            try:
+                return self._commit(context, self._mix, target=self._target)
+            finally:
+                self._finish()
+        if event.type not in {"MOUSEMOVE", "TIMER"}:
             return {"RUNNING_MODAL"}
-
-        scale = self._MOUSE_SCALE * (
-            self._PRECISE_SCALE if getattr(event, "shift", False) else 1.0
-        )
-        self._color = float(
-            np.clip(
-                self._color + (event.mouse_x - self._mouse_x) * scale,
-                *COLOR_LIMITS,
+        if event.type == "MOUSEMOVE":
+            scale = self._MOUSE_SCALE * (
+                self._PRECISE_SCALE if getattr(event, "shift", False) else 1.0
             )
-        )
-        self._lightness = float(
-            np.clip(
-                self._lightness + (event.mouse_y - self._mouse_y) * scale,
-                *LIGHTNESS_LIMITS,
-            )
-        )
-        self._mouse_x = event.mouse_x
-        self._mouse_y = event.mouse_y
-        self._tag_redraw()
+            mix = float(np.clip(
+                self._mix + (event.mouse_x - self._mouse_x) * scale, *MIX_LIMITS,
+            ))
+            self._preview_dirty |= mix != self._mix
+            self._mix = mix
+            self._mouse_x = event.mouse_x
+            self._tag_redraw()
         now = time.perf_counter()
-        if now - self._last_preview_time < self._PREVIEW_INTERVAL:
+        if not self._preview_dirty or now - self._last_preview_time < self._PREVIEW_INTERVAL:
             return {"RUNNING_MODAL"}
         try:
             update_color_preview_image(
@@ -181,6 +174,8 @@ class MatchColorReference(bpy.types.Operator):
                 self._preview_pixels(),
             )
             self._last_preview_time = now
+            self._preview_dirty = False
+            self._tag_redraw()
         except (ReferenceError, RuntimeError, TypeError, ValueError) as error:
             self._finish()
             self.report({"ERROR"}, str(error))
@@ -188,61 +183,45 @@ class MatchColorReference(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def _preview_pixels(self):
-        return match_color_reference(
-            self._reference_proxy,
-            self._target_proxy,
-            color=self._color,
-            lightness=self._lightness,
-            target_float=bool(self._target.image.is_float),
-            preview=True,
-            reference_signature=self._reference_signature,
-            target_signature=self._target_signature,
+        return linear_rgba_to_image(
+            self._target.image,
+            apply_color_match(self._preview_match, mix=self._mix),
         )
 
-    def _commit(self, context, color, lightness, *, target=None):
+    def _commit(self, context, mix, *, target=None):
         reference = current_color_reference(context)
         try:
             target = target or ImageEditTarget.capture(context)
+            target.validate()
             if reference is None:
                 raise ValueError("Set a color reference before matching")
             if target is getattr(self, "_target", None) and reference != self._reference_image:
                 raise RuntimeError("The color reference changed during preview")
             if target.image == reference:
                 raise ValueError("The color reference and target must be different images")
-            reference_rgba = (
-                self._reference_rgba
-                if target is getattr(self, "_target", None)
-                else image_rgba(reference)
-            )
-            target_rgba = (
-                self._target_rgba
-                if target is getattr(self, "_target", None)
-                else image_rgba(target.image)
-            )
-            matched = match_color_reference(
-                reference_rgba,
-                target_rgba,
-                target_float=bool(target.image.is_float),
-                color=color,
-                lightness=lightness,
-                reference_signature=(
-                    self._reference_signature
-                    if target is getattr(self, "_target", None)
-                    else None
+            prepared = get_color_reference(reference, refresh=True)
+            target_rgba = image_rgba(target.image)
+            if target is getattr(self, "_target", None):
+                if prepared is not self._reference:
+                    raise RuntimeError("The color reference changed during preview")
+                if not np.array_equal(target_rgba, self._target_rgba):
+                    raise RuntimeError("The target pixels changed during preview")
+            if mix == 0.0:
+                return {"FINISHED"}
+            matched = apply_color_match(
+                build_color_match(
+                    prepared.transfer, image_rgba_to_linear(target.image, target_rgba),
+                    target_float=bool(target.image.is_float),
                 ),
-                target_signature=(
-                    self._target_signature
-                    if target is getattr(self, "_target", None)
-                    else None
-                ),
+                mix=mix,
             )
             result = create_image_edit_result(
                 target.image,
-                np.flipud(matched).ravel(),
+                np.flipud(linear_rgba_to_image(target.image, matched)).ravel(),
                 tuple(target.image.size),
             )
             target.commit(result, isolate_shared=True)
-        except (RuntimeError, TypeError, ValueError) as error:
+        except (ReferenceError, RuntimeError, TypeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
         return {"FINISHED"}
@@ -277,14 +256,14 @@ class MatchColorReference(bpy.types.Operator):
         draw_preview_frame(bounds)
         center_x = left + draw_width * 0.5
         draw_centered_text(
-            f"Color {self._color * 100:.0f}%  ·  Lightness {self._lightness * 100:.0f}%",
+            f"Mix {self._mix * 100:.0f}%",
             center_x,
             bottom + draw_height * 0.5 - 10.0,
             22,
             (0.25, 0.65, 1.0, 1.0),
         )
         draw_centered_text(
-            "Move horizontally: Color  •  vertically: Lightness  •  Shift: Fine",
+            "Move horizontally: Mix  •  Shift: Fine",
             center_x,
             bottom - 26.0,
             13,
@@ -318,6 +297,14 @@ class MatchColorReference(bpy.types.Operator):
             area.tag_redraw()
 
     def _finish(self):
+        self._preview_match = None
+        self._target_rgba = None
+        self._reference = None
+        self._target = None
+        self._reference_image = None
+        if self._timer is not None:
+            self._window_manager.event_timer_remove(self._timer)
+            self._timer = None
         if self._handle is not None:
             self._space_type.draw_handler_remove(self._handle, "WINDOW")
             self._handle = None

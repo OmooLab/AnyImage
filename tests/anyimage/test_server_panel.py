@@ -64,8 +64,8 @@ class ServerPanelTest(BlenderTestCase):
                     "color_reference_choice",
                     {
                         "show_labels": False,
-                        "scale": 10.0,
-                        "scale_popup": 6.0,
+                        "scale": 8.0,
+                        "scale_popup": 5.0,
                     },
                 ),
                 ("label", {"text": "Reference Palette"}),

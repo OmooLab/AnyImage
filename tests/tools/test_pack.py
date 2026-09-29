@@ -177,6 +177,8 @@ class ExtensionPackagingTest(unittest.TestCase):
                 "blendjob==0.1.18",
                 "numpy>=1.26,<2.0",
                 "scipy==1.15.3",
+                "materialyoucolor==3.0.4",
+                "pillow==12.1.1",
             ],
         )
 

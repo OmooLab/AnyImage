@@ -9,7 +9,7 @@ type = "add-on"
 
 blender_version_min = "4.5.0"
 platforms = ["windows-x64"]
-wheels = ["./wheels/blendjob-0.1.18-py3-none-any.whl", "./wheels/scipy-1.15.3-cp311-cp311-win_amd64.whl", "./wheels/scipy-1.15.3-cp313-cp313-win_amd64.whl"]
+wheels = ["./wheels/blendjob-0.1.18-py3-none-any.whl", "./wheels/materialyoucolor-3.0.4-cp311-cp311-win_amd64.whl", "./wheels/materialyoucolor-3.0.4-cp313-cp313-win_amd64.whl", "./wheels/pillow-12.1.1-cp311-cp311-win_amd64.whl", "./wheels/pillow-12.1.1-cp313-cp313-win_amd64.whl", "./wheels/scipy-1.15.3-cp311-cp311-win_amd64.whl", "./wheels/scipy-1.15.3-cp313-cp313-win_amd64.whl"]
 license = ["SPDX:GPL-3.0-or-later"]
 
 [permissions]

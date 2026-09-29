@@ -169,6 +169,7 @@ class BlenderTestCase(unittest.TestCase):
 
     def setUp(self):
         timer_callbacks = set()
+        self.fake_bpy.app.handlers = SimpleNamespace(load_post=[], undo_post=[], redo_post=[])
         self.fake_bpy.app.timers = SimpleNamespace(
             is_registered=timer_callbacks.__contains__,
             register=lambda callback, **options: timer_callbacks.add(callback),

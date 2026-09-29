@@ -84,6 +84,11 @@ def download_wheels(platform, destination):
             "--implementation=cp",
             f"--platform={config.pip_platform}",
         ]
+        if platform == "linux-x64":
+            command.extend([
+                "--platform=manylinux_2_27_x86_64",
+                "--platform=manylinux_2_28_x86_64",
+            ])
         if shared_constraints.exists():
             command.extend(["--constraint", str(shared_constraints)])
         subprocess.run(command, check=True)

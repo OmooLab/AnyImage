@@ -1,6 +1,7 @@
 import bpy
 
 from . import keymaps, tools
+from .common import color_reference
 from .operators.clipboard_image import CLASSES as CLIPBOARD_CLASSES
 from .menu import (
     AnyImageImageMenu,
@@ -43,9 +44,11 @@ def register():
     bpy.types.NODE_MT_context_menu.prepend(draw_texture_node_context_menu)
     keymaps.register()
     runtime.register()
+    color_reference.register()
 
 
 def unregister():
+    color_reference.unregister()
     runtime.unregister()
     keymaps.unregister()
     tools.unregister()

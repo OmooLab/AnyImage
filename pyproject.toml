@@ -5,11 +5,10 @@ description = "Fast image-guided structure building tools for Blender"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 license = "GPL-3.0-or-later"
-dependencies = ["blendjob==0.1.18", "numpy>=1.26,<2.0", "scipy==1.15.3"]
+dependencies = ["blendjob==0.1.18", "numpy>=1.26,<2.0", "scipy==1.15.3", "materialyoucolor==3.0.4", "pillow==12.1.1"]
 
 [dependency-groups]
 dev = [
-    "pillow==12.1.1",
     "pip>=25,<27",
     "pytest",
 ]

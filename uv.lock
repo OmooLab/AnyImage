@@ -8,7 +8,9 @@ version = "1.0.3"
 source = { editable = "." }
 dependencies = [
     { name = "blendjob" },
+    { name = "materialyoucolor" },
     { name = "numpy" },
+    { name = "pillow" },
     { name = "scipy" },
 ]
 
@@ -21,7 +23,6 @@ blender = [
     { name = "bpy" },
 ]
 dev = [
-    { name = "pillow" },
     { name = "pip" },
     { name = "pytest" },
 ]
@@ -42,7 +43,9 @@ models = [
 [package.metadata]
 requires-dist = [
     { name = "blendjob", specifier = "==0.1.18" },
+    { name = "materialyoucolor", specifier = "==3.0.4" },
     { name = "numpy", specifier = ">=1.26,<2.0" },
+    { name = "pillow", specifier = "==12.1.1" },
     { name = "scipy", specifier = "==1.15.3" },
 ]
 
@@ -53,7 +56,6 @@ ai = [
 ]
 blender = [{ name = "bpy", specifier = "==4.5.3" }]
 dev = [
-    { name = "pillow", specifier = "==12.1.1" },
     { name = "pip", specifier = ">=25,<27" },
     { name = "pytest" },
 ]
@@ -382,6 +384,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0f/62/d9c46a7f5c9adbeeeda52f5b8d802e1094e9717705a645efc71b0913a0a8/markupsafe-3.0.3-cp311-cp311-win32.whl", hash = "sha256:0db14f5dafddbb6d9208827849fad01f1a2609380add406671a26386cdf15a19", size = 14572, upload-time = "2025-09-27T18:36:28.045Z" },
     { url = "https://files.pythonhosted.org/packages/83/8a/4414c03d3f891739326e1783338e48fb49781cc915b2e0ee052aa490d586/markupsafe-3.0.3-cp311-cp311-win_amd64.whl", hash = "sha256:de8a88e63464af587c950061a5e6a67d3632e36df62b986892331d4620a35c01", size = 15077, upload-time = "2025-09-27T18:36:29.025Z" },
     { url = "https://files.pythonhosted.org/packages/35/73/893072b42e6862f319b5207adc9ae06070f095b358655f077f69a35601f0/markupsafe-3.0.3-cp311-cp311-win_arm64.whl", hash = "sha256:3b562dd9e9ea93f13d53989d23a7e775fdfd1066c33494ff43f5418bc8c58a5c", size = 13876, upload-time = "2025-09-27T18:36:29.954Z" },
+]
+
+[[package]]
+name = "materialyoucolor"
+version = "3.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/eb/23/2e63e7bdfcc1aa7ba955386ad09e3bd8a535a1092d7af501659b63cb6282/materialyoucolor-3.0.4.tar.gz", hash = "sha256:30b8dde034dce180845b0eaf52f72c5b22cd5b60bd7aff96804febae4e266276", size = 128892, upload-time = "2026-08-04T13:34:41.372Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/40/78a2fdeb1a5a93ab67475175b5b61377ea158e09fe0a30b8f62dea51c082/materialyoucolor-3.0.4-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:072e13f96f1668c0a0a5bb37f00997a84cb4a0d4486a7e79bbea8195ee2a139f", size = 214070, upload-time = "2026-08-05T19:53:44.225Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/ea/16890c5de00461971439029fbdd520a90c615c643fc0c77ee8e6ea5f43aa/materialyoucolor-3.0.4-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:ab7a8d1e2ed740a16087a42b37c86cc8694cd17d2e43d140faec9765bc345d37", size = 206429, upload-time = "2026-08-05T19:53:45.649Z" },
+    { url = "https://files.pythonhosted.org/packages/bc/77/bf9a87042019f94d0de467ee58b9c757ff8ef98840fee511948999e899ce/materialyoucolor-3.0.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d26092fdaaff6a87cb298483e75bdbe633fdc5e8db082125c488192f5e4de87d", size = 234376, upload-time = "2026-08-05T19:53:47.107Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/72/0b8cd43315598e6ef0bbd228c7464cfda9e8fd7f27c7f2c7b40a2b28a775/materialyoucolor-3.0.4-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:f249e588f3ac9688db685c1e565bb5704ec58fe6f51d8b7190a9381b344508ac", size = 1266380, upload-time = "2026-08-05T19:53:48.796Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/5f/2af490d3471500aff092fc4952aecf2c1cd9d6ebbb49be67328cfb436994/materialyoucolor-3.0.4-cp311-cp311-win32.whl", hash = "sha256:09dd26d958c7512fd9ec7568c5abd6915a976f77b32d985a750b4efb5da5256d", size = 354511, upload-time = "2026-08-05T19:53:50.247Z" },
+    { url = "https://files.pythonhosted.org/packages/00/f8/eff81f10a6109b702d21031c69b17ca3fac0860d6236eb80ae04f1b62d04/materialyoucolor-3.0.4-cp311-cp311-win_amd64.whl", hash = "sha256:cdd2e22418c1081acebe5e65884c49002df2e405b3e3c062df7b61a492786b88", size = 374605, upload-time = "2026-08-05T19:53:52.12Z" },
 ]
 
 [[package]]

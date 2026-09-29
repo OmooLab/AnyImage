@@ -3,8 +3,8 @@ import sys
 
 import bpy
 
-from .common.color_match import extract_reference_palette
-from .common.image import image_rgba, is_color_reference_candidate
+from .common.color_reference import clear_color_references, get_color_reference
+from .common.image import is_color_reference_candidate
 from .runtime import runtime
 from .server import model_catalog as shared_model_catalog
 
@@ -18,7 +18,7 @@ DEVICE_LABELS = {
 }
 
 _COLOR_REFERENCE_ITEMS = []
-COLOR_REFERENCE_PALETTE_SIZE = 7
+COLOR_REFERENCE_PALETTE_SIZE = 4
 COLOR_REFERENCE_PALETTE_PROPERTIES = tuple(
     f"color_reference_palette_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
 )
@@ -74,15 +74,16 @@ def set_color_reference_choice(settings, value):
     )
 
 
-def update_color_reference_palette(settings, _context):
+def update_color_reference_palette(settings, _context, *, refresh=True):
     """Refresh the explanatory palette for the selected reference Image."""
     reference = settings.color_reference
     try:
-        colors, weights = (
-            extract_reference_palette(image_rgba(reference))
-            if reference
-            else ((), ())
-        )
+        if reference:
+            prepared = get_color_reference(reference, refresh=refresh)
+            colors, weights = prepared.colors, prepared.weights
+        else:
+            clear_color_references()
+            colors, weights = (), ()
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
         colors, weights = (), ()
     settings.color_reference_palette_count = len(colors)
@@ -396,16 +397,10 @@ class AnyImageSettings(bpy.types.PropertyGroup):
     color_reference_palette_1: color_reference_palette_property()
     color_reference_palette_2: color_reference_palette_property()
     color_reference_palette_3: color_reference_palette_property()
-    color_reference_palette_4: color_reference_palette_property()
-    color_reference_palette_5: color_reference_palette_property()
-    color_reference_palette_6: color_reference_palette_property()
     color_reference_palette_weight_0: color_reference_palette_weight_property()
     color_reference_palette_weight_1: color_reference_palette_weight_property()
     color_reference_palette_weight_2: color_reference_palette_weight_property()
     color_reference_palette_weight_3: color_reference_palette_weight_property()
-    color_reference_palette_weight_4: color_reference_palette_weight_property()
-    color_reference_palette_weight_5: color_reference_palette_weight_property()
-    color_reference_palette_weight_6: color_reference_palette_weight_property()
     cutout_gesture: cutout_gesture_property()
     cutout_alpha_threshold: cutout_alpha_threshold_property()
     cutout_edge_length: cutout_edge_length_property(store_meters=True)

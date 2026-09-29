@@ -23,8 +23,8 @@ class ColorMatchPanel(bpy.types.Panel):
             settings,
             "color_reference_choice",
             show_labels=False,
-            scale=10.0,
-            scale_popup=6.0,
+            scale=8.0,
+            scale_popup=5.0,
         )
         self.layout.label(text="Reference Palette")
         row = self.layout.row(align=True)

@@ -34,14 +34,7 @@ class AddonRegistrationTest(BlenderTestCase):
         colors = ((0.7, 0.1, 0.2), (0.1, 0.4, 0.6), (0.8, 0.7, 0.2))
         weights = (0.5, 0.3, 0.2)
 
-        with (
-            patch.object(properties, "image_rgba", return_value=object()),
-            patch.object(
-                properties,
-                "extract_reference_palette",
-                return_value=(colors, weights),
-            ),
-        ):
+        with patch.object(properties, "get_color_reference", return_value=SimpleNamespace(colors=colors, weights=weights)):
             properties.update_color_reference_palette(settings, None)
 
         self.assertEqual(settings.color_reference_palette_count, 3)
@@ -184,6 +177,9 @@ class AddonRegistrationTest(BlenderTestCase):
         self.node_menu_draws.append(existing_node_draw)
 
         self.anyimage.register()
+        cache = self.anyimage.color_reference
+        self.assertTrue(self.fake_bpy.app.timers.is_registered(cache.refresh_color_references))
+        self.assertIn(cache.clear_color_references, self.fake_bpy.app.handlers.load_post)
         system_classes = self.anyimage.runtime.operator_classes()
 
         self.assertTrue(set(system_classes) <= set(self.registered))
@@ -254,6 +250,10 @@ class AddonRegistrationTest(BlenderTestCase):
             list(reversed(self.anyimage.CLASSES)),
         )
         self.assertEqual(self.registered, [])
+        self.assertFalse(self.fake_bpy.app.timers.is_registered(cache.refresh_color_references))
+        self.assertEqual(self.fake_bpy.app.handlers.load_post, [])
+        self.assertEqual(self.fake_bpy.app.handlers.undo_post, [])
+        self.assertEqual(self.fake_bpy.app.handlers.redo_post, [])
         self.assertEqual(self.registered_tools, [])
         self.assertEqual(self.status_bar_draws, [])
         self.assertEqual(self.context_menu_draws, [existing_context_draw])

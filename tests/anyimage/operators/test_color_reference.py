@@ -7,7 +7,9 @@ import pytest
 
 from anyimage import properties
 from anyimage.common import material as material_data
-from anyimage.common.color_match import match_color_reference
+from anyimage.common import color_reference as reference_cache
+from anyimage.common.color_match import prepare_color_reference, build_color_match, apply_color_match
+from anyimage.common.color_space import image_rgba_to_linear, linear_rgba_to_image, srgb_to_linear_rgb
 from anyimage.common.image import image_rgba, is_color_reference_candidate
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators import color_reference
@@ -90,7 +92,10 @@ def _modal_operator():
 def _modal_context(owner, reference):
     context = _context(owner, reference)
     context.area = SimpleNamespace(tag_redraw=Mock())
-    context.window_manager = SimpleNamespace(modal_handler_add=Mock())
+    context.window = None
+    context.window_manager = SimpleNamespace(
+        modal_handler_add=Mock(), event_timer_add=Mock(return_value=object()), event_timer_remove=Mock(),
+    )
     return context
 
 
@@ -102,6 +107,13 @@ def _event(event_type, *, x=100, y=100, value="PRESS", shift=False):
         mouse_y=y,
         shift=shift,
     )
+
+
+@pytest.fixture(autouse=True)
+def isolate_reference_cache():
+    reference_cache.clear_color_references()
+    yield
+    reference_cache.clear_color_references()
 
 
 @pytest.fixture
@@ -170,7 +182,7 @@ def test_scene_reference_defaults_replaces_and_clears(registered_color_reference
     assert settings.color_reference_palette_count == 1
     np.testing.assert_allclose(
         settings.color_reference_palette_0,
-        (0.2, 0.3, 0.4),
+        srgb_to_linear_rgb((0.2, 0.3, 0.4)),
         atol=1 / 255,
     )
     assert settings.color_reference_palette_weight_0 == 1.0
@@ -181,6 +193,67 @@ def test_scene_reference_defaults_replaces_and_clears(registered_color_reference
     bpy.context.scene.anyimage_settings.color_reference = None
     assert settings.color_reference is None
     assert settings.color_reference_palette_count == 0
+
+
+def test_selection_prepares_reference_and_match_only_analyzes_target(registered_color_reference):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference_cache.clear_color_references()
+    reference = _image("Cached reference", np.full((8, 8, 4), (0.7, 0.2, 0.1, 1.0)))
+    source = _image("Target", np.full((8, 8, 4), (0.1, 0.2, 0.6, 1.0)))
+    owner = _empty("Owner", source)
+    context = _modal_context(owner, reference)
+    with patch.object(reference_cache, "image_rgba", wraps=reference_cache.image_rgba) as read_reference:
+        bpy.context.scene.anyimage_settings.color_reference = reference
+        assert read_reference.call_count == 1
+        for _ in range(2):
+            operator, reports = _modal_operator()
+            assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
+            MatchColorReference.modal(operator, context, _event("ESC"))
+            assert not reports
+        assert read_reference.call_count == 1
+    bpy.context.scene.anyimage_settings.color_reference = None
+
+
+def test_reference_cache_refreshes_consecutive_pixel_edits(registered_color_reference):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    rgba = np.full((4, 4, 4), (0.7, 0.2, 0.1, 1.0), dtype=np.float32)
+    reference = _image("Reference", rgba)
+    bpy.context.scene.anyimage_settings.color_reference = reference
+    first = reference_cache.get_color_reference(reference)
+    for color in [(0.1, 0.7, 0.2), (0.2, 0.1, 0.7)]:
+        rgba[..., :3] = color
+        reference.pixels.foreach_set(np.flipud(rgba).ravel())
+        reference.update()
+        reference_cache.refresh_color_references()
+        second = reference_cache.get_color_reference(reference)
+        assert second is not first
+        np.testing.assert_allclose(second.rgba, rgba, atol=1/255)
+        first = second
+
+
+def test_shared_reference_refreshes_scenes_only_after_pixel_changes(
+    registered_color_reference,
+):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    rgba = np.full((4, 4, 4), (0.7, 0.2, 0.1, 1.0), dtype=np.float32)
+    reference = _image("Reference", rgba)
+    bpy.context.scene.anyimage_settings.color_reference = reference
+    other = bpy.data.scenes.new("Other scene")
+    other.anyimage_settings.color_reference = reference
+
+    with patch("anyimage.properties.update_color_reference_palette") as update:
+        reference_cache.refresh_color_references()
+        update.assert_not_called()
+        rgba[..., :3] = (0.1, 0.7, 0.2)
+        reference.pixels.foreach_set(np.flipud(rgba).ravel())
+        reference.update()
+        reference_cache.refresh_color_references()
+        assert update.call_count == 2
+        assert {call.args[0].id_data.name for call in update.call_args_list} == {
+            bpy.context.scene.name,
+            other.name,
+        }
+
 
 
 def test_color_reference_gallery_selects_only_candidates(registered_color_reference):
@@ -211,6 +284,59 @@ def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_ref
     bpy.ops.wm.open_mainfile(filepath=str(path))
 
     assert bpy.context.scene.anyimage_settings.color_reference == bpy.data.images["Persistent reference"]
+
+
+def test_reference_reload_and_lifecycle_invalidate_cache(tmp_path, registered_color_reference):
+    from PIL import Image
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    path = tmp_path / "reference.png"
+    Image.new("RGB", (4, 4), "red").save(path)
+    reference = bpy.data.images.load(str(path))
+    bpy.context.scene.anyimage_settings.color_reference = reference
+    first = reference_cache.get_color_reference(reference)
+    Image.new("RGB", (4, 4), "blue").save(path)
+    reference.reload()
+    reference_cache.refresh_color_references()
+    second = reference_cache.get_color_reference(reference)
+    assert second is not first
+    assert second.rgba[0, 0, 2] > .9
+    reference_cache.register()
+    try:
+        for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+            assert reference_cache.clear_color_references in handlers
+            reference_cache.clear_color_references(None)
+            current = reference_cache.get_color_reference(reference)
+            assert current is not second
+            second = current
+    finally:
+        reference_cache.unregister()
+    assert not bpy.app.timers.is_registered(reference_cache.refresh_color_references)
+
+
+def test_failed_reference_preparation_does_not_keep_old_pixels(registered_color_reference):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = _image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    settings = bpy.context.scene.anyimage_settings
+    settings.color_reference = reference
+    reference.pixels.foreach_set(np.zeros(64, dtype=np.float32))
+    reference.update()
+    reference_cache.refresh_color_references()
+    assert settings.color_reference_palette_count == 0
+    with pytest.raises(ValueError, match="no visible"):
+        reference_cache.get_color_reference(reference)
+    with patch("anyimage.properties.update_color_reference_palette") as update:
+        reference_cache.refresh_color_references()
+        update.assert_not_called()
+
+
+def test_byte_reference_is_encoded_once_and_palette_is_linear():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = _image("Reference", np.full((4, 4, 4), (.5, .2, .1, 1)))
+    prepared = reference_cache.get_color_reference(reference)
+    pixels = image_rgba(reference)[0, 0, :3]
+    np.testing.assert_allclose(prepared.transfer.mean, pixels, atol=1e-6)
+    np.testing.assert_allclose(prepared.colors[0], srgb_to_linear_rgb(pixels), atol=.005)
 
 
 def test_match_rejects_missing_same_or_animated_images():
@@ -277,9 +403,12 @@ def test_repeated_match_uses_current_pixels():
 
     assert _execute(MatchColorReference, _context(owner, green)) == {"FINISHED"}
     assert owner.data == source
-    expected = match_color_reference(
-        image_rgba(green), first_result, color=0.5, lightness=0.5
-    )
+    expected = linear_rgba_to_image(source, apply_color_match(
+        build_color_match(
+            prepare_color_reference(image_rgba_to_linear(green, image_rgba(green))),
+            image_rgba_to_linear(source, first_result),
+        ), mix=0.5,
+    ))
     np.testing.assert_allclose(image_rgba(owner.data), expected, atol=1 / 255)
 
 
@@ -311,9 +440,9 @@ def test_match_rejects_a_target_changed_during_processing():
 
     def change_target(_reference, target, **_options):
         owner.data = replacement
-        return target.copy()
+        return build_color_match(_reference, target, **_options)
 
-    with patch.object(color_reference, "match_color_reference", side_effect=change_target):
+    with patch.object(color_reference, "build_color_match", side_effect=change_target):
         result = MatchColorReference.execute(
             SimpleNamespace(report=lambda level, message: reports.append((level, message))),
             context,
@@ -336,22 +465,20 @@ def test_modal_match_updates_controls_and_cancels_cleanly(cancel_event):
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
     preview_name = operator._preview_image.name
     assert owner.data == source
-    assert operator._color == pytest.approx(0.5)
-    assert operator._lightness == pytest.approx(0.5)
+    assert operator._mix == pytest.approx(0.5)
     operator._last_preview_time = 0.0
     assert MatchColorReference.modal(
         operator,
         context,
         _event("MOUSEMOVE", x=200, y=140, value="NOTHING"),
     ) == {"RUNNING_MODAL"}
-    assert operator._color == pytest.approx(0.75)
-    assert operator._lightness == pytest.approx(0.6)
+    assert operator._mix == pytest.approx(0.75)
     assert MatchColorReference.modal(
         operator,
         context,
         _event("MOUSEMOVE", x=300, y=140, value="NOTHING", shift=True),
     ) == {"RUNNING_MODAL"}
-    assert operator._color == pytest.approx(0.8)
+    assert operator._mix == pytest.approx(0.8)
     assert context.area.tag_redraw.called
 
     assert MatchColorReference.modal(operator, context, _event(cancel_event)) == {"CANCELLED"}
@@ -383,7 +510,61 @@ def test_modal_match_throttles_preview_updates():
         )
 
     update.assert_not_called()
+    operator._last_preview_time = 0
+    with (
+        patch.object(color_reference, "build_color_match") as build,
+        patch.object(color_reference, "update_color_preview_image") as update,
+    ):
+        MatchColorReference.modal(operator, context, _event("TIMER", value="NOTHING"))
+        update.assert_called_once()
+        build.assert_not_called()
+    with patch.object(color_reference, "update_color_preview_image") as update:
+        MatchColorReference.modal(operator, context, _event("MOUSEMOVE", x=120, y=200))
+        update.assert_not_called()
     MatchColorReference.modal(operator, context, _event("ESC"))
+    context.window_manager.event_timer_remove.assert_called_once()
+
+
+@pytest.mark.parametrize("changed", ["reference", "target", "binding"])
+def test_modal_rejects_external_changes_and_releases_snapshots(changed):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = _image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    target = _image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
+    owner = _empty("Owner", target)
+    context = _modal_context(owner, reference)
+    operator, reports = _modal_operator()
+    assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
+    preview_name = operator._preview_image.name
+    if changed == "binding":
+        owner.data = reference
+    else:
+        image = reference if changed == "reference" else target
+        image.pixels.foreach_set(np.tile(np.asarray((.4, .5, .1, 1), dtype=np.float32), 16))
+        image.update()
+    before = image_rgba(owner.data)
+    assert MatchColorReference.modal(operator, context, _event("RET")) == {"CANCELLED"}
+    np.testing.assert_array_equal(image_rgba(owner.data), before)
+    assert bpy.data.images.get(preview_name) is None
+    assert operator._reference is None and operator._target_rgba is None
+    assert reports
+
+
+def test_zero_mix_confirmation_preserves_image_identity_and_pixels():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = _image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    target = _image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
+    owner = _empty("Owner", target)
+    context = _modal_context(owner, reference)
+    operator, reports = _modal_operator()
+    before = image_rgba(target)
+    MatchColorReference.invoke(operator, context, _event("LEFTMOUSE"))
+    operator._mix = 0
+    with patch.object(color_reference, "build_color_match") as build:
+        assert MatchColorReference.modal(operator, context, _event("RET")) == {"FINISHED"}
+        build.assert_not_called()
+    assert owner.data == target
+    np.testing.assert_array_equal(image_rgba(target), before)
+    assert not reports
 
 
 @pytest.mark.parametrize("confirm_event", ["LEFTMOUSE", "RET"])
@@ -399,7 +580,7 @@ def test_modal_match_confirms_one_full_resolution_result(confirm_event):
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
     preview_name = operator._preview_image.name
     assert owner.data == source
-    operator._lightness = 0.25
+    operator._mix = 0.25
 
     assert MatchColorReference.modal(operator, context, _event(confirm_event)) == {"FINISHED"}
     assert tuple(owner.data.size) == (8, 8)

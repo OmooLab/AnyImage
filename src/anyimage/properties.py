@@ -3,6 +3,8 @@ import sys
 
 import bpy
 
+from .common.color_match import extract_reference_palette
+from .common.image import image_rgba, is_color_reference_candidate
 from .runtime import runtime
 from .server import model_catalog as shared_model_catalog
 
@@ -14,6 +16,99 @@ DEVICE_LABELS = {
     "coreml": ("CoreML", "Apple CoreML"),
     "cpu": ("CPU", "CPU"),
 }
+
+_COLOR_REFERENCE_ITEMS = []
+COLOR_REFERENCE_PALETTE_SIZE = 7
+COLOR_REFERENCE_PALETTE_PROPERTIES = tuple(
+    f"color_reference_palette_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
+)
+COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES = tuple(
+    f"color_reference_palette_weight_{index}"
+    for index in range(COLOR_REFERENCE_PALETTE_SIZE)
+)
+
+
+def color_reference_candidates():
+    return [
+        image
+        for image in bpy.data.images
+        if is_color_reference_candidate(image)
+    ]
+
+
+def color_reference_items(_settings, _context):
+    global _COLOR_REFERENCE_ITEMS
+    items = [("NONE", "None", "No color reference", "X", 0)]
+    for index, image in enumerate(color_reference_candidates(), start=1):
+        try:
+            icon = image.preview_ensure().icon_id
+        except (AttributeError, ReferenceError, RuntimeError):
+            icon = "IMAGE_DATA"
+        items.append(
+            (
+                str(image.as_pointer()),
+                image.name,
+                f"Use {image.name} as the color reference",
+                icon,
+                index,
+            )
+        )
+    _COLOR_REFERENCE_ITEMS = items
+    return _COLOR_REFERENCE_ITEMS
+
+
+def get_color_reference_choice(settings):
+    reference = settings.color_reference
+    for index, image in enumerate(color_reference_candidates(), start=1):
+        if image == reference:
+            return index
+    return 0
+
+
+def set_color_reference_choice(settings, value):
+    candidates = color_reference_candidates()
+    settings.color_reference = (
+        candidates[value - 1]
+        if 0 < value <= len(candidates)
+        else None
+    )
+
+
+def update_color_reference_palette(settings, _context):
+    """Refresh the explanatory palette for the selected reference Image."""
+    reference = settings.color_reference
+    try:
+        colors, weights = (
+            extract_reference_palette(image_rgba(reference))
+            if reference
+            else ((), ())
+        )
+    except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
+        colors, weights = (), ()
+    settings.color_reference_palette_count = len(colors)
+    for index, name in enumerate(COLOR_REFERENCE_PALETTE_PROPERTIES):
+        color = tuple(colors[index]) if index < len(colors) else (0.0, 0.0, 0.0)
+        setattr(settings, name, color)
+    for index, name in enumerate(COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES):
+        setattr(settings, name, float(weights[index]) if index < len(weights) else 0.0)
+
+
+def color_reference_palette_property():
+    return bpy.props.FloatVectorProperty(
+        size=3,
+        subtype="COLOR",
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+    )
+
+
+def color_reference_palette_weight_property():
+    return bpy.props.FloatProperty(
+        min=0.0,
+        max=1.0,
+        default=0.0,
+    )
 
 
 def supports_coreml():
@@ -280,7 +375,37 @@ def cutout_edge_length_property(*, store_meters=False, **options):
 
 
 class AnyImageSettings(bpy.types.PropertyGroup):
-    color_reference: bpy.props.PointerProperty(type=bpy.types.Image)
+    color_reference: bpy.props.PointerProperty(
+        name="Reference",
+        type=bpy.types.Image,
+        poll=lambda _settings, image: is_color_reference_candidate(image),
+        update=update_color_reference_palette,
+    )
+    color_reference_choice: bpy.props.EnumProperty(
+        name="Reference",
+        items=color_reference_items,
+        get=get_color_reference_choice,
+        set=set_color_reference_choice,
+    )
+    color_reference_palette_count: bpy.props.IntProperty(
+        min=0,
+        max=COLOR_REFERENCE_PALETTE_SIZE,
+        default=0,
+    )
+    color_reference_palette_0: color_reference_palette_property()
+    color_reference_palette_1: color_reference_palette_property()
+    color_reference_palette_2: color_reference_palette_property()
+    color_reference_palette_3: color_reference_palette_property()
+    color_reference_palette_4: color_reference_palette_property()
+    color_reference_palette_5: color_reference_palette_property()
+    color_reference_palette_6: color_reference_palette_property()
+    color_reference_palette_weight_0: color_reference_palette_weight_property()
+    color_reference_palette_weight_1: color_reference_palette_weight_property()
+    color_reference_palette_weight_2: color_reference_palette_weight_property()
+    color_reference_palette_weight_3: color_reference_palette_weight_property()
+    color_reference_palette_weight_4: color_reference_palette_weight_property()
+    color_reference_palette_weight_5: color_reference_palette_weight_property()
+    color_reference_palette_weight_6: color_reference_palette_weight_property()
     cutout_gesture: cutout_gesture_property()
     cutout_alpha_threshold: cutout_alpha_threshold_property()
     cutout_edge_length: cutout_edge_length_property(store_meters=True)

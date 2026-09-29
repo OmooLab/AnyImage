@@ -353,6 +353,29 @@ def image_base_name(image):
     return name
 
 
+def is_static_image(image):
+    """Return whether an Image has valid dimensions and a static source."""
+    try:
+        width, height = (int(value) for value in image.size)
+        return width > 0 and height > 0 and not is_animated_image(image)
+    except (AttributeError, ReferenceError, TypeError, ValueError):
+        return False
+
+
+def is_color_reference_candidate(image):
+    """Return whether a static Image is selectable as a color reference."""
+    if not is_static_image(image):
+        return False
+    try:
+        name = image_base_name(image)
+        stem, separator, duplicate = name.rpartition(".")
+        if separator and duplicate.isdigit():
+            name = stem
+        return not name.lower().endswith(("_normal", "_depth", "_color"))
+    except (AttributeError, ReferenceError, TypeError, ValueError):
+        return False
+
+
 def depth_data_name(source_object):
     return f"{image_base_name(source_object.data)}_depth.exr"
 

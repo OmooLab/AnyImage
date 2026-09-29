@@ -1,19 +1,27 @@
 """Deterministic perceptual color matching for RGBA images."""
 
+from typing import NamedTuple
+
 import numpy as np
 from scipy import ndimage
 from scipy.interpolate import PchipInterpolator
+from scipy.optimize import linprog
 
 
 _ANALYSIS_SAMPLES = 65_536
 _QUANTILES = np.asarray((0.0, 0.02, 0.08, 0.2, 0.5, 0.8, 0.92, 0.98, 1.0))
-_LUMINANCE_INFLUENCE = 0.5
-_CHROMA_INFLUENCE = 0.95
 _CHROMA_SCALE_LIMITS = (0.6, 1.65)
 _COVARIANCE_REGULARIZATION = 4e-4
 _ADJUSTMENT_SIGMA = 2.0
-MATCH_LIMITS = (0.0, 1.5)
-CONTRAST_LIMITS = (-0.5, 0.5)
+_SIGNATURE_MAX_SIZE = 256
+_SIGNATURE_CANDIDATES = 24
+_SIGNATURE_MIN_ANCHORS = 8
+_SIGNATURE_MAX_ANCHORS = 16
+_SIGNATURE_ERROR_LIMIT = 0.021
+_SIGNATURE_BLEND_SIGMA = 0.085
+_PALETTE_MAX_COLORS = 7
+COLOR_LIMITS = (0.0, 1.0)
+LIGHTNESS_LIMITS = (0.0, 1.0)
 PREVIEW_MAX_SIZE = 512
 
 _RGB_TO_LMS = np.asarray(
@@ -63,6 +71,13 @@ _BAYER_8 = np.asarray(
 )
 
 
+class ColorSignature(NamedTuple):
+    """Perceptual representative colors and their normalized importance."""
+
+    colors: np.ndarray
+    weights: np.ndarray
+
+
 def linear_rgb_to_oklab(rgb):
     """Convert linear Rec.709 RGB values to OKLab."""
     rgb = np.asarray(rgb, dtype=np.float32)
@@ -109,20 +124,30 @@ def resize_rgba_proxy(rgba, max_size=PREVIEW_MAX_SIZE):
     ).astype(np.float32, copy=False)
 
 
+def extract_reference_palette(reference_rgba):
+    """Return dynamic display colors and weights from the matching signature."""
+    signature = extract_color_signature(reference_rgba, alpha_weighted=True)
+    palette = _collapse_signature_palette(signature)
+    colors = np.clip(oklab_to_linear_rgb(palette.colors), 0.0, 1.0)
+    return colors.astype(np.float32), palette.weights
+
+
 def match_color_reference(
     reference_rgba,
     target_rgba,
     *,
     target_float=False,
-    match=1.0,
-    contrast=0.0,
+    color=1.0,
+    lightness=1.0,
     preview=False,
+    reference_signature=None,
+    target_signature=None,
 ):
     """Match all target RGB pixels to the visible reference color statistics."""
     reference_rgba = _require_rgba(reference_rgba)
     target_rgba = _require_rgba(target_rgba)
-    match = float(np.clip(match, *MATCH_LIMITS))
-    contrast = float(np.clip(contrast, *CONTRAST_LIMITS))
+    color = float(np.clip(color, *COLOR_LIMITS))
+    lightness = float(np.clip(lightness, *LIGHTNESS_LIMITS))
     reference_sample = sample_rgba(reference_rgba)
     target_sample = sample_rgba(target_rgba)
     reference_weights = np.clip(reference_sample[:, 3], 0.0, 1.0)
@@ -144,39 +169,24 @@ def match_color_reference(
         reference_lab[:, 0],
         reference_weights,
     )
-    luminance_delta = _LUMINANCE_INFLUENCE * (
-        mapped_luminance - foundation[..., 0]
-    )
-    matched_foundation = foundation[..., 0] + match * luminance_delta
-    source_pivot = _weighted_quantiles(target_sample_lab[:, 0], (0.5,))[0]
-    reference_pivot = _weighted_quantiles(
-        reference_lab[:, 0],
-        (0.5,),
-        reference_weights,
-    )[0]
-    pivot = source_pivot + match * _LUMINANCE_INFLUENCE * (
-        reference_pivot - source_pivot
-    )
-    target_lab[..., 0] += match * luminance_delta
-    target_lab[..., 0] += contrast * (matched_foundation - pivot)
+    luminance_delta = mapped_luminance - foundation[..., 0]
+    target_lab[..., 0] += lightness * luminance_delta
 
-    source_mean, reference_mean, chroma_matrix = _chroma_transform(
-        target_sample_lab[:, 1:],
-        reference_lab[:, 1:],
-        reference_weights,
+    reference_signature = reference_signature or extract_color_signature(
+        reference_rgba, alpha_weighted=True
     )
+    target_signature = target_signature or extract_color_signature(
+        target_rgba, alpha_weighted=False
+    )
+    mapped_anchors = _transport_signature(target_signature, reference_signature)
+    anchor_delta = mapped_anchors - target_signature.colors[:, 1:]
     foundation_chroma = foundation[..., 1:]
-    mapped_chroma = (foundation_chroma.reshape((-1, 2)) - source_mean)
-    mapped_chroma = mapped_chroma @ chroma_matrix + reference_mean
-    mapped_chroma = mapped_chroma.reshape(foundation_chroma.shape)
-    chroma = np.linalg.norm(foundation_chroma, axis=2)
-    chroma_weight = 0.3 + 0.7 * np.clip((chroma - 0.006) / 0.04, 0.0, 1.0)
-    target_lab[..., 1:] += (
-        match
-        * _CHROMA_INFLUENCE
-        * chroma_weight[..., None]
-        * (mapped_chroma - foundation_chroma)
+    chroma_delta = _blend_anchor_delta(
+        foundation,
+        target_signature.colors,
+        anchor_delta,
     )
+    target_lab[..., 1:] += color * chroma_delta
 
     if target_float:
         result_rgb = oklab_to_linear_rgb(target_lab)
@@ -191,6 +201,358 @@ def match_color_reference(
     result[..., :3] = np.nan_to_num(result_rgb, nan=0.0, posinf=1.0, neginf=0.0)
     result[..., 3] = target_rgba[..., 3]
     return result
+
+
+def extract_color_signature(rgba, *, alpha_weighted):
+    """Extract an adaptive spatial color signature in OKLab."""
+    rgba = _require_rgba(rgba)
+    if alpha_weighted:
+        premultiplied = rgba.copy()
+        premultiplied[..., :3] *= premultiplied[..., 3:4]
+        proxy = resize_rgba_proxy(
+            premultiplied,
+            max_size=_SIGNATURE_MAX_SIZE,
+        )
+        visible = proxy[..., 3] > 1e-6
+        proxy[visible, :3] /= proxy[visible, 3:4]
+    else:
+        proxy = resize_rgba_proxy(rgba, max_size=_SIGNATURE_MAX_SIZE)
+    lab = linear_rgb_to_oklab(proxy[..., :3])
+    pixel_weights = (
+        np.clip(proxy[..., 3], 0.0, 1.0)
+        if alpha_weighted
+        else np.ones(proxy.shape[:2], dtype=np.float32)
+    )
+    valid = pixel_weights > 1e-6
+    if not np.any(valid):
+        raise ValueError("The color reference contains no visible pixels")
+
+    values = lab[valid]
+    weights = pixel_weights[valid].astype(np.float64)
+    candidate_limit = min(_SIGNATURE_CANDIDATES, len(values))
+    weighted_mean = np.average(values, axis=0, weights=weights)
+    first = int(np.argmin(np.sum((values - weighted_mean) ** 2, axis=1)))
+    centers = [values[first]]
+    nearest = np.full(len(values), np.inf, dtype=np.float64)
+    for _index in range(1, candidate_limit):
+        distance = np.sum((values - centers[-1]) ** 2, axis=1)
+        nearest = np.minimum(nearest, distance)
+        if float(nearest.max()) <= 1e-10:
+            break
+        centers.append(values[np.argmax(nearest * np.sqrt(weights))])
+    centers = np.asarray(centers, dtype=np.float64)
+
+    for _iteration in range(16):
+        distance = np.sum((values[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+        labels = np.argmin(distance, axis=1)
+        previous = centers.copy()
+        for index in range(len(centers)):
+            selected = labels == index
+            if np.any(selected):
+                centers[index] = np.average(
+                    values[selected],
+                    axis=0,
+                    weights=weights[selected],
+                )
+        if np.max(np.abs(centers - previous)) <= 1e-6:
+            break
+
+    distance = np.sum((values[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+    labels = np.argmin(distance, axis=1)
+    label_map = np.full(proxy.shape[:2], -1, dtype=np.int16)
+    label_map[valid] = labels
+    candidate_weights = np.bincount(
+        labels,
+        weights=weights,
+        minlength=len(centers),
+    ).astype(np.float64)
+    area = candidate_weights / candidate_weights.sum()
+    center_distance = np.sqrt(
+        np.sum((centers[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+    )
+    distinctiveness = center_distance @ area
+    boundary = _candidate_boundary_contrast(
+        label_map,
+        pixel_weights,
+        center_distance,
+    )
+    coherence = _candidate_coherence(
+        label_map,
+        pixel_weights,
+        candidate_weights,
+    )
+    chroma = np.linalg.norm(centers[:, 1:], axis=1)
+    saliency = (
+        area**0.35
+        * (0.35 + 0.65 * _normalize_feature(distinctiveness))
+        * (0.35 + 0.65 * _normalize_feature(boundary))
+        * (0.45 + 0.55 * np.sqrt(coherence))
+        * (0.55 + 0.45 * np.clip(chroma / 0.12, 0.0, 1.0))
+    )
+    if float(saliency.sum()) <= 1e-12:
+        saliency = area.copy()
+
+    selected = _select_signature_anchors(
+        centers,
+        area,
+        boundary,
+        coherence,
+        saliency,
+    )
+    group_distance = np.sum(
+        (centers[:, None, 1:] - centers[selected][None, :, 1:]) ** 2,
+        axis=2,
+    )
+    groups = np.argmin(group_distance, axis=1)
+    signature_weights = np.asarray(
+        [saliency[groups == index].sum() for index in range(len(selected))],
+        dtype=np.float64,
+    )
+    signature_weights /= signature_weights.sum()
+
+    representatives = []
+    for candidate in selected:
+        region = values[labels == candidate]
+        region_chroma = np.linalg.norm(region[:, 1:], axis=1)
+        vivid = region[region_chroma >= np.quantile(region_chroma, 0.65)]
+        vivid_distance = np.sum((vivid - centers[candidate]) ** 2, axis=1)
+        representatives.append(vivid[np.argmin(vivid_distance)])
+    return ColorSignature(
+        np.asarray(representatives, dtype=np.float32),
+        signature_weights.astype(np.float32),
+    )
+
+
+def _candidate_boundary_contrast(label_map, pixel_weights, center_distance):
+    count = len(center_distance)
+    contrast_sum = np.zeros(count, dtype=np.float64)
+    boundary_weight = np.zeros(count, dtype=np.float64)
+    pairs = (
+        (label_map[:, :-1], label_map[:, 1:], pixel_weights[:, :-1], pixel_weights[:, 1:]),
+        (label_map[:-1, :], label_map[1:, :], pixel_weights[:-1, :], pixel_weights[1:, :]),
+    )
+    for first, second, first_weight, second_weight in pairs:
+        changed = (first >= 0) & (second >= 0) & (first != second)
+        left = first[changed]
+        right = second[changed]
+        weights = np.minimum(first_weight[changed], second_weight[changed])
+        contrast = center_distance[left, right] * weights
+        np.add.at(contrast_sum, left, contrast)
+        np.add.at(contrast_sum, right, contrast)
+        np.add.at(boundary_weight, left, weights)
+        np.add.at(boundary_weight, right, weights)
+    return contrast_sum / np.maximum(boundary_weight, 1e-8)
+
+
+def _candidate_coherence(label_map, pixel_weights, candidate_weights):
+    coherence = np.zeros(len(candidate_weights), dtype=np.float64)
+    structure = np.ones((3, 3), dtype=np.uint8)
+    for index in range(len(candidate_weights)):
+        connected, component_count = ndimage.label(
+            label_map == index,
+            structure=structure,
+        )
+        if component_count:
+            component_weights = np.bincount(
+                connected.reshape(-1),
+                weights=pixel_weights.reshape(-1),
+            )[1:]
+            coherence[index] = component_weights.max() / candidate_weights[index]
+    return np.clip(coherence, 0.0, 1.0)
+
+
+def _normalize_feature(values):
+    values = np.asarray(values, dtype=np.float64)
+    low, high = np.percentile(values, (10.0, 90.0))
+    if high <= low + 1e-8:
+        return np.zeros_like(values)
+    return np.clip((values - low) / (high - low), 0.0, 1.0)
+
+
+def _select_signature_anchors(centers, area, boundary, coherence, saliency):
+    maximum = min(_SIGNATURE_MAX_ANCHORS, len(centers))
+    minimum = min(_SIGNATURE_MIN_ANCHORS, maximum)
+    order = np.argsort(-saliency)
+    selected = []
+    for index in order:
+        if selected:
+            chosen = centers[np.asarray(selected)]
+            color_distance = np.sqrt(np.sum((centers[index] - chosen) ** 2, axis=1))
+            chroma_distance = np.sqrt(
+                np.sum((centers[index, 1:] - chosen[:, 1:]) ** 2, axis=1)
+            )
+            duplicate = (chroma_distance < 0.035) & (color_distance < 0.13)
+            region_exception = (
+                coherence[index] > 0.55
+                and boundary[index] > 0.105
+                and area[index] < 0.08
+            )
+            if np.any(duplicate) and not region_exception:
+                continue
+        selected.append(int(index))
+        if len(selected) == maximum:
+            break
+    if len(selected) < minimum:
+        selected.extend(
+            int(index) for index in order if index not in selected
+        )
+    selected = np.asarray(selected[:maximum], dtype=np.intp)
+
+    for count in range(minimum, len(selected) + 1):
+        distance = np.sqrt(
+            np.min(
+                np.sum(
+                    (
+                        centers[:, None, 1:]
+                        - centers[selected[:count]][None, :, 1:]
+                    )
+                    ** 2,
+                    axis=2,
+                ),
+                axis=1,
+            )
+        )
+        error = np.sqrt(np.sum(saliency * distance**2) / saliency.sum())
+        if error <= _SIGNATURE_ERROR_LIMIT:
+            return selected[:count]
+    return selected
+
+
+def _transport_signature(source, reference):
+    source_count = len(source.colors)
+    reference_count = len(reference.colors)
+    source_weights = np.asarray(source.weights, dtype=np.float64)
+    reference_weights = np.asarray(reference.weights, dtype=np.float64)
+    source_weights /= source_weights.sum()
+    reference_weights /= reference_weights.sum()
+    source_mean, reference_mean, matrix = _chroma_transform(
+        source.colors[:, 1:],
+        reference.colors[:, 1:],
+        reference_weights,
+        source_weights,
+    )
+    aligned = (source.colors[:, 1:] - source_mean) @ matrix + reference_mean
+    cost = np.sum(
+        (aligned[:, None, :] - reference.colors[None, :, 1:]) ** 2,
+        axis=2,
+    )
+    source_rank = np.argsort(np.argsort(source.colors[:, 0])) / max(source_count - 1, 1)
+    reference_rank = np.argsort(np.argsort(reference.colors[:, 0])) / max(
+        reference_count - 1,
+        1,
+    )
+    cost += 0.15 * (source_rank[:, None] - reference_rank[None, :]) ** 2
+
+    equalities = []
+    for source_index in range(source_count):
+        row = np.zeros((source_count, reference_count), dtype=np.float64)
+        row[source_index, :] = 1.0
+        equalities.append(row.reshape(-1))
+    for reference_index in range(reference_count):
+        row = np.zeros((source_count, reference_count), dtype=np.float64)
+        row[:, reference_index] = 1.0
+        equalities.append(row.reshape(-1))
+    result = linprog(
+        cost.reshape(-1),
+        A_eq=np.asarray(equalities),
+        b_eq=np.concatenate((source_weights, reference_weights)),
+        bounds=(0.0, None),
+        method="highs",
+    )
+    if not result.success:
+        return aligned.astype(np.float32)
+    flow = result.x.reshape((source_count, reference_count))
+    mapped = flow @ reference.colors[:, 1:]
+    mapped /= np.maximum(source_weights[:, None], 1e-8)
+    return mapped.astype(np.float32)
+
+
+def _blend_anchor_delta(lab, anchors, delta):
+    flat = np.asarray(lab, dtype=np.float32).reshape((-1, 3))
+    output = np.empty((len(flat), 2), dtype=np.float32)
+    for start in range(0, len(flat), 131_072):
+        chunk = flat[start : start + 131_072]
+        distance = np.sum((chunk[:, None, :] - anchors[None, :, :]) ** 2, axis=2)
+        membership = np.exp(
+            -distance / (2.0 * _SIGNATURE_BLEND_SIGMA**2),
+            dtype=np.float32,
+        )
+        membership /= np.maximum(membership.sum(axis=1, keepdims=True), 1e-8)
+        output[start : start + len(chunk)] = membership @ delta
+    return output.reshape((*lab.shape[:2], 2))
+
+
+def _collapse_signature_palette(signature):
+    groups = [
+        [signature.colors[index].copy(), float(signature.weights[index])]
+        for index in np.argsort(-signature.weights)
+    ]
+    minimum = min(3, len(groups))
+
+    def more_chromatic(first, second):
+        return (
+            first
+            if np.linalg.norm(groups[first][0][1:])
+            >= np.linalg.norm(groups[second][0][1:])
+            else second
+        )
+
+    def perceptual_distance(first, second):
+        chroma = np.linalg.norm(first[0][1:] - second[0][1:])
+        lightness = abs(float(first[0][0] - second[0][0]))
+        return chroma + 0.16 * lightness
+
+    changed = True
+    while changed and len(groups) > minimum:
+        changed = False
+        for first in range(len(groups)):
+            for second in range(first + 1, len(groups)):
+                chroma = np.linalg.norm(groups[first][0][1:] - groups[second][0][1:])
+                lightness = abs(float(groups[first][0][0] - groups[second][0][0]))
+                if chroma < 0.05 and lightness < 0.22:
+                    keeper = more_chromatic(first, second)
+                    removed = second if keeper == first else first
+                    groups[keeper][1] += groups[removed][1]
+                    del groups[removed]
+                    changed = True
+                    break
+            if changed:
+                break
+
+    while len(groups) > minimum:
+        smallest = min(range(len(groups)), key=lambda index: groups[index][1])
+        if groups[smallest][1] >= 0.04:
+            break
+        nearest = min(
+            (index for index in range(len(groups)) if index != smallest),
+            key=lambda index: perceptual_distance(groups[smallest], groups[index]),
+        )
+        keeper = more_chromatic(smallest, nearest)
+        removed = nearest if keeper == smallest else smallest
+        groups[keeper][1] += groups[removed][1]
+        del groups[removed]
+
+    while len(groups) > _PALETTE_MAX_COLORS:
+        _distance, first, second = min(
+            (
+                (perceptual_distance(groups[first], groups[second]), first, second)
+                for first in range(len(groups))
+                for second in range(first + 1, len(groups))
+            ),
+            key=lambda item: item[0],
+        )
+        keeper = more_chromatic(first, second)
+        removed = second if keeper == first else first
+        groups[keeper][1] += groups[removed][1]
+        del groups[removed]
+
+    groups.sort(key=lambda group: -group[1])
+    weights = np.asarray([group[1] for group in groups], dtype=np.float32)
+    weights /= weights.sum()
+    return ColorSignature(
+        np.asarray([group[0] for group in groups], dtype=np.float32),
+        weights,
+    )
 
 
 def _require_rgba(rgba):
@@ -261,8 +623,11 @@ def _weighted_mean_covariance(values, weights=None):
     return mean, covariance
 
 
-def _chroma_transform(source, reference, reference_weights):
-    source_mean, source_covariance = _weighted_mean_covariance(source)
+def _chroma_transform(source, reference, reference_weights, source_weights=None):
+    source_mean, source_covariance = _weighted_mean_covariance(
+        source,
+        source_weights,
+    )
     reference_mean, reference_covariance = _weighted_mean_covariance(
         reference,
         reference_weights,

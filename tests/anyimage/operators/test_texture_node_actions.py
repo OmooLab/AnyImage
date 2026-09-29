@@ -11,7 +11,6 @@ from anyimage import menu
 from anyimage.common import image as images
 from anyimage.common.image_target import ImageEditTarget, active_texture_node
 from anyimage.operators import remove_background, upscale
-from anyimage.operators.color_reference import SetColorReference
 from anyimage.runtime import runtime
 from tests.support.image_texture import texture, texture_context, write_result
 
@@ -81,13 +80,14 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
         menu.AnyImageTextureNodeMenu.draw(SimpleNamespace(layout=layout), context)
     assert layout.operator_context == "INVOKE_DEFAULT"
     assert [call.args[0] for call in layout.operator.call_args_list] == [
-        "anyimage.set_color_reference", "anyimage.match_color_reference",
-        "anyimage.remove_image_background", "anyimage.upscale_image",
-        "anyimage.clear_models", "anyimage.open_ai_environment_settings",
+        "anyimage.remove_image_background",
+        "anyimage.upscale_image",
+        "anyimage.match_color_reference",
+        "anyimage.open_ai_environment_settings",
     ]
-    assert layout.operator.call_args_list[3].kwargs["text"] == "Upscale (8 × 6)"
+    assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
     menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
-    layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname, icon="PLUGIN")
+    layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname)
     texture.image = None
     layout.menu.reset_mock()
     menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
@@ -102,15 +102,6 @@ def test_texture_poll_applies_busy_and_size_limits(texture, busy, limit, expecte
     ):
         assert upscale.UpscaleImage.poll(context) == expected
         assert remove_background.RemoveImageBackground.poll(context) == (not busy)
-
-
-def test_texture_image_can_be_set_as_reference(texture):
-    context = texture_context(texture)
-    context.scene.anyimage_settings.color_reference = None
-
-    assert SetColorReference.poll(context)
-    assert SetColorReference.execute(SimpleNamespace(report=Mock()), context) == {"FINISHED"}
-    assert context.scene.anyimage_settings.color_reference == texture.image
 
 
 @pytest.mark.parametrize("operation,filename", [(upscale.UpscaleImage, "upscale.png"), (remove_background.RunBackgroundRemoval, "foreground.png")])

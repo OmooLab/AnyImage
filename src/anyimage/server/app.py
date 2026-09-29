@@ -8,8 +8,17 @@ from .jobs.panorama import run as _generate_panorama_geometry
 from .jobs.remove_background import run as _remove_background
 from .jobs.upscale import run as _upscale_image
 from .model_manager import ModelManager
+from .models.onnx_runtime import OnnxResourceError
 
 server = JobServer("AnyImage Job Server")
+
+
+def _run_model_job(handler, context, parameters):
+    try:
+        return handler(context, parameters)
+    except OnnxResourceError:
+        context.resource("model_manager").clear()
+        raise
 
 
 @server.resource("model_manager")
@@ -31,24 +40,24 @@ def download_required_models(context, parameters):
 
 @server.job("remove-background")
 def remove_background(context, parameters):
-    return _remove_background(context, parameters)
+    return _run_model_job(_remove_background, context, parameters)
 
 
 @server.job("upscale-image")
 def upscale_image(context, parameters):
-    return _upscale_image(context, parameters)
+    return _run_model_job(_upscale_image, context, parameters)
 
 
 @server.job("generate-depth-plane-geometry")
 def generate_depth_plane_geometry(context, parameters):
-    return _generate_depth_plane_geometry(context, parameters)
+    return _run_model_job(_generate_depth_plane_geometry, context, parameters)
 
 
 @server.job("generate-cutout-artifacts")
 def generate_cutout_artifacts(context, parameters):
-    return _generate_cutout_artifacts(context, parameters)
+    return _run_model_job(_generate_cutout_artifacts, context, parameters)
 
 
 @server.job("generate-panorama-geometry")
 def generate_panorama_geometry(context, parameters):
-    return _generate_panorama_geometry(context, parameters)
+    return _run_model_job(_generate_panorama_geometry, context, parameters)

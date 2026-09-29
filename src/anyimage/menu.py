@@ -9,7 +9,7 @@ from .common.image_target import (
     owner_image,
 )
 from .operators.activate_workspace_tool import ActivateWorkspaceTool
-from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIEnvironment
+from .operators.ai_setup import ClearModels, OpenAIEnvironmentSettings, SetupAIEnvironment
 from .operators.convert_to_panorama import ConvertToPanorama
 from .operators.convert_to_plane import (
     ConvertToDepthPlane,
@@ -103,6 +103,9 @@ def draw_image_actions(layout, context):
     )
     layout.separator()
     status = ai_status()
+    if status["environment_ready"]:
+        layout.operator(ClearModels.bl_idname, icon="TRASH")
+        layout.separator()
     if status["ready"]:
         layout.operator(
             OpenAIEnvironmentSettings.bl_idname,

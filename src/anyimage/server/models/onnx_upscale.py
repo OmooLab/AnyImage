@@ -13,18 +13,6 @@ except ImportError:
 SCALE = 4
 TILE_SIZE = 256
 TILE_BORDER = 16
-RESOURCE_ERROR_TOKENS = (
-    "out of memory",
-    "bad allocation",
-    "bad_alloc",
-    "failed to allocate",
-    "not enough memory",
-    "insufficient memory",
-)
-
-
-class UpscaleResourceError(RuntimeError):
-    """The execution provider could not allocate resources for one tile."""
 
 
 def create_session(model_directory, requested_device="auto"):
@@ -49,25 +37,12 @@ def _run(session, input_tensor, *, release_memory=True):
 
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
-    try:
-        raw_prediction = run_session(
-            session,
-            [output_name],
-            {input_name: input_tensor},
-            release_memory=release_memory,
-        )[0]
-    except (MemoryError, UnicodeDecodeError) as error:
-        raise UpscaleResourceError(
-            "the ONNX execution provider failed, usually because GPU or "
-            "system memory was exhausted"
-        ) from error
-    except RuntimeError as error:
-        if any(token in str(error).lower() for token in RESOURCE_ERROR_TOKENS):
-            raise UpscaleResourceError(
-                "the ONNX execution provider failed because GPU or system "
-                "memory was exhausted"
-            ) from error
-        raise
+    raw_prediction = run_session(
+        session,
+        [output_name],
+        {input_name: input_tensor},
+        release_memory=release_memory,
+    )[0]
     prediction = np.asarray(raw_prediction, dtype=np.float32)
     expected_shape = (
         1,
@@ -151,9 +126,7 @@ def infer(session, image, cancel_check=None, *, release_memory=True, tile_border
                     border : border + core_width * SCALE,
                 ]
         return Image.fromarray(output, mode="RGB")
-    except UpscaleResourceError:
-        raise
     except MemoryError as error:
-        raise UpscaleResourceError(
+        raise RuntimeError(
             "the complete upscale result exceeded available system memory"
         ) from error

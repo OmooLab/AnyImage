@@ -73,11 +73,15 @@ def test_linked_material_target_is_unavailable(texture, tmp_path):
 def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
     context = texture_context(texture)
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
-    with patch("anyimage.properties.ai_status", return_value={"ready": True}):
+    with patch(
+        "anyimage.properties.ai_status",
+        return_value={"environment_ready": True, "ready": True},
+    ):
         menu.AnyImageTextureNodeMenu.draw(SimpleNamespace(layout=layout), context)
     assert layout.operator_context == "INVOKE_DEFAULT"
     assert [call.args[0] for call in layout.operator.call_args_list] == [
-        "anyimage.remove_image_background", "anyimage.upscale_image", "anyimage.open_ai_environment_settings",
+        "anyimage.remove_image_background", "anyimage.upscale_image",
+        "anyimage.clear_models", "anyimage.open_ai_environment_settings",
     ]
     assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
     menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)

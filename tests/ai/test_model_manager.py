@@ -2,10 +2,18 @@ import sys
 import tempfile
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from tests.anyimage.server.runtime_support import ServerTestCase
 
 class ModelManagerTest(ServerTestCase):
+    def seed_cache(self, cache):
+        cache.background_model = object()
+        cache.background_key = ("background", "directml")
+        cache.moge_model = object()
+        cache.moge_key = ("geometry", "directml")
+        cache.upscale_model = object()
+        cache.upscale_key = ("upscale", "directml")
+
     def test_background_cache_switches_model_directory_and_device_and_closes(self):
         from server.models import background
 
@@ -134,6 +142,96 @@ class ModelManagerTest(ServerTestCase):
         self.assertIs(first, second)
         self.assertEqual(loads, [("model", "cpu")])
         self.assertEqual(cache.snapshot()["upscale"], "model")
+
+    def test_resource_failure_clears_every_slot_and_retries_load_once(self):
+        error = self.onnx_runtime.OnnxResourceError("memory exhausted")
+        recovered = object()
+        upscale = ModuleType("server.models.onnx_upscale")
+        upscale.create_session = Mock(side_effect=[error, recovered])
+        cache = self.create_cache()
+        self.seed_cache(cache)
+
+        with patch.dict(sys.modules, {"server.models.onnx_upscale": upscale}):
+            result = cache.get_upscale("new-upscale", "directml")
+
+        self.assertIs(result, recovered)
+        self.assertEqual(upscale.create_session.call_count, 2)
+        self.assertEqual(
+            cache.snapshot(),
+            {"background": "", "geometry": "", "upscale": "new-upscale"},
+        )
+
+    def test_repeated_resource_failure_stops_after_one_retry(self):
+        error = self.onnx_runtime.OnnxResourceError("memory exhausted")
+        moge = ModuleType("server.models.onnx_moge2")
+        moge.create_session = Mock(side_effect=error)
+        cache = self.create_cache()
+        self.seed_cache(cache)
+
+        with (
+            patch.dict(sys.modules, {"server.models.onnx_moge2": moge}),
+            self.assertRaises(self.onnx_runtime.OnnxResourceError),
+        ):
+            cache.get_moge("new-moge", "directml")
+
+        self.assertEqual(moge.create_session.call_count, 2)
+        self.assertEqual(
+            cache.snapshot(),
+            {"background": "", "geometry": "", "upscale": ""},
+        )
+
+    def test_ordinary_load_failure_does_not_clear_other_categories(self):
+        from server.models import background
+
+        create = Mock(side_effect=RuntimeError("invalid model"))
+        cache = self.create_cache()
+        self.seed_cache(cache)
+
+        with (
+            patch.object(
+                background,
+                "model_adapter",
+                return_value=SimpleNamespace(create_session=create),
+            ),
+            self.assertRaisesRegex(RuntimeError, "invalid model"),
+        ):
+            cache.get_background("new-background", "directml")
+
+        self.assertEqual(create.call_count, 1)
+        self.assertEqual(cache.snapshot()["background"], "")
+        self.assertEqual(cache.snapshot()["geometry"], "geometry")
+        self.assertEqual(cache.snapshot()["upscale"], "upscale")
+
+    def test_every_model_category_uses_shared_load_recovery(self):
+        from server.models import background
+
+        background_adapter = SimpleNamespace(create_session=lambda *_args: object())
+        moge = ModuleType("server.models.onnx_moge2")
+        moge.create_session = lambda *_args: object()
+        upscale = ModuleType("server.models.onnx_upscale")
+        upscale.create_session = lambda *_args: object()
+        cache = self.create_cache()
+
+        with (
+            patch.object(background, "model_adapter", return_value=background_adapter),
+            patch.dict(
+                sys.modules,
+                {
+                    "server.models.onnx_moge2": moge,
+                    "server.models.onnx_upscale": upscale,
+                },
+            ),
+            patch.object(
+                cache,
+                "_load_session",
+                wraps=cache._load_session,
+            ) as load,
+        ):
+            cache.get_background("background", "cpu")
+            cache.get_moge("geometry", "cpu")
+            cache.get_upscale("upscale", "cpu")
+
+        self.assertEqual(load.call_count, 3)
 
 
     def test_inference_cleanup_keeps_every_cached_session(self):

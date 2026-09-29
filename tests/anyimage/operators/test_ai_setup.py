@@ -161,6 +161,22 @@ class AiSetupTest(BlenderTestCase):
             self.anyimage.CLASSES,
         )
 
+    def test_clear_models_is_only_available_while_server_is_ready(self):
+        for state, expected in (
+            ("READY", True),
+            ("BUSY", False),
+            ("STOPPED", False),
+        ):
+            with (
+                self.subTest(state=state),
+                patch.object(
+                    self.anyimage.runtime,
+                    "server_status",
+                    return_value={"state": state},
+                ),
+            ):
+                self.assertEqual(self.ai_setup.ClearModels.poll(None), expected)
+
 
     def test_ui_reads_required_model_files_without_starting_server(self):
         properties = importlib.import_module("anyimage.properties")

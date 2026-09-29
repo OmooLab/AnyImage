@@ -18,7 +18,7 @@ def infer_one(
 ):
     from PIL import Image
 
-    from .onnx_upscale import UpscaleResourceError, infer
+    from .onnx_upscale import infer
 
     if parameters["model"] not in UPSCALE_MODELS:
         raise ValueError(f"Unknown upscale model: {parameters['model']}")
@@ -55,7 +55,7 @@ def infer_one(
             prediction = prediction.convert("RGBA")
             prediction.putalpha(alpha)
             return prediction
-    except (MemoryError, UnicodeDecodeError, UpscaleResourceError) as error:
+    except MemoryError as error:
         model_manager.release_upscale()
         device = str(parameters.get("device", "selected device")).upper()
         raise RuntimeError(

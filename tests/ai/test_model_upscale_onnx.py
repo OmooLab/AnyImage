@@ -145,17 +145,33 @@ class UpscaleOnnxTest(unittest.TestCase):
 
         self.assertEqual(releases, [False] * 6)
 
-    def test_provider_unicode_error_is_presented_as_resource_error(self):
+    def test_provider_unicode_error_uses_shared_runtime_error(self):
         class InvalidProviderSession(FakeSession):
             def run(self, _output_names, _feeds):
                 raise UnicodeDecodeError("utf-8", b"\xc4", 0, 1, "invalid")
 
         with self.assertRaisesRegex(
-            onnx_upscale.UpscaleResourceError,
-            "provider failed",
+            RuntimeError,
+            "could not report why model execution failed.*may be exhausted",
         ):
             onnx_upscale.infer(
                 InvalidProviderSession(),
+                Image.new("RGB", (7, 5)),
+            )
+
+    def test_complete_output_allocation_reports_system_memory_failure(self):
+        padded = np.zeros((256, 256, 3), dtype=np.uint8)
+
+        with (
+            patch.object(np, "pad", return_value=padded),
+            patch.object(np, "empty", side_effect=MemoryError),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "complete upscale result exceeded available system memory",
+            ),
+        ):
+            onnx_upscale.infer(
+                FakeSession(),
                 Image.new("RGB", (7, 5)),
             )
 

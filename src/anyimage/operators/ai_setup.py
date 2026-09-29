@@ -146,7 +146,11 @@ class DownloadRequiredModels(JobOperatorBase, bpy.types.Operator):
 class ClearModels(bpy.types.Operator):
     bl_idname = "anyimage.clear_models"
     bl_label = "Unload Models"
-    bl_description = "Unload AI models to free memory. Downloaded model files are kept."
+    bl_description = "Free memory used by AI models to keep viewport and rendering responsive"
+
+    @classmethod
+    def poll(cls, _context):
+        return runtime.server_status().get("state") == "READY"
 
     def execute(self, _context):
         try:

@@ -43,7 +43,7 @@ class ModelInferenceTest(unittest.TestCase):
         infer_one.assert_called_once()
 
 
-    def test_upscale_resource_error_releases_session_and_is_readable(self):
+    def test_upscale_resource_error_reaches_server_job_boundary(self):
         from PIL import Image
 
         class Models:
@@ -61,20 +61,19 @@ class ModelInferenceTest(unittest.TestCase):
                 self.released = True
 
         with tempfile.TemporaryDirectory() as directory:
+            from server.models.onnx_runtime import OnnxResourceError
+
             path = Path(directory) / "input.png"
             Image.new("RGB", (8, 8)).save(path)
             models = Models(Path(directory))
             with patch.object(
                 self.onnx_upscale,
                 "infer",
-                side_effect=self.onnx_upscale.UpscaleResourceError(
+                side_effect=OnnxResourceError(
                     "provider memory exhausted"
                 ),
             ):
-                with self.assertRaisesRegex(
-                    RuntimeError,
-                    "Reduce Maximum AI Input Size or select CPU",
-                ):
+                with self.assertRaisesRegex(OnnxResourceError, "provider memory exhausted"):
                     self.upscale_model.infer_one(
                         models,
                         {
@@ -85,7 +84,7 @@ class ModelInferenceTest(unittest.TestCase):
                         path,
                     )
 
-            self.assertTrue(models.released)
+            self.assertFalse(models.released)
 
 
 upscale = load_server_module("models.upscale")

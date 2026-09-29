@@ -61,6 +61,8 @@ class ImageMenuTest(BlenderTestCase):
                 ("anyimage.remove_image_background", True),
                 ("anyimage.upscale_image", True),
                 ("separator", True),
+                ("anyimage.clear_models", True),
+                ("separator", True),
                 ("anyimage.setup_ai_environment", True),
             ],
         )
@@ -94,7 +96,14 @@ class ImageMenuTest(BlenderTestCase):
         calls, _labels, _operators = self.draw_menu(
             {"environment_ready": True, "missing_models": (), "ready": True}
         )
-        self.assertIn(("anyimage.open_ai_environment_settings", True), calls)
+        self.assertEqual(
+            calls[-3:],
+            [
+                ("anyimage.clear_models", True),
+                ("separator", True),
+                ("anyimage.open_ai_environment_settings", True),
+            ],
+        )
         self.assertNotIn(("anyimage.setup_ai_environment", True), calls)
 
     def test_outliner_image_menu_does_not_offer_workspace_tools(self):
@@ -106,7 +115,7 @@ class ImageMenuTest(BlenderTestCase):
         self.assertNotIn(("anyimage.activate_workspace_tool", True), calls)
         self.assertEqual(
             [operator.context for operator in operators],
-            ["INVOKE_DEFAULT"] * 7,
+            ["INVOKE_DEFAULT"] * 8,
         )
 
     def draw_menu(self, status, area_type="VIEW_3D"):

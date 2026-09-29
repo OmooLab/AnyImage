@@ -20,6 +20,10 @@ class FakeSession:
         return ["prediction"]
 
 
+class ProviderError(Exception):
+    pass
+
+
 class OnnxRuntimeTest(unittest.TestCase):
     def test_directml_disables_parallel_execution_and_memory_pattern(self):
         options = SimpleNamespace(enable_mem_pattern=True, execution_mode="parallel")
@@ -114,13 +118,11 @@ class OnnxRuntimeTest(unittest.TestCase):
             onnx_runtime.select_providers("coreml", available),
             ["CoreMLExecutionProvider", "CPUExecutionProvider"],
         )
-        self.assertEqual(
+        with self.assertRaisesRegex(RuntimeError, "CoreMLExecutionProvider.*not available"):
             onnx_runtime.select_providers(
                 "coreml",
                 ["CPUExecutionProvider"],
-            ),
-            ["CPUExecutionProvider"],
-        )
+            )
 
 
     def test_completing_cuda_run_shrinks_memory_arena(self):
@@ -173,6 +175,80 @@ class OnnxRuntimeTest(unittest.TestCase):
             "gpu:0",
         )
 
+    def test_session_creation_reports_resource_failure(self):
+        runtime, _calls = self.create_runtime(["CPUExecutionProvider"])
+        runtime.InferenceSession = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ProviderError("failed to allocate memory")
+        )
+
+        with (
+            patch.dict(sys.modules, {"onnxruntime": runtime}),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "load ONNX model because GPU or system memory was exhausted",
+            ) as raised,
+        ):
+            onnx_runtime.create_session("model.onnx", "cpu")
+
+        self.assertIsInstance(raised.exception.__cause__, ProviderError)
+
+    def test_session_creation_reports_undecodable_provider_failure(self):
+        runtime, _calls = self.create_runtime(["CPUExecutionProvider"])
+        runtime.InferenceSession = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            UnicodeDecodeError("utf-8", b"\xc9", 0, 1, "invalid")
+        )
+
+        with (
+            patch.dict(sys.modules, {"onnxruntime": runtime}),
+            self.assertRaisesRegex(
+                RuntimeError,
+                "could not report why model loading failed.*may be exhausted",
+            ),
+        ):
+            onnx_runtime.create_session("model.onnx", "cpu")
+
+    def test_session_creation_preserves_other_provider_error(self):
+        runtime, _calls = self.create_runtime(["CPUExecutionProvider"])
+        runtime.InferenceSession = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ProviderError("invalid graph")
+        )
+
+        with (
+            patch.dict(sys.modules, {"onnxruntime": runtime}),
+            self.assertRaisesRegex(RuntimeError, "Unable to load ONNX model: invalid graph"),
+        ):
+            onnx_runtime.create_session("model.onnx", "cpu")
+
+    def test_model_execution_reports_provider_failures(self):
+        class InvalidSession(FakeSession):
+            def __init__(self, error):
+                super().__init__(["CPUExecutionProvider"])
+                self.error = error
+
+            def run(self, *_args, **_kwargs):
+                raise self.error
+
+        failures = (
+            (
+                ProviderError("out of memory"),
+                "run ONNX model because GPU or system memory was exhausted",
+            ),
+            (
+                UnicodeDecodeError("utf-8", b"\xc9", 0, 1, "invalid"),
+                "could not report why model execution failed.*may be exhausted",
+            ),
+            (ProviderError("invalid input"), "Unable to run ONNX model: invalid input"),
+        )
+        for error, message in failures:
+            with self.subTest(error=type(error).__name__):
+                with self.assertRaisesRegex(RuntimeError, message) as raised:
+                    onnx_runtime.run_session(
+                        InvalidSession(error),
+                        ["output"],
+                        {"input": 1},
+                    )
+                self.assertIs(raised.exception.__cause__, error)
+
 
     def test_auto_provider_prefers_accelerated_runtime(self):
         providers = onnx_runtime.select_providers(
@@ -186,13 +262,12 @@ class OnnxRuntimeTest(unittest.TestCase):
         )
 
 
-    def test_explicit_unavailable_provider_falls_back_to_cpu(self):
-        providers = onnx_runtime.select_providers(
-            "cuda",
-            ["CPUExecutionProvider"],
-        )
-
-        self.assertEqual(providers, ["CPUExecutionProvider"])
+    def test_explicit_unavailable_provider_fails(self):
+        with self.assertRaisesRegex(RuntimeError, "CUDAExecutionProvider.*not available"):
+            onnx_runtime.select_providers(
+                "cuda",
+                ["CPUExecutionProvider", "DmlExecutionProvider"],
+            )
 
 
 if __name__ == "__main__":

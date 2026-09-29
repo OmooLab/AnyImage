@@ -1,10 +1,62 @@
 import threading
 import time
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from tests.anyimage.server.runtime_support import ServerTestCase
 
 class JobServerTest(ServerTestCase):
+    def test_model_job_resource_failure_clears_cache_without_retry(self):
+        error = self.onnx_runtime.OnnxResourceError("memory exhausted")
+        manager = SimpleNamespace(clear=Mock())
+        context = SimpleNamespace(resource=lambda _name: manager)
+        handler = Mock(side_effect=error)
+
+        with self.assertRaises(self.onnx_runtime.OnnxResourceError) as raised:
+            self.app_module._run_model_job(handler, context, {"value": 1})
+
+        self.assertIs(raised.exception, error)
+        handler.assert_called_once_with(context, {"value": 1})
+        manager.clear.assert_called_once_with()
+
+    def test_model_job_success_and_ordinary_failure_keep_cache(self):
+        manager = SimpleNamespace(clear=Mock())
+        context = SimpleNamespace(resource=lambda _name: manager)
+        success = Mock(return_value={"value": 1})
+
+        self.assertEqual(
+            self.app_module._run_model_job(success, context, {}),
+            {"value": 1},
+        )
+        with self.assertRaisesRegex(RuntimeError, "invalid input"):
+            self.app_module._run_model_job(
+                Mock(side_effect=RuntimeError("invalid input")),
+                context,
+                {},
+            )
+
+        manager.clear.assert_not_called()
+
+    def test_every_model_inference_job_uses_resource_failure_boundary(self):
+        context = object()
+        parameters = {"value": 1}
+        jobs = (
+            self.app_module.remove_background,
+            self.app_module.upscale_image,
+            self.app_module.generate_depth_plane_geometry,
+            self.app_module.generate_cutout_artifacts,
+            self.app_module.generate_panorama_geometry,
+        )
+
+        with patch.object(
+            self.app_module,
+            "_run_model_job",
+            return_value={"result": True},
+        ) as run:
+            for job in jobs:
+                self.assertEqual(job(context, parameters), {"result": True})
+
+        self.assertEqual(run.call_count, len(jobs))
+
     def test_dedicated_server_runs_only_one_job_at_a_time(self):
         server = self.JobServer("Test", storage_root=self.storage_root)
         self.addCleanup(server.close)

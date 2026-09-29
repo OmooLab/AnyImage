@@ -55,6 +55,19 @@ class ServerPanelTest(BlenderTestCase):
         self.assertEqual(calls[0][1]["text"], "Working")
         self.assertEqual(calls[1], ("operator", "anyimage.cancel_job"))
 
+    def test_panel_clear_control_uses_shared_operator_state(self):
+        panel_module = importlib.import_module("anyimage.panel")
+        for state, expected in (("READY", True), ("BUSY", False), ("STOPPED", False)):
+            with (
+                self.subTest(state=state),
+                patch.object(
+                    panel_module.runtime,
+                    "server_status",
+                    return_value={"state": state},
+                ),
+            ):
+                self.assertEqual(panel_module.ClearModels.poll(None), expected)
+
 
     def _draw_server_panel(self, state, cached_names=()):
         events = SimpleNamespace(labels=[], operators=[])

@@ -33,7 +33,12 @@ class ModelSessionCache:
         from .models.background import model_adapter
 
         started = time.perf_counter()
-        model = model_adapter(model_dir).create_session(model_dir, requested_device)
+        model = self._load_session(
+            lambda: model_adapter(model_dir).create_session(
+                model_dir,
+                requested_device,
+            )
+        )
         self.background_model = model
         self.background_key = key
         elapsed_ms = (time.perf_counter() - started) * 1000.0
@@ -50,7 +55,9 @@ class ModelSessionCache:
         if self.moge_model is not None and self.moge_key == key:
             return self.moge_model
         self.release_geometry()
-        model = create_session(model_dir, requested_device)
+        model = self._load_session(
+            lambda: create_session(model_dir, requested_device)
+        )
         self.moge_model = model
         self.moge_key = key
         return model
@@ -62,7 +69,9 @@ class ModelSessionCache:
         if self.upscale_model is not None and self.upscale_key == key:
             return self.upscale_model
         self.release_upscale()
-        model = create_session(model_dir, requested_device)
+        model = self._load_session(
+            lambda: create_session(model_dir, requested_device)
+        )
         self.upscale_model = model
         self.upscale_key = key
         return model
@@ -101,6 +110,15 @@ class ModelSessionCache:
 
     def _release_runtime_cache(self):
         gc.collect()
+
+    def _load_session(self, factory):
+        from .models.onnx_runtime import OnnxResourceError
+
+        try:
+            return factory()
+        except OnnxResourceError:
+            self.close()
+            return factory()
 
 
 class ModelManager:

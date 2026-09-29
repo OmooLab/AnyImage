@@ -3,33 +3,63 @@
 CUDA_PROVIDER_OPTIONS = {
     "arena_extend_strategy": "kSameAsRequested",
 }
+RESOURCE_ERROR_TOKENS = (
+    "out of memory",
+    "bad allocation",
+    "bad_alloc",
+    "failed to allocate",
+    "not enough memory",
+    "insufficient memory",
+)
+
+
+class OnnxResourceError(RuntimeError):
+    """ONNX Runtime could not allocate or report provider resources."""
+
+
+def _raise_runtime_error(error, action, stage):
+    if isinstance(error, UnicodeDecodeError):
+        message = (
+            f"ONNX Runtime could not report why model {stage} failed; "
+            "GPU or system memory may be exhausted"
+        )
+        exception_type = OnnxResourceError
+    elif isinstance(error, MemoryError) or any(
+        token in str(error).lower() for token in RESOURCE_ERROR_TOKENS
+    ):
+        message = (
+            f"Unable to {action} ONNX model because GPU or system memory "
+            "was exhausted"
+        )
+        exception_type = OnnxResourceError
+    else:
+        message = f"Unable to {action} ONNX model: {error}"
+        exception_type = RuntimeError
+    raise exception_type(message) from error
 
 
 def select_providers(requested, available):
     available = set(available)
     providers_for_device = {
-        "cuda": ("CUDAExecutionProvider", "DmlExecutionProvider"),
-        "directml": ("DmlExecutionProvider",),
-        "coreml": ("CoreMLExecutionProvider",),
-        "cpu": ("CPUExecutionProvider",),
+        "cuda": "CUDAExecutionProvider",
+        "directml": "DmlExecutionProvider",
+        "coreml": "CoreMLExecutionProvider",
+        "cpu": "CPUExecutionProvider",
     }
     if requested != "auto":
-        candidates = providers_for_device[requested]
-        for provider in candidates:
-            if provider in available:
-                providers = [provider]
-                if (
-                    provider == "CoreMLExecutionProvider"
-                    and "CPUExecutionProvider" in available
-                ):
-                    providers.append("CPUExecutionProvider")
-                return providers
-        if "CPUExecutionProvider" in available:
-            return ["CPUExecutionProvider"]
-        raise RuntimeError(
-            f"{requested.upper()} was requested but the ONNX Runtime "
-            f"providers {', '.join(candidates)} are not available"
-        )
+        provider = providers_for_device[requested]
+        if provider not in available:
+            raise RuntimeError(
+                f"{requested.upper()} was requested but the ONNX Runtime "
+                f"provider {provider} is not available"
+            )
+        providers = [provider]
+        if (
+            provider == "CoreMLExecutionProvider"
+            and "CPUExecutionProvider" in available
+        ):
+            providers.append("CPUExecutionProvider")
+        return providers
     priorities = (
         "CUDAExecutionProvider",
         "CoreMLExecutionProvider",
@@ -68,11 +98,14 @@ def create_session(
         options.enable_mem_pattern = False
         options.execution_mode = onnxruntime.ExecutionMode.ORT_SEQUENTIAL
         session_options["sess_options"] = options
-    return onnxruntime.InferenceSession(
-        str(path),
-        providers=configured_providers,
-        **session_options,
-    )
+    try:
+        return onnxruntime.InferenceSession(
+            str(path),
+            providers=configured_providers,
+            **session_options,
+        )
+    except Exception as error:
+        _raise_runtime_error(error, "load", "loading")
 
 
 def run_session(
@@ -82,16 +115,18 @@ def run_session(
     *,
     release_memory=True,
 ):
-    if not release_memory or "CUDAExecutionProvider" not in (
-        session.get_providers()
-    ):
-        return session.run(output_names, input_feed)
+    run_options = None
+    if release_memory and "CUDAExecutionProvider" in session.get_providers():
+        import onnxruntime
 
-    import onnxruntime
-
-    run_options = onnxruntime.RunOptions()
-    run_options.add_run_config_entry(
-        "memory.enable_memory_arena_shrinkage",
-        "gpu:0",
-    )
-    return session.run(output_names, input_feed, run_options=run_options)
+        run_options = onnxruntime.RunOptions()
+        run_options.add_run_config_entry(
+            "memory.enable_memory_arena_shrinkage",
+            "gpu:0",
+        )
+    try:
+        if run_options is None:
+            return session.run(output_names, input_feed)
+        return session.run(output_names, input_feed, run_options=run_options)
+    except Exception as error:
+        _raise_runtime_error(error, "run", "execution")

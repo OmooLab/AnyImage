@@ -7,7 +7,6 @@ from anyimage.operators.cutout_tool.boundary_padding import (
     image_rgba_buffer,
     pad_cutout_images,
 )
-from anyimage.operators.cutout_tool.texture import create_cutout_texture_atlas
 
 
 def square_with_hole():
@@ -146,20 +145,3 @@ def test_client_processing_updates_and_packs_color_and_depth_together():
     assert padded_depth[2, 8, 0] == 0
     assert metadata == original_metadata
     assert (color.updated, color.packed, depth.updated, depth.packed) == (1, 1, 1, 1)
-
-
-def test_color_atlas_mirrors_the_already_padded_single_image():
-    content = square_with_hole()
-    yy, xx = np.mgrid[:17, :17]
-    color = Image(
-        np.stack((xx, yy, xx + yy, content), axis=-1).astype(np.float32),
-    )
-
-    pad_cutout_images(color, None, None, content, 0.9, 2)
-    padded = image_rgba_buffer(color).copy()
-    create_cutout_texture_atlas(color)
-
-    atlas = image_rgba_buffer(color)
-    assert tuple(color.size) == (17, 34)
-    np.testing.assert_array_equal(atlas[:17], padded)
-    np.testing.assert_array_equal(atlas[17:], np.flip(padded, axis=1))

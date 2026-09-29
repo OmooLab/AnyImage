@@ -2,6 +2,7 @@
 
 BALLOON_ATTRIBUTE_NAME = "o_balloon"
 NORMAL_REDUCTION_ATTRIBUTE_NAME = "o_normal_reduction"
+IMAGE_REGION_ATTRIBUTE_NAME = "o_image_region"
 CUTOUT_NODE_GROUP_NAMES = {
     "FLAT": "O Image Cutout",
     "SOLID": "O Image Cutout",

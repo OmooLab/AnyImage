@@ -47,7 +47,6 @@ def _create_cutout_shape(
         source.data,
         selection_mask.bounds,
         source_rgba,
-        double_sided=True,
     )
     base_shape = cutout_geometry.build_base_shape(
         bpy.context,

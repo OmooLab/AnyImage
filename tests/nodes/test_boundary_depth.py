@@ -22,7 +22,7 @@ def test_cutout_fine_outline_smooths_only_within_boundary_band():
     uv = obj.data.uv_layers.get("UVMap") or obj.data.uv_layers.new(name="UVMap")
     for loop in obj.data.loops:
         source_uv = points[loop.vertex_index] / (64, 32)
-        uv.data[loop.index].uv = (source_uv[0], 0.5 + 0.5 * source_uv[1])
+        uv.data[loop.index].uv = source_uv
     image = bpy.data.images["Camera"]
     pixels = np.array(image.pixels[:], np.float32).reshape(32, 64, 4)
     pixels[..., 2] = 2 + 12 * ((xx > 25) & (xx < 39) & (yy > 25))

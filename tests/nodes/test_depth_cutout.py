@@ -94,7 +94,7 @@ def test_depth_limit_tapers_balloon_profile_and_closes_the_cut_edge():
             uv[loop.vertex_index] = mesh.uv_layers["UVMap"].data[loop.index].uv
         cut = (
             np.isclose(uv[:, 0], uv[:, 0].max(), atol=1e-6)
-            & (uv[:, 1] > 0.5 + 1e-3)
+            & (uv[:, 1] > 1e-3)
             & (uv[:, 1] < 1.0 - 1e-3)
         )
         assert cut.any()
@@ -116,7 +116,7 @@ def test_depth_limit_tapers_balloon_profile_and_closes_the_cut_edge():
 
 
 @pytest.mark.parametrize("mode", [0, 1])
-def test_depth_cutout_faces_stay_inside_one_atlas_tile(mode):
+def test_depth_cutout_faces_preserve_leaf_regions(mode):
     from tests.support.depth_surface import surface
 
     obj, set_value = surface(step=1, resolution=6)
@@ -130,20 +130,11 @@ def test_depth_cutout_faces_stay_inside_one_atlas_tile(mode):
     result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = result.to_mesh()
     try:
-        face_v = [
-            np.array([
-                mesh.uv_layers["UVMap"].data[index].uv.y
-                for index in polygon.loop_indices
-            ])
-            for polygon in mesh.polygons
-        ]
-        assert all(
-            values.max() <= 0.5 + 1e-6
-            or values.min() >= 0.5 - 1e-6
-            for values in face_v
-        )
-        assert any(values.max() <= 0.5 + 1e-6 for values in face_v)
-        assert any(values.min() >= 0.5 - 1e-6 for values in face_v)
+        region = mesh.attributes["o_image_region"]
+        assert region.domain == "FACE"
+        assert {item.value for item in region.data} == {0, 1}
+        uv = np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
+        assert uv.min() >= -1e-6 and uv.max() <= 1 + 1e-6
     finally:
         result.to_mesh_clear()
 

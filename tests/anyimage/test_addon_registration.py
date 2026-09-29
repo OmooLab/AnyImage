@@ -17,6 +17,11 @@ class AddonRegistrationTest(BlenderTestCase):
 
     def test_mesh_operators_are_registered_and_ordered(self):
         from anyimage.operators.convert_to_panorama import ConvertToPanorama, GeneratePanorama
+        from anyimage.operators.convert_to_mesh import ConvertToMesh
+
+        self.assertIn(ConvertToMesh, self.anyimage.CLASSES)
+        self.assertEqual(ConvertToMesh.bl_idname, "anyimage.convert_to_mesh")
+        self.assertIn("UNDO", ConvertToMesh.bl_options)
 
         self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
         self.assertIn(GeneratePanorama, self.anyimage.CLASSES)

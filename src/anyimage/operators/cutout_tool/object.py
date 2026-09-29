@@ -57,9 +57,7 @@ def _assign_uv(mesh, uv):
     loop_vertices = np.empty(len(mesh.loops), dtype=np.int32)
     mesh.loops.foreach_get("vertex_index", loop_vertices)
     source_uv = np.asarray(uv, dtype=np.float32)
-    atlas_uv = source_uv.copy()
-    atlas_uv[:, 1] = 0.5 + 0.5 * atlas_uv[:, 1]
-    loop_uv = atlas_uv[loop_vertices]
+    loop_uv = source_uv[loop_vertices]
     uv_layer.data.foreach_set("uv", loop_uv.ravel())
 
 

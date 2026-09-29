@@ -69,7 +69,6 @@ from .object import (
 )
 from .shape import CUTOUT_SHAPES, DEPTH_CUTOUT_SHAPES
 from .boundary_padding import pad_cutout_images
-from .texture import create_cutout_texture_atlas
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
@@ -132,12 +131,6 @@ def create_cutout_shape(
         0.5,
         boundary_padding,
     )
-    create_cutout_texture_atlas(color_image)
-    if normal_image is not None:
-        create_cutout_texture_atlas(
-            normal_image,
-            invert_rear_x=normal_mode == NormalMode.TANGENT,
-        )
     result = create_shape_object(
         context,
         source_object,

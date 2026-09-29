@@ -4,6 +4,18 @@ from tests.support.blender import BlenderTestCase
 
 
 class ImageMenuTest(BlenderTestCase):
+    def test_cutout_menu_exposes_static_mesh_conversion(self):
+        from anyimage import menu
+
+        calls = []
+        owner = SimpleNamespace(layout=SimpleNamespace(
+            operator=lambda identifier, **options: calls.append(identifier),
+            separator=lambda: None,
+        ))
+        with patch.object(menu.ConvertToMesh, "poll", return_value=True), patch.object(menu, "draw_image_actions"):
+            menu.AnyImageObjectMenu.draw(owner, SimpleNamespace())
+        self.assertEqual(calls, [menu.ConvertToMesh.bl_idname])
+
     def test_marked_mesh_draws_object_image_menu(self):
         calls = []
         layout = SimpleNamespace(

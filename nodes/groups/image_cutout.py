@@ -1,9 +1,9 @@
 """Build O Image Cutout."""
 import bpy
-from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME
+from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME, IMAGE_REGION_ATTRIBUTE_NAME
 from ..common.nodes import (
     interface_socket, group_input, compare_node, math_node, float_input,
-    menu_switch, read_float_attribute, store_float_attribute, prepare_node_group,
+    menu_switch, read_float_attribute, store_float_attribute, store_int_attribute, prepare_node_group,
 )
 from ..common.cutout import _set_layer_y, _shade_output
 
@@ -70,8 +70,9 @@ def build_image_cutout_group():
     float_input(group, 'Shell Thickness', 0.0, maximum=1.0, subtype='DISTANCE').description = 'Add thickness behind the original surface while keeping the front surface in place.'
     interface_socket(group, 'Geometry', 'OUTPUT', 'NodeSocketGeometry')
     controls = group_input(group.nodes, set())
-    balloon = _build_balloon(group, controls.outputs['Geometry'], controls.outputs['Thickness'])
-    shell = _build_shell(group, controls.outputs['Geometry'], controls.outputs['Shell Thickness'])
+    source = store_int_attribute(group, controls.outputs['Geometry'], IMAGE_REGION_ATTRIBUTE_NAME, 0, domain='FACE')
+    balloon = _build_balloon(group, source, controls.outputs['Thickness'])
+    shell = _build_shell(group, source, controls.outputs['Shell Thickness'])
     choose = menu_switch(group, 'Mode', ('Balloon', 'Shell'), 'GEOMETRY')
     group.links.new(balloon, choose.inputs['Balloon'])
     group.links.new(shell, choose.inputs['Shell'])

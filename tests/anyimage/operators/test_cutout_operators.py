@@ -8,7 +8,7 @@ from tests.support.blender import BlenderTestCase
 
 
 class CutoutOperatorsTest(BlenderTestCase):
-    def test_cutout_pads_single_color_and_depth_before_building_atlases(self):
+    def test_cutout_keeps_single_images_after_padding(self):
         order = []
         color = SimpleNamespace(size=(8, 4))
         normal = SimpleNamespace(size=(8, 4))
@@ -19,10 +19,6 @@ class CutoutOperatorsTest(BlenderTestCase):
         def pad(*args):
             order.append(("pad", color.size, normal.size, depth.size, args))
 
-        def atlas(image, **options):
-            order.append(("atlas", image, options))
-            image.size = (8, 8)
-
         with (
             patch.object(
                 self.cutout_main, "effective_cutout_edge_length", return_value=0.1,
@@ -31,9 +27,6 @@ class CutoutOperatorsTest(BlenderTestCase):
                 self.cutout_main, "build_base_shape", return_value=base_shape,
             ),
             patch.object(self.cutout_main, "pad_cutout_images", side_effect=pad),
-            patch.object(
-                self.cutout_main, "create_cutout_texture_atlas", side_effect=atlas,
-            ),
             patch.object(
                 self.cutout_main, "create_shape_object", return_value="Result",
             ),
@@ -69,17 +62,9 @@ class CutoutOperatorsTest(BlenderTestCase):
                 (color, depth, "Metadata", "Mask", 0.5, 2.0),
             ),
         )
-        self.assertEqual(
-            order[1:],
-            [
-                ("atlas", color, {}),
-                (
-                    "atlas",
-                    normal,
-                    {"invert_rear_x": True},
-                ),
-            ],
-        )
+        self.assertEqual(order[1:], [])
+        self.assertEqual(color.size, (8, 4))
+        self.assertEqual(normal.size, (8, 4))
 
     def test_cutout_gestures_start_on_empty_pick_and_lasso_finishes_on_release(self):
         viewport = importlib.import_module("anyimage.common.viewport")

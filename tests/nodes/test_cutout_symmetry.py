@@ -51,7 +51,7 @@ def symmetry():
         row, column = divmod(loop.vertex_index, count)
         uv.data[loop.index].uv = (
             (column + 0.5) / count,
-            0.5 + 0.5 * (row + 0.5) / count,
+            (row + 0.5) / count,
         )
     profile = 0.3 * np.maximum(0, 1 - np.maximum(abs(x), abs(z)))
     mesh.attributes.new("o_balloon", "FLOAT", "POINT").data.foreach_set(
@@ -113,18 +113,6 @@ def _evaluated_uv(obj):
     mesh = result.to_mesh()
     try:
         return np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
-    finally:
-        result.to_mesh_clear()
-
-
-def _assert_faces_stay_inside_atlas_tiles(obj):
-    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    mesh = result.to_mesh()
-    try:
-        uv = mesh.uv_layers["UVMap"].data
-        for polygon in mesh.polygons:
-            values = np.array([uv[index].uv.y for index in polygon.loop_indices])
-            assert values.max() <= 0.5 + 1e-6 or values.min() >= 0.5 - 1e-6
     finally:
         result.to_mesh_clear()
 
@@ -207,7 +195,6 @@ def test_fill_smooth_relaxes_the_junction_band(symmetry):
     smooth_band = _positions(smooth_points[np.abs(smooth_points[:, 0]) <= band])
     assert plain_band != smooth_band
     assert np.isfinite(smooth_uv).all()
-    _assert_faces_stay_inside_atlas_tiles(obj)
     assert cKDTree(smooth_points).query(smooth_points * (-1, 1, 1))[0].max() < 1e-5
 
 
@@ -246,7 +233,7 @@ def test_final_orientation_preserves_symmetry_and_normal_attributes(symmetry):
         evaluated_obj.to_mesh_clear()
 
 
-def test_symmetry_preserves_uv_tiles_on_the_mirrored_side(symmetry):
+def test_symmetry_preserves_source_uv_and_separates_regions(symmetry):
     obj, _cutout, _mirror, _cutout_setter, _mirror_setter = symmetry
     evaluated_obj = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = evaluated_obj.to_mesh()
@@ -259,12 +246,13 @@ def test_symmetry_preserves_uv_tiles_on_the_mirrored_side(symmetry):
                 for index in polygon.loop_indices
             ])
             assert values.min() >= -1e-6 and values.max() <= 1.0 + 1e-6
-            assert values.max() <= 0.5 + 1e-6 or values.min() >= 0.5 - 1e-6
             if owner in owner_uv:
                 owner_uv[int(owner)].update(
                     tuple(np.round(mesh.uv_layers["UVMap"].data[index].uv[:], 5))
                     for index in polygon.loop_indices
                 )
         assert owner_uv[1] == owner_uv[2]
+        regions = {item.value for item in mesh.attributes['o_image_region'].data}
+        assert regions == {0, 2}
     finally:
         evaluated_obj.to_mesh_clear()

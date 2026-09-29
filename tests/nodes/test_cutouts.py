@@ -27,7 +27,7 @@ def test_cutout_thickness_modes():
     mesh = bpy.data.meshes.new("Profile")
     mesh.from_pydata([(-1,0,-1), (1,0,-1), (1,0,1), (-1,0,1), (0,0,0)], [], [(0,1,4), (1,2,4), (2,3,4), (3,0,4)])
     uv = mesh.uv_layers.new(name="UVMap")
-    source_uv = ((0, .5), (1, .5), (1, 1), (0, 1), (.35, .75))
+    source_uv = ((0, 0), (1, 0), (1, 1), (0, 1), (.35, .5))
     for loop in mesh.loops:
         uv.data[loop.index].uv = source_uv[loop.vertex_index]
     profile = mesh.attributes.new("o_balloon", "FLOAT", "POINT")
@@ -55,33 +55,10 @@ def test_cutout_thickness_modes():
                 assert np.isclose(y.min(), back) and np.isclose(y.max(), front)
                 uses = Counter(tuple(sorted((a,b))) for face in result.polygons for a,b in zip(face.vertices, (*face.vertices[1:],face.vertices[0])))
                 assert set(uses.values()) == {2}
-            face_v = [
-                np.array([
-                    result.uv_layers["UVMap"].data[index].uv.y
-                    for index in polygon.loop_indices
-                ])
-                for polygon in result.polygons
-            ]
-            assert all(
-                values.max() <= 0.5 + 1e-6
-                or values.min() >= 0.5 - 1e-6
-                for values in face_v
-            )
-            assert any(values.min() >= 0.5 - 1e-6 for values in face_v)
-            if thickness:
-                assert any(values.max() <= 0.5 + 1e-6 for values in face_v)
-                upper_u = {
-                    round(result.uv_layers["UVMap"].data[index].uv.x, 5)
-                    for polygon in result.polygons
-                    for index in polygon.loop_indices
-                    if result.uv_layers["UVMap"].data[index].uv.y > 0.5 + 1e-6
-                }
-                lower_u = {
-                    round(result.uv_layers["UVMap"].data[index].uv.x, 5)
-                    for polygon in result.polygons
-                    for index in polygon.loop_indices
-                    if result.uv_layers["UVMap"].data[index].uv.y < 0.5 - 1e-6
-                }
-                assert {round(1.0 - value, 5) for value in upper_u} <= lower_u
+            regions = result.attributes["o_image_region"]
+            assert regions.domain == "FACE"
+            assert {item.value for item in regions.data} == ({0, 1} if thickness else {0})
+            uv_values = np.array([item.uv[:] for item in result.uv_layers["UVMap"].data])
+            assert uv_values.min() >= 0 and uv_values.max() <= 1
         finally:
             evaluated.to_mesh_clear()

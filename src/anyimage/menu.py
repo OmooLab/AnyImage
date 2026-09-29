@@ -11,6 +11,7 @@ from .common.image_target import (
 from .operators.activate_workspace_tool import ActivateWorkspaceTool
 from .operators.ai_setup import ClearModels, OpenAIEnvironmentSettings, SetupAIEnvironment
 from .operators.convert_to_panorama import ConvertToPanorama
+from .operators.convert_to_mesh import ConvertToMesh
 from .operators.convert_to_plane import (
     ConvertToDepthPlane,
     ConvertToPlane,
@@ -85,6 +86,9 @@ class AnyImageObjectMenu(bpy.types.Menu):
     bl_label = "AnyImage"
 
     def draw(self, context):
+        if ConvertToMesh.poll(context):
+            self.layout.operator(ConvertToMesh.bl_idname, icon="MESH_DATA")
+            self.layout.separator()
         draw_image_actions(self.layout, context)
 
 

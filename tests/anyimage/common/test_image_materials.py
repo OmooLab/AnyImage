@@ -233,62 +233,6 @@ def test_loaded_normal_image_uses_normal_texture_name(tmp_path):
     assert image.packed_file is not None
 
 
-def test_cutout_normal_is_duplicated_after_loading(tmp_path):
-    from PIL import Image
-
-    path = tmp_path / "normal.png"
-    Image.new("RGB", (2, 1), (128, 64, 255)).save(path)
-    source = SimpleNamespace(data=SimpleNamespace(name="Poster.png"))
-
-    image = image_data.load_normal_result_image(path, source)
-    from anyimage.operators.cutout_tool.texture import create_cutout_texture_atlas
-
-    create_cutout_texture_atlas(image, invert_rear_x=True)
-
-    assert tuple(image.size) == (2, 2)
-    pixels = np.asarray(image.pixels[:], dtype=np.float32).reshape(2, 2, 4)
-    np.testing.assert_allclose(
-        pixels[0, :, 0], 1.0 - pixels[1, ::-1, 0], atol=1e-7,
-    )
-    np.testing.assert_allclose(pixels[0, :, 1:], pixels[1, ::-1, 1:])
-
-
-def test_float_cutout_atlas_survives_packed_library_reload(tmp_path):
-    from anyimage.operators.cutout_tool.texture import create_cutout_texture_atlas
-
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    image = bpy.data.images.new(
-        "Float Cutout", width=2, height=2, alpha=True, float_buffer=True,
-    )
-    image.alpha_mode = "PREMUL"
-    front = np.array(
-        [
-            [[2.0, -0.5, 0.25, 0.0], [4.0, 1.5, 0.5, 0.25]],
-            [[8.0, 3.0, 1.0, 0.5], [16.0, 6.0, 2.0, 1.0]],
-        ],
-        dtype=np.float32,
-    )
-    image.pixels.foreach_set(front.ravel())
-    image.pack()
-    create_cutout_texture_atlas(image)
-    expected = np.concatenate((front[:, ::-1], front), axis=0)
-    library = tmp_path / "float_cutout_atlas.blend"
-    bpy.data.libraries.write(str(library), {image})
-    bpy.data.images.remove(image)
-
-    with bpy.data.libraries.load(str(library)) as (available, loaded):
-        loaded.images = available.images
-    restored = loaded.images[0]
-
-    assert restored.is_float
-    assert restored.packed_file is not None
-    assert tuple(restored.size) == (2, 4)
-    np.testing.assert_array_equal(
-        np.asarray(restored.pixels[:], dtype=np.float32).reshape(4, 2, 4),
-        expected,
-    )
-
-
 def test_shared_conversion_images_use_blender_duplicate_suffix():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     image = bpy.data.images.new("Poster", width=16, height=16)

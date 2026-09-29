@@ -2,13 +2,13 @@
 import bpy
 from mathutils import Matrix
 
-from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME
+from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME, IMAGE_REGION_ATTRIBUTE_NAME
 
 from ..common.nodes import (
     interface_socket, group_input, float_input, bool_input, vector_input,
     compare_node, boolean_node, evaluate_field,
     store_boolean_attribute, store_float_attribute, read_float_attribute,
-    remove_attribute_pattern, prepare_node_group,
+    remove_attribute_pattern, prepare_node_group, store_int_attribute, read_int_attribute,
 )
 from ..common.depth_surface import _math
 from ..common.normal_map import ROTATION_ATTRIBUTE, FACE_ATTRIBUTE, AXIS_ATTRIBUTE
@@ -320,8 +320,12 @@ def build_image_cutout_symmetry_group():
     mark_mirrored.inputs['Value'].default_value = 2
     links.new(_mirror(group, body.outputs[0]), mark_mirrored.inputs['Geometry'])
     links.new(compare_node(group, 'EQUAL', read_float_attribute(group, FACE_ATTRIBUTE), 1), mark_mirrored.inputs['Selection'])
+    mirrored_region = store_int_attribute(
+        group, mark_mirrored.outputs['Geometry'], IMAGE_REGION_ATTRIBUTE_NAME,
+        _math(group, 'ADD', read_int_attribute(group, IMAGE_REGION_ATTRIBUTE_NAME), 2), domain='FACE',
+    )
     join = nodes.new('GeometryNodeJoinGeometry')
-    for geometry in (body.outputs[0], mark_mirrored.outputs['Geometry']):
+    for geometry in (body.outputs[0], mirrored_region):
         links.new(geometry, join.inputs[0])
     # 平面附近的点已经折到平面上，接缝两侧位置重合；合并只作用在这条带内。
     merged = _merge_points(group, join.outputs[0], on_plane, merge_distance)

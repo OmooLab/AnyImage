@@ -1,6 +1,6 @@
 """Build O Image Depth Cutout."""
 import bpy
-from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME
+from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME, IMAGE_REGION_ATTRIBUTE_NAME
 from ..common.nodes import (
     interface_socket, group_input, float_input, boolean_node, read_float_attribute, read_vector_attribute,
     read_int_attribute, store_float_attribute, store_vector_attribute, store_int_attribute,
@@ -9,7 +9,7 @@ from ..common.nodes import (
 )
 from ..common.boundary_smoothing import boundary_influence
 from ..common.cutout import (
-    _position_field, _shade_output, move_uv_to_lower_tile, source_depth_uv,
+    _position_field, _shade_output,
 )
 from ..common.depth_surface import (
     _math, build_surface_camera, limit_depth_surface, project_depth_surface,
@@ -386,11 +386,13 @@ def build_solid(
     flipped_rear = nodes.new("GeometryNodeFlipFaces")
     links.new(smoothed.outputs["Geometry"], flipped_rear.inputs["Mesh"])
 
+    front_region = store_int_attribute(group, front.outputs["Geometry"], IMAGE_REGION_ATTRIBUTE_NAME, 0, domain="FACE")
+    rear_region = store_int_attribute(group, flipped_rear.outputs["Mesh"], IMAGE_REGION_ATTRIBUTE_NAME, 1, domain="FACE")
     marked_front = store_int_attribute(
-        group, front.outputs["Geometry"], LEAF_ID_ATTRIBUTE, 0,
+        group, front_region, LEAF_ID_ATTRIBUTE, 0,
     )
     marked_rear = store_int_attribute(
-        group, flipped_rear.outputs["Mesh"], LEAF_ID_ATTRIBUTE, 1,
+        group, rear_region, LEAF_ID_ATTRIBUTE, 1,
     )
     leaves = nodes.new("GeometryNodeJoinGeometry")
     links.new(marked_front, leaves.inputs["Geometry"])
@@ -479,9 +481,8 @@ def build_solid(
     back = nodes.new("GeometryNodeJoinGeometry")
     links.new(rear_geometry, back.inputs["Geometry"])
     links.new(sides, back.inputs["Geometry"])
-    back_uv = move_uv_to_lower_tile(group, back.outputs["Geometry"], is_rear)
     back_geometry = store_float_attribute(
-        group, back_uv, NORMAL_REDUCTION_ATTRIBUTE_NAME, 1.0,
+        group, back.outputs["Geometry"], NORMAL_REDUCTION_ATTRIBUTE_NAME, 1.0,
     )
     join = nodes.new("GeometryNodeJoinGeometry")
     links.new(front_geometry, join.inputs["Geometry"])
@@ -507,7 +508,7 @@ def _build_depth_surface(group, geometry, controls):
     geometry, corner_camera, cut_vertex = split_depth_surface(
         group,
         geometry,
-        sample_face_camera(group, image, uv_mapper=source_depth_uv),
+        sample_face_camera(group, image),
         split,
         controls.outputs["Reference Depth"],
         controls.outputs["Depth Scale"], triangles=True,

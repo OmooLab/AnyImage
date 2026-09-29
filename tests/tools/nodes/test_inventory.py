@@ -124,6 +124,7 @@ def test_geometry_attribute_contract_includes_nested_groups():
     allowed = {
         "UVMap": ("FLOAT2", "CORNER"),
         "o_balloon": ("FLOAT", "POINT"),
+        "o_image_region": ("INT", "FACE"),
         "_o_depth_cut": ("BOOLEAN", "CORNER"),
         "_o_depth_limit_boundary": ("BOOLEAN", "POINT"),
         "_o_boundary_smooth_weight": ("FLOAT", "POINT"),

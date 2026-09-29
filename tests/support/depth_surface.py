@@ -34,7 +34,7 @@ def surface(*, step=6.0, size=1.0, resolution=2):
     uv = mesh.uv_layers.new(name="UVMap")
     for loop in mesh.loops:
         x, _y, z = points[loop.vertex_index]
-        uv.data[loop.index].uv = (x / (2 * size), 0.5 + z / (2 * size))
+        uv.data[loop.index].uv = (x / (2 * size), z / size)
     obj = bpy.data.objects.new("Step", mesh)
     bpy.context.collection.objects.link(obj)
     image = bpy.data.images.new("Camera", width=64, height=32, float_buffer=True)

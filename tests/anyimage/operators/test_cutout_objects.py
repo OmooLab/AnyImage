@@ -541,18 +541,15 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
         if node.bl_idname == "ShaderNodeTexImage"
     )
     assert color_texture.image is not image
-    assert tuple(color_texture.image.size) == (64, 72)
-    copied = np.empty(72 * 64 * 4, dtype=np.float32)
+    assert tuple(color_texture.image.size) == (64, 36)
+    copied = np.empty(36 * 64 * 4, dtype=np.float32)
     color_texture.image.pixels.foreach_get(copied)
-    copied = copied.reshape((72, 64, 4))
+    copied = copied.reshape((36, 64, 4))
     assert np.allclose(copied[:, :, :3], 1.0)
     left, top, right, bottom = selection_mask.bounds
     assert np.allclose(
         copied[:, :, 3],
-        np.concatenate([
-            np.fliplr(np.flipud(rgba[top:bottom, left:right, 3])),
-            np.flipud(rgba[top:bottom, left:right, 3]),
-        ]),
+        np.flipud(rgba[top:bottom, left:right, 3]),
     )
 
 

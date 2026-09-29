@@ -161,7 +161,7 @@ def _remove_triangle_strip_faces(group, geometry):
     return delete.outputs["Geometry"]
 
 
-def sample_face_camera(group, image, *, uv_mapper=None):
+def sample_face_camera(group, image):
     """Sample camera XYZ at each planar face's UV center."""
     nodes, links = group.nodes, group.links
     uv = nodes.new("GeometryNodeInputNamedAttribute")
@@ -175,10 +175,7 @@ def sample_face_camera(group, image, *, uv_mapper=None):
     texture.interpolation = "Linear"
     texture.extension = "EXTEND"
     links.new(image, texture.inputs["Image"])
-    sample_uv = face_uv.outputs["Value"]
-    if uv_mapper is not None:
-        sample_uv = uv_mapper(group, image, sample_uv)
-    links.new(sample_uv, texture.inputs["Vector"])
+    links.new(face_uv.outputs["Value"], texture.inputs["Vector"])
     return texture.outputs["Color"]
 
 

@@ -6,9 +6,10 @@ Cutout 在创建阶段建立双区图片，使基础 UV、Depth 采样、侧壁�
 
 - **BREAKING**：可编辑 Cutout 的 Color、Normal 使用单区图片和完整 0–1 UV；彻底删除创建阶段的旧双区拼接、上半区初始化、下半区变换和 Atlas 专用 Depth 还原代码及旧测试。
 - 增加 AnyImage `Convert to Mesh`，将当前 Cutout 求值结果原位转换为静态 Mesh；转换阶段按实际表面来源生成独立纹理区域，支持厚度和一次 symmetry 组合产生的 1、2、4 个主要区域。
-- 将当前法线旋转、镜像、正背处理、Normal Scale、空间变化的衰减及补面禁用效果固化成最终 UV 下的静态 Tangent Normal；转换结果不再依赖法线属性。
+- 同一入口支持 Plane、Depth Plane、Relief Plane、Panorama 的单区静态转换，按实际需要固化法线；成功后清理本次转换已无引用的 Depth 图片数据块。
+- 将当前法线旋转、镜像、正背处理、空间变化的衰减及补面禁用效果固化成最终 UV 下的静态 Tangent Normal；转换结果不再依赖法线属性。
 - 转换成功后清除 AnyImage 的形状、区域、法线及中间数据属性和程序化对象标记；保留 UV、必要的 Blender 网格数据及用户自有数据。
-- 保留材质结构及共享 `O Image Layer`，仅隔离共享材质、更新图片及必要输入；静态结果使用 Tangent 模式和单位 Normal Scale。
+- 保留材质结构及共享 `O Image Layer`，原位更新图片并复位 Object Space；Normal Scale 及其他设置保持原值，不将强度烘入贴图。
 - 完整替代尚未归档的 `split-cutout-front-back-uv` 的双区协议，不保留旧路径、开关或转发层。
 
 ## Capabilities
@@ -26,6 +27,6 @@ Cutout 在创建阶段建立双区图片，使基础 UV、Depth 采样、侧壁�
 ## Impact
 
 - 涉及 `src/anyimage/operators/cutout_tool`、新增转换 Operator、材质及图片共用函数、菜单和注册入口，以及 `nodes/common/cutout.py`、Cutout、Depth Cutout 和 Symmetry 节点源码。
-- 涉及相关图片、节点求值、法线渲染、Undo / Redo、共享数据隔离和注册测试；节点修改后运行 `uv run --group blender node-group build`。
+- 涉及相关图片、节点求值、法线渲染、Undo / Redo、共享材质原位更新和注册测试；节点修改后运行 `uv run --group blender node-group build`。
 - 优先使用现有 Blender 与 NumPy 能力。共享 `O Image Layer` 的实时法线能力继续服务于可编辑对象；转换结果通过 Tangent 路径读取静态图。
 - 实施更新相关测试和 OpenSpec，不主动同步说明文档、构建文档或打包扩展。

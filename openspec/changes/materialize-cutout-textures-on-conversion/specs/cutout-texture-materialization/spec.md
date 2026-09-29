@@ -1,5 +1,29 @@
 ## ADDED Requirements
 
+### Requirement: Convert To results support static mesh conversion
+
+系统 SHALL 为 Plane、Depth Plane、Relief Plane、Panorama 提供同一个 Convert to Mesh 入口，保留求值几何、单区 UV、Color 内容与材质身份。法线存在时 SHALL 将其当前空间及属性处理固化到原 Normal 图片，再清除已消费属性；Normal Scale SHALL 保持原值且不烘入图片。
+
+#### Scenario: Convert a depth or relief plane
+- **WHEN** 用户转换带 Object Space 法线的 Depth Plane 或带 Depth Scale、边缘衰减的 Relief Plane
+- **THEN** 法线烘焙到现有单区 UV，Object Space 复位，删除协议属性后有效表面的法线编码误差 95% 分位小于 0.04
+
+#### Scenario: Convert an ordinary plane or panorama
+- **WHEN** 用户转换没有 Normal 的 Plane 或自发光 Panorama
+- **THEN** 固化几何，保持 Color、材质及采样设置，跳过法线烘焙
+
+### Requirement: Unreferenced conversion depth images are released
+
+所有 Convert to Mesh 操作 SHALL 在成功提交后，仅删除本次修改器 Depth Image 输入中用户数为零的图片数据块，保留磁盘文件和无关图片。失败 SHALL 保留 Depth，Undo SHALL 恢复被清理的 Depth 与修改器。
+
+#### Scenario: Depth is no longer referenced
+- **WHEN** 转换移除修改器后其 Depth Image 没有其他使用者
+- **THEN** 删除该图片数据块，磁盘 EXR 保持不变
+
+#### Scenario: Depth is still referenced
+- **WHEN** 其他修改器、材质或 Fake User 仍引用 Depth Image
+- **THEN** 保留该图片数据块
+
 ### Requirement: Editable Cutouts use source images and source UVs
 
 系统 SHALL 为可编辑 Cutout 保留单区 Color、Normal、Depth 和完整 0–1 源 UV。创建阶段 MUST 不生成前后 Atlas，Depth 采样 MUST 不依赖材质 Atlas 逆变换。共享源采样的实时材质 SHALL 保持厚度、正背及 symmetry 的当前默认外观。
@@ -29,7 +53,7 @@
 
 ### Requirement: Converted normal maps are static
 
-转换 SHALL 把当前法线图经过旋转、镜像、正背适配、Normal Scale、Depth Scale、位置相关衰减与 wall 禁用后的效果固化为最终 UV 下的 Tangent Normal。结果 MUST 不依赖 AnyImage 法线属性；有效网格法线、平滑和锐边 SHALL 保留。
+转换 SHALL 把当前法线图经过旋转、镜像、正背适配、Depth Scale、位置相关衰减与 wall 禁用后的效果固化为最终 UV 下的 Tangent Normal。结果 MUST 不依赖 AnyImage 法线属性；有效网格法线、平滑和锐边 SHALL 保留。
 
 #### Scenario: Convert a rotated symmetric depth object
 - **WHEN** 对带非平坦法线图、非默认 symmetry 方向与接缝衰减的 Cutout 执行转换
@@ -43,7 +67,7 @@
 
 #### Scenario: Normal strength and bump are both customized
 - **WHEN** 用户修改 Normal Scale 和 Bump Scale 后执行转换
-- **THEN** 当前 Normal Scale 固化到贴图，目标 Normal Scale 为 1 且 Object Space 为 false
+- **THEN** Normal Scale 不烘入贴图并保持原值，仅 Object Space 设为 false
 - **AND** Bump Scale 与既有 Bump 连接保留且效果只应用一次
 
 #### Scenario: Normal maps are disabled on a surface
@@ -52,11 +76,16 @@
 
 ### Requirement: Material structure and image interpretation are preserved
 
-转换 SHALL 保留材质结构及共享 `O Image Layer`，只更新目标图片和静态法线所需输入。Color SHALL 保持 Alpha、颜色解释和源精度，HDR SHALL 保留浮点动态范围。共享数据 SHALL 在修改前隔离。
+转换 SHALL 保留材质结构及共享 `O Image Layer`，只更新目标图片和静态法线所需输入。Color SHALL 保持 Alpha、颜色解释和源精度，HDR SHALL 保留浮点动态范围。材质与图片 SHALL 保持原数据块身份，图片名称、路径和节点引用保持不变，仅原位替换图片内容；除 Object Space 外的设置 SHALL 保持原值，Normal Scale SHALL 不烘入贴图。
 
 #### Scenario: Material and images have other users
 - **WHEN** 活动 Cutout 与其他对象共享材质或图片
-- **THEN** 转换只更新活动对象的独立结果，其他对象及共享节点组不变
+- **THEN** 转换结果复用原材质与原图片，共享图片的使用者同步看到新内容，共享材质的其他对象同步看到 Object Space 设置；共享节点组保持不变
+- **AND** 转换结束后不留下新增材质或图片数据块
+
+#### Scenario: Static normals have no independent image destination
+- **WHEN** 需要固化法线但没有现成 Normal 图片，或 Color 与 Normal 共用同一图片
+- **THEN** 转换前明确拒绝并保留源数据
 
 #### Scenario: Save a converted HDR object
 - **WHEN** 转换 HDR Cutout 并保存重载文件
@@ -68,7 +97,7 @@
 
 #### Scenario: Undo and redo conversion
 - **WHEN** 成功转换后撤销再重做
-- **THEN** 撤销恢复可编辑节点栈与原图引用，重做恢复静态网格、图片和材质
+- **THEN** 撤销恢复可编辑节点栈与原图内容，重做恢复静态网格与拼接后的图片内容，图片名称和引用不变
 
 #### Scenario: Baking fails or input is unsupported
 - **WHEN** 烘焙失败、输入有未知修改器/材质连接或缺少来源协议

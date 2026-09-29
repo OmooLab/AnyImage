@@ -36,7 +36,7 @@ class ModelSessionCache:
 
     def snapshot(self):
         return {
-            name: Path(self.sessions[family][0][1]).name if family in self.sessions else ""
+            name: model_catalog.get_downloadable_model(self.sessions[family][0][0]).label if family in self.sessions else ""
             for family, name in (
                 ("background", "background"),
                 ("moge", "geometry"),

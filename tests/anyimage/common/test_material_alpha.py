@@ -8,7 +8,7 @@ from tests.support.materials import image_layer
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("shadeless", [False, True])
 @pytest.mark.parametrize("view", ["AgX", "Unknown"])
-def test_material_alpha_strength_follows_preference(image_layer, monkeypatch, enabled, shadeless, view):
+def test_material_alpha_fix_defaults_to_zero_independently_of_preference(image_layer, monkeypatch, enabled, shadeless, view):
     monkeypatch.setattr(material, "material_node_group", lambda depth_plane=False: image_layer)
     monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: enabled)
     color = bpy.data.images.new("Alpha edge", width=2, height=2, alpha=True)
@@ -22,7 +22,7 @@ def test_material_alpha_strength_follows_preference(image_layer, monkeypatch, en
         assert len([node for node in result.node_tree.nodes if node.type == "GROUP"]) == 1
         return
     layer = next(node for node in result.node_tree.nodes if node.type == "GROUP" and node.node_tree == image_layer)
-    assert layer.inputs["Alpha Fix"].default_value == float(enabled)
+    assert layer.inputs["Alpha Fix"].default_value == 0
     alpha_link = layer.outputs["Alpha"].links[0]
     assert alpha_link.to_node.type == "BSDF_PRINCIPLED"
     assert alpha_link.to_socket.name == "Alpha"
@@ -30,5 +30,5 @@ def test_material_alpha_strength_follows_preference(image_layer, monkeypatch, en
     monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: not enabled)
     second = material.create_image_material(color, color, shadeless=shadeless, scene=scene)
     second_layer = next(node for node in second.node_tree.nodes if node.type == "GROUP" and node.node_tree == image_layer)
-    assert second_layer.inputs["Alpha Fix"].default_value == float(not enabled)
+    assert second_layer.inputs["Alpha Fix"].default_value == 0
     assert layer.inputs["Alpha Fix"].default_value == 0.5

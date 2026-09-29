@@ -18,7 +18,7 @@
 
 **Non-Goals:**
 
-- 首轮入口范围为项目生成的 Cutout 及一次 Cutout Symmetry；任意用户节点、任意修改器组合、重复 symmetry 和通用材质烘焙不属于首轮支持范围。
+- 支持项目生成的 Plane、Depth Plane、Relief Plane、Panorama、Cutout 及一次 Cutout Symmetry；任意用户节点、任意修改器组合、重复 symmetry 和通用材质烘焙不属于支持范围。
 - 本变更不增加 AI 背面生成，也不迁移已有旧双区 `.blend` 对象。
 
 ## Decisions
@@ -43,7 +43,7 @@ Color 每个 tile 保持源图尺寸并逐像素复制，保留透明 RGB、Alph
 
 ### 3. 将实际法线效果烘焙成 Tangent Normal
 
-采用同一份当前求值 Mesh，同时保存源 UV 和最终目标 UV。临时材质中的图片及 Tangent Normal 节点显式读取源 UV，Cycles CPU NORMAL Bake 写入目标 UV，并采用临时 Diffuse BSDF 的 Normal 接收 O Image Layer 法线输出。原型验证 Principled 的反射有效性修正会改变背面法线，Diffuse 路径则与原始法线输出匹配。烘焙包含当前 Normal Scale、Depth Scale、Balloon 衰减、Rear/Side 禁用、symmetry 旋转和接缝衰减。
+采用同一份当前求值 Mesh，同时保存源 UV 和最终目标 UV。临时材质中的图片及 Tangent Normal 节点显式读取源 UV，Cycles CPU NORMAL Bake 写入目标 UV，并采用临时 Diffuse BSDF 的 Normal 接收 O Image Layer 法线输出。原型验证 Principled 的反射有效性修正会改变背面法线，Diffuse 路径则与原始法线输出匹配。临时烘焙材质将 Normal Scale 设为 1；烘焙包含 Depth Scale、Balloon 衰减、Rear/Side 禁用、symmetry 旋转和接缝衰减。
 
 同 Mesh 的直接烘焙关闭 selected-to-active；每个目标像素直接对应所在面，不使用跨对象射线投射。临时场景和材质隔离渲染状态，临时对象使用原对象矩阵。转换同步阻塞执行，完成或失败后恢复用户场景并清理临时数据。
 
@@ -53,11 +53,11 @@ Color 按区域直接复制和水平翻转，保留 RGB、Alpha、HDR/编码解�
 
 ### 4. 保留材质结构，只切换静态输入
 
-转换目标保留原有材质节点、`O Image Layer`、Alpha Fix、粗糙度与其他连接。Normal 输入替换为烘焙图，`Object Space=false`，`Normal Scale=1`；当前强度已经固化。Color 输入替换为静态 Atlas。转换之后用户再调 Normal Scale，含义是调节已烘焙细节的整体强度。
+转换目标保留原有材质节点、`O Image Layer`、Alpha Fix、粗糙度与其他连接。原材质的 Normal 输入替换为单位强度烘焙图，Color 输入替换为静态 Atlas，`Object Space=false`。Normal Scale、Bump Scale 及其他材质设置保持原值。Object/Tangent 模式的非单位强度计算并不完全等价，强度作为转换后材质的实时参数保留。
 
 共享 `O Image Layer` 不因单个对象转换而修改。结果没有 `o_normal_reduction` 时使用现有单位权重默认值，Tangent 路径不会使用对象空间旋转属性。删除法线属性后继续验证外观，不能仅凭节点未报错判断正确。
 
-当材质或图片存在其他用户时，为目标创建独立副本再更新输入。原图片、其他对象与共享节点组保持有效。
+结果直接引用原材质与原图片数据块，图片名称、路径和节点引用保持不变，原位更新图片尺寸与内容。共享图片的其他使用者同步看到更新，共享材质的其他对象也会看到 Object Space 更新；共享节点组本身不修改。临时烘焙材质与图片在结束时清理。不需要法线图的对象跳过烘焙；需要固化法线但没有现成 Normal 图片、或 Color/Normal 共用同一图片时，转换前明确拒绝。
 
 ### 5. 完成后清除程序化数据
 
@@ -69,9 +69,15 @@ Color 按区域直接复制和水平翻转，保留 RGB、Alpha、HDR/编码解�
 
 ### 6. 原位、事务式转换
 
-新增 `ConvertToMesh` / `anyimage.convert_to_mesh`，从 AnyImage 对象菜单操作活动 Cutout，首轮只支持完整可识别的 Cutout 节点栈。额外修改器、未知材质连接、缺失区域协议或旧双区对象在修改数据之前明确拒绝。
+`ConvertToMesh` / `anyimage.convert_to_mesh` 从 AnyImage 对象菜单操作活动图片对象，支持完整可识别的项目节点栈。额外修改器、未知材质连接、Cutout 缺失区域协议或旧双区对象在修改数据之前明确拒绝。
 
-先在隔离临时数据上完成求值、布局、图片生成和校验，最后原位替换对象的 Mesh / 材质并移除已求值 Modifier，保留对象身份、变换、集合和用户自有属性。失败释放临时资源，原对象保持可编辑；成功支持 Undo / Redo。临时烘焙场景及渲染设置不泄露到用户场景。
+先在隔离临时数据上完成求值、布局、图片生成和校验，完成所有构建后原位更新图片内容、替换对象 Mesh 并移除已求值 Modifier，保留对象身份、变换、集合和用户自有属性。提交前保存图片内容，失败恢复原图并释放临时资源，原对象保持可编辑；成功支持 Undo / Redo。临时烘焙场景及渲染设置不泄露到用户场景。
+
+### 7. Convert To 单区对象及 Depth 生命周期
+
+Plane、Depth Plane、Relief Plane 和 Panorama 保留求值 Mesh 的单区 UV 与 Color 内容。普通 Plane 默认无 Normal；Panorama 保留自发光材质及 REPEAT 采样。Depth Plane 的 Object Space 法线转换为 Tangent，Relief Plane 的 Depth Scale 和边界衰减烘入单位强度法线图；两者均保留原 Normal 图片身份与材质强度，随后清理法线协议属性。
+
+所有转换在提交前收集修改器 `Depth Image` 输入，成功移除修改器后，仅删除其中用户数为零的图片数据块。材质、其他修改器及 Fake User 的引用受到保护，磁盘文件保持原样；撤销可恢复图片和修改器。
 
 ## Risks / Trade-offs
 
@@ -94,8 +100,9 @@ Color 按区域直接复制和水平翻转，保留 RGB、Alpha、HDR/编码解�
 
 ## Validation
 
-- Tangent/Object Normal、Normal Scale=0.6、Bump Scale=0/0.08、对象旋转与非均匀缩放均参与渲染对比。有效 UV 表面的内部像素法线编码 RGB 向量误差 95% 分位小于 0.04，固定光照线性 RGB 的阈值为 0.06。
+- Tangent Normal 使用 Normal Scale=0.6，Object Normal 使用单位强度作为空间转换基准；Bump Scale=0/0.08、对象旋转与非均匀缩放均参与渲染对比。有效 UV 表面的内部像素法线编码 RGB 向量误差 95% 分位小于 0.04，固定光照线性 RGB 的阈值为 0.06。
 - 普通 Shell 通过相机射线获取可见面，以 UV 三角形面积分类，独立于渲染颜色筛选有效覆盖；转换前后可见面分类须一致。退化侧壁必须仍可见且渲染值有限，其原有 UV 关系保留。表面边界剔除 2–4 像素以隔离抗锯齿。
 - Depth Symmetry 覆盖非默认 Direction、Depth Scale=0.5、Smooth=2、零厚度与 Shell Thickness=0.15，验证左右双区/完整四区及全部协议属性清理后的渲染。
 - 单区、上下双区、左右双区、四区及缺失组合分别验证 UV 缩放、区域位置与双重水平翻转。Color 拼接包含 HDR、透明 RGB 和 Alpha，要求逐像素相等；byte/sRGB 与 float/Non-Color 图片打包重载保持原值。
-- 同步菜单调用与直接执行均验证 Undo/Redo、共享数据隔离。缺失/保留 UV 名称冲突、额外修改器、链接 Normal Scale 在烘焙前失败；场景初始化、图片分配、烘焙失败均验证资源释放与用户场景恢复。
+- 同步菜单调用与直接执行均验证 Undo/Redo、共享材质原位更新。缺失/保留 UV 名称冲突、额外修改器、链接 Normal Scale 在烘焙前失败；场景初始化、图片分配、烘焙失败均验证资源释放与用户场景恢复。
+- 分别以 Normal Scale=0、0.3、1、2 转换，烘焙法线像素必须完全相同；原材质身份、共享节点组、所有非 Object Space 输入保持不变。

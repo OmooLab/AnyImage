@@ -4,6 +4,67 @@ from tests.support.blender import BlenderTestCase
 
 
 class AddonRegistrationTest(BlenderTestCase):
+    def test_color_reference_property_filters_selector_candidates(self):
+        annotations = self.anyimage.AnyImageSettings.__annotations__
+        options = annotations["color_reference"]
+        gallery = annotations["color_reference_choice"]
+        candidate = SimpleNamespace(
+            name="Reference.png",
+            size=(4, 3),
+            source="FILE",
+        )
+        generated = SimpleNamespace(
+            name="Reference_depth.exr.001",
+            size=(4, 3),
+            source="FILE",
+        )
+
+        self.assertEqual(options["name"], "Reference")
+        self.assertTrue(options["poll"](None, candidate))
+        self.assertFalse(options["poll"](None, generated))
+        self.assertEqual(gallery["name"], "Reference")
+        self.assertIs(gallery["items"], self.anyimage.properties.color_reference_items)
+        self.assertIs(gallery["get"], self.anyimage.properties.get_color_reference_choice)
+        self.assertIs(gallery["set"], self.anyimage.properties.set_color_reference_choice)
+
+    def test_color_reference_palette_update_stores_and_clears_dynamic_values(self):
+        properties = self.anyimage.properties
+        reference = object()
+        settings = SimpleNamespace(color_reference=reference)
+        colors = ((0.7, 0.1, 0.2), (0.1, 0.4, 0.6), (0.8, 0.7, 0.2))
+        weights = (0.5, 0.3, 0.2)
+
+        with (
+            patch.object(properties, "image_rgba", return_value=object()),
+            patch.object(
+                properties,
+                "extract_reference_palette",
+                return_value=(colors, weights),
+            ),
+        ):
+            properties.update_color_reference_palette(settings, None)
+
+        self.assertEqual(settings.color_reference_palette_count, 3)
+        self.assertEqual(settings.color_reference_palette_0, colors[0])
+        self.assertEqual(settings.color_reference_palette_weight_2, weights[2])
+        self.assertEqual(settings.color_reference_palette_3, (0.0, 0.0, 0.0))
+        self.assertEqual(settings.color_reference_palette_weight_3, 0.0)
+
+        settings.color_reference = None
+        properties.update_color_reference_palette(settings, None)
+
+        self.assertEqual(settings.color_reference_palette_count, 0)
+        for name in properties.COLOR_REFERENCE_PALETTE_PROPERTIES:
+            self.assertEqual(getattr(settings, name), (0.0, 0.0, 0.0))
+        for name in properties.COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES:
+            self.assertEqual(getattr(settings, name), 0.0)
+
+    def test_job_cleanup_is_registered_without_undo(self):
+        from anyimage.operators.job_files import ClearJobFiles
+
+        self.assertIn(ClearJobFiles, self.anyimage.CLASSES)
+        self.assertNotIn("UNDO", getattr(ClearJobFiles, "bl_options", set()))
+
     def test_import_does_not_add_addon_directories_to_sys_path(self):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
 
@@ -17,11 +78,11 @@ class AddonRegistrationTest(BlenderTestCase):
 
     def test_mesh_operators_are_registered_and_ordered(self):
         from anyimage.operators.convert_to_panorama import ConvertToPanorama, GeneratePanorama
-        from anyimage.operators.convert_to_mesh import ConvertToMesh
+        from anyimage.operators.bake_mesh import BakeMesh
 
-        self.assertIn(ConvertToMesh, self.anyimage.CLASSES)
-        self.assertEqual(ConvertToMesh.bl_idname, "anyimage.convert_to_mesh")
-        self.assertIn("UNDO", ConvertToMesh.bl_options)
+        self.assertIn(BakeMesh, self.anyimage.CLASSES)
+        self.assertEqual(BakeMesh.bl_idname, "anyimage.bake_mesh")
+        self.assertIn("UNDO", BakeMesh.bl_options)
 
         self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
         self.assertIn(GeneratePanorama, self.anyimage.CLASSES)
@@ -179,6 +240,7 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertEqual(self.node_menu_draws, [self.anyimage.draw_texture_node_context_menu, existing_node_draw])
         self.assertIn(self.anyimage.AnyImageTextureNodeMenu, self.registered)
         self.assertIn(self.anyimage.AnyImageObjectMenu, self.registered)
+        self.assertIn(self.anyimage.ColorMatchPanel, self.registered)
 
         unregister_order = []
         original_unregister = self.fake_bpy.utils.unregister_class

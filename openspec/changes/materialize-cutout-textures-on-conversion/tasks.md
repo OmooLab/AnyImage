@@ -29,7 +29,7 @@
 - [x] 3.2 按实际存在的来源区域生成最终 Corner UV，保留源 UV 形状和退化/重叠关系，实现 Color/Normal 的一致区域布局及翻转。
 - [x] 3.3 实现 Color 逐像素拼接及水平翻转，验证 Alpha、透明 RGB、byte/float/HDR、颜色空间及打包保存重载。
 - [x] 3.4 按原型方案实现静态 Tangent Normal 生成，固化全部法线适配与衰减，保持 Bump 只应用一次，同步执行并清理失败资源。
-- [x] 3.5 保留目标材质结构与共享 O Image Layer，更新独立图片引用、Tangent 模式及单位 Normal Scale，验证共享数据隔离。
+- [x] 3.5 保留目标材质结构与共享 O Image Layer，原位更新图片引用及 Tangent 模式，保留 Normal Scale 和其他设置，验证共享材质原位更新。
 
 ## 4. 提交与属性清理
 
@@ -44,3 +44,17 @@
 - [x] 5.3 运行 `uv run --group blender node-group build`，验证生成资产、来源协议、单图 UV、Capture Attribute 为零及旧 Atlas 节点消失。
 - [x] 5.4 沿真实调用链检查旧拼接代码、旧节点、旧测试及引用全部清除，检查最终差异并保留其他已有修改；不构建文档或打包扩展。
 - [x] 5.5 准备 split-cutout-front-back-uv 之后应用的规格 delta，废止旧双区要求并恢复创建期单图规格，记录归档先后顺序并校验；实施阶段不自动归档。
+
+## 材质原位更新
+
+- [x] 保留原材质身份，仅原位替换贴图及复位 Object Space，失败时恢复原引用。
+- [x] 临时烘焙采用单位 Normal Scale，目标保留所有其他设置；验证 0、0.3、1、2 强度产出相同法线图。
+- [x] 验证共享材质原位更新、同步调用 Undo/Redo、失败清理与相关渲染回归。
+- [x] 原位替换现有图片内容，保留图片身份、名称、路径和节点引用；清理临时图片，验证共享图片、保存重载、Undo/Redo 与部分写入失败回滚。
+- [x] 静态图片直接原位写入尺寸与像素后打包，避免重载磁盘旧图；覆盖 PNG/EXR 法线、已打包/未打包输入与保存重载。
+
+## Convert To 与 Depth 清理
+
+- [x] 支持 Plane、Depth Plane、Relief Plane、Panorama，保留单区 UV 与 Color，按需烘焙法线并清理已消费属性。
+- [x] 全部转换成功后仅清理本次零引用 Depth 图片数据块，保留共享引用、Fake User、磁盘文件和无关图片；验证失败与 Undo/Redo。
+- [x] 验证 Depth/Relief 多种 Depth Scale 的法线外观，运行相关菜单、注册、材质和转换回归。

@@ -256,11 +256,6 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
             )
         else:
             server_row.label(text="Installed", icon="CHECKMARK")
-        server_row.operator(
-            "anyimage.open_server_log",
-            text="Open Server Log",
-            icon="TEXT",
-        )
 
         if status["environment_ready"]:
             ai = self._draw_box(layout, "AI")

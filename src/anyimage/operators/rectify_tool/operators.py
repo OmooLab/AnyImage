@@ -5,6 +5,11 @@ import math
 
 import bpy
 
+from ...common.image_preview import (
+    draw_preview_frame,
+    preview_draw_bounds,
+    preview_texture_draw_options,
+)
 from ...common.viewport import (
     active_view3d_tool_id,
     deserialize_matrix,
@@ -40,10 +45,7 @@ from .preview import (
     aspect_ratio_from_mouse,
     create_perspective_preview_image,
     draw_aspect_hud,
-    draw_preview_frame,
     interactive_preview_polygon,
-    preview_draw_bounds,
-    preview_texture_draw_options,
     snapped_aspect_ratio,
 )
 

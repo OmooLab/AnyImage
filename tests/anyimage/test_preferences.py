@@ -188,7 +188,7 @@ class PreferencesTest(BlenderTestCase):
         operators = self.draw_preferences(missing_environment, ())
         self.assertEqual(
             [identifier for identifier, _options in operators],
-            ["anyimage.setup_ai_environment", "anyimage.open_server_log"],
+            ["anyimage.setup_ai_environment"],
         )
 
         ready = {"environment_ready": True, "missing_models": (), "ready": True}

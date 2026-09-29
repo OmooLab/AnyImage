@@ -6,10 +6,11 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from anyimage.common.image import image_content_state, restore_image_content, image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from anyimage.operators.convert_to_mesh.materialization import build_conversion_mesh, PROTOCOL_ATTRIBUTES
-from anyimage.operators.convert_to_mesh import ConvertToMesh
+from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures, PROTOCOL_ATTRIBUTES
+from anyimage.operators.bake_mesh import BakeMesh
 from nodes.groups.image_cutout import build_image_cutout_group
 from nodes.groups.image_layer import build_image_layer_group
 from mathutils import Vector
@@ -52,16 +53,21 @@ def cutout():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def test_materialization_is_static_and_does_not_mutate_source(cutout):
+def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     source_mesh = cutout.data
     source_material = cutout.active_material
     source_scene = bpy.context.window.scene
     source_selection = list(bpy.context.selected_objects)
     source_material.node_tree.nodes.new("ShaderNodeGroup")
-    result = build_conversion_mesh(bpy.context, cutout)
+    shared_material = source_material.copy()
+    source_textures = [n.image for n in shared_material.node_tree.nodes if n.type == "TEX_IMAGE"]
+    for image in source_textures:
+        image.filepath_raw = "//" + image.name + ".exr"
+    source_images = {image.name: image.as_pointer() for image in bpy.data.images}
+    result = materialize_mesh_and_textures(bpy.context, cutout)
     assert result is not None
     assert cutout.data == source_mesh and len(cutout.modifiers) == 1
-    assert result.materials[0] != source_material
+    assert result.materials[0] == source_material
     assert not (set(result.attributes.keys()) & PROTOCOL_ATTRIBUTES)
     assert "user_value" in result.attributes
     assert list(result.uv_layers.keys()) == ["UVMap"]
@@ -72,6 +78,9 @@ def test_materialization_is_static_and_does_not_mutate_source(cutout):
     assert all(i.packed_file is not None for i in images)
     assert all(tuple(i.size) == (64, 128) for i in images)
     assert max(images[0].pixels[:]) > 1
+    assert {image.name: image.as_pointer() for image in bpy.data.images} == source_images
+    assert images == source_textures
+    assert all(image.filepath_raw == "//" + image.name + ".exr" for image in images)
     assert len(bpy.data.scenes) == 1
     assert bpy.context.window.scene == source_scene
     assert bpy.context.object == cutout and list(bpy.context.selected_objects) == source_selection
@@ -176,11 +185,11 @@ def test_static_normal_matches_shader_after_attributes_are_removed(cutout, tmp_p
         bpy.context.view_layer.update()
     layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
     layer.inputs["Object Space"].default_value = object_space
-    layer.inputs["Normal Scale"].default_value = .6
+    layer.inputs["Normal Scale"].default_value = 1 if object_space else .6
     layer.inputs["Bump Scale"].default_value = bump
     directions = ((0, -1, 0), (0, 1, 0), (1, -.2, 0))
     before = [render_normal(cutout, tmp_path / f"before-{i}.exr", d, with_uv_coverage=True) for i, d in enumerate(directions)]
-    cutout.data = build_conversion_mesh(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     cutout.modifiers.clear()
     after = [render_normal(cutout, tmp_path / f"after-{i}.exr", d, with_uv_coverage=True) for i, d in enumerate(directions)]
     for direction, (original, source_coverage), (static, target_coverage) in zip(directions, before, after):
@@ -216,7 +225,7 @@ def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thi
     bpy.context.view_layer.objects.active = obj
     directions = ((1, 0, 0), (-1, 0, 0))
     before = [render_normal(obj, tmp_path / f"s-before-{i}.exr", d) for i, d in enumerate(directions)]
-    result = build_conversion_mesh(bpy.context, obj)
+    result = materialize_mesh_and_textures(bpy.context, obj)
     assert not set(result.attributes.keys()) & PROTOCOL_ATTRIBUTES
     normal_result = next(n.image for n in result.materials[0].node_tree.nodes
                          if n.type == "TEX_IMAGE" and n.image.colorspace_settings.name == "Non-Color")
@@ -232,6 +241,24 @@ def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thi
         assert np.quantile(differences, .95) < .04, (thickness, direction, np.quantile(differences, [.5, .95, 1]))
 
 
+@pytest.mark.parametrize("mirrored", [False, True])
+def test_depth_cutout_conversion_removes_unused_depth(symmetry, mirrored):
+    obj, _, mirror, *_ = symmetry
+    if not mirrored:
+        obj.modifiers.remove(mirror)
+    obj["o_image_object"] = True
+    build_image_layer_group()
+    color = bpy.data.images.new("Color", width=16, height=16, float_buffer=True)
+    obj.data.materials.append(create_image_material(color, color))
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    depth_name = "Depth"
+    assert depth_name in bpy.data.images
+    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
+    assert depth_name not in bpy.data.images
+    assert color.name in bpy.data.images
+
+
 @pytest.mark.parametrize("execution", ["EXEC_DEFAULT", "INVOKE_DEFAULT"])
 def test_conversion_operator_undo_redo(cutout, execution):
     name, mesh_name = cutout.name, cutout.data.name
@@ -239,23 +266,34 @@ def test_conversion_operator_undo_redo(cutout, execution):
     bpy.context.collection.objects.link(other)
     other_name = other.name
     material_name = cutout.active_material.name
+    source_color_name = next(n.image.name for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
+    original_pixels = image_pixels(bpy.data.images[source_color_name]).copy()
     bpy.context.preferences.edit.use_global_undo = True
-    bpy.utils.register_class(ConvertToMesh)
+    bpy.utils.register_class(BakeMesh)
     try:
-        bpy.ops.ed.undo_push(message="Before Convert to Mesh")
-        assert bpy.ops.anyimage.convert_to_mesh(execution, True) == {"FINISHED"}
+        bpy.ops.ed.undo_push(message="Before Bake Mesh")
+        assert bpy.ops.anyimage.bake_mesh(execution, True) == {"FINISHED"}
         assert len(bpy.data.objects[name].modifiers) == 0
         assert bpy.data.objects[other_name].data.name == mesh_name
         assert bpy.data.objects[other_name].active_material.name == material_name
-        assert not ConvertToMesh.poll(bpy.context)
+        assert bpy.data.objects[name].active_material == bpy.data.objects[other_name].active_material
+        assert next(n.image.name for n in bpy.data.objects[name].active_material.node_tree.nodes if n.type == "TEX_IMAGE") == source_color_name
+        assert tuple(bpy.data.images[source_color_name].size) == (64, 128)
+        converted_pixels = image_pixels(bpy.data.images[source_color_name]).copy()
+        assert not BakeMesh.poll(bpy.context)
         assert bpy.ops.ed.undo() == {"FINISHED"}
         assert len(bpy.data.objects[name].modifiers) == 1
         assert bpy.data.objects[name].data.name == mesh_name
+        assert tuple(bpy.data.images[source_color_name].size) == (64, 64)
+        np.testing.assert_array_equal(image_pixels(bpy.data.images[source_color_name]), original_pixels)
+        assert next(n.image.name for n in bpy.data.objects[name].active_material.node_tree.nodes if n.type == "TEX_IMAGE") == source_color_name
         assert bpy.ops.ed.redo() == {"FINISHED"}
         assert len(bpy.data.objects[name].modifiers) == 0
+        assert tuple(bpy.data.images[source_color_name].size) == (64, 128)
+        np.testing.assert_array_equal(image_pixels(bpy.data.images[source_color_name]), converted_pixels)
         assert not set(bpy.data.objects[name].data.attributes.keys()) & PROTOCOL_ATTRIBUTES
     finally:
-        bpy.utils.unregister_class(ConvertToMesh)
+        bpy.utils.unregister_class(BakeMesh)
 
 
 @pytest.mark.parametrize("float_color", [False, True])
@@ -267,7 +305,7 @@ def test_packed_static_images_survive_library_reload(cutout, tmp_path, float_col
         color.colorspace_settings.name = "sRGB"
         color.pixels.foreach_set(np.linspace(0, 1, 13 * 9 * 4, dtype=np.float32))
         next(n for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE").image = color
-    cutout.data = build_conversion_mesh(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     cutout.modifiers.clear()
     images = [n.image for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE"]
     expected = {i.name: (image_pixels(i), i.colorspace_settings.name, i.alpha_mode, i.is_float) for i in images}
@@ -288,6 +326,51 @@ def test_packed_static_images_survive_library_reload(cutout, tmp_path, float_col
         np.testing.assert_array_equal(image_pixels(image), pixels)
 
 
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("file_format, extension", [("PNG", "png"), ("OPEN_EXR", "exr")])
+def test_disk_normal_is_replaced_and_packed_in_place(cutout, tmp_path, monkeypatch, packed, file_format, extension):
+    from anyimage.operators.bake_mesh import materialization
+
+    layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
+    node = layer.inputs["Normal"].links[0].from_node
+    path = tmp_path / f"normal.{extension}"
+    node.image.file_format = file_format
+    node.image.filepath_raw = str(path)
+    node.image.save()
+    node.image = bpy.data.images.load(str(path), check_existing=False)
+    node.image.colorspace_settings.name = "Non-Color"
+    image = node.image
+    if packed:
+        image.pack()
+    identity, name = image.as_pointer(), image.name
+    disk_content = path.read_bytes()
+    bake = materialization.bake_normal
+    expected = None
+
+    def capture_bake(*args):
+        nonlocal expected
+        result = bake(*args)
+        expected = image_pixels(result).copy()
+        return result
+
+    monkeypatch.setattr(materialization, "bake_normal", capture_bake)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.modifiers.clear()
+    assert node.image.as_pointer() == identity and image.name == name
+    assert image.filepath_raw == str(path) and path.read_bytes() == disk_content
+    assert tuple(image.size) == (64, 128) and image.packed_file
+    np.testing.assert_allclose(image_pixels(image), expected, atol=1 / 255)
+    pixels = image_pixels(image).copy()
+    library = tmp_path / "converted.blend"
+    bpy.data.libraries.write(str(library), {cutout})
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    with bpy.data.libraries.load(str(library)) as (available, loaded):
+        loaded.objects = available.objects
+    image = bpy.data.images[name]
+    assert tuple(image.size) == (64, 128) and image.packed_file
+    np.testing.assert_array_equal(image_pixels(image), pixels)
+
+
 def test_single_region_without_normal_preserves_user_attributes(cutout):
     modifier = cutout.modifiers[0]
     set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"), 0)
@@ -300,33 +383,76 @@ def test_single_region_without_normal_preserves_user_attributes(cutout):
     nodes.remove(layer.inputs["Normal"].links[0].from_node)
     cutout.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
-    result = build_conversion_mesh(bpy.context, cutout)
+    result = materialize_mesh_and_textures(bpy.context, cutout)
     assert "o_user_data" in result.attributes
     assert "UserUV" in result.uv_layers
     assert all(tuple(item.uv) == (.25, .25) for item in result.uv_layers["UserUV"].data)
     images = [n.image for n in result.materials[0].node_tree.nodes if n.type == "TEX_IMAGE"]
     assert len(images) == 1 and tuple(images[0].size) == (64, 64)
     static_layer = next(n for n in result.materials[0].node_tree.nodes if n.type == "GROUP")
-    assert static_layer.inputs["Normal Scale"].default_value == 1
+    assert static_layer.inputs["Normal Scale"].default_value == pytest.approx(.37)
 
 
 def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch):
-    from anyimage.operators.convert_to_mesh import materialization
+    from anyimage.operators.bake_mesh import materialization
 
     counts = tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.scenes, bpy.data.node_groups))
     source = cutout.data
+    material = cutout.active_material
+    images = [n.image for n in material.node_tree.nodes if n.type == "TEX_IMAGE"]
     def fail(*args, **kwargs):
         raise RuntimeError("Injected bake failure")
     monkeypatch.setattr(materialization, "bake_normal", fail)
     with pytest.raises(RuntimeError, match="Injected"):
-        build_conversion_mesh(bpy.context, cutout)
+        materialize_mesh_and_textures(bpy.context, cutout)
     assert cutout.data == source and len(cutout.modifiers) == 1
+    assert cutout.active_material == material
+    assert images == [n.image for n in material.node_tree.nodes if n.type == "TEX_IMAGE"]
     assert counts == tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.scenes, bpy.data.node_groups))
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed):
+    from anyimage.operators.bake_mesh import materialization
+
+    images = [n.image for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE"]
+    if packed:
+        for image in images:
+            if not image.packed_file:
+                image.pack()
+    pixels = [image_pixels(image).copy() for image in images]
+    contents = [image_content_state(image) for image in images]
+    identities = {image.name: image.as_pointer() for image in bpy.data.images}
+    counts = tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.scenes))
+    layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
+    layer.inputs["Object Space"].default_value = True
+    calls = 0
+    replace = materialization.replace_static_image
+
+    def fail_second_write(image, result):
+        nonlocal calls
+        calls += 1
+        replace(image, result)
+        if calls == 2:
+            raise RuntimeError("Injected image write failure")
+
+    monkeypatch.setattr(materialization, "replace_static_image", fail_second_write)
+    with pytest.raises(RuntimeError, match="Injected image write"):
+        materialize_mesh_and_textures(bpy.context, cutout)
+    assert layer.inputs["Object Space"].default_value is True
+    assert {image.name: image.as_pointer() for image in bpy.data.images} == identities
+    assert counts == tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.scenes))
+    for image, original, expected in zip(images, contents, pixels):
+        assert tuple(image.size) == original["size"], (image.name, image.source, image.filepath_raw, original["source"], original["filepath"], image.packed_file is not None)
+        np.testing.assert_array_equal(image_pixels(image), expected)
+        actual = image_content_state(image)
+        for field in ("size", "packed", "source", "filepath", "colorspace", "alpha_mode"):
+            assert actual[field] == original[field]
 
 
 def test_conversion_preserves_fixed_light_appearance(cutout, tmp_path):
     before = render_normal(cutout, tmp_path / "lit-before.exr", (0, -1, 0), lighting=True)
-    cutout.data = build_conversion_mesh(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     cutout.modifiers.clear()
     after = render_normal(cutout, tmp_path / "lit-after.exr", (0, -1, 0), lighting=True)
     from scipy.ndimage import binary_erosion
@@ -337,7 +463,7 @@ def test_conversion_preserves_fixed_light_appearance(cutout, tmp_path):
 
 
 def test_color_tiles_preserve_hdr_alpha_and_transparent_rgb(cutout):
-    from anyimage.operators.convert_to_mesh.textures import build_color_tiles
+    from anyimage.operators.bake_mesh.textures import build_color_tiles
     from anyimage.common.image import image_pixels
 
     image = next(n.image for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
@@ -361,7 +487,7 @@ def test_color_tiles_preserve_hdr_alpha_and_transparent_rgb(cutout):
     ((0, 1, 3), ((1, 3), (0, None)), ((0, 1), (0, 0), (1, 0))),
 ])
 def test_layout_preserves_surface_axes_and_composes_uv_flips(regions, expected_tiles, offsets):
-    from anyimage.operators.convert_to_mesh.materialization import build_layout, SOURCE_UV, TARGET_UV
+    from anyimage.operators.bake_mesh.materialization import build_layout, SOURCE_UV, TARGET_UV
     mesh = bpy.data.meshes.new("Layout")
     try:
         mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)] * len(regions), [],
@@ -385,18 +511,56 @@ def test_layout_preserves_surface_axes_and_composes_uv_flips(regions, expected_t
 
 
 def test_operator_is_blocking_and_reports_failure(cutout, monkeypatch):
-    from anyimage.operators.convert_to_mesh import operators
+    from anyimage.operators.bake_mesh import operators
     source = cutout.data
-    monkeypatch.setattr(operators, "build_conversion_mesh", Mock(side_effect=RuntimeError("Bake failed")))
+    monkeypatch.setattr(operators, "materialize_mesh_and_textures", Mock(side_effect=RuntimeError("Bake failed")))
     operator = SimpleNamespace(report=Mock())
-    assert ConvertToMesh.execute(operator, bpy.context) == {"CANCELLED"}
+    assert BakeMesh.execute(operator, bpy.context) == {"CANCELLED"}
     operator.report.assert_called_once_with({"ERROR"}, "Bake failed")
     assert cutout.data == source and len(cutout.modifiers) == 1
-    assert not {"invoke", "modal", "cancel", "_timer"} & ConvertToMesh.__dict__.keys()
+    assert not {"invoke", "modal", "cancel", "_timer"} & BakeMesh.__dict__.keys()
+
+
+@pytest.mark.parametrize("object_space", [False, True])
+def test_conversion_preserves_material_settings_and_does_not_bake_strength(cutout, object_space):
+    from anyimage.common.image import image_pixels
+
+    material = cutout.active_material
+    layer = next(n for n in material.node_tree.nodes if n.type == "GROUP")
+    color = layer.inputs["Color"].links[0].from_node
+    normal = layer.inputs["Normal"].links[0].from_node
+    source_color, source_normal = color.image, normal.image
+    original_color = image_content_state(source_color)
+    original_normal = image_content_state(source_normal)
+    group = layer.node_tree
+    material_count = len(bpy.data.materials)
+    layer.inputs["Bump Scale"].default_value = .12
+    expected_pixels = None
+    for strength in (0, .3, 1, 2):
+        restore_image_content(source_color, original_color)
+        restore_image_content(source_normal, original_normal)
+        layer.inputs["Object Space"].default_value = object_space
+        layer.inputs["Normal Scale"].default_value = strength
+        inputs = {socket.name: tuple(socket.default_value) if hasattr(socket.default_value, "__len__") else socket.default_value
+                  for socket in layer.inputs if hasattr(socket, "default_value") and socket.name != "Object Space"}
+        result = materialize_mesh_and_textures(bpy.context, cutout)
+        assert result.materials[0] == material and cutout.active_material == material
+        assert len(bpy.data.materials) == material_count and layer.node_tree == group
+        assert layer.inputs["Object Space"].default_value is False
+        for name, value in inputs.items():
+            actual = layer.inputs[name].default_value
+            actual = tuple(actual) if hasattr(actual, "__len__") else actual
+            assert actual == pytest.approx(value), name
+        pixels = image_pixels(normal.image)
+        if expected_pixels is None:
+            expected_pixels = pixels.copy()
+        else:
+            np.testing.assert_array_equal(pixels, expected_pixels)
+        bpy.data.meshes.remove(result)
 
 
 def test_bake_context_setup_failure_releases_scene_and_object(cutout):
-    from anyimage.operators.convert_to_mesh.materialization import bake_context
+    from anyimage.operators.bake_mesh.materialization import bake_context
 
     scene = bpy.context.window.scene
     counts = (len(bpy.data.scenes), len(bpy.data.objects))
@@ -409,7 +573,7 @@ def test_bake_context_setup_failure_releases_scene_and_object(cutout):
 
 @pytest.mark.parametrize("stage", ["allocation", "bake"])
 def test_normal_bake_failure_cleans_internal_resources(cutout, monkeypatch, stage):
-    from anyimage.operators.convert_to_mesh import materialization
+    from anyimage.operators.bake_mesh import materialization
 
     material = cutout.active_material.copy()
     layer = next(n for n in material.node_tree.nodes if n.type == "GROUP")
@@ -431,9 +595,9 @@ def test_normal_bake_failure_cleans_internal_resources(cutout, monkeypatch, stag
         bpy.data.materials.remove(material)
 
 
-@pytest.mark.parametrize("invalid_input", ["modifier", "linked_strength", "reserved_uv", "missing_uv"])
+@pytest.mark.parametrize("invalid_input", ["modifier", "linked_strength", "reserved_uv", "missing_uv", "shared_image", "constant_normal"])
 def test_unsupported_input_preserves_source_and_releases_resources(cutout, monkeypatch, invalid_input):
-    from anyimage.operators.convert_to_mesh import materialization
+    from anyimage.operators.bake_mesh import materialization
 
     if invalid_input == "modifier":
         cutout.modifiers.new("User bevel", "BEVEL")
@@ -443,6 +607,15 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
         tree.links.new(tree.nodes.new("ShaderNodeValue").outputs[0], layer.inputs["Normal Scale"])
     elif invalid_input == "reserved_uv":
         cutout.data.uv_layers.new(name=materialization.SOURCE_UV)
+    elif invalid_input in {"shared_image", "constant_normal"}:
+        tree = cutout.active_material.node_tree
+        layer = next(n for n in tree.nodes if n.type == "GROUP")
+        normal = layer.inputs["Normal"].links[0].from_node
+        if invalid_input == "shared_image":
+            normal.image = layer.inputs["Color"].links[0].from_node.image
+        else:
+            tree.nodes.remove(normal)
+            layer.inputs["Object Space"].default_value = True
     else:
         cutout.data.uv_layers.remove(cutout.data.uv_layers["UVMap"])
     cutout.update_tag(refresh={"DATA"})
@@ -454,7 +627,7 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
     bake = Mock(side_effect=AssertionError("Unsupported input must not reach baking"))
     monkeypatch.setattr(materialization, "bake_normal", bake)
     with pytest.raises(ValueError):
-        build_conversion_mesh(bpy.context, cutout)
+        materialize_mesh_and_textures(bpy.context, cutout)
     bake.assert_not_called()
     assert cutout.data == source and cutout.active_material == material
     assert list(cutout.modifiers) == modifiers

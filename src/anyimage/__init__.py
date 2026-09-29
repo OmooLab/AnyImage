@@ -11,7 +11,7 @@ from .menu import (
     draw_texture_node_context_menu,
 )
 from .operators import CLASSES as OPERATOR_CLASSES
-from .panel import ServerPanel
+from .panel import ColorMatchPanel, DangerZonePanel, ServerPanel
 from .preferences import AnyImagePreferences
 from .properties import AnyImageSettings
 from .runtime import runtime
@@ -25,7 +25,9 @@ CLASSES = (
     AnyImageImageMenu,
     AnyImageObjectMenu,
     AnyImageTextureNodeMenu,
+    ColorMatchPanel,
     ServerPanel,
+    DangerZonePanel,
 )
 
 

@@ -1,5 +1,4 @@
 from .remove_background import RemoveImageBackground, RunBackgroundRemoval
-from .activate_workspace_tool import ActivateWorkspaceTool
 from .cutout_tool import CLASSES as CUTOUT_CLASSES
 from .frame_tool import CLASSES as FRAME_CLASSES
 from .mask_tool import EditImageAlpha
@@ -15,11 +14,11 @@ from .ai_setup import (
 from .upscale import UpscaleImage
 from .convert_to_panorama import CLASSES as PANORAMA_CLASSES
 from .color_reference import CLASSES as COLOR_REFERENCE_CLASSES
-from .convert_to_mesh import CLASSES as MESH_CLASSES
+from .bake_mesh import CLASSES as MESH_CLASSES
+from .job_files import ClearJobFiles
 
 
 CLASSES = (
-    ActivateWorkspaceTool,
     *MESH_CLASSES,
     *COLOR_REFERENCE_CLASSES,
     *PANORAMA_CLASSES,
@@ -31,6 +30,7 @@ CLASSES = (
     DownloadRequiredModels,
     RunBackgroundRemoval,
     ClearModels,
+    ClearJobFiles,
     *FRAME_CLASSES,
     EditImageAlpha,
     *RECTIFY_CLASSES,

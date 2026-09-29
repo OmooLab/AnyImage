@@ -15,6 +15,7 @@ def test_alpha_curve_preserves_endpoints_and_suppresses_soft_edges(image_layer):
         "Color", "Alpha", "Normal", "Normal Scale", "Bump Scale",
         "Alpha Fix", "Object Space",
     ]
+    assert inputs["Alpha Fix"].default_value == 0
     output = next(node for node in image_layer.nodes if node.type == "GROUP_OUTPUT")
     curve = output.inputs["Alpha"].links[0].from_node
     assert curve.type == "CURVE_FLOAT"

@@ -47,6 +47,14 @@ def set_modifier_input(modifier, identifier, value):
         modifier[identifier] = value
 
 
+def get_modifier_input(modifier, identifier):
+    """Read a Geometry Nodes modifier input socket value."""
+    inputs = _modifier_input_slots(modifier)
+    if inputs is not None:
+        return getattr(inputs, identifier).value
+    return modifier.get(identifier)
+
+
 def finalize_object_result(
     context,
     source_object,

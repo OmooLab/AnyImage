@@ -12,9 +12,9 @@ class ImageMenuTest(BlenderTestCase):
             operator=lambda identifier, **options: calls.append(identifier),
             separator=lambda: None,
         ))
-        with patch.object(menu.ConvertToMesh, "poll", return_value=True), patch.object(menu, "draw_image_actions"):
+        with patch.object(menu.BakeMesh, "poll", return_value=True), patch.object(menu, "draw_image_actions"):
             menu.AnyImageObjectMenu.draw(owner, SimpleNamespace())
-        self.assertEqual(calls, [menu.ConvertToMesh.bl_idname])
+        self.assertEqual(calls, [menu.BakeMesh.bl_idname])
 
     def test_marked_mesh_draws_object_image_menu(self):
         calls = []
@@ -35,7 +35,7 @@ class ImageMenuTest(BlenderTestCase):
         self.assertEqual(
             calls,
             [
-                (self.anyimage.AnyImageObjectMenu.bl_idname, {"icon": "PLUGIN"}),
+                (self.anyimage.AnyImageObjectMenu.bl_idname, {}),
                 ("separator", {}),
             ],
         )
@@ -47,8 +47,8 @@ class ImageMenuTest(BlenderTestCase):
         )
         self.assertEqual(calls, [])
 
-    def test_view_3d_image_menu_offers_tools_and_ai_actions(self):
-        calls, labels, operators = self.draw_menu(
+    def test_view_3d_image_menu_offers_image_and_ai_actions(self):
+        calls, labels, _operators = self.draw_menu(
             {
                 "environment_ready": True,
                 "missing_models": ("BEN2_BASE",),
@@ -59,24 +59,14 @@ class ImageMenuTest(BlenderTestCase):
         self.assertEqual(
             calls,
             [
-                ("anyimage.activate_workspace_tool", True),
-                ("separator", True),
-                ("anyimage.activate_workspace_tool", True),
-                ("anyimage.activate_workspace_tool", True),
-                ("anyimage.activate_workspace_tool", True),
-                ("separator", True),
                 ("anyimage.convert_to_plane", True),
                 ("anyimage.convert_to_depth_plane", True),
                 ("anyimage.convert_to_relief_plane", True),
                 ("anyimage.convert_to_panorama", True),
                 ("separator", True),
-                ("anyimage.set_color_reference", True),
-                ("anyimage.match_color_reference", True),
-                ("separator", True),
                 ("anyimage.remove_image_background", True),
                 ("anyimage.upscale_image", True),
-                ("separator", True),
-                ("anyimage.clear_models", True),
+                ("anyimage.match_color_reference", True),
                 ("separator", True),
                 ("anyimage.setup_ai_environment", True),
             ],
@@ -90,47 +80,27 @@ class ImageMenuTest(BlenderTestCase):
             labels["anyimage.upscale_image"],
             "Upscale (1280 × 960)",
         )
-        self.assertEqual(
-            [
-                (
-                    operator.context,
-                    operator.text,
-                    operator.properties.tool_id,
-                )
-                for operator in operators
-                if operator.identifier == "anyimage.activate_workspace_tool"
-            ],
-            [
-                ("EXEC_DEFAULT", self.tools.CutoutTool.bl_label, self.tools.CutoutTool.bl_idname),
-                ("EXEC_DEFAULT", self.tools.FrameTool.bl_label, self.tools.FrameTool.bl_idname),
-                ("EXEC_DEFAULT", self.tools.MaskTool.bl_label, self.tools.MaskTool.bl_idname),
-                ("EXEC_DEFAULT", self.tools.RectifyTool.bl_label, self.tools.RectifyTool.bl_idname),
-            ],
-        )
-
         calls, _labels, _operators = self.draw_menu(
             {"environment_ready": True, "missing_models": (), "ready": True}
         )
         self.assertEqual(
-            calls[-3:],
+            calls[-1:],
             [
-                ("anyimage.clear_models", True),
-                ("separator", True),
                 ("anyimage.open_ai_environment_settings", True),
             ],
         )
         self.assertNotIn(("anyimage.setup_ai_environment", True), calls)
+        self.assertNotIn(("anyimage.clear_models", True), calls)
 
-    def test_outliner_image_menu_does_not_offer_workspace_tools(self):
+    def test_image_menu_uses_invoke_context(self):
         calls, _labels, operators = self.draw_menu(
             {"environment_ready": True, "missing_models": (), "ready": True},
             area_type="OUTLINER",
         )
 
-        self.assertNotIn(("anyimage.activate_workspace_tool", True), calls)
         self.assertEqual(
             [operator.context for operator in operators],
-            ["INVOKE_DEFAULT"] * 10,
+            ["INVOKE_DEFAULT"] * 8,
         )
 
     def draw_menu(self, status, area_type="VIEW_3D"):

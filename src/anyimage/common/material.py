@@ -161,10 +161,6 @@ def create_image_material(
         material_inputs.node_tree = material_node_group(is_depth_plane)
         material_inputs.location = (-300.0, 300.0)
         material_inputs.inputs["Bump Scale"].default_value = depth_scale
-        if not is_depth_plane:
-            material_inputs.inputs["Alpha Fix"].default_value = float(
-                not material_image.is_float and configured_material_view_adaptation()
-            )
         if "Object Space" in material_inputs.inputs:
             if normal_space not in {"TANGENT", "OBJECT"}:
                 raise ValueError(f"Unsupported normal space: {normal_space}")

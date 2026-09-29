@@ -186,16 +186,6 @@ class RectifyToolTest(BlenderTestCase):
         )
 
 
-    def test_rectify_preview_is_centered_at_requested_aspect(self):
-        left, bottom, width, height = self.rectify_preview.preview_draw_bounds(
-            (1000, 800), 2.0
-        )
-
-        self.assertAlmostEqual(width / height, 2.0)
-        self.assertAlmostEqual(left + width * 0.5, 500.0)
-        self.assertAlmostEqual(bottom + height * 0.5, 400.0)
-
-
     def test_rectify_uses_quad_edges_for_initial_aspect(self):
         ratio = self.rectify_geometry.perspective_quad_aspect(
             ((0, 0), (8, 0), (8, 4), (0, 4))

@@ -1,6 +1,5 @@
 import bpy
 
-from . import tools
 from .common.image import is_image_empty
 from .common.image_target import (
     active_texture_node,
@@ -8,11 +7,10 @@ from .common.image_target import (
     is_image_object,
     owner_image,
 )
-from .operators.activate_workspace_tool import ActivateWorkspaceTool
-from .operators.ai_setup import ClearModels, OpenAIEnvironmentSettings, SetupAIEnvironment
+from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIEnvironment
 from .operators.convert_to_panorama import ConvertToPanorama
-from .operators.color_reference import MatchColorReference, SetColorReference
-from .operators.convert_to_mesh import ConvertToMesh
+from .operators.color_reference import MatchColorReference
+from .operators.bake_mesh import BakeMesh
 from .operators.convert_to_plane import (
     ConvertToDepthPlane,
     ConvertToPlane,
@@ -29,30 +27,6 @@ class AnyImageImageMenu(bpy.types.Menu):
 
     def draw(self, context):
         layout = self.layout
-        if context.area.type == "VIEW_3D":
-            layout.operator_context = "EXEC_DEFAULT"
-            operator = layout.operator(
-                ActivateWorkspaceTool.bl_idname,
-                text=tools.CutoutTool.bl_label,
-            )
-            operator.tool_id = tools.CutoutTool.bl_idname
-            layout.separator()
-            operator = layout.operator(
-                ActivateWorkspaceTool.bl_idname,
-                text=tools.FrameTool.bl_label,
-            )
-            operator.tool_id = tools.FrameTool.bl_idname
-            operator = layout.operator(
-                ActivateWorkspaceTool.bl_idname,
-                text=tools.MaskTool.bl_label,
-            )
-            operator.tool_id = tools.MaskTool.bl_idname
-            operator = layout.operator(
-                ActivateWorkspaceTool.bl_idname,
-                text=tools.RectifyTool.bl_label,
-            )
-            operator.tool_id = tools.RectifyTool.bl_idname
-            layout.separator()
         layout.operator_context = "INVOKE_DEFAULT"
         layout.operator(
             ConvertToPlane.bl_idname,
@@ -87,8 +61,8 @@ class AnyImageObjectMenu(bpy.types.Menu):
     bl_label = "AnyImage"
 
     def draw(self, context):
-        if ConvertToMesh.poll(context):
-            self.layout.operator(ConvertToMesh.bl_idname, icon="MESH_DATA")
+        if BakeMesh.poll(context):
+            self.layout.operator(BakeMesh.bl_idname, icon="MESH_DATA")
             self.layout.separator()
         draw_image_actions(self.layout, context)
 
@@ -97,9 +71,6 @@ def draw_image_actions(layout, context):
     from .properties import ai_setup_label, ai_status
 
     layout.operator_context = "INVOKE_DEFAULT"
-    layout.operator(SetColorReference.bl_idname, icon="EYEDROPPER")
-    layout.operator(MatchColorReference.bl_idname, icon="COLOR")
-    layout.separator()
     layout.operator(
         RemoveImageBackground.bl_idname,
         icon="IMAGE_ALPHA",
@@ -109,11 +80,9 @@ def draw_image_actions(layout, context):
         text=upscale_menu_label(context),
         icon="FULLSCREEN_ENTER",
     )
+    layout.operator(MatchColorReference.bl_idname, icon="COLOR")
     layout.separator()
     status = ai_status()
-    if status["environment_ready"]:
-        layout.operator(ClearModels.bl_idname, icon="TRASH")
-        layout.separator()
     if status["ready"]:
         layout.operator(
             OpenAIEnvironmentSettings.bl_idname,
@@ -141,19 +110,19 @@ def upscale_menu_label(context):
 def draw_image_context_menu(self, context):
     if not is_image_empty(context.object):
         return
-    self.layout.menu(AnyImageImageMenu.bl_idname, icon="PLUGIN")
+    self.layout.menu(AnyImageImageMenu.bl_idname)
     self.layout.separator()
 
 
 def draw_image_object_context_menu(self, context):
     if not is_image_object(getattr(context, "object", None)):
         return
-    self.layout.menu(AnyImageObjectMenu.bl_idname, icon="PLUGIN")
+    self.layout.menu(AnyImageObjectMenu.bl_idname)
     self.layout.separator()
 
 
 def draw_texture_node_context_menu(self, context):
     if active_texture_node(context) is None:
         return
-    self.layout.menu(AnyImageTextureNodeMenu.bl_idname, icon="PLUGIN")
+    self.layout.menu(AnyImageTextureNodeMenu.bl_idname)
     self.layout.separator()

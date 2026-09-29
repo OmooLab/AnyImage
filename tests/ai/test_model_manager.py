@@ -27,6 +27,7 @@ def test_session_reuses_model_and_applies_catalog_device(tmp_path, key):
         second, elapsed = manager.get_session(key, "directml")
     assert first is second
     assert elapsed == 0.0
+    assert spec.label in manager.snapshot()["loaded"].values()
     create.assert_called_once_with(manager.directory(key), spec.device or "directml")
     manager.close()
     assert not any(manager.snapshot()["loaded"].values())
@@ -58,7 +59,7 @@ def test_cache_keeps_three_families_and_only_replaces_selected_family(tmp_path):
     before = manager.snapshot()
     with patch.object(model_adapter("MOGE3_VITL"), "create_session", return_value=Session()):
         manager.get_session("MOGE3_VITL", "cpu")
-    assert manager.snapshot()["loaded"] == {**before["loaded"], "geometry": "moge-3-vitl-onnx"}
+    assert manager.snapshot()["loaded"] == {**before["loaded"], "geometry": "MoGe-3 ViT-L"}
 
 
 @pytest.mark.parametrize("key", ("BEN2_BASE", "MOGE2_VITS_NORMAL", "REALESRGAN_X4PLUS"))

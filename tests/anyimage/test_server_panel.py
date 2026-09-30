@@ -68,7 +68,6 @@ class ServerPanelTest(BlenderTestCase):
                         "scale_popup": 5.0,
                     },
                 ),
-                ("label", {"text": "Reference Palette"}),
             ],
         )
         self.assertTrue(palette_row.enabled)
@@ -79,6 +78,25 @@ class ServerPanelTest(BlenderTestCase):
         self.assertEqual(
             [round(cell.scale_x, 6) for cell in palette_cells],
             [1.5, 0.9, 0.6],
+        )
+
+        settings.color_reference_palette_count = 0
+        palette_calls.clear()
+        palette_cells.clear()
+        panel.draw(
+            SimpleNamespace(
+                scene=SimpleNamespace(anyimage_settings=settings),
+            )
+        )
+
+        self.assertEqual(len(palette_cells), 4)
+        self.assertEqual(
+            [name for _owner, name, _options in palette_calls],
+            list(panel_module.COLOR_REFERENCE_PALETTE_PROPERTIES),
+        )
+        self.assertEqual(
+            [round(cell.scale_x, 6) for cell in palette_cells],
+            [1.0, 1.0, 1.0, 1.0],
         )
         self.assertEqual(panel.bl_label, "Color Match")
         self.assertLess(panel_module.ServerPanel.bl_order, panel.bl_order)
@@ -96,17 +114,15 @@ class ServerPanelTest(BlenderTestCase):
                 self.assertIn(("row", label, icon), events.labels)
                 self.assertIn("anyimage.restart_server", operators)
                 self.assertIn("anyimage.stop_server", operators)
-                self.assertIn(("row", "No Models Loaded", None), events.labels)
-                self.assertIn(
-                    ("anyimage.clear_models", state == "READY"), events.operators
-                )
-                self.assertEqual(events.options["anyimage.clear_models"]["text"], "Unload")
+                self.assertIn(("row", "Models Loaded", None), events.labels)
+                self.assertNotIn("anyimage.clear_models", operators)
+                self.assertIn(("row", "Generate Depth Map", "RADIOBUT_OFF"), events.labels)
+                self.assertIn(("row", "Remove Background", "RADIOBUT_OFF"), events.labels)
+                self.assertIn(("row", "Upscale Image", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("anyimage.open_server_log", True), events.operators)
                 self.assertNotIn("anyimage.clear_job_files", operators)
                 self.assertLess(events.sequence.index("anyimage.open_server_log"),
-                                events.sequence.index("No Models Loaded"))
-                self.assertIs(events.parents["anyimage.clear_models"].parent,
-                              events.parents["No Models Loaded"])
+                                events.sequence.index("Models Loaded"))
 
         for state in ("STOPPED", "STARTING", "ERROR"):
             with self.subTest(state=state):
@@ -114,6 +130,10 @@ class ServerPanelTest(BlenderTestCase):
                 operators = [identifier for identifier, _enabled in events.operators]
                 self.assertNotIn("anyimage.restart_server", operators)
                 self.assertNotIn("anyimage.stop_server", operators)
+                self.assertIn(("row", "Models Loaded", None), events.labels)
+                self.assertIn(("row", "Generate Depth Map", "RADIOBUT_OFF"), events.labels)
+                self.assertIn(("row", "Remove Background", "RADIOBUT_OFF"), events.labels)
+                self.assertIn(("row", "Upscale Image", "RADIOBUT_OFF"), events.labels)
 
 
     def test_status_bar_reads_runtime_state(self):
@@ -144,12 +164,17 @@ class ServerPanelTest(BlenderTestCase):
         names = ("MoGe-2 ViT-S Normal", "BiRefNet Lite", "Real-ESRGAN General WDN x4v3")
         for count in (1, 3):
             events = self._draw_server_panel("READY", cached_names=names[:count])
-            header = events.parents["Loaded Models:"]
+            header = events.parents["Models Loaded"]
             self.assertIs(events.parents["anyimage.clear_models"].parent, header)
-            for name in names[:count]:
-                self.assertIn(("column", name, None), events.labels)
-                self.assertIs(events.parents[name].parent, header.parent)
-                self.assertGreater(events.sequence.index(name), events.sequence.index("anyimage.clear_models"))
+            self.assertEqual(events.options["anyimage.clear_models"]["text"], "Unload")
+            for task in (
+                "Generate Depth Map  [ Fast ]",
+                "Remove Background  [ Fast ]",
+                "Upscale Image  [ Fast ]",
+            )[:count]:
+                self.assertIn(("row", task, "RADIOBUT_ON"), events.labels)
+                self.assertIs(events.parents[task].parent.parent, header.parent)
+                self.assertGreater(events.sequence.index(task), events.sequence.index("anyimage.clear_models"))
 
     def test_panel_clear_control_uses_shared_operator_state(self):
         panel_module = importlib.import_module("anyimage.panel")
@@ -213,10 +238,9 @@ class ServerPanelTest(BlenderTestCase):
         panel_module = importlib.import_module("anyimage.panel")
         panel = (panel_type or panel_module.ServerPanel)()
         panel.layout = Layout()
-        loaded = {
-            str(index): name
-            for index, name in enumerate(cached_names)
-        }
+        loaded = dict(
+            zip(("geometry", "background", "upscale"), cached_names)
+        )
         with (
             patch.object(
                 panel_module.runtime,

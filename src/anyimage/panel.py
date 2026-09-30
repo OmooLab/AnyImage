@@ -7,6 +7,14 @@ from .properties import (
     COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES,
 )
 from .runtime import runtime
+from .server.model_catalog import BACKGROUND_MODELS, MOGE_MODELS, UPSCALE_MODELS
+
+
+_MODEL_TIER_BY_LABEL = {
+    model.label: tier
+    for models in (MOGE_MODELS, BACKGROUND_MODELS, UPSCALE_MODELS)
+    for model, tier in zip(models.values(), ("Fast", "Base", "Pro"))
+}
 
 
 class ColorMatchPanel(bpy.types.Panel):
@@ -26,17 +34,21 @@ class ColorMatchPanel(bpy.types.Panel):
             scale=8.0,
             scale_popup=5.0,
         )
-        self.layout.label(text="Reference Palette")
         row = self.layout.row(align=True)
-        count = min(
+        palette_count = min(
             settings.color_reference_palette_count,
             len(COLOR_REFERENCE_PALETTE_PROPERTIES),
         )
+        count = palette_count or len(COLOR_REFERENCE_PALETTE_PROPERTIES)
         for index in range(count):
             cell = row.row(align=True)
-            weight = getattr(
-                settings,
-                COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES[index],
+            weight = (
+                getattr(
+                    settings,
+                    COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES[index],
+                )
+                if palette_count
+                else 1.0 / count
             )
             cell.scale_x = max(weight * count, 0.1)
             cell.prop(settings, COLOR_REFERENCE_PALETTE_PROPERTIES[index], text="")
@@ -119,15 +131,23 @@ class ServerPanel(bpy.types.Panel):
 
         layout.operator("anyimage.open_server_log", icon="TEXT")
 
-        if server_running:
-            cached = (
-                status.get("resources", {})
-                .get("model_manager", {})
-                .get("loaded", {})
+        cached = (
+            status.get("resources", {})
+            .get("model_manager", {})
+            .get("loaded", {})
+        )
+        slots = tuple(
+            (cached.get(family), task)
+            for family, task in (
+                ("geometry", "Generate Depth Map"),
+                ("background", "Remove Background"),
+                ("upscale", "Upscale Image"),
             )
-            cached_names = [name for name in cached.values() if name]
-            cached_row = layout.row(align=True)
-            cached_row.label(text="Loaded Models:" if cached_names else "No Models Loaded")
+        )
+        has_loaded_models = any(name for name, _task in slots)
+        cached_row = layout.row(align=True)
+        cached_row.label(text="Models Loaded")
+        if has_loaded_models:
             clear = cached_row.row(align=True)
             clear.enabled = state == "READY"
             clear.operator(
@@ -135,10 +155,14 @@ class ServerPanel(bpy.types.Panel):
                 text="Unload",
                 icon="TRASH",
             )
-            if cached_names:
-                cached_list = layout.column(align=True)
-                for name in cached_names:
-                    cached_list.label(text=name)
+        cached_list = layout.column(align=True)
+        for name, task in slots:
+            slot = cached_list.row(align=True)
+            tier = _MODEL_TIER_BY_LABEL.get(name)
+            slot.label(
+                text=f"{task}  [ {tier} ]" if tier else task,
+                icon="RADIOBUT_ON" if name else "RADIOBUT_OFF",
+            )
 
 
 class DangerZonePanel(bpy.types.Panel):

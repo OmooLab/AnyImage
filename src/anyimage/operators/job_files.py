@@ -17,7 +17,7 @@ def protected_image_paths():
 class ClearJobFiles(bpy.types.Operator):
     bl_idname = "anyimage.clear_job_files"
     bl_label = "Clear Job Files"
-    bl_description = "Permanently remove unused task outputs and logs, preserving models and the AI environment"
+    bl_description = "Delete unused job outputs and logs"
 
     @classmethod
     def poll(cls, _context):
@@ -30,26 +30,22 @@ class ClearJobFiles(bpy.types.Operator):
                 raise RuntimeError("Wait for the current task to finish")
             connection = runtime.server.ensure()
             self._instance = connection.instance_id
-            self._preview = connection.client.request(
-                "POST", "/job-files/preview", {"protected_paths": protected_image_paths()}, timeout=60,
-            )
+            self._preview = connection.client.preview_job_files(protected_image_paths())
         except (OSError, RuntimeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
         if not self._preview["jobs"]:
-            self.report({"INFO"}, "No unused job files to clear; protected or inaccessible files were kept")
+            self.report({"INFO"}, "No unused job files to clear")
             return {"CANCELLED"}
         return context.window_manager.invoke_props_dialog(self, width=460, confirm_text="Delete Files")
 
     def draw(self, _context):
         preview = self._preview
         self.layout.label(text=f"Delete {len(preview['jobs'])} jobs ({preview['bytes'] / 1_000_000:.1f} MB)?")
-        self.layout.label(text="This permanently deletes task outputs and task logs.")
-        self.layout.label(text="Models, environment and server.log are kept.")
-        self.layout.label(text="Close other Blender instances using this Storage Folder.")
-        self.layout.label(text="External references and other .blend files cannot be checked.")
+        self.layout.label(text="Permanently delete job outputs and logs.")
+        self.layout.label(text="Files used by other projects may be deleted.")
         if preview["skipped"] or preview["failed"]:
-            self.layout.label(text=f"Kept {preview['skipped'] + len(preview['failed'])} protected or inaccessible jobs.")
+            self.layout.label(text=f"Kept {preview['skipped'] + len(preview['failed'])} jobs skipped.")
 
     def execute(self, context):
         try:
@@ -58,9 +54,7 @@ class ClearJobFiles(bpy.types.Operator):
             connection = runtime.server.connection
             if connection is None or connection.instance_id != self._instance:
                 raise RuntimeError("Job Server changed; preview cleanup again")
-            result = connection.client.request("POST", "/job-files/clear", {
-                "jobs": self._preview["jobs"], "protected_paths": protected_image_paths(),
-            }, timeout=60)
+            result = connection.client.clear_job_files(self._preview["jobs"], protected_image_paths())
         except (OSError, RuntimeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}

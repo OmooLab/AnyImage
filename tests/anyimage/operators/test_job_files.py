@@ -13,7 +13,7 @@ class JobFilesTest(BlenderTestCase):
         operator = module.ClearJobFiles()
         operator.report = Mock()
         preview = {"jobs": ["a" * 32], "bytes": 123, "skipped": 0, "failed": []}
-        client = SimpleNamespace(request=Mock(return_value=preview))
+        client = SimpleNamespace(preview_job_files=Mock(return_value=preview), clear_job_files=Mock(return_value=preview))
         connection = SimpleNamespace(instance_id="one", client=client)
         runtime = SimpleNamespace(environment_ready=lambda: True, server_busy=lambda: False,
                                   server_status=lambda: {"state": "READY"},
@@ -21,19 +21,18 @@ class JobFilesTest(BlenderTestCase):
         context = SimpleNamespace(window_manager=SimpleNamespace(invoke_props_dialog=Mock(return_value={"RUNNING_MODAL"})))
         with patch.object(module, "runtime", runtime), patch.object(module, "protected_image_paths", return_value=["C:/protected.png"]):
             assert operator.execute(context) == {"CANCELLED"}
-            client.request.assert_not_called()
+            client.clear_job_files.assert_not_called()
             assert operator.invoke(context, None) == {"RUNNING_MODAL"}
-            assert client.request.call_args.args[1] == "/job-files/preview"
+            client.preview_job_files.assert_called_once_with(["C:/protected.png"])
             runtime.server_busy = lambda: True
             assert operator.execute(context) == {"CANCELLED"}
-            assert client.request.call_count == 1
+            client.clear_job_files.assert_not_called()
             runtime.server_busy = lambda: False
             assert operator.execute(context) == {"FINISHED"}
-            assert client.request.call_args.args[1] == "/job-files/clear"
-            assert client.request.call_args.args[2]["protected_paths"] == ["C:/protected.png"]
+            client.clear_job_files.assert_called_once_with(preview["jobs"], ["C:/protected.png"])
             connection.instance_id = "restarted"
             assert operator.execute(context) == {"CANCELLED"}
-            assert client.request.call_count == 2
+            assert client.clear_job_files.call_count == 1
 
     def test_only_unpacked_image_paths_are_protected(self):
         module = importlib.import_module("anyimage.operators.job_files")

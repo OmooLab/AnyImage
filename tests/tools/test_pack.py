@@ -57,7 +57,7 @@ class ExtensionPackagingTest(unittest.TestCase):
         records = {}
         with tempfile.TemporaryDirectory() as directory:
             directory_path = Path(directory)
-            wheel_path = directory_path / "blendjob-0.1.18-py3-none-any.whl"
+            wheel_path = directory_path / "blendjob-0.1.19-py3-none-any.whl"
             wheel_path.write_bytes(b"wheel")
             original_dist = pack.DIST_DIR
             pack.DIST_DIR = directory_path / "dist"
@@ -159,7 +159,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                 self.assertIn("operators/cutout_tool/polygon.py", names)
                 self.assertIn("licenses/scikit-image.txt", names)
                 self.assertIn(
-                    "wheels/blendjob-0.1.18-py3-none-any.whl",
+                    "wheels/blendjob-0.1.19-py3-none-any.whl",
                     names,
                 )
                 self.assertNotIn("anyimage/__init__.py", names)
@@ -174,7 +174,7 @@ class ExtensionPackagingTest(unittest.TestCase):
         self.assertEqual(
             pack.project_dependencies(),
             [
-                "blendjob==0.1.18",
+                "blendjob==0.1.19",
                 "numpy>=1.26,<2.0",
                 "scipy==1.15.3",
                 "materialyoucolor==3.0.4",
@@ -187,7 +187,7 @@ class ExtensionPackagingTest(unittest.TestCase):
         wheels = [
             Path(name)
             for name in (
-                "blendjob-0.1.18-py3-none-any.whl",
+                "blendjob-0.1.19-py3-none-any.whl",
                 "numpy-1.26.4-cp311-cp311-win_amd64.whl",
                 "scipy-1.15.3-cp311-cp311-win_amd64.whl",
             )
@@ -216,12 +216,12 @@ class ExtensionPackagingTest(unittest.TestCase):
                     if target.name == "3.13":
                         constraints = Path(command[command.index("--constraint") + 1])
                         self.assertEqual(
-                            constraints.read_text(), "blendjob==0.1.18"
+                            constraints.read_text(), "blendjob==0.1.19"
                         )
                     else:
                         self.assertNotIn("--constraint", command)
                     for name in (
-                        "blendjob-0.1.18-py3-none-any.whl",
+                        "blendjob-0.1.19-py3-none-any.whl",
                         f"scipy-1.15.3-{tag}-{tag}-{config.pip_platform}.whl",
                         f"numpy-2.1.0-{tag}-{tag}-{config.pip_platform}.whl",
                     ):
@@ -237,7 +237,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                     ("numpy>=1.26,<2.0", "numpy>=2.1,<3.0"),
                 ):
                     command = call.args[0]
-                    self.assertIn("blendjob==0.1.18", command)
+                    self.assertIn("blendjob==0.1.19", command)
                     self.assertNotIn(str(pack.SOURCE_DIR / "wheels"), command)
                     self.assertIn(f"--python-version={version}", command)
                     self.assertIn("--implementation=cp", command)
@@ -271,7 +271,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             def fake_run(command, check):
                 target = Path(command[command.index("--dest") + 1])
                 if target.name == "3.11":
-                    (target / "blendjob-0.1.18-py3-none-any.whl").write_bytes(b"wheel")
+                    (target / "blendjob-0.1.19-py3-none-any.whl").write_bytes(b"wheel")
 
             with patch.object(pack.subprocess, "run", side_effect=fake_run):
                 with self.assertRaisesRegex(RuntimeError, "Python 3.13"):
@@ -340,7 +340,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                 target = Path(command[command.index("--dest") + 1])
                 if target.name == "3.13":
                     raise RuntimeError("download failed")
-                (target / "blendjob-0.1.18-py3-none-any.whl").write_bytes(b"wheel")
+                (target / "blendjob-0.1.19-py3-none-any.whl").write_bytes(b"wheel")
 
             with (
                 patch.object(pack, "SOURCE_DIR", source),

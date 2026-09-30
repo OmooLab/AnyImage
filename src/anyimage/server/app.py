@@ -1,6 +1,6 @@
 """AnyImage Job Server without Blender dependencies."""
 
-from .job_files import AnyImageJobServer
+from blendjob import JobServer
 
 from .jobs.cutout import run as _generate_cutout_artifacts
 from .jobs.depth_plane import run as _generate_depth_plane_geometry
@@ -10,7 +10,7 @@ from .jobs.upscale import run as _upscale_image
 from .model_manager import ModelManager
 from .models.onnx_runtime import OnnxResourceError
 
-server = AnyImageJobServer("AnyImage Job Server")
+server = JobServer("AnyImage Job Server")
 
 
 def _run_model_job(handler, context, parameters):

@@ -6,7 +6,7 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.common.hdr_image import HdrBackgroundInput
+from anyimage.operators.background_hdr import HdrBackgroundInput
 from anyimage.common.image import cleanup_image_input, image_rgba
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators import remove_background as operators

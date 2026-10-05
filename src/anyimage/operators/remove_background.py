@@ -13,7 +13,7 @@ from ..common.ai import (
 
 from ..common.image import cleanup_image_input
 from ..common.image_target import ImageEditTarget, image_edit_owner
-from ..common.hdr_image import HdrBackgroundInput
+from .background_hdr import HdrBackgroundInput
 
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}

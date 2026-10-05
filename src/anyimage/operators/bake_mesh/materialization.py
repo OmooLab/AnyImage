@@ -200,7 +200,7 @@ def bake_normal(material, layer_name, size):
     created = []
     try:
         image = bpy.data.images.new("Mesh bake normal", width=size[0], height=size[1], alpha=True, float_buffer=True)
-        image.colorspace_settings.name = "Non-Color"
+        image.colorspace_settings.is_data = True
         layer.node_tree = group
         layer.inputs["Bump Scale"].default_value = 0
         layer.inputs["Normal Scale"].default_value = 1

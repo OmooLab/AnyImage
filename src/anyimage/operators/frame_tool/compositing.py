@@ -1,12 +1,7 @@
 """Composite projected image samples with independent RGB and Alpha coverage."""
 
 import math
-from ...common.image import (
-    PROJECTIVE_CHUNK_ROWS,
-    homography_from_points,
-    sample_rgba,
-    transform_homography,
-)
+from ...common.projective_image import PROJECTIVE_CHUNK_ROWS, homography_from_points, sample_rgba, transform_homography
 from .projection import frame_source_coordinates
 
 

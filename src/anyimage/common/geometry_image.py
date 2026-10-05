@@ -1,11 +1,11 @@
-"""Load and scale Depth file artifacts shared by Blender workflows."""
+"""Load geometry images and interpret depth metadata, samples, and scales."""
 
 import json
 from pathlib import Path
 
 import bpy
 
-from .image import depth_data_name, image_empty_bounds
+from .image import image_base_name, image_empty_bounds
 
 
 PLANE_VARIANCE_FLOOR_RATIO = 0.025
@@ -15,6 +15,44 @@ REFERENCE_DEPTH_RANGE_FACTOR = 1.1
 REFERENCE_DEPTH_BASELINE = 8.0
 DEPTH_LIMIT_MEDIAN_FACTOR = 1.2
 FLAT_DEPTH_DIRECTION = (0.0, 1.0, 0.0)
+
+
+def depth_data_name(source_object):
+    return f"{image_base_name(source_object.data)}_depth.exr"
+
+
+def normal_data_name(source_object):
+    return f"{image_base_name(source_object.data)}_normal.png"
+
+
+def load_normal_result_image(path, source_object):
+    """Load, name, configure, and pack a generated normal image."""
+    image = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        image.name = normal_data_name(source_object)
+        image.colorspace_settings.is_data = True
+        image.pack()
+        return image
+    except Exception:
+        bpy.data.images.remove(image, do_unlink=True)
+        raise
+
+
+def load_depth_result_image(path, source_object, metadata):
+    """Load, validate, name, configure, and pack a generated Depth texture."""
+    image = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        width, height = metadata["image_size"]
+        if tuple(int(value) for value in image.size) != (width, height):
+            raise ValueError("Depth texture dimensions do not match its metadata")
+        image.name = depth_data_name(source_object)
+        image.colorspace_settings.is_data = True
+        image.alpha_mode = "CHANNEL_PACKED"
+        image.pack()
+        return image
+    except Exception:
+        bpy.data.images.remove(image, do_unlink=True)
+        raise
 
 
 def load_depth_metadata(path):
@@ -41,23 +79,6 @@ def load_depth_metadata(path):
         "image_size": image_size,
         "intrinsics": intrinsics,
     }
-
-
-def load_depth_result_image(path, source_object, metadata):
-    """Load, validate, name, configure, and pack a generated Depth texture."""
-    image = bpy.data.images.load(str(path), check_existing=False)
-    try:
-        width, height = metadata["image_size"]
-        if tuple(int(value) for value in image.size) != (width, height):
-            raise ValueError("Depth texture dimensions do not match its metadata")
-        image.name = depth_data_name(source_object)
-        image.colorspace_settings.name = "Non-Color"
-        image.alpha_mode = "CHANNEL_PACKED"
-        image.pack()
-        return image
-    except Exception:
-        bpy.data.images.remove(image, do_unlink=True)
-        raise
 
 
 def camera_depth_values(image):

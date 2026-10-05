@@ -1,7 +1,7 @@
 """Project image planes and place the view-facing Frame result."""
 
 import math
-from ...common.image import MAX_PROJECTIVE_OUTPUT_PIXELS
+from ...common.projective_image import MAX_PROJECTIVE_OUTPUT_PIXELS
 from ...common.selection import clip_polygon_halfplanes
 
 

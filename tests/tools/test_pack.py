@@ -93,8 +93,11 @@ class ExtensionPackagingTest(unittest.TestCase):
                 for path in (
                     "common/__init__.py",
                     "common/ai.py",
-                    "common/depth.py",
+                    "common/geometry_image.py",
                     "common/image.py",
+                    "common/projective_image.py",
+                    "common/polygon.py",
+                    "operators/background_hdr.py",
                     "common/material.py",
                     "common/node.py",
                     "common/object.py",
@@ -134,7 +137,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                     names,
                 )
                 self.assertIn("server/media/input.py", names)
-                self.assertIn("common/depth.py", names)
+                self.assertIn("common/geometry_image.py", names)
                 self.assertIn("server/models/geometry.py", names)
                 self.assertIn("server/jobs/remove_background.py", names)
                 self.assertIn("server/jobs/cutout.py", names)

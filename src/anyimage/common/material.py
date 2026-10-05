@@ -3,18 +3,27 @@
 import bpy
 
 from ..preferences import configured_material_view_adaptation
-from .image import (
-    VIEW_TRANSFORM_COLOR_SPACES,
-    color_alpha_mode,
-    image_base_name,
-    image_pixels,
-)
+from .image import image_base_name, image_pixels
 from .node import load_node_group
 
 
 IMAGE_MATERIAL_NODE_GROUP_NAME = "O Image Layer"
 DEPTH_MATERIAL_NODE_GROUP_NAME = "O Image Depth Layer"
 SHADELESS_NODE_GROUP_NAME = "O Shadeless"
+
+
+VIEW_TRANSFORM_COLOR_SPACES = (
+    ("ACES 1.3", "ACES 1.3 sRGB"),
+    ("ACES 2.0", "ACES 2.0 sRGB"),
+    ("AgX", "AgX Base sRGB"),
+    ("Filmic", "Filmic sRGB"),
+    ("Khronos PBR Neutral", "Khronos PBR Neutral sRGB"),
+)
+
+
+def color_alpha_mode(color_space):
+    """Pair inverse view color spaces with straight alpha."""
+    return "STRAIGHT" if color_space in dict(VIEW_TRANSFORM_COLOR_SPACES).values() else "PREMUL"
 
 
 def material_color_space_name(scene):

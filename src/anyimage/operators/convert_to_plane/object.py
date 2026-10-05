@@ -2,16 +2,13 @@
 
 import bpy
 
-from ...common.image import (
-    image_empty_bounds,
-    load_normal_result_image,
-    require_conversion_source,
-)
-from ...common.depth import (
+from ...common.image import image_empty_bounds, require_conversion_source
+from ...common.geometry_image import (
     depth_uniform_scale,
     fit_image_depth_direction,
     load_depth_metadata,
     load_depth_result_image,
+    load_normal_result_image,
     reference_depth,
 )
 from ...common.coordinate import canonical_direction_to_legacy

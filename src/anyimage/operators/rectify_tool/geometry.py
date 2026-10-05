@@ -6,10 +6,7 @@ from ...common.selection import (
     clip_polygon_halfplanes,
     trim_pixels_to_alpha,
 )
-from ...common.image import (
-    projective_output_size,
-    warp_projective_pixels,
-)
+from ...common.projective_image import projective_output_size, warp_projective_pixels
 
 
 MIN_INTERACTIVE_ASPECT = 0.05

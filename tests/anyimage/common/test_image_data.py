@@ -67,35 +67,6 @@ class ImageDataTest(unittest.TestCase):
         )
 
 
-    def test_depth_data_uses_source_image_name(self):
-        source_object = SimpleNamespace(
-            name="obj_img",
-            data=SimpleNamespace(name="img.png"),
-        )
-
-        self.assertEqual(
-            self.modules.image.depth_data_name(source_object),
-            "img_depth.exr",
-        )
-        source_object.data.name = "img.png.001"
-        self.assertEqual(
-            self.modules.image.depth_data_name(source_object),
-            "img.001_depth.exr",
-        )
-
-
-    def test_moge_normal_name_uses_source_image_name(self):
-        source_object = SimpleNamespace(
-            name="obj_img",
-            data=SimpleNamespace(name="img.png"),
-        )
-
-        self.assertEqual(
-            self.modules.image.normal_data_name(source_object),
-            "img_normal.png",
-        )
-
-
     def test_image_empty_bounds_keep_image_aspect_and_empty_offset(self):
         source = SimpleNamespace(
             data=SimpleNamespace(size=(800, 400)),

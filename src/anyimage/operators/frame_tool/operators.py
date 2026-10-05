@@ -2,15 +2,8 @@
 
 import bpy
 
-from ...common.image import (
-    create_image_edit_result,
-    image_empty_bounds,
-    image_pixels,
-    is_image_empty,
-    premultiplied_rgba,
-    replace_empty_image,
-    is_animated_image,
-)
+from ...common.image import create_image_edit_result, image_empty_bounds, image_pixels, is_image_empty, replace_empty_image, is_animated_image
+from ...common.projective_image import premultiplied_rgba
 from ...preferences import configured_max_frame_resolution
 from ...common.viewport import (
     active_image_edit_source,

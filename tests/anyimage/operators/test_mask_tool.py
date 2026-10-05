@@ -1,3 +1,5 @@
+from anyimage.common import polygon as polygon_geometry
+
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import Mock, patch
@@ -27,10 +29,10 @@ class MaskToolTest(BlenderTestCase):
 
         self.assertTrue(selection[3, 5])
 
-        triangles = self.image_interaction.preview_fill_geometry(path)[0]
+        triangles = polygon_geometry.preview_fill_geometry(path)[0]
         preview_area = sum(
             abs(
-                self.image_interaction._triangle_cross(
+                polygon_geometry._triangle_cross(
                     triangles[index],
                     triangles[index + 1],
                     triangles[index + 2],
@@ -186,10 +188,10 @@ class MaskToolTest(BlenderTestCase):
             (1, 4),
             (0, 4),
         )
-        triangles = self.image_interaction.triangulated_polygon_vertices(polygon)
+        triangles = polygon_geometry.triangulated_polygon_vertices(polygon)
         area = sum(
             abs(
-                self.image_interaction._triangle_cross(
+                polygon_geometry._triangle_cross(
                     triangles[index],
                     triangles[index + 1],
                     triangles[index + 2],
@@ -212,7 +214,7 @@ class MaskToolTest(BlenderTestCase):
             )
         )
         with patch.dict(sys.modules, {"mathutils": mathutils}):
-            triangles = self.image_interaction.triangulated_polygon_vertices(
+            triangles = polygon_geometry.triangulated_polygon_vertices(
                 ((0, 0), (2, 0), (0, 2))
             )
 
@@ -229,7 +231,7 @@ class MaskToolTest(BlenderTestCase):
             tessellate_polygon=lambda _loops: (_ for _ in ()).throw(TypeError())
         )
         with patch.dict(sys.modules, {"mathutils": mathutils}):
-            triangles = self.image_interaction.triangulated_polygon_vertices(
+            triangles = polygon_geometry.triangulated_polygon_vertices(
                 ((0, 0), (2, 0), (0, 2))
             )
 
@@ -238,10 +240,10 @@ class MaskToolTest(BlenderTestCase):
 
     def test_image_mask_preview_fills_a_self_intersecting_lasso(self):
         polygon = ((0, 0), (4, 4), (0, 4), (4, 0))
-        triangles = self.image_interaction.preview_fill_geometry(polygon)[0]
+        triangles = polygon_geometry.preview_fill_geometry(polygon)[0]
         area = sum(
             abs(
-                self.image_interaction._triangle_cross(
+                polygon_geometry._triangle_cross(
                     triangles[index],
                     triangles[index + 1],
                     triangles[index + 2],
@@ -257,12 +259,12 @@ class MaskToolTest(BlenderTestCase):
 
     def test_image_mask_preview_detects_only_actual_self_intersections(self):
         self.assertTrue(
-            self.image_interaction.polygon_self_intersects(
+            polygon_geometry.polygon_self_intersects(
                 ((0, 0), (4, 4), (0, 4), (4, 0))
             )
         )
         self.assertFalse(
-            self.image_interaction.polygon_self_intersects(
+            polygon_geometry.polygon_self_intersects(
                 ((0, 0), (4, 0), (2, 2), (4, 4), (0, 4))
             )
         )
@@ -337,11 +339,11 @@ class MaskToolTest(BlenderTestCase):
 
 
     def test_mask_brush_round_turn_stays_inside_the_radius(self):
-        polygons = self.image_interaction.brush_footprint_polygons(
+        polygons = polygon_geometry.brush_footprint_polygons(
             ((10.0, 10.0), (30.0, 10.0), (15.0, 11.0)),
             5.0,
         )
-        bands = self.image_interaction.scanline_union_bands(polygons)
+        bands = polygon_geometry.scanline_union_bands(polygons)
         center_band = next(
             band for band in bands if band[0] <= 10.0 < band[1]
         )

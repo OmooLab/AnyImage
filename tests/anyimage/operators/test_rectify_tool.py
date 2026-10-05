@@ -1,3 +1,5 @@
+from anyimage.common import projective_image
+
 from types import SimpleNamespace
 from tests.support.blender import BlenderTestCase
 
@@ -9,7 +11,7 @@ class RectifyToolTest(BlenderTestCase):
         top_down = np.arange(3 * 4 * 4, dtype=np.float32).reshape((3, 4, 4))
         top_down /= float(top_down.max())
         top_down[:, :, 3] = 1.0
-        result = self.image_data.warp_projective_pixels(
+        result = projective_image.warp_projective_pixels(
             np.flipud(top_down).ravel(),
             (4, 3),
             ((0, 0), (4, 0), (4, 3), (0, 3)),
@@ -27,7 +29,7 @@ class RectifyToolTest(BlenderTestCase):
         import numpy as np
 
         source = np.ones((2, 2, 4), dtype=np.float32)
-        result = self.image_data.warp_projective_pixels(
+        result = projective_image.warp_projective_pixels(
             np.flipud(source).ravel(),
             (2, 2),
             ((-2, 0), (2, 0), (2, 2), (-2, 2)),
@@ -46,21 +48,21 @@ class RectifyToolTest(BlenderTestCase):
         source = np.zeros((1, 2, 4), dtype=np.float32)
         source[0, 0] = (1.0, 0.0, 0.0, 1.0)
         source[0, 1] = (0.0, 1.0, 0.0, 0.0)
-        sampled = self.image_data.sample_rgba(
-            self.image_data.premultiplied_rgba(
+        sampled = projective_image.sample_rgba(
+            projective_image.premultiplied_rgba(
                 np.flipud(source).ravel(),
                 (2, 1),
             ),
             np.asarray([[[1.0, 0.5]]]),
         )
-        straight = self.image_data.straight_rgba(sampled)
+        straight = projective_image.straight_rgba(sampled)
 
         np.testing.assert_allclose(straight[0, 0], (1.0, 0.0, 0.0, 0.5))
 
 
     def test_homography_rejects_degenerate_points(self):
         with self.assertRaisesRegex(ValueError, "degenerate"):
-            self.image_data.homography_from_points(
+            projective_image.homography_from_points(
                 ((0, 0), (1, 0), (2, 0), (3, 0)),
                 ((0, 0), (1, 0), (1, 1), (0, 1)),
             )
@@ -160,14 +162,14 @@ class RectifyToolTest(BlenderTestCase):
 
 
     def test_rectify_limits_output_pixel_count(self):
-        width, height = self.image_data.projective_output_size(
+        width, height = projective_image.projective_output_size(
             ((0, 0), (10000, 0), (10000, 10000), (0, 10000)),
             1.0,
         )
 
         self.assertLessEqual(
             width * height,
-            self.image_data.MAX_PROJECTIVE_OUTPUT_PIXELS,
+            projective_image.MAX_PROJECTIVE_OUTPUT_PIXELS,
         )
 
 

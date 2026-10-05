@@ -3,7 +3,6 @@ import bpy
 import numpy as np
 
 
-from anyimage.common import image as image_data
 from anyimage.common import material as material_data
 from tests.support.image_objects import _create_cutout_shape, _group_node
 
@@ -217,20 +216,6 @@ def test_cutout_material_uses_flat_tangent_normal():
 
     layer = _group_node(material_data.material_node_group(), result.node_tree)
     assert layer.inputs["Object Space"].default_value is False
-
-
-def test_loaded_normal_image_uses_normal_texture_name(tmp_path):
-    from PIL import Image
-
-    path = tmp_path / "normal.png"
-    Image.new("RGB", (1, 1), (128, 128, 255)).save(path)
-    source = SimpleNamespace(data=SimpleNamespace(name="Poster.png"))
-
-    image = image_data.load_normal_result_image(path, source)
-
-    assert image.name == "Poster_normal.png"
-    assert image.colorspace_settings.name == "Non-Color"
-    assert image.packed_file is not None
 
 
 def test_shared_conversion_images_use_blender_duplicate_suffix():

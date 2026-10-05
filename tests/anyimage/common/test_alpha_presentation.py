@@ -1,3 +1,5 @@
+from anyimage.common import projective_image
+
 from types import SimpleNamespace
 from unittest.mock import patch
 import bpy
@@ -197,7 +199,7 @@ def test_mask_pack_reopen_extend_and_repeat_frame_preserve_hidden_color(tmp_path
         for _ in range(2):
             source = frame_source_projection(np.eye(4), np.eye(4), np.eye(4), (-1, 1, -1, 1), (2, 2), perspective=False)
             rgba_read = images.image_rgba(result)
-            source.update(rgba=rgba_read, pixels=images.premultiplied_rgba(images.image_pixels(result), (2, 2)),
+            source.update(rgba=rgba_read, pixels=projective_image.premultiplied_rgba(images.image_pixels(result), (2, 2)),
                           image_size=(2, 2), active=True, name=result.name)
             pixels = composite_frame_pixels((source,), ((0, 2), (2, 2), (2, 0), (0, 0)), (2, 2))
             next_result = images.create_image_edit_result(result, pixels, (2, 2))

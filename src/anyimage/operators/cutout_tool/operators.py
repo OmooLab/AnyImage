@@ -34,13 +34,12 @@ from ...common.ai import (
     require_input_path,
     require_model,
 )
-from ...common.image import (
-    image_rgba,
+from ...common.image import image_rgba, require_image_empty, is_animated_image
+from ...common.geometry_image import (
+    load_depth_metadata,
+    load_depth_result_image,
     load_normal_result_image,
-    require_image_empty,
-    is_animated_image,
 )
-from ...common.depth import load_depth_metadata, load_depth_result_image
 from ...common.color_image import (
     cleanup_material_color_input,
     load_material_color_image,

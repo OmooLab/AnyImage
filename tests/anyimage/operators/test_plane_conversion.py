@@ -7,7 +7,7 @@ from tests.support.planes import surface
 def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surface, monkeypatch):
     from anyimage.operators.convert_to_plane import object as conversion
     from anyimage.common.image import image_empty_bounds
-    from anyimage.common.depth import reference_depth
+    from anyimage.common.geometry_image import reference_depth
     from mathutils import Matrix, Vector
 
     obj, _, _, inputs, image = surface

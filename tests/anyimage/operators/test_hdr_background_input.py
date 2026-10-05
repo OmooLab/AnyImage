@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.common.hdr_image import HdrBackgroundInput, recognition_rgba, save_hdr_result
+from anyimage.operators.background_hdr import HdrBackgroundInput
+from anyimage.common.hdr_image import recognition_rgba, save_hdr_result
 from anyimage.common.image import cleanup_image_input, image_content_state, image_rgba, restore_image_content
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.common import image_target as targets

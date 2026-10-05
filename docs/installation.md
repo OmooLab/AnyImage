@@ -1,5 +1,7 @@
 # 安装
 
+不建议使用 Microsoft Store 或 Steam 版 Blender 安装插件，可能出现依赖安装或加载异常。建议使用 [Blender 官网](https://www.blender.org/download/)下载的版本。
+
 AnyImage 支持拖拽和手动安装，选择一种方式即可。
 
 ## 拖入 Blender

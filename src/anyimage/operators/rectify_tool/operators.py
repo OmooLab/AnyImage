@@ -22,15 +22,8 @@ from ...common.viewport import (
     screen_path_to_image_pixels,
     serialize_matrix,
 )
-from ...common.image import (
-    create_image_edit_result,
-    image_pixels,
-    image_empty_bounds,
-    replace_empty_image,
-    require_image_empty,
-    is_animated_image,
-    warp_projective_pixels,
-)
+from ...common.image import create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
+from ...common.projective_image import warp_projective_pixels
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
     MIN_INTERACTIVE_ASPECT,

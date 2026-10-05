@@ -1,3 +1,5 @@
+from anyimage.common import geometry_image
+
 from unittest.mock import patch
 import bpy
 import numpy as np
@@ -5,7 +7,6 @@ import pytest
 from mathutils import Vector
 
 
-from anyimage.common import depth as depth_data
 from tests.support.color_image import color_image as prepared_color_image
 from anyimage.common import image as image_data
 from anyimage.common import material as material_data
@@ -43,20 +44,21 @@ def test_depth_result_image_loads_camera_exr_and_keeps_data_name(tmp_path):
     write_depth_texture(frame, path, alpha=alpha)
     metadata = _depth_metadata(np.eye(3), (2, 2))
 
-    image = depth_data.load_depth_result_image(path, source, metadata)
+    image = geometry_image.load_depth_result_image(path, source, metadata)
 
     packed = np.empty(16, dtype=np.float32)
     image.pixels.foreach_get(packed)
     packed = np.flipud(packed.reshape((2, 2, 4)))
     assert np.array_equal(packed[..., :3], points)
     assert np.array_equal(packed[..., 3], alpha * validity)
-    camera_depth, valid = depth_data.camera_depth_values(image)
+    camera_depth, valid = geometry_image.camera_depth_values(image)
     np.testing.assert_array_equal(camera_depth, points[..., 2])
     np.testing.assert_array_equal(
         valid,
-        alpha * validity > depth_data.DEPTH_ALPHA_THRESHOLD,
+        alpha * validity > geometry_image.DEPTH_ALPHA_THRESHOLD,
     )
     assert image.alpha_mode == "CHANNEL_PACKED"
+    assert image.colorspace_settings.is_data
     assert image.name == "Source_depth.exr"
 
 
@@ -76,10 +78,10 @@ def test_cutout_depth_result_keeps_the_single_server_image(tmp_path):
     write_depth_texture(frame, path, alpha=np.ones((2, 2)))
     metadata = _depth_metadata(np.eye(3), (2, 2))
 
-    image = depth_data.load_depth_result_image(path, source, metadata)
+    image = geometry_image.load_depth_result_image(path, source, metadata)
 
     assert tuple(image.size) == (2, 2)
-    camera_depth, valid = depth_data.camera_depth_values(image)
+    camera_depth, valid = geometry_image.camera_depth_values(image)
     np.testing.assert_array_equal(camera_depth, points[..., 2])
     assert valid.all()
 
@@ -98,7 +100,7 @@ def test_depth_texture_keeps_points_outside_positive_validity(tmp_path):
     path = tmp_path / "depth.exr"
     write_depth_texture(frame, path, alpha=np.ones_like(frame.validity))
 
-    image = depth_data.load_depth_result_image(
+    image = geometry_image.load_depth_result_image(
         path,
         source,
         _depth_metadata(np.eye(3), (2, 1)),
@@ -210,7 +212,7 @@ def test_depth_surface_object_evaluates(gesture):
         modifier,
         object_data.modifier_input_identifier(modifier.node_group, "Depth Limit"),
     ) == pytest.approx(
-        (depth_data.DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
+        (geometry_image.DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
         * modifier_value(modifier, scale_id)
     )
     object_data.set_modifier_input(
@@ -376,8 +378,8 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     model_reference = value(modifier, "Reference Depth") / value(modifier, "Uniform Scale")
     expected_limit = max(
         (
-            depth_data.DEPTH_LIMIT_MEDIAN_FACTOR
-            * depth_data.median_depth(depth_image, reference_mask)
+            geometry_image.DEPTH_LIMIT_MEDIAN_FACTOR
+            * geometry_image.median_depth(depth_image, reference_mask)
             - model_reference
         )
         * value(modifier, "Uniform Scale"),

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 
-from anyimage.common.image import premultiplied_rgba
+from anyimage.common.projective_image import premultiplied_rgba
 from anyimage.operators.frame_tool import compositing as frame
 from anyimage.operators.frame_tool.projection import frame_source_projection
 

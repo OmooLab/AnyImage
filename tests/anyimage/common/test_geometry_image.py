@@ -1,4 +1,4 @@
-"""Verify shared Depth calibration and metadata from Depth artifacts."""
+"""Verify geometry image loading and depth calibration."""
 
 import json
 from types import SimpleNamespace
@@ -6,8 +6,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from anyimage.common import geometry_image
 from anyimage.common.coordinate import canonical_direction_to_symmetry_legacy
-from anyimage.common.depth import (
+from anyimage.common.geometry_image import (
     FLAT_DEPTH_DIRECTION,
     REFERENCE_DEPTH_BASELINE,
     depth_uniform_scale,
@@ -212,3 +213,37 @@ def test_depth_uniform_scale_converts_model_units_at_the_reference_depth():
     )
 
     assert uniform_scale == pytest.approx(2.0)
+
+
+def test_depth_data_uses_source_image_name():
+    source_object = SimpleNamespace(
+        name="obj_img",
+        data=SimpleNamespace(name="img.png"),
+    )
+
+    assert geometry_image.depth_data_name(source_object) == "img_depth.exr"
+    source_object.data.name = "img.png.001"
+    assert geometry_image.depth_data_name(source_object) == "img.001_depth.exr"
+
+
+def test_normal_name_uses_source_image_name():
+    source_object = SimpleNamespace(
+        name="obj_img",
+        data=SimpleNamespace(name="img.png"),
+    )
+
+    assert geometry_image.normal_data_name(source_object) == "img_normal.png"
+
+
+def test_loaded_normal_image_uses_normal_texture_name(tmp_path):
+    from PIL import Image
+
+    path = tmp_path / "normal.png"
+    Image.new("RGB", (1, 1), (128, 128, 255)).save(path)
+    source = SimpleNamespace(data=SimpleNamespace(name="Poster.png"))
+
+    image = geometry_image.load_normal_result_image(path, source)
+
+    assert image.name == "Poster_normal.png"
+    assert image.colorspace_settings.is_data
+    assert image.packed_file is not None

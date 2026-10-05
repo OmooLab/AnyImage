@@ -5,7 +5,7 @@ from pathlib import Path
 
 import bpy
 
-from ...common.depth import load_depth_result_image
+from ...common.geometry_image import load_depth_result_image
 from ...common.image import require_conversion_source
 from ...common.color_image import material_color_image
 from ...common.material import create_emission_material

@@ -5,7 +5,7 @@ from enum import StrEnum
 import bpy
 
 from ...common.coordinate import canonical_direction_to_symmetry_legacy
-from ...common.depth import (
+from ...common.geometry_image import (
     DEPTH_LIMIT_MEDIAN_FACTOR,
     depth_uniform_scale,
     fit_symmetry_depth_direction,

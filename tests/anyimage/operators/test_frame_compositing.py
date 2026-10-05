@@ -1,3 +1,5 @@
+from anyimage.common import projective_image
+
 import unittest
 from unittest.mock import patch
 from anyimage.common import image as image_data, selection
@@ -20,7 +22,7 @@ class FrameCompositingTest(unittest.TestCase):
                 "name": name,
                 "perspective": True,
                 "pixels": pixels,
-                "rgba": image_data.straight_rgba(pixels),
+                "rgba": projective_image.straight_rgba(pixels),
                 "region_size": (2.0, 2.0),
                 "screen_to_source": np.asarray(
                     ((1.0, 0.0, 0.0), (0.0, -1.0, 1.0), (0.0, 0.0, 1.0))
@@ -272,7 +274,7 @@ class FrameCompositingTest(unittest.TestCase):
             (source,), ((0, 1), (2, 1), (2, 0), (0, 0)), (1, 1)
         )
         np.testing.assert_allclose(framed, (0.5, 0, 0.5, 0))
-        sampled = image_data.sample_rgba(
+        sampled = projective_image.sample_rgba(
             transparent, np.asarray(((1, 0.5), (-1, 0.5)))
         )
         np.testing.assert_allclose(sampled, ((0.5, 0, 0.5, 0), (0, 0, 0, 0)))
@@ -297,7 +299,7 @@ class FrameCompositingTest(unittest.TestCase):
         )
         source.update(
             active=active, name=name, image_size=(width, height), rgba=rgba,
-            pixels=image_data.premultiplied_rgba(
+            pixels=projective_image.premultiplied_rgba(
                 np.flipud(rgba).ravel(), (width, height)
             ),
         )

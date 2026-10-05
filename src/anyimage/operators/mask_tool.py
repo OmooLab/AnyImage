@@ -12,12 +12,8 @@ from ..common.selection import (
     rasterize_selection_union,
     SelectionPath,
 )
-from ..common.viewport import (
-    brush_footprint_polygons,
-    ImageGesture,
-    report_image_edit_exception,
-    screen_path_to_image_pixels,
-)
+from ..common.polygon import brush_footprint_polygons
+from ..common.viewport import ImageGesture, report_image_edit_exception, screen_path_to_image_pixels
 from ..properties import (
     mask_gesture_property,
     mask_mode_property,

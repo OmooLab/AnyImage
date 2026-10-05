@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from anyimage.common.color_palette import extract_reference_palette
+from anyimage.common.color_palette import extract_reference_palette, _merge_palette_colors
 
 
 def _rgba(rgb, alpha=1.0):
@@ -79,3 +79,10 @@ def test_palette_selects_distinct_colors_close_to_source():
     source_colors = rgb.reshape((-1, 3))
     for color in colors:
         assert np.min(np.linalg.norm(source_colors - color, axis=1)) < 0.04
+
+
+def test_close_dark_colors_merge_without_averaging_distinct_accents():
+    colors = np.asarray(((.002, .003, .002), (.003, .004, .003), (.8, .02, .01)), dtype=np.float32)
+    merged, weights = _merge_palette_colors(colors, np.asarray((.6, .35, .05)))
+    np.testing.assert_array_equal(merged, colors[[0, 2]])
+    np.testing.assert_allclose(weights, (.95, .05))

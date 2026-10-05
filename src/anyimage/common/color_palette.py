@@ -6,6 +6,8 @@ from materialyoucolor.score.score import Score, ScoreOptions
 
 from .color_space import linear_rgb_to_oklab, linear_rgb_to_srgb, srgb_to_linear_rgb
 
+_PALETTE_MERGE_DISTANCE = 0.06
+
 
 def extract_reference_palette(rgba):
     """Return up to four prominent linear RGB colors and assigned area weights."""
@@ -24,7 +26,6 @@ def extract_reference_palette(rgba):
     rgb = np.clip(pixels[np.searchsorted(cumulative, positions), :3], 0.0, 1.0)
     srgb = linear_rgb_to_srgb(rgb)
     populations = QuantizeCelebi(np.rint(srgb * 255).astype(np.uint8).tolist(), 128)
-    # Keep rare accents and neutral images eligible; never synthesize a fallback hue.
     selected = Score.score(populations, ScoreOptions(desired=4, filter=False))
     candidates = np.asarray(list(populations), dtype=np.uint32)
 
@@ -45,4 +46,26 @@ def extract_reference_palette(rgba):
         minlength=len(colors),
     )
     weights /= weights.sum()
+    colors, weights = _merge_palette_colors(colors, weights)
     return colors.astype(np.float32), weights.astype(np.float32)
+
+
+def _merge_palette_colors(colors, weights):
+    """Merge perceptually close colors while retaining selected representatives."""
+    lab = linear_rgb_to_oklab(colors)
+    distances = np.linalg.norm(lab[:, None, :] - lab[None, :, :], axis=2)
+    groups = [[index] for index in range(len(colors))]
+    while len(groups) > 1:
+        distance, first, second = min(
+            (
+                (float(distances[np.ix_(groups[first], groups[second])].max()), first, second)
+                for first in range(len(groups))
+                for second in range(first + 1, len(groups))
+            ),
+        )
+        if distance >= _PALETTE_MERGE_DISTANCE:
+            break
+        groups[first].extend(groups.pop(second))
+    representatives = [max(group, key=lambda index: weights[index]) for group in groups]
+    merged_weights = np.asarray([weights[group].sum() for group in groups])
+    return colors[representatives], merged_weights / merged_weights.sum()

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import bpy
 
+TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
 
 IMAGE_NAME_SUFFIXES = (
     ".jpeg",
@@ -163,6 +164,9 @@ def is_color_reference_candidate(image):
     if not is_static_image(image):
         return False
     try:
+        get = getattr(image, "get", None)
+        if get is not None and get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
+            return False
         name = image_base_name(image)
         stem, separator, duplicate = name.rpartition(".")
         if separator and duplicate.isdigit():
@@ -317,6 +321,12 @@ def restore_image_content(image, state):
             image.scale(*state["size"])
         image.pixels.foreach_set(state["pixels"])
         image.update()
+    preview = image.preview
+    if preview is not None:
+        preview.reload()
+    from .color_reference import refresh_edited_color_reference
+
+    refresh_edited_color_reference(image)
 
 
 def replace_empty_image(source_object, result_image, *, placement_bounds=None,

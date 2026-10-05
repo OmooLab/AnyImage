@@ -3,7 +3,11 @@ import sys
 
 import bpy
 
-from .common.color_reference import clear_color_references, get_color_reference
+from .common.color_reference import (
+    clear_color_references,
+    color_reference_preview_icon,
+    get_color_reference,
+)
 from .common.image import is_color_reference_candidate
 from .runtime import runtime
 from .server import model_catalog as shared_model_catalog
@@ -18,6 +22,7 @@ DEVICE_LABELS = {
 }
 
 _COLOR_REFERENCE_ITEMS = []
+_COLOR_REFERENCE_ITEMS_KEY = None
 COLOR_REFERENCE_PALETTE_SIZE = 4
 COLOR_REFERENCE_PALETTE_PROPERTIES = tuple(
     f"color_reference_palette_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
@@ -36,12 +41,25 @@ def color_reference_candidates():
     ]
 
 
+def invalidate_color_reference_items():
+    """Rebuild gallery icons after their runtime previews have been released."""
+    global _COLOR_REFERENCE_ITEMS_KEY
+    _COLOR_REFERENCE_ITEMS_KEY = None
+
+
 def color_reference_items(_settings, _context):
-    global _COLOR_REFERENCE_ITEMS
+    global _COLOR_REFERENCE_ITEMS, _COLOR_REFERENCE_ITEMS_KEY
+    candidates = color_reference_candidates()
+    key = tuple(
+        (image.session_uid, image.name, tuple(image.size), color_reference_preview_icon(image))
+        for image in candidates
+    )
+    if key == _COLOR_REFERENCE_ITEMS_KEY:
+        return _COLOR_REFERENCE_ITEMS
     items = [("NONE", "None", "No color reference", "X", 0)]
-    for index, image in enumerate(color_reference_candidates(), start=1):
+    for index, image in enumerate(candidates, start=1):
         try:
-            icon = image.preview_ensure().icon_id
+            icon = color_reference_preview_icon(image) or image.preview_ensure().icon_id
         except (AttributeError, ReferenceError, RuntimeError):
             icon = "IMAGE_DATA"
         items.append(
@@ -54,6 +72,7 @@ def color_reference_items(_settings, _context):
             )
         )
     _COLOR_REFERENCE_ITEMS = items
+    _COLOR_REFERENCE_ITEMS_KEY = key
     return _COLOR_REFERENCE_ITEMS
 
 
@@ -67,11 +86,13 @@ def get_color_reference_choice(settings):
 
 def set_color_reference_choice(settings, value):
     candidates = color_reference_candidates()
-    settings.color_reference = (
+    reference = (
         candidates[value - 1]
         if 0 < value <= len(candidates)
         else None
     )
+    if settings.color_reference != reference:
+        settings.color_reference = reference
 
 
 def update_color_reference_palette(settings, _context, *, refresh=True):

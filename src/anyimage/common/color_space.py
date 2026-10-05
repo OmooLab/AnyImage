@@ -18,11 +18,20 @@ _LMS_TO_OKLAB = np.asarray(
     ),
     dtype=np.float32,
 )
+_OKLAB_TO_LMS = np.linalg.inv(_LMS_TO_OKLAB)
+_LMS_TO_RGB = np.linalg.inv(_RGB_TO_LMS)
 
 def linear_rgb_to_oklab(rgb):
     """Convert linear Rec.709 RGB values to OKLab."""
     rgb = np.asarray(rgb, dtype=np.float32)
     return np.cbrt(rgb @ _RGB_TO_LMS) @ _LMS_TO_OKLAB
+
+
+def oklab_to_linear_rgb(lab):
+    """Convert OKLab to linear Rec.709 RGB without clipping."""
+    lab = np.asarray(lab, dtype=np.float32)
+    lms = lab @ _OKLAB_TO_LMS
+    return (lms * lms * lms) @ _LMS_TO_RGB
 
 
 def linear_rgb_to_srgb(rgb):

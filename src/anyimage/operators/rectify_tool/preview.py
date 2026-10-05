@@ -4,7 +4,7 @@ import math
 
 import bpy
 
-from ...common.image import image_base_name
+from ...common.image import TEMPORARY_IMAGE_PREVIEW_PROPERTY, image_base_name
 from ...common.image_preview import draw_centered_text
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
@@ -97,6 +97,7 @@ def create_perspective_preview_image(source_image, pixels):
         alpha=True,
     )
     try:
+        image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
         image.colorspace_settings.name = "sRGB"
         image.alpha_mode = "STRAIGHT"
         image.pixels.foreach_set(pixels)

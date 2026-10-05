@@ -6,7 +6,8 @@ import bpy
 import numpy as np
 
 from ..common.color_match import (
-    MIX_LIMITS,
+    COLOR_LIMITS,
+    LIGHTNESS_LIMITS,
     apply_color_match,
     build_color_match,
     resize_rgba_proxy,
@@ -14,6 +15,7 @@ from ..common.color_match import (
 from ..common.color_reference import get_color_reference
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
+    TEMPORARY_IMAGE_PREVIEW_PROPERTY,
     create_image_edit_result,
     image_rgba,
     is_color_reference_candidate,
@@ -56,6 +58,7 @@ def create_color_preview_image(source_image, rgba):
         float_buffer=bool(source_image.is_float),
     )
     try:
+        image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
         image.colorspace_settings.name = source_image.colorspace_settings.name
         image.alpha_mode = source_image.alpha_mode
         image.pixels.foreach_set(np.flipud(rgba).ravel())
@@ -96,7 +99,7 @@ class MatchColorReference(bpy.types.Operator):
 
     def execute(self, context):
         """Apply the default full-resolution match for direct execution."""
-        return MatchColorReference._commit(self, context, 0.5)
+        return MatchColorReference._commit(self, context, 0.5, 0.0)
 
     def invoke(self, context, event):
         """Start an interactive proxy preview."""
@@ -112,7 +115,7 @@ class MatchColorReference(bpy.types.Operator):
             self._target = ImageEditTarget.capture(context)
             if self._target.image == reference:
                 raise ValueError("The color reference and target must be different images")
-            prepared = get_color_reference(reference)
+            prepared = get_color_reference(reference, refresh=True)
             self._reference = prepared
             self._reference_image = reference
             self._target_rgba = image_rgba(self._target.image)
@@ -121,8 +124,10 @@ class MatchColorReference(bpy.types.Operator):
                 resize_rgba_proxy(image_rgba_to_linear(self._target.image, self._target_rgba)),
                 target_float=bool(self._target.image.is_float),
             )
-            self._mix = 0.5
+            self._color = 0.5
+            self._lightness = 0.0
             self._mouse_x = event.mouse_x
+            self._mouse_y = event.mouse_y
             preview_rgba = self._preview_pixels()
             self._preview_image = create_color_preview_image(
                 self._target.image, preview_rgba
@@ -149,7 +154,7 @@ class MatchColorReference(bpy.types.Operator):
             return {"CANCELLED"}
         if event.value == "PRESS" and event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"}:
             try:
-                return self._commit(context, self._mix, target=self._target)
+                return self._commit(context, self._color, self._lightness, target=self._target)
             finally:
                 self._finish()
         if event.type not in {"MOUSEMOVE", "TIMER"}:
@@ -158,12 +163,17 @@ class MatchColorReference(bpy.types.Operator):
             scale = self._MOUSE_SCALE * (
                 self._PRECISE_SCALE if getattr(event, "shift", False) else 1.0
             )
-            mix = float(np.clip(
-                self._mix + (event.mouse_x - self._mouse_x) * scale, *MIX_LIMITS,
+            color = float(np.clip(
+                self._color + (event.mouse_x - self._mouse_x) * scale, *COLOR_LIMITS,
             ))
-            self._preview_dirty |= mix != self._mix
-            self._mix = mix
+            lightness = float(np.clip(
+                self._lightness + (event.mouse_y - self._mouse_y) * scale, *LIGHTNESS_LIMITS,
+            ))
+            self._preview_dirty |= color != self._color or lightness != self._lightness
+            self._color = color
+            self._lightness = lightness
             self._mouse_x = event.mouse_x
+            self._mouse_y = event.mouse_y
             self._tag_redraw()
         now = time.perf_counter()
         if not self._preview_dirty or now - self._last_preview_time < self._PREVIEW_INTERVAL:
@@ -185,10 +195,10 @@ class MatchColorReference(bpy.types.Operator):
     def _preview_pixels(self):
         return linear_rgba_to_image(
             self._target.image,
-            apply_color_match(self._preview_match, mix=self._mix),
+            apply_color_match(self._preview_match, color=self._color, lightness=self._lightness),
         )
 
-    def _commit(self, context, mix, *, target=None):
+    def _commit(self, context, color, lightness, *, target=None):
         reference = current_color_reference(context)
         try:
             target = target or ImageEditTarget.capture(context)
@@ -206,14 +216,20 @@ class MatchColorReference(bpy.types.Operator):
                     raise RuntimeError("The color reference changed during preview")
                 if not np.array_equal(target_rgba, self._target_rgba):
                     raise RuntimeError("The target pixels changed during preview")
-            if mix == 0.0:
+            if color == 0.0 and lightness == 0.0:
                 return {"FINISHED"}
             matched = apply_color_match(
                 build_color_match(
                     prepared.transfer, image_rgba_to_linear(target.image, target_rgba),
                     target_float=bool(target.image.is_float),
+                    prepared_match=(
+                        self._preview_match
+                        if target is getattr(self, "_target", None)
+                        else None
+                    ),
                 ),
-                mix=mix,
+                color=color,
+                lightness=lightness,
             )
             result = create_image_edit_result(
                 target.image,
@@ -256,14 +272,14 @@ class MatchColorReference(bpy.types.Operator):
         draw_preview_frame(bounds)
         center_x = left + draw_width * 0.5
         draw_centered_text(
-            f"Mix {self._mix * 100:.0f}%",
+            f"Color {self._color * 100:.0f}%  ·  Lightness {self._lightness * 100:.0f}%",
             center_x,
             bottom + draw_height * 0.5 - 10.0,
             22,
             (0.25, 0.65, 1.0, 1.0),
         )
         draw_centered_text(
-            "Move horizontally: Mix  •  Shift: Fine",
+            "Move horizontally: Color  •  vertically: Lightness  •  Shift: Fine",
             center_x,
             bottom - 26.0,
             13,

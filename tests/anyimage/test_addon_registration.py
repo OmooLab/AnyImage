@@ -178,8 +178,7 @@ class AddonRegistrationTest(BlenderTestCase):
 
         self.anyimage.register()
         cache = self.anyimage.color_reference
-        self.assertTrue(self.fake_bpy.app.timers.is_registered(cache.refresh_color_references))
-        self.assertIn(cache.clear_color_references, self.fake_bpy.app.handlers.load_post)
+        self.assertIn(cache.restore_color_references, self.fake_bpy.app.handlers.load_post)
         system_classes = self.anyimage.runtime.operator_classes()
 
         self.assertTrue(set(system_classes) <= set(self.registered))
@@ -250,7 +249,6 @@ class AddonRegistrationTest(BlenderTestCase):
             list(reversed(self.anyimage.CLASSES)),
         )
         self.assertEqual(self.registered, [])
-        self.assertFalse(self.fake_bpy.app.timers.is_registered(cache.refresh_color_references))
         self.assertEqual(self.fake_bpy.app.handlers.load_post, [])
         self.assertEqual(self.fake_bpy.app.handlers.undo_post, [])
         self.assertEqual(self.fake_bpy.app.handlers.redo_post, [])

@@ -70,7 +70,11 @@ class RectifyToolTest(BlenderTestCase):
 
     def test_rectify_preview_uses_srgb_without_changing_pixels(self):
         written = []
-        preview = SimpleNamespace(
+        class PreviewImage(SimpleNamespace):
+            def __setitem__(self, key, value):
+                setattr(self, key, value)
+
+        preview = PreviewImage(
             colorspace_settings=SimpleNamespace(name="Non-Color"),
             alpha_mode=None,
             pixels=SimpleNamespace(foreach_set=written.extend),
@@ -95,6 +99,7 @@ class RectifyToolTest(BlenderTestCase):
         self.assertIs(result, preview)
         self.assertEqual(preview.colorspace_settings.name, "sRGB")
         self.assertEqual(preview.alpha_mode, "STRAIGHT")
+        self.assertTrue(preview.anyimage_temporary_preview)
         self.assertEqual(written, list(pixels))
 
 

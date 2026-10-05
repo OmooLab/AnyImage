@@ -1,5 +1,86 @@
 """Shared image preview layout and overlay drawing."""
 
+from functools import lru_cache
+
+import numpy as np
+
+from .color_space import linear_rgb_to_srgb
+
+
+def create_preview_texture(linear_rgba):
+    """Upload top-down straight linear Rec.709 RGBA for fixed sRGB display."""
+    import gpu
+
+    rgba = np.asarray(linear_rgba, dtype=np.float32).copy()
+    rgba[..., :3] = np.clip(linear_rgb_to_srgb(rgba[..., :3]), 0.0, 1.0)
+    height, width = rgba.shape[:2]
+    pixels = np.ascontiguousarray(np.flipud(rgba)).ravel()
+    return gpu.types.GPUTexture(
+        (width, height), format="RGBA32F",
+        data=gpu.types.Buffer("FLOAT", pixels.size, pixels),
+    )
+
+
+@lru_cache(maxsize=1)
+def _preview_shader():
+    """Convert encoded display colors to the active framebuffer's space."""
+    import gpu
+
+    interface = gpu.types.GPUStageInterfaceInfo("anyimage_preview")
+    interface.smooth("VEC2", "uv")
+    info = gpu.types.GPUShaderCreateInfo()
+    info.push_constant("MAT4", "ModelViewProjectionMatrix")
+    # Blender sets this built-in uniform when binding the active framebuffer.
+    info.push_constant("BOOL", "srgbTarget")
+    info.vertex_in(0, "VEC2", "pos")
+    info.vertex_in(1, "VEC2", "texCoord")
+    info.vertex_out(interface)
+    info.sampler(0, "FLOAT_2D", "image")
+    info.fragment_out(0, "VEC4", "fragColor")
+    info.vertex_source("""
+        void main() {
+            uv = texCoord;
+            gl_Position = ModelViewProjectionMatrix * vec4(pos, 0.0, 1.0);
+        }
+    """)
+    info.fragment_source("""
+        void main() {
+            fragColor = texture(image, uv);
+            if (srgbTarget) {
+                vec3 rgb = max(fragColor.rgb, vec3(0.0));
+                fragColor.rgb = mix(rgb / 12.92,
+                    pow((rgb + 0.055) / 1.055, vec3(2.4)),
+                    step(vec3(0.04045), rgb));
+            }
+        }
+    """)
+    return gpu.shader.create_from_info(info)
+
+
+def draw_preview_texture(texture, bounds):
+    """Draw fixed sRGB colors while accounting for framebuffer encoding."""
+    import gpu
+    from gpu_extras.batch import batch_for_shader
+
+    left, bottom, width, height = bounds
+    shader = _preview_shader()
+    batch = batch_for_shader(shader, "TRI_FAN", {
+        "pos": ((left, bottom), (left + width, bottom),
+                (left + width, bottom + height), (left, bottom + height)),
+        "texCoord": ((0, 0), (1, 0), (1, 1), (0, 1)),
+    })
+    shader.bind()
+    shader.uniform_float(
+        "ModelViewProjectionMatrix",
+        gpu.matrix.get_projection_matrix() @ gpu.matrix.get_model_view_matrix(),
+    )
+    shader.uniform_sampler("image", texture)
+    gpu.state.blend_set("ALPHA")
+    try:
+        batch.draw(shader)
+    finally:
+        gpu.state.blend_set("NONE")
+
 
 def preview_draw_bounds(region_size, aspect_ratio):
     region_width, region_height = (float(value) for value in region_size)
@@ -55,9 +136,3 @@ def draw_centered_text(text, center_x, baseline_y, size, color):
     blf.position(font_id, x, baseline_y, 0.0)
     blf.color(font_id, *color)
     blf.draw(font_id, text)
-
-
-def preview_texture_draw_options(blender_version):
-    if tuple(blender_version) >= (5, 0, 0):
-        return {"is_scene_linear_with_rec709_srgb_target": True}
-    return {}

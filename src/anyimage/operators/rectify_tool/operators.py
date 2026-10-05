@@ -8,7 +8,8 @@ import bpy
 from ...common.image_preview import (
     draw_preview_frame,
     preview_draw_bounds,
-    preview_texture_draw_options,
+    create_preview_texture,
+    draw_preview_texture,
 )
 from ...common.viewport import (
     active_view3d_tool_id,
@@ -24,6 +25,7 @@ from ...common.viewport import (
 )
 from ...common.image import create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
 from ...common.projective_image import warp_projective_pixels
+from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
     MIN_INTERACTIVE_ASPECT,
@@ -36,7 +38,6 @@ from .geometry import (
 from .preview import (
     PREVIEW_TEXTURE_SIZE,
     aspect_ratio_from_mouse,
-    create_perspective_preview_image,
     draw_aspect_hud,
     interactive_preview_polygon,
     snapped_aspect_ratio,
@@ -68,7 +69,7 @@ class RectifyImagePerspective(bpy.types.Operator):
     _handle = None
     _timer = None
     _phase = "POINTS"
-    _preview_image = None
+    _preview_texture = None
     _source_pixels = None
     _initial_aspect_ratio = 1.0
     _raw_aspect_ratio = 1.0
@@ -82,28 +83,13 @@ class RectifyImagePerspective(bpy.types.Operator):
         return image_edit_poll(context)
 
     def _draw_preview(self):
-        if self._preview_image is None:
+        if self._preview_texture is None:
             return
-        import gpu
-        from gpu_extras.presets import draw_texture_2d
-
         region = bpy.context.region
-        left, bottom, width, height = preview_draw_bounds(
-            (region.width, region.height), self.aspect_ratio
+        bounds = preview_draw_bounds(
+            (region.width, region.height), self.aspect_ratio,
         )
-        bounds = (left, bottom, width, height)
-        texture = gpu.texture.from_image(self._preview_image)
-        gpu.state.blend_set("ALPHA")
-        try:
-            draw_texture_2d(
-                texture,
-                (left, bottom),
-                width,
-                height,
-                **preview_texture_draw_options(bpy.app.version),
-            )
-        finally:
-            gpu.state.blend_set("NONE")
+        draw_preview_texture(self._preview_texture, bounds)
         draw_preview_frame(bounds)
         draw_aspect_hud(
             bounds, self.aspect_ratio, self._aspect_preset_label
@@ -154,14 +140,7 @@ class RectifyImagePerspective(bpy.types.Operator):
         context.area.tag_redraw()
 
     def _remove_preview(self):
-        preview_image = self._preview_image
-        self._preview_image = None
-        if preview_image is None:
-            return
-        try:
-            bpy.data.images.remove(preview_image, do_unlink=True)
-        except ReferenceError:
-            pass
+        self._preview_texture = None
 
     def _finish(self, context):
         if self._handle is not None:
@@ -196,7 +175,7 @@ class RectifyImagePerspective(bpy.types.Operator):
         self.source_matrix_data = serialize_matrix(source_object.matrix_world)
         self.quad_json = ""
         self._phase = "POINTS"
-        self._preview_image = None
+        self._preview_texture = None
         self._source_pixels = None
         self._points = [(float(event.mouse_region_x), float(event.mouse_region_y))]
         self._cursor = self._points[0]
@@ -315,8 +294,11 @@ class RectifyImagePerspective(bpy.types.Operator):
                 import numpy as np
 
                 self._source_pixels = image_pixels(source_object.data)
+                source_linear = image_rgba_to_linear(
+                    source_object.data, self._source_pixels.reshape((-1, 4)),
+                ).ravel()
                 preview_pixels = warp_projective_pixels(
-                    self._source_pixels,
+                    source_linear,
                     tuple(source_object.data.size),
                     quad,
                     (PREVIEW_TEXTURE_SIZE, PREVIEW_TEXTURE_SIZE),
@@ -330,8 +312,8 @@ class RectifyImagePerspective(bpy.types.Operator):
                     )
                     self._finish(context)
                     return {"CANCELLED"}
-                self._preview_image = create_perspective_preview_image(
-                    source_object.data, preview_pixels
+                self._preview_texture = create_preview_texture(
+                    np.flipud(preview_pixels.reshape((PREVIEW_TEXTURE_SIZE, PREVIEW_TEXTURE_SIZE, 4))),
                 )
                 self._phase = "ASPECT"
                 self._cursor = None
@@ -367,15 +349,18 @@ class RectifyImagePerspective(bpy.types.Operator):
                 source_object.data.pixels
             ):
                 source_pixels = image_pixels(source_object.data)
+            source_linear = image_rgba_to_linear(
+                source_object.data, source_pixels.reshape((-1, 4)),
+            ).ravel()
             pixels, output_size, placement_bounds = extract_perspective_pixels(
-                source_pixels,
+                source_linear,
                 tuple(source_object.data.size),
                 quad,
                 self.aspect_ratio,
             )
             result_image = create_image_edit_result(
                 source_object.data,
-                pixels,
+                linear_rgba_to_image(source_object.data, pixels.reshape((-1, 4))).ravel(),
                 output_size,
             )
             replace_empty_image(

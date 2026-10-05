@@ -53,9 +53,9 @@ def srgb_to_linear_rgb(rgb):
 
 
 def image_rgba_to_linear(image, rgba):
-    """Decode Blender's byte sRGB buffer; float and data buffers are linear."""
+    """Decode byte business RGB as sRGB; float business RGB is linear Rec.709."""
     result = np.asarray(rgba, dtype=np.float32).copy()
-    if not image.is_float and image.colorspace_settings.name == "sRGB":
+    if not image.is_float:
         result[..., :3] = srgb_to_linear_rgb(result[..., :3])
     return result
 
@@ -63,6 +63,6 @@ def image_rgba_to_linear(image, rgba):
 def linear_rgba_to_image(image, rgba):
     """Encode linear colors for the destination Blender pixel buffer."""
     result = np.asarray(rgba, dtype=np.float32).copy()
-    if not image.is_float and image.colorspace_settings.name == "sRGB":
+    if not image.is_float:
         result[..., :3] = linear_rgb_to_srgb(result[..., :3])
     return result

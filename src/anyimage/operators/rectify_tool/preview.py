@@ -2,9 +2,6 @@
 
 import math
 
-import bpy
-
-from ...common.image import TEMPORARY_IMAGE_PREVIEW_PROPERTY, image_base_name
 from ...common.image_preview import draw_centered_text
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
@@ -87,22 +84,3 @@ def draw_aspect_hud(bounds, aspect_ratio, preset_label=None):
         13,
         (0.85, 0.9, 1.0, 1.0),
     )
-
-
-def create_perspective_preview_image(source_image, pixels):
-    image = bpy.data.images.new(
-        f"{image_base_name(source_image)}.rectify-preview",
-        width=PREVIEW_TEXTURE_SIZE,
-        height=PREVIEW_TEXTURE_SIZE,
-        alpha=True,
-    )
-    try:
-        image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
-        image.colorspace_settings.name = "sRGB"
-        image.alpha_mode = "STRAIGHT"
-        image.pixels.foreach_set(pixels)
-        image.update()
-    except Exception:
-        bpy.data.images.remove(image, do_unlink=True)
-        raise
-    return image

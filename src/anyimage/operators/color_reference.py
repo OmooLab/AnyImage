@@ -15,7 +15,6 @@ from ..common.color_match import (
 from ..common.color_reference import get_color_reference
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
-    TEMPORARY_IMAGE_PREVIEW_PROPERTY,
     create_image_edit_result,
     image_rgba,
     is_color_reference_candidate,
@@ -31,7 +30,8 @@ from ..common.image_preview import (
     draw_centered_text,
     draw_preview_frame,
     preview_draw_bounds,
-    preview_texture_draw_options,
+    create_preview_texture,
+    draw_preview_texture,
 )
 
 
@@ -45,36 +45,6 @@ def current_color_reference(context):
 def _context_image(context):
     owner = image_edit_owner(context)
     return None if owner is None else owner_image(owner)
-
-
-def create_color_preview_image(source_image, rgba):
-    """Create one unpacked temporary image for a color-match preview."""
-    height, width = rgba.shape[:2]
-    image = bpy.data.images.new(
-        f"{source_image.name} Color Match Preview",
-        width=width,
-        height=height,
-        alpha=True,
-        float_buffer=bool(source_image.is_float),
-    )
-    try:
-        image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
-        image.colorspace_settings.name = source_image.colorspace_settings.name
-        image.alpha_mode = source_image.alpha_mode
-        image.pixels.foreach_set(np.flipud(rgba).ravel())
-        image.update()
-    except Exception:
-        bpy.data.images.remove(image, do_unlink=True)
-        raise
-    return image
-
-
-def update_color_preview_image(image, rgba):
-    """Replace the pixels of one standalone color-match preview."""
-    if tuple(image.size) != (rgba.shape[1], rgba.shape[0]):
-        raise ValueError("The color-match preview dimensions changed")
-    image.pixels.foreach_set(np.flipud(rgba).ravel())
-    image.update()
 
 
 class MatchColorReference(bpy.types.Operator):
@@ -104,7 +74,7 @@ class MatchColorReference(bpy.types.Operator):
     def invoke(self, context, event):
         """Start an interactive proxy preview."""
         reference = current_color_reference(context)
-        self._preview_image = None
+        self._preview_texture = None
         self._handle = None
         self._space_type = None
         self._timer = None
@@ -118,6 +88,9 @@ class MatchColorReference(bpy.types.Operator):
             prepared = get_color_reference(reference, refresh=True)
             self._reference = prepared
             self._reference_image = reference
+            self._target_settings = (
+                self._target.image.colorspace_settings.name, self._target.image.alpha_mode,
+            )
             self._target_rgba = image_rgba(self._target.image)
             self._preview_match = build_color_match(
                 prepared.transfer,
@@ -129,9 +102,7 @@ class MatchColorReference(bpy.types.Operator):
             self._mouse_x = event.mouse_x
             self._mouse_y = event.mouse_y
             preview_rgba = self._preview_pixels()
-            self._preview_image = create_color_preview_image(
-                self._target.image, preview_rgba
-            )
+            self._preview_texture = create_preview_texture(preview_rgba)
             self._last_preview_time = time.perf_counter()
             self._preview_dirty = False
             self._area = getattr(context, "area", None)
@@ -179,10 +150,7 @@ class MatchColorReference(bpy.types.Operator):
         if not self._preview_dirty or now - self._last_preview_time < self._PREVIEW_INTERVAL:
             return {"RUNNING_MODAL"}
         try:
-            update_color_preview_image(
-                self._preview_image,
-                self._preview_pixels(),
-            )
+            self._preview_texture = create_preview_texture(self._preview_pixels())
             self._last_preview_time = now
             self._preview_dirty = False
             self._tag_redraw()
@@ -193,9 +161,8 @@ class MatchColorReference(bpy.types.Operator):
         return {"RUNNING_MODAL"}
 
     def _preview_pixels(self):
-        return linear_rgba_to_image(
-            self._target.image,
-            apply_color_match(self._preview_match, color=self._color, lightness=self._lightness),
+        return apply_color_match(
+            self._preview_match, color=self._color, lightness=self._lightness,
         )
 
     def _commit(self, context, color, lightness, *, target=None):
@@ -212,6 +179,8 @@ class MatchColorReference(bpy.types.Operator):
             prepared = get_color_reference(reference, refresh=True)
             target_rgba = image_rgba(target.image)
             if target is getattr(self, "_target", None):
+                if (target.image.colorspace_settings.name, target.image.alpha_mode) != self._target_settings:
+                    raise RuntimeError("The target image settings changed during preview")
                 if prepared is not self._reference:
                     raise RuntimeError("The color reference changed during preview")
                 if not np.array_equal(target_rgba, self._target_rgba):
@@ -243,32 +212,18 @@ class MatchColorReference(bpy.types.Operator):
         return {"FINISHED"}
 
     def _draw_overlay(self):
-        if self._preview_image is None or not drawing_in_region(
+        if self._preview_texture is None or not drawing_in_region(
             self._area_pointer, self._region_pointer
         ):
             return
-        import gpu
-        from gpu_extras.presets import draw_texture_2d
-
         region = bpy.context.region
-        width, height = self._preview_image.size
+        texture = self._preview_texture
         bounds = preview_draw_bounds(
             (region.width, region.height),
-            float(width) / float(height),
+            float(texture.width) / float(texture.height),
         )
         left, bottom, draw_width, draw_height = bounds
-        texture = gpu.texture.from_image(self._preview_image)
-        gpu.state.blend_set("ALPHA")
-        try:
-            draw_texture_2d(
-                texture,
-                (left, bottom),
-                draw_width,
-                draw_height,
-                **preview_texture_draw_options(bpy.app.version),
-            )
-        finally:
-            gpu.state.blend_set("NONE")
+        draw_preview_texture(texture, bounds)
         draw_preview_frame(bounds)
         center_x = left + draw_width * 0.5
         draw_centered_text(
@@ -324,13 +279,8 @@ class MatchColorReference(bpy.types.Operator):
         if self._handle is not None:
             self._space_type.draw_handler_remove(self._handle, "WINDOW")
             self._handle = None
-        preview_image = self._preview_image
-        self._preview_image = None
-        if preview_image is not None:
-            try:
-                bpy.data.images.remove(preview_image, do_unlink=True)
-            except ReferenceError:
-                pass
+        self._preview_texture = None
+        self._target_settings = None
         self._tag_redraw()
 
 

@@ -34,9 +34,16 @@ class ModelSessionCache:
         self.sessions.clear()
         gc.collect()
 
+    def release_model(self, model):
+        cached = self.sessions.get(model.family)
+        if cached is not None and cached[0][0] == model.key:
+            self.sessions.pop(model.family)
+            del cached
+            gc.collect()
+
     def snapshot(self):
         return {
-            name: model_catalog.get_downloadable_model(self.sessions[family][0][0]).label if family in self.sessions else ""
+            name: self.sessions[family][0][0] if family in self.sessions else None
             for family, name in (
                 ("background", "background"),
                 ("moge", "geometry"),
@@ -61,6 +68,7 @@ class ModelManager:
         self.models_directory = Path(models_directory)
         self.sessions = ModelSessionCache()
         self.verified_files = {}
+        self.validation_errors = {}
 
     def directory(self, model_key):
         model = model_catalog.get_downloadable_model(model_key)
@@ -95,10 +103,16 @@ class ModelManager:
 
     def get_session(self, model_key, device):
         model = model_catalog.get_downloadable_model(model_key)
+        if not self.ready(model_key):
+            message = f"{model.label} files failed validation; download the model again"
+            self.validation_errors[model_key] = message
+            self.sessions.release_model(model)
+            raise RuntimeError(message)
+        self.validation_errors.pop(model_key, None)
         return self.sessions.get(model, self.directory(model_key), device)
 
     def snapshot(self):
-        return {"loaded": self.sessions.snapshot()}
+        return {"loaded": self.sessions.snapshot(), "validation_errors": dict(self.validation_errors)}
 
     def clear(self):
         self.sessions.close()
@@ -127,5 +141,9 @@ class ModelManager:
     def _download(self, context, model_key, progress):
         model = model_catalog.get_downloadable_model(model_key)
         context.check_cancelled()
+        self.sessions.release_model(model)
+        for filename, _size, _checksum in model.files:
+            self.verified_files.pop(self.directory(model_key) / filename, None)
         download_model(model, self.directory(model_key), progress, context.check_cancelled)
         context.check_cancelled()
+        self.validation_errors.pop(model_key, None)

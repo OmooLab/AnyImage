@@ -31,6 +31,9 @@ flowchart TD
 | Remove Background | BiRefNet Lite、BEN2、BiRefNet HR Matting | background |
 | Upscale | Real-ESRGAN WDN、Real-ESRGAN x4plus、HAT Sharper | upscale |
 
-`model_catalog.py` 声明文件来源、许可、大小和 SHA-256；`model_download.py` 下载并校验。ModelManager 按模型路径和设备缓存 Session，切换模型或设备时释放对应类别。Clear Models 或关闭 Server 时释放已加载资源。
+`model_catalog.py` 声明模型 key、Fast/Base/Pro 档位、文件来源、许可、大小和 SHA-256；`model_download.py` 下载并校验。ModelManager 在 Session 创建前校验声明文件，按文件身份缓存校验结果，并按模型 key、路径和设备缓存 Session，切换模型或设备时释放对应类别。Clear Models 或关闭 Server 时释放已加载资源。
 
 首次安装通过 `post_install()` 下载默认 MoGe-2 ViT-S Normal、BiRefNet Lite 与 Real-ESRGAN General WDN x4v3。Storage Root 默认 `~/.anyimage`，保存环境、模型、Job 产物和日志。设置入口见 [AI 环境管理](operators/ai-setup.md)。
+
+
+UI 在本地快速检查文件存在性和大小，以 Installed 表示安装状态。加载状态与 `validation_errors` 通过 Runtime 已有资源快照传递；校验失败记录模型 key 和原因，并在 Preferences 提供 Download Again。修复开始时释放目标模型 Session，下载成功后清理其校验错误和失效缓存，其他模型继续使用已有资源。

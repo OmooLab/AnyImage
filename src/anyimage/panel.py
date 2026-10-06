@@ -7,14 +7,9 @@ from .properties import (
     COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES,
 )
 from .runtime import runtime
-from .server.model_catalog import BACKGROUND_MODELS, MOGE_MODELS, UPSCALE_MODELS
 
 
-_MODEL_TIER_BY_LABEL = {
-    model.label: tier
-    for models in (MOGE_MODELS, BACKGROUND_MODELS, UPSCALE_MODELS)
-    for model, tier in zip(models.values(), ("Fast", "Base", "Pro"))
-}
+from .server.model_catalog import DOWNLOADABLE_MODELS
 
 
 class ColorMatchPanel(bpy.types.Panel):
@@ -156,7 +151,8 @@ class ServerPanel(bpy.types.Panel):
         cached_list = layout.column(align=True)
         for name, task in slots:
             slot = cached_list.row(align=True)
-            tier = _MODEL_TIER_BY_LABEL.get(name)
+            model = DOWNLOADABLE_MODELS.get(name)
+            tier = model.tier if model is not None else None
             slot.label(
                 text=f"{task}  [ {tier} ]" if tier else task,
                 icon="RADIOBUT_ON" if name else "RADIOBUT_OFF",

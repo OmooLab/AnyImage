@@ -12,7 +12,7 @@ from ..common.color_match import (
     build_color_match,
     resize_rgba_proxy,
 )
-from ..common.color_reference import get_color_reference
+from ..common.color_reference import get_color_reference, retain_color_reference, release_color_reference, release_unused_color_references
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
     create_image_edit_result,
@@ -78,6 +78,7 @@ class MatchColorReference(bpy.types.Operator):
         self._handle = None
         self._space_type = None
         self._timer = None
+        self._reference_resource_key = None
         self._window_manager = context.window_manager
         try:
             if reference is None:
@@ -86,6 +87,7 @@ class MatchColorReference(bpy.types.Operator):
             if self._target.image == reference:
                 raise ValueError("The color reference and target must be different images")
             prepared = get_color_reference(reference, refresh=True)
+            self._reference_resource_key = retain_color_reference(reference)
             self._reference = prepared
             self._reference_image = reference
             self._target_settings = (
@@ -268,6 +270,14 @@ class MatchColorReference(bpy.types.Operator):
             area.tag_redraw()
 
     def _finish(self):
+        retained = getattr(self, "_reference_resource_key", None)
+        if retained is not None:
+            release_color_reference(retained)
+            self._reference_resource_key = None
+            release_unused_color_references(
+                getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
+                for scene in bpy.data.scenes
+            )
         self._preview_match = None
         self._target_rgba = None
         self._reference = None

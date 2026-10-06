@@ -9,44 +9,6 @@ from PIL import Image
 
 
 from anyimage.common import image as images
-from tests.support.color_image import color_image
-
-
-@pytest.mark.parametrize("floating", [False, True])
-def test_owned_color_images_preserve_source_and_use_premul(floating):
-    original = bpy.data.images.new("Alpha source", width=2, height=2, alpha=True, float_buffer=floating)
-    if floating:
-        original.alpha_mode = "PREMUL"
-    rgba = np.tile(np.array([0.2, 0.4, 0.8, 0.25], dtype=np.float32), (2, 2, 1))
-    original.pixels.foreach_set(rgba.ravel())
-    source = SimpleNamespace(data=original)
-    expected = images.image_rgba(original)
-    cropped = color_image(source.data, (0, 0, 2, 2), expected)
-    edited = images.create_image_edit_result(original, rgba.ravel(), (2, 2))
-    try:
-        assert original.alpha_mode == ("PREMUL" if floating else "STRAIGHT")
-        np.testing.assert_allclose(images.image_rgba(original), expected)
-        assert edited.alpha_mode == original.alpha_mode
-        for image in (cropped,):
-            assert image.alpha_mode == original.alpha_mode
-            np.testing.assert_allclose(images.image_rgba(image), expected, atol=1 / 255)
-    finally:
-        for image in (cropped, edited, original):
-            bpy.data.images.remove(image)
-
-
-def test_job_loader_preserves_edit_alpha_policy(tmp_path):
-    rgba = np.array([[[51, 102, 204, 64]]], dtype=np.uint8)
-    Image.fromarray(rgba).save(tmp_path / "foreground.png")
-    original = bpy.data.images.new("Job source", width=1, height=1, alpha=True)
-    result = images.load_image_edit_result(original, tmp_path / "foreground.png")
-    try:
-        assert result.alpha_mode == "STRAIGHT"
-        assert result.packed_file is not None
-        assert original.alpha_mode == "STRAIGHT"
-    finally:
-        bpy.data.images.remove(result)
-        bpy.data.images.remove(original)
 
 
 def test_business_pixels_ignore_premul_read_interpretation():

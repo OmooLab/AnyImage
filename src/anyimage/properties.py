@@ -7,8 +7,10 @@ from .common.color_reference import (
     clear_color_references,
     color_reference_preview_icon,
     get_color_reference,
+    invalidate_color_reference,
+    release_unused_color_references,
 )
-from .common.image import is_color_reference_candidate
+from .common.image import image_content_handlers, is_color_reference_candidate
 from .runtime import runtime
 from .server import model_catalog as shared_model_catalog
 
@@ -103,16 +105,58 @@ def update_color_reference_palette(settings, _context, *, refresh=True):
             prepared = get_color_reference(reference, refresh=refresh)
             colors, weights = prepared.colors, prepared.weights
         else:
-            clear_color_references()
             colors, weights = (), ()
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
         colors, weights = (), ()
+    release_unused_color_references(
+        getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
+        for scene in getattr(bpy.data, "scenes", ())
+    )
+    invalidate_color_reference_items()
     settings.color_reference_palette_count = len(colors)
     for index, name in enumerate(COLOR_REFERENCE_PALETTE_PROPERTIES):
         color = tuple(colors[index]) if index < len(colors) else (0.0, 0.0, 0.0)
         setattr(settings, name, color)
     for index, name in enumerate(COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES):
         setattr(settings, name, float(weights[index]) if index < len(weights) else 0.0)
+
+
+def refresh_edited_color_reference(image):
+    """Synchronize scenes using an edited reference image."""
+    invalidate_color_reference(image)
+    for scene in bpy.data.scenes:
+        settings = getattr(scene, "anyimage_settings", None)
+        if settings is not None and settings.color_reference == image:
+            update_color_reference_palette(settings, None, refresh=False)
+
+
+def restore_color_references(*_args):
+    """Rebuild scene reference presentation after Blender restores data."""
+    clear_color_references()
+    invalidate_color_reference_items()
+    for scene in bpy.data.scenes:
+        settings = getattr(scene, "anyimage_settings", None)
+        if settings is not None:
+            update_color_reference_palette(settings, None, refresh=False)
+
+
+def register_color_references():
+    restore_color_references._bpy_persistent = True
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if restore_color_references not in handlers:
+            handlers.append(restore_color_references)
+    if refresh_edited_color_reference not in image_content_handlers:
+        image_content_handlers.append(refresh_edited_color_reference)
+
+
+def unregister_color_references():
+    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+        if restore_color_references in handlers:
+            handlers.remove(restore_color_references)
+    if refresh_edited_color_reference in image_content_handlers:
+        image_content_handlers.remove(refresh_edited_color_reference)
+    clear_color_references()
+    invalidate_color_reference_items()
 
 
 def color_reference_palette_property():
@@ -165,21 +209,20 @@ def device_enum_items(_owner, _context):
     ]
 
 
-def models_status(refresh=False):
+def models_status():
     status = runtime.server_status().get("resources", {}).get("model_manager", {})
+    errors = status.get("validation_errors", {})
     return {
         "catalog": tuple(
-            shared_model_catalog.model_record(
-                model,
-                _model_files_ready(model),
-            )
+            {**shared_model_catalog.model_record(model, _model_files_installed(model)),
+             "validation_error": errors.get(model.key, "")}
             for model in shared_model_catalog.DOWNLOADABLE_MODELS.values()
         ),
         "loaded": status.get("loaded", {}),
     }
 
 
-def _model_files_ready(model):
+def _model_files_installed(model):
     directory = runtime.storage_root() / "models" / model.directory_name
     try:
         return all(
@@ -192,14 +235,14 @@ def _model_files_ready(model):
 
 def model_ready(model_key):
     return any(
-        model.get("key") == model_key and model.get("ready")
+        model.get("key") == model_key and model.get("installed") and not model.get("validation_error")
         for model in models_status().get("catalog", ())
     )
 
 
 def ai_status():
     environment_ready = runtime.environment_ready()
-    ready_models = {model["key"] for model in model_catalog() if model.get("ready")}
+    ready_models = {model["key"] for model in model_catalog() if model.get("installed") and not model.get("validation_error")}
     missing_models = tuple(
         model_key for model_key in shared_model_catalog.DEFAULT_MODEL_KEYS if model_key not in ready_models
     )
@@ -241,15 +284,14 @@ def model_record(model_key):
 
 
 def _model_items(models):
-    numbers = {"MOGE2_VITS_NORMAL": 0, "MOGE2_VITB_NORMAL": 1, "MOGE3_VITL": 3}
     return [
         (
             model["key"],
-            f"{tier} | {model['label']}",
+            f"{model['tier']} | {model['label']}",
             f"{model['description']}; license: {model['license']}",
-            numbers[model["key"]],
+            model["enum_value"],
         )
-        for model, tier in zip(models, ("Fast", "Base", "Pro"))
+        for model in models
     ]
 
 

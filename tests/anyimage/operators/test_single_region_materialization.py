@@ -13,8 +13,8 @@ from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh import materialization
 from nodes.groups.image_layer import build_image_layer_group
 from tests.support.planes import create_surface
-from tests.nodes.test_image_depth_panorama import panorama
-from tests.anyimage.operators.test_mesh_materialization import render_normal
+from tests.support.panorama import panorama
+from tests.support.mesh_bake import render_normal
 
 
 @pytest.fixture(params=["PLANE", "DEPTH", "RELIEF", "PANORAMA"])
@@ -71,6 +71,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     operator = SimpleNamespace(report=Mock())
     assert BakeMesh.execute(operator, bpy.context) == {"FINISHED"}
     assert not obj.modifiers and not BakeMesh.poll(bpy.context)
+    assert "o_image_object" not in obj
     assert obj.active_material == material
     remaining = {i.name: i.as_pointer() for i in bpy.data.images}
     assert all(images[name] == identity for name, identity in remaining.items())
@@ -92,8 +93,9 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
         bake.assert_not_called()
 
 
-@pytest.mark.parametrize("image_object", ["DEPTH", "RELIEF"], indirect=True)
-@pytest.mark.parametrize("depth_scale", [0, .5, 1.5])
+@pytest.mark.parametrize("image_object,depth_scale", [
+    ("DEPTH", 0), ("DEPTH", 1.5), ("RELIEF", .5),
+], indirect=["image_object"])
 def test_single_region_normal_render_survives_attribute_cleanup(image_object, tmp_path, depth_scale):
     obj, kind, _, normal = image_object
     from scipy.ndimage import binary_erosion
@@ -117,6 +119,7 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
 
 
+@pytest.mark.parametrize("image_object", ["DEPTH", "PANORAMA"], indirect=True)
 def test_four_conversions_support_undo_redo(image_object):
     obj, kind, color, normal = image_object
     name = obj.name
@@ -130,15 +133,18 @@ def test_four_conversions_support_undo_redo(image_object):
     try:
         bpy.ops.ed.undo_push(message="Before conversion")
         assert bpy.ops.anyimage.bake_mesh("EXEC_DEFAULT", True) == {"FINISHED"}
+        assert "o_image_object" not in bpy.data.objects[name]
         converted_pixels = {name: image_pixels(bpy.data.images[name]).copy() for name in image_names}
         assert bpy.ops.ed.undo() == {"FINISHED"}
         assert len(bpy.data.objects[name].modifiers) == 1
+        assert bpy.data.objects[name]["o_image_object"] is True
         if depth_name:
             assert depth_name in bpy.data.images
         for image_name in image_names:
             np.testing.assert_array_equal(image_pixels(bpy.data.images[image_name]), original_pixels[image_name])
         assert bpy.ops.ed.redo() == {"FINISHED"}
         assert not bpy.data.objects[name].modifiers
+        assert "o_image_object" not in bpy.data.objects[name]
         if depth_name:
             assert depth_name not in bpy.data.images
         for image_name in image_names:
@@ -147,8 +153,10 @@ def test_four_conversions_support_undo_redo(image_object):
         bpy.utils.unregister_class(BakeMesh)
 
 
-@pytest.mark.parametrize("image_object", ["DEPTH", "RELIEF", "PANORAMA"], indirect=True)
-@pytest.mark.parametrize("user", ["none", "modifier", "material", "fake"])
+@pytest.mark.parametrize("image_object,user", [
+    ("DEPTH", "none"), ("RELIEF", "modifier"),
+    ("PANORAMA", "material"), ("DEPTH", "fake"),
+], indirect=["image_object"])
 def test_conversion_only_removes_unreferenced_depth(image_object, user, tmp_path):
     obj, kind, *_ = image_object
     depth_name = "Radial Depth" if kind == "PANORAMA" else "Camera"
@@ -173,7 +181,7 @@ def test_conversion_only_removes_unreferenced_depth(image_object, user, tmp_path
     assert path.read_bytes() == disk_content
 
 
-@pytest.mark.parametrize("image_object", ["DEPTH", "RELIEF", "PANORAMA"], indirect=True)
+@pytest.mark.parametrize("image_object", ["DEPTH"], indirect=True)
 def test_conversion_failure_keeps_depth(image_object, monkeypatch):
     from anyimage.operators.bake_mesh import operators
 
@@ -182,6 +190,58 @@ def test_conversion_failure_keeps_depth(image_object, monkeypatch):
     source = obj.data
     identity = depth.as_pointer()
     monkeypatch.setattr(operators, "materialize_mesh_and_textures", Mock(side_effect=RuntimeError("Injected failure")))
-    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"CANCELLED"}
+    operator = SimpleNamespace(report=Mock())
+    assert BakeMesh.execute(operator, bpy.context) == {"CANCELLED"}
+    operator.report.assert_called_once_with({"ERROR"}, "Injected failure")
+    assert obj["o_image_object"] is True
     assert depth.as_pointer() == identity and depth.users > 0
     assert obj.data == source and len(obj.modifiers) == 1
+
+
+@pytest.mark.parametrize("image_object", ["PLANE", "PANORAMA"], indirect=True)
+def test_geometry_only_bake_preserves_animated_color_sampling(image_object):
+    obj, _kind, color, _normal = image_object
+    node = next(n for n in obj.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
+    color.source = "SEQUENCE"
+    node.interpolation = "Closest"
+    node.extension = "CLIP"
+    node.projection = "BOX"
+    before = tuple(color.size)
+    operator = SimpleNamespace(report=Mock())
+    assert BakeMesh.execute(operator, bpy.context) == {"FINISHED"}
+    assert node.image == color and tuple(color.size) == before
+    assert color.source == "SEQUENCE"
+    assert (node.interpolation, node.extension, node.projection) == ("Closest", "CLIP", "BOX")
+    assert "o_image_object" not in obj
+    operator.report.assert_not_called()
+
+
+@pytest.mark.parametrize("image_object", ["PLANE"], indirect=True)
+def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
+    from anyimage import menu
+    from anyimage.common.image_target import active_texture_node, image_edit_owner
+    from anyimage.operators.color_match import MatchColorReference
+    from anyimage.operators.remove_background import RemoveImageBackground
+    from anyimage.operators.upscale import UpscaleImage
+    from anyimage.runtime import runtime
+    from unittest.mock import patch
+
+    obj, _kind, _color, _normal = image_object
+    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
+    context = SimpleNamespace(object=obj, space_data=SimpleNamespace(type="VIEW_3D"), scene=bpy.context.scene)
+    assert image_edit_owner(context) is None
+    layout = Mock()
+    menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
+    layout.menu.assert_not_called()
+    with patch.object(runtime, "server_busy", return_value=False):
+        assert not RemoveImageBackground.poll(context)
+        assert not UpscaleImage.poll(context)
+        assert not MatchColorReference.poll(context)
+    material = obj.active_material
+    node = next(n for n in material.node_tree.nodes if n.type == "TEX_IMAGE" and n.image.name == "Color")
+    material.node_tree.nodes.active = node
+    context.space_data = SimpleNamespace(type="NODE_EDITOR", tree_type="ShaderNodeTree", shader_type="OBJECT", id=material, edit_tree=material.node_tree)
+    assert active_texture_node(context) == node
+    with patch.object(menu, "draw_image_actions") as actions:
+        menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+    layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname)

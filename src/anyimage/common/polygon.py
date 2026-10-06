@@ -179,7 +179,7 @@ def scanline_fill_bands(vertices, step=2.0):
     return tuple(bands)
 
 
-def _merge_intervals(intervals):
+def merge_intervals(intervals):
     merged = []
     for left, right in sorted(intervals):
         if right - left <= 1e-8:
@@ -211,7 +211,7 @@ def scanline_union_bands(polygons, step=2.0):
     while band_bottom < maximum_y:
         band_top = min(band_bottom + step, maximum_y)
         sample_y = (band_bottom + band_top) * 0.5
-        intervals = _merge_intervals(
+        intervals = merge_intervals(
             interval
             for polygon, bottom, top in bounds
             if bottom <= sample_y < top
@@ -222,7 +222,7 @@ def scanline_union_bands(polygons, step=2.0):
     return tuple(bands)
 
 
-def _scanline_band_triangles(bands):
+def scanline_band_triangles(bands):
     triangles = []
     for band_bottom, band_top, intervals in bands:
         for left, right in intervals:
@@ -241,7 +241,7 @@ def _scanline_band_triangles(bands):
     return tuple(triangles)
 
 
-def _subtract_intervals(intervals, covered):
+def subtract_intervals(intervals, covered):
     difference = []
     for left, right in intervals:
         position = left
@@ -323,8 +323,8 @@ def scanline_outline_segments(bands):
     ]
     for y, lower, upper in boundaries:
         for left, right in (
-            *_subtract_intervals(lower, upper),
-            *_subtract_intervals(upper, lower),
+            *subtract_intervals(lower, upper),
+            *subtract_intervals(upper, lower),
         ):
             edges.append(((left, y), (right, y)))
     return tuple(
@@ -407,7 +407,7 @@ def preview_fill_geometry(vertices):
         if triangles:
             return triangles, dashed_line_segments((*vertices, vertices[0]))
     bands = scanline_fill_bands(vertices)
-    return _scanline_band_triangles(bands), scanline_outline_segments(bands)
+    return scanline_band_triangles(bands), scanline_outline_segments(bands)
 
 
 def circle_vertices(center, radius, segments=32):

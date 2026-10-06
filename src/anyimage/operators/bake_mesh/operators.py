@@ -35,6 +35,7 @@ class BakeMesh(bpy.types.Operator):
             return {"CANCELLED"}
         obj.data = mesh
         obj.modifiers.clear()
+        del obj["o_image_object"]
         for name in tuple(obj.keys()):
             if name in PROTOCOL_ATTRIBUTES:
                 del obj[name]

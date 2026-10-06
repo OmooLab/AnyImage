@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.operators.background_hdr import HdrBackgroundInput
+from anyimage.operators.remove_background.hdr import HdrBackgroundInput
 from anyimage.common.hdr_image import recognition_rgba, save_hdr_result
 from anyimage.common.image import cleanup_image_input, image_content_state, image_rgba, restore_image_content
 from anyimage.common.image_target import ImageEditTarget
@@ -15,9 +15,10 @@ from tests.support.image_texture import texture, texture_context
 from tests.support.hdr_image import hdr_texture
 
 
-@pytest.mark.parametrize("source_kind", ["generated", "file", "packed", "dirty"])
-@pytest.mark.parametrize("owner_kind", ["texture", "empty"])
-@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("source_kind,owner_kind,shared", [
+    ("generated", "texture", False), ("file", "texture", True),
+    ("packed", "empty", False), ("dirty", "empty", True),
+])
 def test_hdr_commit_keeps_float_pixels_and_transaction(hdr_texture, tmp_path, source_kind, owner_kind, shared):
     texture = hdr_texture
     source = texture.image

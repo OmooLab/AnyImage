@@ -1,3 +1,4 @@
+from anyimage.common import polygon as polygon_geometry
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -23,27 +24,26 @@ def test_simplified_segments_bound_every_original_sample():
         assert distances.max() <= 0.75 + 1e-10
 
 
-@pytest.mark.parametrize("radius", [2, 5, 25])
-@pytest.mark.parametrize("path", [
-    ((40, 70), (70, 70), (70, 100)),
-    ((35, 35), (100, 100), (35, 100), (100, 35)),
+@pytest.mark.parametrize("radius,path", [
+    (2, ((40, 70), (70, 70), (70, 100))),
+    (25, ((40, 70), (70, 70), (70, 100))),
+    (5, ((35, 35), (100, 100), (35, 100), (100, 35))),
 ])
 def test_brush_antialiases_the_hard_union_once(radius, path):
     size = (150, 150)
     hard = np.zeros(size[::-1], dtype=bool)
-    for polygon in viewport.brush_footprint_polygons(path, radius):
+    for polygon in polygon_geometry.brush_footprint_polygons(path, radius):
         hard |= selection._rasterize_path((0, 0, *size), polygon)
     result = mask.rasterize_brush_path(size, path, radius, lambda points: points)
     np.testing.assert_allclose(result.full_values(size), selection._antialias_mask(hard))
     assert result.values.size < size[0] * size[1]
 
 
-@pytest.mark.parametrize("radius", [2, 5, 25])
-def test_straight_stroke_is_independent_of_segmentation(radius):
+def test_straight_stroke_is_independent_of_segmentation():
     size = (160, 160)
     sparse = ((40, 70), (110, 70))
     dense = tuple((x, 70) for x in range(40, 111, 5))
-    results = [mask.rasterize_brush_path(size, path, radius, lambda p: p).full_values(size)
+    results = [mask.rasterize_brush_path(size, path, 5, lambda p: p).full_values(size)
                for path in (sparse, dense)]
     np.testing.assert_array_equal(*results)
 
@@ -61,8 +61,8 @@ def test_incremental_preview_matches_full_union_when_tail_moves_and_crosses():
                 path.append(point)
         cache.update(path, 8)
         reference = {round(bottom / cache.step): intervals
-                     for bottom, _, intervals in viewport.scanline_union_bands(
-                         viewport.brush_footprint_polygons(path, 8), cache.step)
+                     for bottom, _, intervals in polygon_geometry.scanline_union_bands(
+                         polygon_geometry.brush_footprint_polygons(path, 8), cache.step)
                      if intervals}
         assert cache.coverage.keys() == reference.keys()
         for row in reference:

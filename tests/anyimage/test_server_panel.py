@@ -7,7 +7,6 @@ from tests.support.blender import BlenderTestCase
 class ServerPanelTest(BlenderTestCase):
 
 
-
     def test_server_panel_shows_controls_for_every_running_state(self):
         for state, label, icon in (
             ("READY", "Running", "RADIOBUT_ON"),
@@ -66,7 +65,7 @@ class ServerPanelTest(BlenderTestCase):
         self.assertEqual(calls[1], ("operator", "anyimage.cancel_job"))
 
     def test_loaded_names_use_full_width_rows_below_header(self):
-        names = ("MoGe-2 ViT-S Normal", "BiRefNet Lite", "Real-ESRGAN General WDN x4v3")
+        names = ("MOGE2_VITS_NORMAL", "BIREFNET_LITE", "REALESRGAN_GENERAL_WDN_X4V3")
         for count in (1, 3):
             events = self._draw_server_panel("READY", cached_names=names[:count])
             header = events.parents["Models Loaded"]
@@ -80,19 +79,6 @@ class ServerPanelTest(BlenderTestCase):
                 self.assertIn(("row", task, "RADIOBUT_ON"), events.labels)
                 self.assertIs(events.parents[task].parent.parent, header.parent)
                 self.assertGreater(events.sequence.index(task), events.sequence.index("anyimage.clear_models"))
-
-    def test_panel_clear_control_uses_shared_operator_state(self):
-        panel_module = importlib.import_module("anyimage.panel")
-        for state, expected in (("READY", True), ("BUSY", False), ("STOPPED", False)):
-            with (
-                self.subTest(state=state),
-                patch.object(
-                    panel_module.runtime,
-                    "server_status",
-                    return_value={"state": state},
-                ),
-            ):
-                self.assertEqual(panel_module.ClearModels.poll(None), expected)
 
 
     def test_maintenance_controls_without_environment(self):

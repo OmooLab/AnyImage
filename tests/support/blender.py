@@ -129,7 +129,7 @@ class BlenderTestCase(unittest.TestCase):
             "anyimage.operators.cutout_tool.operators"
         )
         cls.remove_background = importlib.import_module(
-            "anyimage.operators.remove_background"
+            "anyimage.operators.remove_background.operators"
         )
         cls.upscale = importlib.import_module("anyimage.operators.upscale")
         cls.image_interaction = importlib.import_module("anyimage.common.viewport")

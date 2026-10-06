@@ -11,6 +11,8 @@ class ModelSpec:
     description: str
     family: str
     adapter: str
+    tier: str
+    enum_value: int
     device: str = ""
     tile_border: int = 16
     huggingface_repository: str = ""
@@ -22,6 +24,8 @@ BIREFNET_LITE = ModelSpec(
     key="BIREFNET_LITE",
     family="background",
     adapter="onnx_birefnet",
+    tier="Fast",
+    enum_value=1,
     label="BiRefNet Lite",
     directory_name="birefnet-lite",
     repository="ZhengPeng7/BiRefNet_lite",
@@ -39,6 +43,8 @@ BEN2_MODEL = ModelSpec(
     key="BEN2_BASE",
     family="background",
     adapter="onnx_ben2",
+    tier="Base",
+    enum_value=0,
     label="BEN2 Base",
     directory_name="BEN2-ONNX",
     repository="onnx-community/BEN2-ONNX",
@@ -58,6 +64,8 @@ REALESRGAN_GENERAL_WDN_X4V3 = ModelSpec(
     key="REALESRGAN_GENERAL_WDN_X4V3",
     family="upscale",
     adapter="onnx_upscale",
+    tier="Fast",
+    enum_value=0,
     label="Real-ESRGAN General WDN x4v3",
     directory_name="realesr-general-wdn-x4v3",
     repository="xinntao/Real-ESRGAN",
@@ -76,6 +84,8 @@ REALESRGAN_X4PLUS = ModelSpec(
     key="REALESRGAN_X4PLUS",
     family="upscale",
     adapter="onnx_upscale",
+    tier="Base",
+    enum_value=2,
     label="Real-ESRGAN x4plus",
     directory_name="realesrgan-x4plus",
     repository="jonathanst29/tinier-upscale-models",
@@ -97,6 +107,8 @@ HAT_GAN_X4_SHARPER = ModelSpec(
     key="HAT_GAN_X4_SHARPER",
     family="upscale",
     adapter="onnx_upscale",
+    tier="Pro",
+    enum_value=4,
     tile_border=48,
     label="HAT Sharper",
     directory_name="hat-gan-x4-sharper",
@@ -132,6 +144,8 @@ MOGE2_MODELS = {
         key="MOGE2_VITS_NORMAL",
         family="moge",
         adapter="onnx_moge2",
+        tier="Fast",
+        enum_value=0,
         label="MoGe-2 ViT-S Normal",
         directory_name="moge-2-vits-normal-onnx",
         repository="Ruicheng/moge-2-vits-normal-onnx",
@@ -149,6 +163,8 @@ MOGE2_MODELS = {
         key="MOGE2_VITB_NORMAL",
         family="moge",
         adapter="onnx_moge2",
+        tier="Base",
+        enum_value=1,
         label="MoGe-2 ViT-B Normal",
         directory_name="moge-2-vitb-normal-onnx",
         repository="Ruicheng/moge-2-vitb-normal-onnx",
@@ -167,6 +183,8 @@ MOGE3_VITL = ModelSpec(
     key="MOGE3_VITL",
     family="moge",
     adapter="onnx_moge3",
+    tier="Pro",
+    enum_value=3,
     label="MoGe-3 ViT-L",
     directory_name="moge-3-vitl-onnx",
     repository="Ruicheng/moge-3-vitl",
@@ -185,6 +203,8 @@ BIREFNET_HR_MATTING = ModelSpec(
     family="background",
     adapter="onnx_birefnet",
     device="cpu",
+    tier="Pro",
+    enum_value=2,
     label="BiRefNet HR-matting (CPU)",
     directory_name="birefnet-hr-matting",
     repository="ZhengPeng7/BiRefNet_HR-matting",
@@ -223,7 +243,7 @@ def get_downloadable_model(model_key):
         raise ValueError(f"Unknown model: {model_key}") from error
 
 
-def model_record(model, ready=False):
+def model_record(model, installed=False):
     """Return public model metadata exposed by the Models Resource."""
     return {
         "key": model.key,
@@ -231,5 +251,7 @@ def model_record(model, ready=False):
         "description": model.description,
         "license": model.license_name,
         "family": model.family,
-        "ready": bool(ready),
+        "tier": model.tier,
+        "enum_value": model.enum_value,
+        "installed": bool(installed),
     }

@@ -80,13 +80,13 @@ def test_reference_depth_uses_the_upper_depth_percentile():
     assert reference > float(np.median(depth))
 
 
-def test_reference_depth_ignores_transparent_invalid_and_non_positive_pixels():
+def test_reference_depth_filters_invalid_and_soft_alpha_pixels():
     depth = np.asarray(
-        ((1.0, 1.05, 1.1, 9.0), (1.15, 0.0, np.nan, 1.2)),
+        ((1.0, 1.05, 1.1, 9.0, 1.18), (1.15, 0.0, np.nan, 1.2, 1.17)),
         dtype=np.float32,
     )
     alpha = np.asarray(
-        ((True, True, True, False), (True, True, True, True)),
+        ((1.0, 1.0, 1.0, 0.0, 0.9), (1.0, 1.0, 1.0, 1.0, 0.6)),
     )
 
     reference = reference_depth(_camera_depth_image(depth, alpha))
@@ -106,15 +106,6 @@ def test_reference_depth_narrows_its_domain_to_the_mask():
     )
     assert reference_depth(image, mask) == pytest.approx(
         float(np.percentile(np.asarray((1.1, 1.15)), 95.0))
-    )
-
-
-def test_reference_depth_ignores_soft_depth_alpha():
-    depth = np.asarray(((1.0, 1.05, 1.1, 1.15),), dtype=np.float32)
-    image = _camera_depth_image(depth, ((1.0, 1.0, 0.9, 0.6),))
-
-    assert reference_depth(image) == pytest.approx(
-        float(np.percentile(np.asarray((1.0, 1.05)), 95.0))
     )
 
 
@@ -224,15 +215,6 @@ def test_depth_data_uses_source_image_name():
     assert geometry_image.depth_data_name(source_object) == "img_depth.exr"
     source_object.data.name = "img.png.001"
     assert geometry_image.depth_data_name(source_object) == "img.001_depth.exr"
-
-
-def test_normal_name_uses_source_image_name():
-    source_object = SimpleNamespace(
-        name="obj_img",
-        data=SimpleNamespace(name="img.png"),
-    )
-
-    assert geometry_image.normal_data_name(source_object) == "img_normal.png"
 
 
 def test_loaded_normal_image_uses_normal_texture_name(tmp_path):

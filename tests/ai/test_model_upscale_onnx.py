@@ -47,17 +47,6 @@ class UpscaleOnnxTest(unittest.TestCase):
             np.array((64, 128, 192), dtype=np.float32) / 255.0,
         )
 
-    def test_infer_returns_direct_four_x_rgb_prediction(self):
-        session = FakeSession()
-        image = Image.new("RGB", (7, 5), (10, 20, 30))
-
-        result = onnx_upscale.infer(session, image)
-
-        self.assertEqual(result.mode, "RGB")
-        self.assertEqual(result.size, (28, 20))
-        self.assertEqual(session.output_names, ["output"])
-        self.assertEqual(session.feeds["input"].shape, (1, 3, 256, 256))
-        self.assertEqual(result.getpixel((0, 0)), (10, 20, 30))
 
     def test_infer_returns_raw_rgb_for_rgba_input(self):
         session = FakeSession()
@@ -71,6 +60,8 @@ class UpscaleOnnxTest(unittest.TestCase):
         self.assertEqual(result.mode, "RGB")
         self.assertEqual(result.size, (28, 20))
         self.assertEqual(result.getpixel((0, 0)), (10, 20, 30))
+        self.assertEqual(session.output_names, ["output"])
+        self.assertEqual(session.feeds["input"].shape, (1, 3, 256, 256))
 
     def test_tiles_use_reflected_context_at_outer_image_edges(self):
         class RecordingSession(FakeSession):
@@ -92,26 +83,7 @@ class UpscaleOnnxTest(unittest.TestCase):
         self.assertAlmostEqual(red[16, 23], 100 / 255.0)
 
 
-    def test_all_models_split_large_inputs_into_fixed_tiles(self):
-        class CountingSession(FakeSession):
-            def __init__(self):
-                self.calls = 0
-
-            def run(self, output_names, feeds):
-                self.calls += 1
-                return super().run(output_names, feeds)
-
-        session = CountingSession()
-        result = onnx_upscale.infer(
-            session,
-            Image.new("RGB", (449, 225), (1, 2, 3)),
-        )
-
-        self.assertEqual(result.size, (1796, 900))
-        self.assertEqual(session.calls, 6)
-        self.assertEqual(session.feeds["input"].shape, (1, 3, 256, 256))
-
-    def test_only_final_tile_releases_memory(self):
+    def test_tiled_inference_preserves_output_and_releases_only_final_tile(self):
         releases = []
         session = FakeSession()
 
@@ -127,6 +99,7 @@ class UpscaleOnnxTest(unittest.TestCase):
 
         self.assertEqual(result.size, (1796, 900))
         self.assertEqual(releases, [False, False, False, False, False, True])
+        self.assertEqual(session.feeds["input"].shape, (1, 3, 256, 256))
 
     def test_non_final_image_does_not_release_its_final_tile(self):
         releases = []

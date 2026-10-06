@@ -12,7 +12,8 @@ from anyimage.common.image_target import (
     image_edit_owner,
     object_color_texture,
 )
-from anyimage.operators import remove_background, upscale
+from anyimage.operators import upscale
+from anyimage.operators.remove_background import operators as remove_background
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
 

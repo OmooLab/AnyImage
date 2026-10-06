@@ -1,8 +1,8 @@
 """Prepare and refresh the selected Blender color references."""
 
+import hashlib
 from typing import NamedTuple
 
-import bpy
 import numpy as np
 
 from .color_match import prepare_color_reference, resize_rgba_proxy
@@ -13,7 +13,7 @@ from .image import image_rgba, is_color_reference_candidate
 
 class PreparedReference(NamedTuple):
     image: object
-    rgba: np.ndarray
+    content_digest: bytes
     metadata: tuple
     transfer: object
     colors: np.ndarray
@@ -21,6 +21,7 @@ class PreparedReference(NamedTuple):
 
 
 _references = {}
+_retained = {}
 _previews = None
 
 
@@ -60,28 +61,38 @@ def invalidate_color_reference(image):
         del _previews[key]
 
 
-def refresh_edited_color_reference(image):
-    """Refresh previously prepared references after a known content edit."""
-    key = image.as_pointer()
-    prepared = key in _references or (_previews is not None and str(key) in _previews)
-    invalidate_color_reference(image)
-    if not prepared:
-        return
-    from ..properties import update_color_reference_palette
+def release_unused_color_references(images):
+    """Keep resources selected by scenes or retained by active interactions."""
+    keys = {image.as_pointer() for image in images if image is not None} | set(_retained)
+    for key in tuple(_references):
+        if key not in keys:
+            _references.pop(key)
+            if _previews is not None and str(key) in _previews:
+                del _previews[str(key)]
 
-    settings_group = [
-        scene.anyimage_settings
-        for scene in bpy.data.scenes
-        if getattr(getattr(scene, "anyimage_settings", None), "color_reference", None) == image
-    ]
-    if settings_group:
-        for settings in settings_group:
-            update_color_reference_palette(settings, None, refresh=False)
+
+def retain_color_reference(image):
+    """Keep the selected reference resources for one active interaction."""
+    key = image.as_pointer()
+    _retained[key] = _retained.get(key, 0) + 1
+    return key
+
+
+def release_color_reference(key):
+    """End one interaction's resource ownership."""
+    count = _retained.get(key, 0)
+    if count <= 1:
+        _retained.pop(key, None)
     else:
-        try:
-            get_color_reference(image)
-        except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
-            pass
+        _retained[key] = count - 1
+
+
+def color_reference_digest(rgba):
+    """Identify complete pixels without retaining a full-size snapshot."""
+    digest = hashlib.blake2b(digest_size=32)
+    for row in rgba:
+        digest.update(memoryview(np.ascontiguousarray(row)))
+    return digest.digest()
 
 
 def _metadata(image):
@@ -105,7 +116,8 @@ def get_color_reference(image, *, refresh=False):
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
         invalidate_color_reference(image)
         raise
-    if cached is not None and cached.image == image and cached.metadata == metadata and np.array_equal(cached.rgba, rgba):
+    content_digest = color_reference_digest(rgba)
+    if cached is not None and cached.image == image and cached.metadata == metadata and cached.content_digest == content_digest:
         _references[key] = cached
         return cached
     invalidate_color_reference(image)
@@ -113,45 +125,16 @@ def get_color_reference(image, *, refresh=False):
     colors, weights = extract_reference_palette(linear)
     transfer = prepare_color_reference(linear, colors, weights)
     _prepare_reference_preview(image, linear)
-    cached = PreparedReference(image, rgba, metadata, transfer, colors, weights)
+    cached = PreparedReference(image, content_digest, metadata, transfer, colors, weights)
     _references[key] = cached
     return cached
 
 
-def clear_color_references(*_args):
-    """Release snapshots after loading, undoing or disabling the add-on."""
-    _references.clear()
-    if _previews is not None:
-        _previews.clear()
-    from ..properties import invalidate_color_reference_items
-
-    invalidate_color_reference_items()
-
-
-def restore_color_references(*_args):
-    """Rebuild selected references from restored Blender data after Undo or load."""
-    from ..properties import update_color_reference_palette
-
-    clear_color_references()
-    for scene in bpy.data.scenes:
-        settings = getattr(scene, "anyimage_settings", None)
-        if settings is not None and settings.color_reference is not None:
-            update_color_reference_palette(settings, None, refresh=False)
-
-
-def register():
-    restore_color_references._bpy_persistent = True
-    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
-        if restore_color_references not in handlers:
-            handlers.append(restore_color_references)
-
-
-def unregister():
+def clear_color_references():
+    """Release all reference resources at a global data lifecycle boundary."""
     global _previews
-    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
-        if restore_color_references in handlers:
-            handlers.remove(restore_color_references)
-    clear_color_references()
+    _references.clear()
+    _retained.clear()
     if _previews is not None:
         from bpy.utils import previews
 

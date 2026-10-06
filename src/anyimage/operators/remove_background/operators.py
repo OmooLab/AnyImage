@@ -1,8 +1,8 @@
 import bpy
 
-from ..preferences import configured_background_model
-from ..runtime import JobOperatorBase
-from ..common.ai import (
+from ...preferences import configured_background_model
+from ...runtime import JobOperatorBase
+from ...common.ai import (
     require_input_path,
     report_ai_error,
     invoke_ai_setup_if_needed,
@@ -11,9 +11,9 @@ from ..common.ai import (
     require_model,
 )
 
-from ..common.image import cleanup_image_input
-from ..common.image_target import ImageEditTarget, image_edit_owner
-from .background_hdr import HdrBackgroundInput
+from ...common.image import cleanup_image_input
+from ...common.image_target import ImageEditTarget, image_edit_owner
+from .hdr import HdrBackgroundInput
 
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
@@ -27,7 +27,7 @@ class RemoveImageBackground(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        from ..runtime import runtime
+        from ...runtime import runtime
 
         return image_edit_owner(context) is not None and not runtime.server_busy()
 

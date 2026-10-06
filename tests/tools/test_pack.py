@@ -97,7 +97,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                     "common/image.py",
                     "common/projective_image.py",
                     "common/polygon.py",
-                    "operators/background_hdr.py",
+                    "operators/remove_background/hdr.py",
                     "common/material.py",
                     "common/node.py",
                     "common/object.py",
@@ -129,7 +129,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                     "operators/rectify_tool/geometry.py",
                     "operators/rectify_tool/preview.py",
                     "operators/ai_setup.py",
-                    "operators/remove_background.py",
+                    "operators/remove_background/operators.py",
                 ):
                     self.assertIn(path, names)
                 self.assertIn(

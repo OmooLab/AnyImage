@@ -5,8 +5,7 @@ import numpy as np
 import pytest
 
 from tests.support.depth_surface import evaluated
-from tests.nodes.test_boundary_smoothing import boundary_neighbors, corner_mask, edge_band, uv_delta
-
+from tests.support.boundary import boundary_neighbors, corner_mask, edge_band, uv_delta
 
 
 def test_cutout_fine_outline_smooths_only_within_boundary_band():
@@ -85,7 +84,7 @@ def test_plane_validity_hole_blurs_depth_and_protects_rectangle():
 
 @pytest.mark.parametrize("region", ["seam", "pole"])
 def test_panorama_blurs_opening_radially(region):
-    from tests.nodes.test_image_depth_panorama import panorama, evaluated as panorama_mesh
+    from tests.support.panorama import panorama, evaluated as panorama_mesh
 
     yy, xx = np.mgrid[:64, :128]
     distance = np.minimum(xx, 128 - xx)

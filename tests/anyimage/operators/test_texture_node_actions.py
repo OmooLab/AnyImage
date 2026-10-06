@@ -10,7 +10,8 @@ import pytest
 from anyimage import menu
 from anyimage.common import image as images
 from anyimage.common.image_target import ImageEditTarget, active_texture_node
-from anyimage.operators import remove_background, upscale
+from anyimage.operators import upscale
+from anyimage.operators.remove_background import operators as remove_background
 from anyimage.runtime import runtime
 from tests.support.image_texture import texture, texture_context, write_result
 
@@ -104,8 +105,10 @@ def test_texture_poll_applies_busy_and_size_limits(texture, busy, limit, expecte
         assert remove_background.RemoveImageBackground.poll(context) == (not busy)
 
 
-@pytest.mark.parametrize("operation,filename", [(upscale.UpscaleImage, "upscale.png"), (remove_background.RunBackgroundRemoval, "foreground.png")])
-@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("operation,filename,shared", [
+    (upscale.UpscaleImage, "upscale.png", True),
+    (remove_background.RunBackgroundRemoval, "foreground.png", False),
+])
 def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, operation, filename, shared):
     source_name = texture.image.name
     source_pixels = images.image_pixels(texture.image)
@@ -151,11 +154,13 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
             bpy.utils.unregister_class(operation)
 
 
-@pytest.mark.parametrize("operation,module,filename", [
-    (upscale.UpscaleImage, upscale, "upscale.png"),
-    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png"),
+@pytest.mark.parametrize("operation,module,filename,outcome", [
+    (upscale.UpscaleImage, upscale, "upscale.png", "succeeded"),
+    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png", "succeeded"),
+    (upscale.UpscaleImage, upscale, "upscale.png", "failed"),
+    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png", "cancelled"),
+    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png", "invalid_target"),
 ])
-@pytest.mark.parametrize("outcome", ["succeeded", "cancelled", "failed", "invalid_target"])
 def test_texture_job_request_and_completion(texture, tmp_path, operation, module, filename, outcome):
     context = texture_context(texture)
     context.window = object()

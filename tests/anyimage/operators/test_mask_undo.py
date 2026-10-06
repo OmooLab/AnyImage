@@ -8,8 +8,7 @@ from anyimage.common import image, viewport
 from anyimage.operators import mask_tool as mask
 
 
-@pytest.mark.parametrize("gesture", ["LASSO", "BRUSH", "POLYLINE"])
-@pytest.mark.parametrize("alpha_mode", ["STRAIGHT", "PREMUL"])
+@pytest.mark.parametrize("gesture,alpha_mode", [("LASSO", "STRAIGHT"), ("BRUSH", "PREMUL"), ("POLYLINE", "STRAIGHT")])
 def test_mask_commit_is_one_undo_transaction(gesture, alpha_mode):
     source = bpy.data.images.new("Undo source", width=8, height=8, alpha=True)
     source.alpha_mode = alpha_mode

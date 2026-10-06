@@ -3,7 +3,8 @@ from unittest.mock import patch
 import bpy
 import pytest
 
-from anyimage.operators import ai_setup, remove_background
+from anyimage.operators import ai_setup
+from anyimage.operators.remove_background import operators as remove_background
 from anyimage.operators.convert_to_plane import operators as plane
 
 

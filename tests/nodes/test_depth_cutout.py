@@ -1,5 +1,4 @@
 """Behavior checks for the Depth Cutout balloon and shell shapes."""
-from collections import Counter
 
 import bpy
 import numpy as np
@@ -8,21 +7,7 @@ import pytest
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 
 
-def assert_no_boundary_ear_triangles(faces):
-    edges = Counter(
-        tuple(sorted((a, b)))
-        for face in faces
-        for a, b in zip(face, (*face[1:], face[0]))
-    )
-    boundary = {edge for edge, count in edges.items() if count == 1}
-    assert not [
-        face for face in faces
-        if len(face) == 3
-        and sum(
-            tuple(sorted((a, b))) in boundary
-            for a, b in zip(face, (*face[1:], face[0]))
-        ) >= 2
-    ]
+from tests.support.depth_surface import assert_no_boundary_ear_triangles
 
 
 def test_depth_limit_keeps_threshold_points_and_deletes_points_beyond_it():

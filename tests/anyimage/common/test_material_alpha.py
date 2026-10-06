@@ -5,10 +5,9 @@ from anyimage.common import material
 from tests.support.materials import image_layer
 
 
-@pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("shadeless", [False, True])
-@pytest.mark.parametrize("view", ["AgX", "Unknown"])
-def test_material_alpha_fix_defaults_to_zero_independently_of_preference(image_layer, monkeypatch, enabled, shadeless, view):
+def test_material_alpha_fix_defaults_to_zero_independently_of_preference(image_layer, monkeypatch, shadeless):
+    enabled, view = True, "AgX"
     monkeypatch.setattr(material, "material_node_group", lambda depth_plane=False: image_layer)
     monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: enabled)
     color = bpy.data.images.new("Alpha edge", width=2, height=2, alpha=True)

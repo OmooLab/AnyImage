@@ -6,6 +6,8 @@ from pathlib import Path
 
 import bpy
 
+image_content_handlers = []
+
 TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
 
 IMAGE_NAME_SUFFIXES = (
@@ -324,9 +326,8 @@ def restore_image_content(image, state):
     preview = image.preview
     if preview is not None:
         preview.reload()
-    from .color_reference import refresh_edited_color_reference
-
-    refresh_edited_color_reference(image)
+    for handler in tuple(image_content_handlers):
+        handler(image)
 
 
 def replace_empty_image(source_object, result_image, *, placement_bounds=None,

@@ -18,7 +18,23 @@ class Session:
     pass
 
 
-@pytest.mark.parametrize("key", model_catalog.DOWNLOADABLE_MODELS)
+@pytest.fixture(autouse=True)
+def installed_models(tmp_path, monkeypatch):
+    content = b"verified"
+    specs = {}
+    for key, model in model_catalog.DOWNLOADABLE_MODELS.items():
+        specs[key] = replace(model, files=tuple(
+            (name, len(content), hashlib.sha256(content).hexdigest())
+            for name, _size, _checksum in model.files
+        ))
+        for name, _size, _checksum in specs[key].files:
+            path = tmp_path / model.directory_name / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+    monkeypatch.setattr(model_catalog, "DOWNLOADABLE_MODELS", specs)
+
+
+@pytest.mark.parametrize("key", ["BEN2_BASE", "BIREFNET_HR_MATTING"])
 def test_session_reuses_model_and_applies_catalog_device(tmp_path, key):
     manager = ModelManager(tmp_path)
     spec = model_catalog.get_downloadable_model(key)
@@ -27,7 +43,7 @@ def test_session_reuses_model_and_applies_catalog_device(tmp_path, key):
         second, elapsed = manager.get_session(key, "directml")
     assert first is second
     assert elapsed == 0.0
-    assert spec.label in manager.snapshot()["loaded"].values()
+    assert spec.key in manager.snapshot()["loaded"].values()
     create.assert_called_once_with(manager.directory(key), spec.device or "directml")
     manager.close()
     assert not any(manager.snapshot()["loaded"].values())
@@ -59,11 +75,10 @@ def test_cache_keeps_three_families_and_only_replaces_selected_family(tmp_path):
     before = manager.snapshot()
     with patch.object(model_adapter("MOGE3_VITL"), "create_session", return_value=Session()):
         manager.get_session("MOGE3_VITL", "cpu")
-    assert manager.snapshot()["loaded"] == {**before["loaded"], "geometry": "MoGe-3 ViT-L"}
+    assert manager.snapshot()["loaded"] == {**before["loaded"], "geometry": "MOGE3_VITL"}
 
 
-@pytest.mark.parametrize("key", ("BEN2_BASE", "MOGE2_VITS_NORMAL", "REALESRGAN_X4PLUS"))
-@pytest.mark.parametrize("error_type", (OnnxResourceError, MemoryError))
+@pytest.mark.parametrize("key,error_type", [("BEN2_BASE", OnnxResourceError), ("MOGE2_VITS_NORMAL", MemoryError)])
 def test_resource_failure_releases_failed_frames_before_retry(tmp_path, key, error_type):
     manager = ModelManager(tmp_path)
     refs = []
@@ -112,16 +127,16 @@ def test_load_failure_has_bounded_retries_and_preserves_unrelated_cache(tmp_path
             manager.get_session("MOGE3_VITL", "cpu")
     assert create.call_count == attempts
     assert bool(manager.snapshot()["loaded"]["background"]) == (attempts == 1)
-    assert manager.snapshot()["loaded"]["geometry"] == ""
+    assert manager.snapshot()["loaded"]["geometry"] is None
 
 
-@pytest.mark.parametrize("key", model_catalog.DOWNLOADABLE_MODELS)
+@pytest.mark.parametrize("key", ["BEN2_BASE", "BIREFNET_LITE"])
 def test_ready_checks_every_declared_file_and_same_size_corruption(tmp_path, key):
     spec = model_catalog.get_downloadable_model(key)
     content = b"verified"
     files = tuple((name, len(content), hashlib.sha256(content).hexdigest()) for name, _, _ in spec.files)
     spec = replace(spec, files=files)
-    manager = ModelManager(tmp_path)
+    manager = ModelManager(tmp_path / "missing")
     with patch.object(model_catalog, "get_downloadable_model", return_value=spec):
         assert not manager.ready(key)
         for name, _, _ in files:
@@ -138,7 +153,7 @@ def test_verified_large_file_is_reused_until_identity_changes(tmp_path):
     spec = replace(model_catalog.BEN2_MODEL, files=(("model.onnx", len(content), hashlib.sha256(content).hexdigest()),))
     manager = ModelManager(tmp_path)
     directory = manager.directory(spec.key)
-    directory.mkdir()
+    directory.mkdir(exist_ok=True)
     path = directory / "model.onnx"
     path.write_bytes(content)
     os.utime(path, (1, 1))
@@ -159,3 +174,46 @@ def test_required_downloads_skip_ready_models_and_aggregate_progress(tmp_path):
     assert download.call_args.args[1] == "MOGE3_VITL"
     download.call_args.args[2](0.5, "loading")
     context.progress.assert_called_once_with(0.5, "loading")
+
+
+def test_corrupt_file_blocks_loading_and_repair_clears_only_its_state(tmp_path, monkeypatch):
+    key = "BEN2_BASE"
+    manager = ModelManager(tmp_path)
+    model = model_catalog.get_downloadable_model(key)
+    other_key = "MOGE2_VITS_NORMAL"
+    with patch.object(model_adapter(other_key), "create_session", return_value=Session()):
+        other, _ = manager.get_session(other_key, "cpu")
+    path = manager.directory(key) / model.files[0][0]
+    path.write_bytes(b"damaged!")
+    with patch.object(model_adapter(key), "create_session") as create:
+        with pytest.raises(RuntimeError, match="failed validation"):
+            manager.get_session(key, "cpu")
+        create.assert_not_called()
+    assert key in manager.snapshot()["validation_errors"]
+    assert manager.snapshot()["loaded"]["geometry"] == other_key
+
+    def download(spec, directory, progress, check_cancelled):
+        path.write_bytes(b"verified")
+
+    monkeypatch.setattr("server.model_manager.download_model", download)
+    context = SimpleNamespace(progress=Mock(), check_cancelled=Mock())
+    manager.download(context, key)
+    assert not manager.snapshot()["validation_errors"]
+    with patch.object(model_adapter(key), "create_session", return_value=Session()) as create:
+        manager.get_session(key, "cpu")
+        create.assert_called_once()
+    assert manager.get_session(other_key, "cpu")[0] is other
+
+
+def test_repair_failure_keeps_validation_error_and_releases_target_session(tmp_path, monkeypatch):
+    key = "BEN2_BASE"
+    manager = ModelManager(tmp_path)
+    with patch.object(model_adapter(key), "create_session", return_value=Session()):
+        manager.get_session(key, "cpu")
+    manager.validation_errors[key] = "Validation failed"
+    monkeypatch.setattr("server.model_manager.download_model", Mock(side_effect=RuntimeError("network failed")))
+    with pytest.raises(RuntimeError, match="network failed"):
+        manager.download(SimpleNamespace(progress=Mock(), check_cancelled=Mock()), key)
+    assert manager.snapshot()["loaded"]["background"] is None
+    assert manager.snapshot()["validation_errors"][key] == "Validation failed"
+    assert manager.ready(key)

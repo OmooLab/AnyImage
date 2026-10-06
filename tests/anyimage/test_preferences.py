@@ -172,7 +172,7 @@ class PreferencesTest(BlenderTestCase):
                 "label": key,
                 "family": family,
                 "enabled": True,
-                "ready": False,
+                "installed": False,
             }
             for key, family in (
                 ("MOGE2_VITS_NORMAL", "moge"),
@@ -202,6 +202,38 @@ class PreferencesTest(BlenderTestCase):
             downloads,
             ["MOGE2_VITS_NORMAL", "BEN2_BASE", "HAT_GAN_X4_SHARPER"],
         )
+
+    def test_installed_invalid_model_draw_offers_local_repair(self):
+        import tempfile
+        import hashlib
+        from dataclasses import replace
+        from unittest.mock import Mock
+
+        properties = self.anyimage.properties
+        spec = replace(properties.shared_model_catalog.BEN2_MODEL, files=(("model.onnx", 4, "checksum"),))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "models" / spec.directory_name / "model.onnx"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"bad!")
+            state = {"resources": {"model_manager": {"validation_errors": {spec.key: "Checksum mismatch"}}}}
+            with (
+                patch.dict(properties.shared_model_catalog.DOWNLOADABLE_MODELS, {spec.key: spec}, clear=True),
+                patch.object(properties.runtime, "storage_root", return_value=root),
+                patch.object(properties.runtime.server, "snapshot", state),
+                patch.object(properties.runtime.server, "ensure", side_effect=AssertionError("UI contacted server")),
+                patch.object(hashlib, "file_digest", side_effect=AssertionError("UI hashed files")),
+                patch.object(properties.runtime, "server_busy", return_value=False),
+            ):
+                record = properties.model_catalog()[0]
+                self.assertTrue(record["installed"])
+                self.assertEqual(record["validation_error"], "Checksum mismatch")
+                layout = Mock()
+                operator = layout.row.return_value.row.return_value.operator.return_value
+                self.anyimage.preferences.AnyImagePreferences._draw_model_status(layout, record, "AI Remove Background")
+                self.assertEqual(operator.model, spec.key)
+                self.assertEqual(layout.row.return_value.row.return_value.operator.call_args.kwargs["text"], "Download Again")
+
 
     def draw_preferences(self, status, catalog):
         operators = []

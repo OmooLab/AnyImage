@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 from tests.support.depth_surface import surface, evaluated
-from tests.nodes.test_depth_cutout import assert_no_boundary_ear_triangles
-from tests.nodes.test_boundary_smoothing import diagonal_surface
+from tests.support.depth_surface import assert_no_boundary_ear_triangles
+from tests.support.boundary import diagonal_surface
 
 
 def profile_values(obj):

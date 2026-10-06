@@ -7,11 +7,16 @@
 | `ai.py` | 环境和模型就绪检查、输入路径校验、`production_device()`、`moge2_parameters()` 与安装 UI |
 | `image.py` | `image_rgba()`、Image User 帧设置读取、Job 输入准备、像素采样、结果 Image 和 `replace_empty_image()` |
 | `color_image.py` | 材质颜色与 AI 分析输入的准备和清理 |
-| `hdr_image.py` | HDR 去背景分析输入及浮点颜色保留 |
-| `image_target.py` | Image Empty 与 Shader Image Texture 编辑目标 |
+| `hdr_image.py` | HDR 分析颜色、EXR 保存和浮点图片创建 |
+| `image_target.py` | Image Empty、带能力标记的 Mesh 与 Shader Image Texture 编辑目标 |
 | `selection.py` | `SelectionPath`、`SelectionMask`、non-zero winding 栅格化与 Alpha 修整 |
 | `viewport.py` | 原生点选、屏幕投影、`ImageGesture`、Lasso / Brush / Polyline 与 Overlay |
-| `depth.py` | 深度图片和元数据加载、相机坐标与显示范围的尺度换算 |
+| `geometry_image.py` | 深度图片和元数据加载、相机坐标与显示范围的尺度换算 |
+| `color_reference.py` | 参考签名、内容摘要、色板、缩略图及交互资源引用 |
+| `color_match.py`、`color_palette.py`、`color_space.py` | 色板锚点匹配、亮度曲线、代表色提取与颜色转换 |
+| `image_preview.py` | GPU 预览纹理、显示编码、布局和 HUD 绘制 |
+| `projective_image.py` | 透视变换与预乘 Alpha 插值 |
+| `polygon.py` | 屏幕多边形、Brush 轮廓、扫描线区间和预览网格 |
 | `material.py` | Image Layer、Normal、Alpha、Shadeless 与 Depth 材质 |
 | `object.py` | Modifier 输入设置与结果对象激活、源对象替换 |
 | `node.py` | `node_asset_path()` 与 `load_node_group()` |
@@ -21,6 +26,12 @@
 业务像素采用 Top-down RGBA，`image_pixels()` 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。`ImageEditTarget` 校验目标身份后经 `replace_empty_image()` 或 `replace_texture_image()` 提交：未共享的 Image 原地替换内容，共享时改用新的 Image 数据块，失败时回滚源数据。
 
 `prepare_image_input()` 返回路径及临时标记；`cleanup_image_input()` 与创建方配对。`color_image.py` 的 `prepare_material_color_input()` 准备材质颜色，`material_analysis_input()` 提供分析输入；Cutout 按几何 bounds 裁切。
+
+## 颜色参考生命周期
+
+`properties.py` 管理各 Scene 的参考选择、画廊与色板同步，并注册 load、Undo、Redo 回调和 `image_content_handlers` 的编辑通知。公共参考模块准备签名、色板与缩略图，使用逐行像素摘要检查内容身份。长期缓存保留紧凑派生数据，完整像素只在准备及匹配交互期间使用。
+
+Scene 清空或替换参考时，按其他 Scene 与活动交互的引用释放资源。匹配确认、取消和失败会结束交互引用；扩展注销清理自身 handler 与预览资源。
 
 ## 手势与 Selection
 

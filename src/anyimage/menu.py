@@ -9,7 +9,7 @@ from .common.image_target import (
 )
 from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIEnvironment
 from .operators.convert_to_panorama import ConvertToPanorama
-from .operators.color_reference import MatchColorReference
+from .operators.color_match import MatchColorReference
 from .operators.bake_mesh import BakeMesh
 from .operators.convert_to_plane import (
     ConvertToDepthPlane,

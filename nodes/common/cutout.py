@@ -1,36 +1,7 @@
 """Build geometry calculations shared by Cutout assets."""
-from .nodes import compare_node, math_node, store_int_attribute
+from .nodes import math_node, store_int_attribute
 from .smoothing import edge_boundary_field
-from anyimage.operators.cutout_tool.shape import BALLOON_ATTRIBUTE_NAME, IMAGE_REGION_ATTRIBUTE_NAME
-
-
-def _profile_field(group, geometry):
-    nodes = group.nodes
-    links = group.links
-    profile = nodes.new("GeometryNodeInputNamedAttribute")
-    profile.data_type = "FLOAT"
-    profile.inputs["Name"].default_value = BALLOON_ATTRIBUTE_NAME
-    profile_max = nodes.new("GeometryNodeAttributeStatistic")
-    profile_max.data_type = "FLOAT"
-    profile_max.domain = "POINT"
-    links.new(geometry, profile_max.inputs["Geometry"])
-    links.new(profile.outputs["Attribute"], profile_max.inputs["Attribute"])
-    safe_max = math_node(nodes, "MAXIMUM")
-    safe_max.inputs[1].default_value = 1e-6
-    links.new(profile_max.outputs["Max"], safe_max.inputs[0])
-    normalized = math_node(nodes, "DIVIDE")
-    links.new(profile.outputs["Attribute"], normalized.inputs[0])
-    links.new(safe_max.outputs[0], normalized.inputs[1])
-    smooth = nodes.new("ShaderNodeMapRange")
-    smooth.data_type = "FLOAT"
-    smooth.interpolation_type = "SMOOTHERSTEP"
-    smooth.clamp = True
-    smooth.inputs["From Min"].default_value = 0.0
-    smooth.inputs["From Max"].default_value = 1.0
-    smooth.inputs["To Min"].default_value = 0.0
-    smooth.inputs["To Max"].default_value = 1.0
-    links.new(normalized.outputs[0], smooth.inputs["Value"])
-    return profile.outputs["Attribute"], smooth.outputs["Result"]
+from anyimage.operators.cutout_tool.shape import IMAGE_REGION_ATTRIBUTE_NAME
 
 
 def _set_geometry_y(group, geometry, y_value):
@@ -109,23 +80,6 @@ def _set_layer_y(group, geometry, front_y, back_y, *, build_sides=True):
     merge.inputs["Distance"].default_value = 1e-6
     links.new(join.outputs["Geometry"], merge.inputs["Geometry"])
     return merge.outputs["Geometry"]
-
-
-def _remove_zero_thickness(
-    group,
-    zero_geometry,
-    shaped_geometry,
-    thickness,
-):
-    nodes = group.nodes
-    links = group.links
-    zero = compare_node(group, "LESS_THAN", thickness, 1e-6)
-    choose = nodes.new("GeometryNodeSwitch")
-    choose.input_type = "GEOMETRY"
-    links.new(zero, choose.inputs["Switch"])
-    links.new(shaped_geometry, choose.inputs["False"])
-    links.new(zero_geometry, choose.inputs["True"])
-    return choose.outputs["Output"]
 
 
 def _position_field(group, depth_image):

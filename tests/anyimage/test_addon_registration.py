@@ -177,7 +177,7 @@ class AddonRegistrationTest(BlenderTestCase):
         self.node_menu_draws.append(existing_node_draw)
 
         self.anyimage.register()
-        cache = self.anyimage.color_reference
+        cache = self.anyimage.properties
         self.assertIn(cache.restore_color_references, self.fake_bpy.app.handlers.load_post)
         system_classes = self.anyimage.runtime.operator_classes()
 

@@ -13,7 +13,7 @@ from nodes.groups.image_depth_cutout import (
     SIDE_UV_INFLUENCE_ITERATIONS,
     prepare_bridge_uv,
 )
-from tests.nodes.test_boundary_smoothing import boundary_neighbors
+from tests.support.boundary import boundary_neighbors
 from tests.support.depth_surface import evaluated, surface
 
 

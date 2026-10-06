@@ -138,3 +138,20 @@ def component_count(faces):
                 remaining.remove(neighbor)
                 pending.append(neighbor)
     return count
+
+
+def assert_no_boundary_ear_triangles(faces):
+    edges = Counter(
+        tuple(sorted((a, b)))
+        for face in faces
+        for a, b in zip(face, (*face[1:], face[0]))
+    )
+    boundary = {edge for edge, count in edges.items() if count == 1}
+    assert not [
+        face for face in faces
+        if len(face) == 3
+        and sum(
+            tuple(sorted((a, b))) in boundary
+            for a, b in zip(face, (*face[1:], face[0]))
+        ) >= 2
+    ]

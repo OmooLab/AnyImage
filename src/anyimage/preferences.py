@@ -26,13 +26,13 @@ MAX_CUTOUT_BOUNDARY_PADDING = 4.0
 ADDON_PACKAGE = __package__
 DEFAULT_STORAGE_ROOT = Path.home() / ".anyimage"
 UPSCALE_MODEL_ITEMS = tuple(
-    (model.key, f"{tier} | {model.label}", model.description, number)
-    for model, tier, number in zip(UPSCALE_MODELS.values(), ("Fast", "Base", "Pro"), (0, 2, 4))
+    (model.key, f"{model.tier} | {model.label}", model.description, model.enum_value)
+    for model in UPSCALE_MODELS.values()
 )
 
 BACKGROUND_MODEL_ITEMS = tuple(
-    (model.key, f"{tier} | {model.label}", model.description, number)
-    for model, tier, number in zip(BACKGROUND_MODELS.values(), ("Fast", "Base", "Pro"), (1, 0, 2))
+    (model.key, f"{model.tier} | {model.label}", model.description, model.enum_value)
+    for model in BACKGROUND_MODELS.values()
 )
 
 BALLOON_PROFILE_ALGORITHM_ITEMS = (
@@ -335,14 +335,17 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         if model is None:
             row.label(text="Unavailable", icon="ERROR")
             return
-        if model.get("ready"):
-            row.label(text=ready_label, icon="CHECKMARK")
+        error = model.get("validation_error")
+        if error:
+            row.label(text="Validation failed", icon="ERROR")
+        elif model.get("installed"):
+            row.label(text=f"{ready_label} (Installed)", icon="CHECKMARK")
             return
         download_row = row.row(align=True)
         download_row.enabled = not runtime.server_busy()
         operator = download_row.operator(
             DownloadModel.bl_idname,
-            text="Download",
+            text="Download Again" if error else "Download",
             icon="IMPORT",
         )
         operator.model = model["key"]

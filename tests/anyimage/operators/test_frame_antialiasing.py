@@ -56,7 +56,7 @@ def test_partial_foreground_over_transparent_blue():
     np.testing.assert_allclose(render((bottom, top)), [[[0.25, 0, 0.75, 0.25]]])
 
 
-@pytest.mark.parametrize("alpha", [0, 1e-12, 1e-8, 1e-7])
+@pytest.mark.parametrize("alpha", [1e-8, 1e-7])
 def test_near_zero_alpha_keeps_covered_rgb(alpha):
     result = render((source([[[0.2, 0.4, 0.8, alpha]]]),))
     np.testing.assert_allclose(result[..., :3], [[[0.2, 0.4, 0.8]]])

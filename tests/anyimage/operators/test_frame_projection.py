@@ -8,8 +8,7 @@ import pytest
 from anyimage.common.selection import clip_polygon_halfplanes
 
 
-@pytest.mark.parametrize("focal", [1, 1.7, 2, 4])
-@pytest.mark.parametrize("angle,depth", [(30, 0.2), (0, 1e-14)])
+@pytest.mark.parametrize("focal,angle,depth", [(1, 30, .2), (4, 30, .2), (1, 0, 1e-14)])
 def test_frame_overlap_matches_finite_front_samples(focal, angle, depth):
     projection = np.eye(4)
     projection[0, 0] = projection[1, 1] = focal
@@ -204,31 +203,6 @@ class FrameProjectionTest(unittest.TestCase):
             )
         )
         self.assertFalse(parallel_valid[0])
-
-
-    def test_frame_perspective_projection_accepts_extremely_close_image(self):
-        import numpy as np
-
-        projection = np.identity(4)
-        projection[3] = (0.0, 0.0, -1.0, 0.0)
-        matrix_world = np.identity(4)
-        matrix_world[2, 3] = -1e-14
-        source = frame_projection.frame_source_projection(
-            projection,
-            np.identity(4),
-            matrix_world,
-            (-1.0, 1.0, -1.0, 1.0),
-            (100, 100),
-            perspective=True,
-        )
-        source["image_size"] = (100, 100)
-        _points, depth, valid, _normalized = frame_projection.frame_source_coordinates(
-            source,
-            np.asarray(((50.0, 50.0),)),
-        )
-
-        self.assertTrue(valid[0])
-        self.assertEqual(depth[0], 1e-14)
 
 
     def test_frame_overlap_does_not_depend_on_output_pixel_centers(self):

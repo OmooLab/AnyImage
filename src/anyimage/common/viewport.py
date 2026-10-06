@@ -12,17 +12,7 @@ from .image import (
     require_image_empty,
     is_animated_image,
 )
-from .polygon import (
-    _merge_intervals,
-    _scanline_band_triangles,
-    _subtract_intervals,
-    brush_footprint_polygons,
-    circle_vertices,
-    dashed_line_segments,
-    preview_fill_geometry,
-    scanline_union_bands,
-    triangulated_polygon_vertices,
-)
+from . import polygon as polygon_geometry
 from .selection import ImageEditWarning, SelectionPath
 
 MIN_PATH_DISTANCE = 2.0
@@ -213,7 +203,7 @@ def draw_dashed_line(
     from gpu_extras.batch import batch_for_shader
 
     if segments is None:
-        segments = dashed_line_segments(vertices)
+        segments = polygon_geometry.dashed_line_segments(vertices)
     if not segments:
         return
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
@@ -235,7 +225,7 @@ def draw_polygon_fill(
     from gpu_extras.batch import batch_for_shader
 
     if triangles is None:
-        triangles = triangulated_polygon_vertices(vertices)
+        triangles = polygon_geometry.triangulated_polygon_vertices(vertices)
     if not triangles:
         return
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
@@ -342,7 +332,7 @@ def draw_circle_outline(
     import gpu
     from gpu_extras.batch import batch_for_shader
 
-    vertices = circle_vertices(center, radius)
+    vertices = polygon_geometry.circle_vertices(center, radius)
     shader = gpu.shader.from_builtin("UNIFORM_COLOR")
     batch = batch_for_shader(
         shader,
@@ -386,7 +376,7 @@ class BrushPreview:
     def _polygon_rows(self, polygons):
         return {
             round(bottom / self.step): intervals
-            for bottom, _top, intervals in scanline_union_bands(polygons, self.step)
+            for bottom, _top, intervals in polygon_geometry.scanline_union_bands(polygons, self.step)
             if intervals
         }
 
@@ -398,20 +388,20 @@ class BrushPreview:
         changed = set(self.tail)
         target = max(1, len(path) - 1)
         for index in range(self.count, target):
-            polygons = (circle_vertices(path[0], radius),) if index == 0 else (
-                brush_footprint_polygons(path[index - 1:index + 1], radius)[1:]
+            polygons = (polygon_geometry.circle_vertices(path[0], radius),) if index == 0 else (
+                polygon_geometry.brush_footprint_polygons(path[index - 1:index + 1], radius)[1:]
             )
             for row, intervals in self._polygon_rows(polygons).items():
-                self.prefix[row] = _merge_intervals((*self.prefix.get(row, ()), *intervals))
+                self.prefix[row] = polygon_geometry.merge_intervals((*self.prefix.get(row, ()), *intervals))
                 changed.add(row)
         self.count = target
         self.tail = self._polygon_rows(
-            brush_footprint_polygons(path[-2:], radius)[1:]
+            polygon_geometry.brush_footprint_polygons(path[-2:], radius)[1:]
         ) if len(path) > 1 else {}
         changed.update(self.tail)
         chunks = set()
         for row in changed:
-            intervals = _merge_intervals((*self.prefix.get(row, ()), *self.tail.get(row, ())))
+            intervals = polygon_geometry.merge_intervals((*self.prefix.get(row, ()), *self.tail.get(row, ())))
             if intervals == self.coverage.get(row, ()):
                 continue
             if intervals:
@@ -432,15 +422,15 @@ class BrushPreview:
             bands.append((bottom, bottom + self.step, intervals))
             for left, right in intervals:
                 for x in (left, right):
-                    outline.extend(dashed_line_segments(
+                    outline.extend(polygon_geometry.dashed_line_segments(
                         ((x, bottom), (x, bottom + self.step)), offset=bottom
                     ))
-            for left, right in (*_subtract_intervals(intervals, lower),
-                                *_subtract_intervals(lower, intervals)):
-                outline.extend(dashed_line_segments(
+            for left, right in (*polygon_geometry.subtract_intervals(intervals, lower),
+                                *polygon_geometry.subtract_intervals(lower, intervals)):
+                outline.extend(polygon_geometry.dashed_line_segments(
                     ((left, bottom), (right, bottom)), offset=left
                 ))
-        return _scanline_band_triangles(bands), tuple(outline)
+        return polygon_geometry.scanline_band_triangles(bands), tuple(outline)
 
     def draw(self, color):
         import gpu
@@ -505,7 +495,7 @@ class ImageGesture:
         polygon = ImageGesture._screen_path(self)
         if polygon != self._preview_polygon:
             self._preview_polygon = polygon
-            self._fill_triangles, self._outline_segments = preview_fill_geometry(polygon)
+            self._fill_triangles, self._outline_segments = polygon_geometry.preview_fill_geometry(polygon)
         if self._fill_triangles:
             draw_polygon_fill(polygon, self._fill_triangles, color)
         if self._outline_segments:

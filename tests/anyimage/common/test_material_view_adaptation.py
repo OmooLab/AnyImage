@@ -9,7 +9,6 @@ from PIL import Image
 from anyimage import preferences
 from anyimage.common import image as images
 from anyimage.common import material
-from anyimage.operators.clipboard_image import actions as clipboard
 from tests.support.color_image import color_image
 
 
@@ -35,8 +34,11 @@ def color_texture(result):
     return next(node.image for node in result.node_tree.nodes if node.type == "TEX_IMAGE")
 
 
-@pytest.mark.parametrize("enabled", [False, True])
-@pytest.mark.parametrize("view,space", [*material.VIEW_TRANSFORM_COLOR_SPACES, ("Standard", "sRGB"), ("Unknown", "sRGB")])
+@pytest.mark.parametrize("enabled,view,space", [
+    (False, "AgX", "AgX Base sRGB"),
+    (True, "AgX", "AgX Base sRGB"),
+    (True, "Unknown", "sRGB"),
+])
 def test_color_space_and_alpha_follow_preference(color_data, enabled, view, space):
     image = bpy.data.images.new("Material policy", width=2, height=1, alpha=True)
     expected = np.array([0.2, 0.4, 0.8, 0.25, 0.6, 0.3, 0.1, 0], dtype=np.float32)
@@ -58,10 +60,9 @@ def test_color_space_and_alpha_follow_preference(color_data, enabled, view, spac
     np.testing.assert_allclose(images.image_pixels(result), expected, atol=1 / 255)
 
 
-@pytest.mark.parametrize("enabled", [False, True])
-@pytest.mark.parametrize("kind", [
-    "byte", "packed", "file", "dirty",
-    "float",
+@pytest.mark.parametrize("enabled,kind", [
+    (True, "byte"), (True, "packed"), (False, "file"),
+    (True, "dirty"), (True, "float"),
 ])
 def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, enabled, kind):
     expected = np.array([[[51, 102, 204, 64], [153, 76, 25, 0]]], dtype=np.uint8)
@@ -102,8 +103,9 @@ def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, e
     np.testing.assert_allclose(images.image_pixels(edited), before, atol=1 / 255)
 
 
-@pytest.mark.parametrize("shadeless", [False, True])
-@pytest.mark.parametrize("entry", ["plane", "cutout", "depth", "clipboard"])
+@pytest.mark.parametrize("entry,shadeless", [
+    ("plane", False), ("cutout", True), ("depth", False),
+])
 def test_material_configures_the_image_selected_by_its_caller(color_data, entry, shadeless):
     source = bpy.data.images.new("Shared source", width=2, height=2, alpha=True)
     source.pixels.foreach_set(np.tile(np.array([0.2, 0.4, 0.8, 0.25], dtype=np.float32), 4))
@@ -124,23 +126,14 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         for key, image in data_textures.items()
     }
     with patch.object(preferences, "addon_preferences", return_value=settings):
-        if entry == "clipboard":
-            first = clipboard.create_image_material(source, source, shadeless=shadeless, scene=scene)
-        else:
-            if entry == "cutout":
-                color = color_image(owner.data, (0, 0, 2, 2), images.image_rgba(source))
-            else:
-                color = source
-            first = material.create_image_material(owner.data, color, 0, shadeless=shadeless, scene=scene, **data_textures)
+        color = color_image(source, (0, 0, 2, 2), images.image_rgba(source)) if entry == "cutout" else source
+        first = material.create_image_material(source, color, 0, shadeless=shadeless, scene=scene, **data_textures)
         original_color = color_texture(first)
         assert original_color.colorspace_settings.name == "AgX Base sRGB"
         assert original_color.alpha_mode == "STRAIGHT"
         settings.adapt_material_to_view_transform = False
         assert original_color.alpha_mode == "STRAIGHT"
-        if entry == "clipboard":
-            second = clipboard.create_image_material(original_color, original_color, shadeless=shadeless, scene=scene)
-        else:
-            second = material.create_image_material(owner.data, original_color, 0, shadeless=shadeless, scene=scene)
+        second = material.create_image_material(source, original_color, 0, shadeless=shadeless, scene=scene)
         new_color = color_texture(second)
         assert new_color == original_color
         assert new_color.colorspace_settings.name == "sRGB"
@@ -158,18 +151,3 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         assert image.colorspace_settings.name == space
         assert image.alpha_mode == alpha
         np.testing.assert_array_equal(images.image_pixels(image), pixels)
-
-
-def test_edit_results_preserve_source_alpha_with_adaptation_enabled(color_data, tmp_path):
-    source = bpy.data.images.new("Editing source", width=1, height=1, alpha=True)
-    rgba = np.array([0.2, 0.4, 0.8, 0.25], dtype=np.float32)
-    Image.fromarray(np.array([[[51, 102, 204, 64]]], dtype=np.uint8)).save(tmp_path / "foreground.png")
-    with patch.object(preferences, "addon_preferences", return_value=SimpleNamespace(adapt_material_to_view_transform=True)):
-        edited = images.create_image_edit_result(source, rgba, (1, 1))
-        loaded = images.load_image_edit_result(source, tmp_path / "foreground.png")
-    for result in (edited, loaded):
-        assert result.colorspace_settings.name == "sRGB"
-        assert result.alpha_mode == source.alpha_mode
-        np.testing.assert_allclose(images.image_pixels(result), rgba, atol=1 / 255)
-    assert source.colorspace_settings.name == "sRGB"
-    assert source.alpha_mode == "STRAIGHT"

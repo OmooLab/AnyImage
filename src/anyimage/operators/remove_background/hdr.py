@@ -7,9 +7,9 @@ import tempfile
 import bpy
 import numpy as np
 
-from ..common.image import TEMPORARY_IMAGE_PREVIEW_PROPERTY, cleanup_image_input, image_content_state, image_rgba, is_animated_image, restore_image_content
-from ..common.image_target import has_other_image_user
-from ..common.hdr_image import recognition_rgba, create_packed_hdr
+from ...common.image import TEMPORARY_IMAGE_PREVIEW_PROPERTY, cleanup_image_input, image_content_state, image_rgba, is_animated_image, restore_image_content
+from ...common.image_target import has_other_image_user
+from ...common.hdr_image import recognition_rgba, create_packed_hdr
 
 
 @dataclass

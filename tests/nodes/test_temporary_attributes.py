@@ -5,7 +5,7 @@ import pytest
 
 from tests.support.depth_surface import surface
 from tests.support.planes import create_surface
-from tests.nodes.test_image_depth_panorama import panorama
+from tests.support.panorama import panorama
 
 
 @pytest.mark.parametrize("kind", ["cutout", "plane", "panorama"])

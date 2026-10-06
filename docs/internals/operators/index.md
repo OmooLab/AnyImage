@@ -10,7 +10,10 @@
 | `operators/frame_tool/operators.py` | [Frame 多图合成](frame.md) |
 | `operators/mask_tool.py` | [Mask Alpha 编辑](mask.md) |
 | `operators/rectify_tool/operators.py` | [Rectify 透视校正](rectify.md) |
-| `operators/remove_background.py` | [Remove Background](remove-background.md) |
+| `operators/remove_background/operators.py` | [Remove Background](remove-background.md) |
+| `operators/color_match.py` | [Color Match](color-match.md) |
+| `operators/bake_mesh/operators.py` | [Bake Mesh](bake-mesh.md) |
+| `operators/job_files.py` | [Job 文件清理](job-files.md) |
 | `operators/upscale.py` | [Upscale](upscale.md) |
 
 单文件功能按业务命名；复杂功能包在 `operators.py` 定义 Operator 和入口协调逻辑，其余模块承载具体实现。包的 `__init__.py` 汇总导出与 `CLASSES` 注册清单，类型在 `operators/__init__.py` 和扩展 `__init__.py` 汇总注册。交互式工具的 WorkspaceTool 统一定义和注册于 `tools.py`。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。

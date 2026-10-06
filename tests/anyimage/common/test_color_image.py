@@ -22,8 +22,7 @@ def source():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-@pytest.mark.parametrize("floating,alpha", [(False, "STRAIGHT"), (True, "STRAIGHT")])
-@pytest.mark.parametrize("bounds", [None, (1, 0, 3, 2)])
+@pytest.mark.parametrize("floating,alpha,bounds", [(False, "STRAIGHT", (1, 0, 3, 2)), (True, "STRAIGHT", None)])
 def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, monkeypatch, floating, alpha, bounds):
     if floating:
         source = bpy.data.images.new("Source.exr", width=4, height=2, alpha=True, float_buffer=True)

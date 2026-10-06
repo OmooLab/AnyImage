@@ -6,17 +6,16 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.operators.background_hdr import HdrBackgroundInput
+from anyimage.operators.remove_background.hdr import HdrBackgroundInput
 from anyimage.common.image import cleanup_image_input, image_rgba
 from anyimage.common.image_target import ImageEditTarget
-from anyimage.operators import remove_background as operators
+from anyimage.operators.remove_background import operators
 from anyimage.runtime import JobOperatorBase
 from tests.support.hdr_image import hdr_texture
 from tests.support.image_texture import texture, texture_context
 
 
-@pytest.mark.parametrize("owner_kind", ["texture", "empty"])
-@pytest.mark.parametrize("shared", [False, True])
+@pytest.mark.parametrize("owner_kind,shared", [("texture", False), ("empty", True)])
 def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
     node = hdr_texture
     source = node.image

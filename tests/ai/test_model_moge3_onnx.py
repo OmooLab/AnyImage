@@ -1,10 +1,9 @@
-from dataclasses import replace
 from unittest.mock import patch
 
 import numpy as np
 
 from server.models import onnx_moge3
-from server import model_catalog, model_manager
+from server import model_catalog
 
 
 def test_sparse_neighbors_and_pooling_follow_voxel_coordinates():
@@ -71,36 +70,6 @@ def test_bilinear_resize_preserves_edges_and_pixel_centers():
     image = np.array([[0, 2], [4, 6]], np.float32)
     assert np.array_equal(onnx_moge3._resize(image, 2, 2), image)
     assert onnx_moge3._resize(image, 1, 1)[0, 0] == 3
-
-
-def test_moge3_requires_all_verified_model_files(tmp_path):
-    model = replace(
-        model_catalog.MOGE3_VITL,
-        files=(
-            (
-                "backbone.onnx",
-                1,
-                "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
-            ),
-            (
-                "refiner.onnx",
-                1,
-                "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
-            ),
-        ),
-    )
-    manager = model_manager.ModelManager(tmp_path)
-    directory = manager.directory("MOGE3_VITL")
-    directory.mkdir()
-    with patch.object(
-        model_manager.model_catalog, "get_downloadable_model", return_value=model
-    ):
-        (directory / "backbone.onnx").write_bytes(b"a")
-        assert not manager.ready("MOGE3_VITL")
-        (directory / "refiner.onnx").write_bytes(b"b")
-        assert manager.ready("MOGE3_VITL")
-        (directory / "refiner.onnx").write_bytes(b"c")
-        assert not manager.ready("MOGE3_VITL")
 
 
 def test_moge3_catalog_uses_onnx_assets_and_geometry_family():

@@ -82,11 +82,11 @@ class AiSetupTest(BlenderTestCase):
                 properties,
                 "model_catalog",
                 return_value=(
-                    {"key": "MOGE2_VITS_NORMAL", "ready": True},
-                    {"key": "BIREFNET_LITE", "ready": False},
+                    {"key": "MOGE2_VITS_NORMAL", "installed": True},
+                    {"key": "BIREFNET_LITE", "installed": False},
                     {
                         "key": "REALESRGAN_GENERAL_WDN_X4V3",
-                        "ready": True,
+                        "installed": True,
                     },
                 ),
             ),
@@ -103,7 +103,7 @@ class AiSetupTest(BlenderTestCase):
                 properties,
                 "model_catalog",
                 return_value=tuple(
-                    {"key": key, "ready": True}
+                    {"key": key, "installed": True}
                     for key in properties.shared_model_catalog.DEFAULT_MODEL_KEYS
                 ),
             ),

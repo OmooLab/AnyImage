@@ -5,8 +5,8 @@ from contextlib import ExitStack, contextmanager
 import bpy
 import numpy as np
 
-from ...common.image import image_content_state, image_pixels, restore_image_content
-from ...common.image_target import is_image_object, object_color_texture
+from ...common.image import create_image_edit_result, image_content_state, image_pixels, restore_image_content
+from ...common.image_target import has_other_image_user, is_image_object, material_has_other_object_user, object_color_texture
 from ...common.material import IMAGE_MATERIAL_NODE_GROUP_NAME, SHADELESS_NODE_GROUP_NAME
 from ..cutout_tool.shape import CUTOUT_NODE_GROUP_NAMES, IMAGE_REGION_ATTRIBUTE_NAME
 from ..convert_to_plane.image_plane import IMAGE_PLANE_NODE_GROUP_NAME
@@ -89,9 +89,11 @@ def material_inputs(obj):
     for node in (color, normal):
         if node is None:
             continue
+        if single_region and normal is None:
+            continue
         if node.image.source not in {"FILE", "GENERATED"} or min(node.image.size) < 1:
             raise ValueError("Bake Mesh requires loaded static images")
-        if not node.image.is_editable or node.image.library is not None:
+        if (node is normal or not single_region) and (not node.image.is_editable or node.image.library is not None):
             raise ValueError("Bake Mesh requires editable local images")
         extensions = {"EXTEND", "REPEAT"} if single_region else {"EXTEND"}
         if node.interpolation != "Linear" or node.extension not in extensions or node.projection != "FLAT":
@@ -174,22 +176,6 @@ def build_layout(mesh, *, single_region=False):
     return tiles
 
 
-def create_static_image(source, pixels, name):
-    """Create a packed image preserving the source's pixel interpretation."""
-    height, width = pixels.shape[:2]
-    image = bpy.data.images.new(name, width=width, height=height, alpha=True, float_buffer=source.is_float)
-    try:
-        image.colorspace_settings.name = source.colorspace_settings.name
-        image.alpha_mode = source.alpha_mode
-        image.pixels.foreach_set(np.asarray(pixels, dtype=np.float32).ravel())
-        image.update()
-        image.pack()
-        return image
-    except Exception:
-        bpy.data.images.remove(image)
-        raise
-
-
 def bake_normal(material, layer_name, size):
     """Bake the pre-bump shader normal using explicit source and target UVs."""
     layer = material.node_tree.nodes[layer_name]
@@ -262,6 +248,10 @@ def materialize_mesh_and_textures(context, obj):
     source_color = color.image
     source_normal = normal.image if normal is not None else None
     source_object_space = layer.inputs["Object Space"].default_value if layer is not None else None
+    isolate_material = material_has_other_object_user(material, obj)
+    isolated_images = {node.name: isolate_material or has_other_image_user(node)
+                       for node in (color, normal) if node is not None}
+    static_material = None
     originals = []
     images_updated = False
     images = []
@@ -278,7 +268,7 @@ def materialize_mesh_and_textures(context, obj):
         if not single_region:
             originals.append((source_color, image_content_state(source_color)))
             pixels = build_color_tiles(source_color, tiles)
-            images.append(create_static_image(source_color, pixels, source_color.name + "_mesh"))
+            images.append(create_image_edit_result(source_color, pixels.ravel(), (pixels.shape[1], pixels.shape[0])))
             del pixels
         if normal is not None:
             originals.append((source_normal, image_content_state(source_normal)))
@@ -286,6 +276,8 @@ def materialize_mesh_and_textures(context, obj):
             with bake_context(mesh, bake_material, obj.matrix_world):
                 static_normal = bake_normal(bake_material, layer.name, size)
                 images.append(static_normal)
+            bpy.data.materials.remove(bake_material)
+            bake_material = None
         mesh.uv_layers.remove(mesh.uv_layers[SOURCE_UV])
         mesh.uv_layers[TARGET_UV].name = "UVMap"
         mesh.uv_layers.active = mesh.uv_layers["UVMap"]
@@ -296,14 +288,20 @@ def materialize_mesh_and_textures(context, obj):
         for name in PROTOCOL_ATTRIBUTES:
             if name in mesh:
                 del mesh[name]
+        static_material = material.copy() if isolate_material else material
         mesh.materials.clear()
-        mesh.materials.append(material)
+        mesh.materials.append(static_material)
         mesh.update()
         images_updated = True
-        for (source, _), result in zip(originals, images):
-            replace_static_image(source, result)
+        updated_nodes = ([color] if not single_region else []) + ([normal] if normal is not None else [])
+        for node, (source, _), result in zip(updated_nodes, originals, images):
+            if isolated_images[node.name]:
+                static_material.node_tree.nodes[node.name].image = result
+                result.name = source.name
+            else:
+                replace_static_image(source, result)
         if layer is not None:
-            layer.inputs["Object Space"].default_value = False
+            static_material.node_tree.nodes[layer.name].inputs["Object Space"].default_value = False
         transferred = True
         return mesh
     finally:
@@ -311,11 +309,16 @@ def materialize_mesh_and_textures(context, obj):
             bpy.data.materials.remove(bake_material)
         if not transferred:
             if images_updated:
-                for image, content in reversed(originals):
-                    restore_image_content(image, content)
+                for node, (image, content) in reversed(list(zip(updated_nodes, originals))):
+                    static_material.node_tree.nodes[node.name].image = image
+                    if not isolated_images[node.name]:
+                        restore_image_content(image, content)
             if layer is not None:
                 layer.inputs["Object Space"].default_value = source_object_space
             if mesh is not None:
                 bpy.data.meshes.remove(mesh)
+            if static_material is not None and static_material != material:
+                bpy.data.materials.remove(static_material)
         for image in images:
-            bpy.data.images.remove(image)
+            if image.users == 0:
+                bpy.data.images.remove(image)

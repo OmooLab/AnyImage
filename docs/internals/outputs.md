@@ -29,7 +29,7 @@ flowchart TD
     D --> F[Blender 加载并 Pack]
 ```
 
-参考深度由 `common/depth.py` 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。Depth Plane 使用对象空间法线，Relief Plane 使用切线空间法线。
+参考深度由 `common/geometry_image.py` 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。Depth Plane 使用对象空间法线，Relief Plane 使用切线空间法线。
 
 Panorama 的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 `projection: equirectangular` 和 `image_size`。
 

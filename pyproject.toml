@@ -1,6 +1,6 @@
 [project]
 name = "anyimage"
-version = "1.0.3"
+version = "1.1.0"
 description = "Fast image-guided structure building tools for Blender"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"

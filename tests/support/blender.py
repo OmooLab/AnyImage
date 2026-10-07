@@ -106,6 +106,8 @@ class BlenderTestCase(unittest.TestCase):
         fake_bpy.path = SimpleNamespace(abspath=lambda path: path)
         fake_bpy.data = SimpleNamespace(
             objects=SimpleNamespace(get=lambda _name: None),
+            scenes=[],
+            images=[],
         )
         cls.bpy_import_patch = mock_bpy_imports(fake_bpy)
         cls.bpy_import_patch.start()
@@ -196,6 +198,8 @@ class BlenderTestCase(unittest.TestCase):
         self.node_menu_draws.clear()
         self.fake_bpy.data = SimpleNamespace(
             objects=SimpleNamespace(get=lambda _name: None),
+            scenes=[],
+            images=[],
         )
         if hasattr(self.fake_bpy.types.Scene, "anyimage_settings"):
             del self.fake_bpy.types.Scene.anyimage_settings

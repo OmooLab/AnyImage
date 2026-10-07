@@ -5,6 +5,8 @@ from tests.support.blender import BlenderTestCase
 
 class AddonRegistrationTest(BlenderTestCase):
     def test_color_reference_property_filters_selector_candidates(self):
+        from anyimage.common.image import CLIPBOARD_HASH_PROPERTY
+
         annotations = self.anyimage.AnyImageSettings.__annotations__
         options = annotations["color_reference"]
         gallery = annotations["color_reference_choice"]
@@ -12,16 +14,17 @@ class AddonRegistrationTest(BlenderTestCase):
             name="Reference.png",
             size=(4, 3),
             source="FILE",
+            get=lambda key, default=None: "clipboard-content" if key == CLIPBOARD_HASH_PROPERTY else default,
         )
-        generated = SimpleNamespace(
-            name="Reference_depth.exr.001",
+        ordinary = SimpleNamespace(
+            name="Reference.png",
             size=(4, 3),
             source="FILE",
         )
 
         self.assertEqual(options["name"], "Reference")
         self.assertTrue(options["poll"](None, candidate))
-        self.assertFalse(options["poll"](None, generated))
+        self.assertFalse(options["poll"](None, ordinary))
         self.assertEqual(gallery["name"], "Reference")
         self.assertIs(gallery["items"], self.anyimage.properties.color_reference_items)
         self.assertIs(gallery["get"], self.anyimage.properties.get_color_reference_choice)

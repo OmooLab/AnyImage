@@ -5,13 +5,13 @@ from anyimage import properties
 from anyimage.common import color_reference as reference_cache
 from anyimage.common.image import image_rgba
 from anyimage.common.color_space import srgb_to_linear_rgb
-from tests.support.color_reference import create_rgba_image, registered_color_reference, isolate_reference_cache
+from tests.support.color_reference import create_rgba_image, create_clipboard_image, create_image_empty, registered_color_reference, isolate_reference_cache
 
 
 def test_scene_reference_defaults_replaces_and_clears(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    first = create_rgba_image("First", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
-    second = create_rgba_image("Second", np.full((2, 2, 4), (0.6, 0.2, 0.1, 1.0)))
+    first = create_clipboard_image("First", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
+    second = create_clipboard_image("Second", np.full((2, 2, 4), (0.6, 0.2, 0.1, 1.0)))
 
     assert bpy.context.scene.anyimage_settings.color_reference is None
     bpy.context.scene.anyimage_settings.color_reference = first
@@ -37,7 +37,7 @@ def test_scene_reference_defaults_replaces_and_clears(registered_color_reference
 def test_reference_edit_refreshes_detached_preview_and_palette_without_reselection(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     rgba = np.full((4, 4, 4), (0.7, 0.2, 0.1, 1.0), dtype=np.float32)
-    reference = create_rgba_image("Reference", rgba)
+    reference = create_clipboard_image("Reference", rgba)
     bpy.context.scene.anyimage_settings.color_reference = reference
     icon = reference_cache.color_reference_preview_icon(reference)
     items = properties.color_reference_items(None, None)
@@ -45,7 +45,7 @@ def test_reference_edit_refreshes_detached_preview_and_palette_without_reselecti
     reference.preview_ensure().reload()
     assert reference_cache.color_reference_preview_icon(reference) == icon
     from anyimage.common.image import image_content_state, restore_image_content
-    result = create_rgba_image("Edited reference", np.full((6, 8, 4), (0.1, 0.7, 0.2, .25)))
+    result = create_clipboard_image("Edited reference", np.full((6, 8, 4), (0.1, 0.7, 0.2, .25)))
     restore_image_content(reference, image_content_state(result))
     assert str(reference.as_pointer()) in reference_cache._previews
     refreshed = reference_cache.get_color_reference(reference)
@@ -60,7 +60,7 @@ def test_reference_edit_refreshes_detached_preview_and_palette_without_reselecti
 
 def test_color_reference_gallery_selects_only_candidates(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
+    reference = create_clipboard_image("Reference", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
     create_rgba_image("Reference_depth.exr", np.full((2, 2, 4), (0.6, 0.2, 0.1, 1.0)))
     settings = bpy.context.scene.anyimage_settings
 
@@ -78,7 +78,7 @@ def test_color_reference_gallery_selects_only_candidates(registered_color_refere
 
 def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Persistent reference", np.full((2, 2, 4), (0.4, 0.3, 0.2, 1.0)))
+    reference = create_clipboard_image("Persistent reference", np.full((2, 2, 4), (0.4, 0.3, 0.2, 1.0)))
     reference.use_fake_user = True
     bpy.context.scene.anyimage_settings.color_reference = reference
     path = tmp_path / "color-reference.blend"
@@ -97,6 +97,7 @@ def test_reference_reload_and_lifecycle_invalidate_cache(tmp_path, registered_co
     path = tmp_path / "reference.png"
     Image.new("RGB", (4, 4), "red").save(path)
     reference = bpy.data.images.load(str(path))
+    create_image_empty("Reference", reference)
     bpy.context.scene.anyimage_settings.color_reference = reference
     first = reference_cache.get_color_reference(reference)
     Image.new("RGB", (4, 4), "blue").save(path)
@@ -123,9 +124,9 @@ def test_undo_redo_rebuilds_selected_preview_from_restored_pixels(registered_col
     from anyimage.common.image import image_content_state, restore_image_content
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Undo reference preview", np.full((4, 4, 4), (.7, .2, .1, 1)))
+    reference = create_clipboard_image("Undo reference preview", np.full((4, 4, 4), (.7, .2, .1, 1)))
     bpy.context.scene.anyimage_settings.color_reference = reference
-    result = create_rgba_image("Edited reference", np.full((6, 8, 4), (.1, .7, .2, .25)))
+    result = create_clipboard_image("Edited reference", np.full((6, 8, 4), (.1, .7, .2, .25)))
     properties.register_color_references()
     try:
         bpy.context.preferences.edit.use_global_undo = True
@@ -148,7 +149,7 @@ def test_undo_redo_rebuilds_selected_preview_from_restored_pixels(registered_col
 
 def test_failed_reference_preparation_does_not_keep_old_pixels(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
     settings = bpy.context.scene.anyimage_settings
     settings.color_reference = reference
     reference.pixels.foreach_set(np.zeros(64, dtype=np.float32))
@@ -164,8 +165,8 @@ def test_failed_reference_preparation_does_not_keep_old_pixels(registered_color_
 @pytest.mark.parametrize("shared", [False, True])
 def test_scene_clear_preserves_other_scene_reference(shared, registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    first = create_rgba_image("Scene A reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
-    second = first if shared else create_rgba_image("Scene B reference", np.full((4, 4, 4), (.1, .2, .7, 1)))
+    first = create_clipboard_image("Scene A reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
+    second = first if shared else create_clipboard_image("Scene B reference", np.full((4, 4, 4), (.1, .2, .7, 1)))
     settings = bpy.context.scene.anyimage_settings
     settings.color_reference = first
     prepared = reference_cache.get_color_reference(first)
@@ -182,19 +183,48 @@ def test_scene_clear_preserves_other_scene_reference(shared, registered_color_re
     bpy.data.scenes.remove(other)
 
 
-def test_replaced_references_release_full_pixels_and_old_icons(registered_color_reference):
+def test_replaced_references_release_palette_data_and_keep_candidate_icons(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     settings = bpy.context.scene.anyimage_settings
     previous = None
     for index in range(4):
-        image = create_rgba_image(f"Reference {index}", np.full((256, 256, 4), (.2 + index * .1, .3, .4, 1)))
+        image = create_clipboard_image(f"Reference {index}", np.full((256, 256, 4), (.2 + index * .1, .3, .4, 1)))
         settings.color_reference = image
         prepared = reference_cache.get_color_reference(image)
         assert not hasattr(prepared, "rgba")
         assert len(prepared.content_digest) == 32
         assert len(reference_cache._references) == 1
         if previous is not None:
-            assert reference_cache.color_reference_preview_icon(previous) == 0
+            assert str(previous.as_pointer()) in reference_cache._previews
         previous = image
     settings.color_reference = None
     assert not reference_cache._references
+
+
+def test_gallery_preserves_edited_alpha_before_selection(registered_color_reference):
+    from unittest.mock import patch
+    from anyimage.common.image import image_content_state, restore_image_content
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = create_clipboard_image("Unselected reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
+    properties.color_reference_items(None, None)
+    edited = create_clipboard_image("Alpha result", np.full((4, 4, 4), (.7, .2, .1, .25)))
+    restore_image_content(reference, image_content_state(edited))
+    bpy.data.images.remove(edited)
+    with patch.object(reference_cache, "extract_reference_palette", side_effect=AssertionError("Gallery must only prepare previews")):
+        items = properties.color_reference_items(None, None)
+        assert properties.color_reference_items(None, None) is items
+    key = str(reference.as_pointer())
+    preview = reference_cache._previews[key]
+    assert next(item[3] for item in items if item[1] == reference.name) == preview.icon_id
+    for prefix in ("image", "icon"):
+        pixels = np.asarray(getattr(preview, f"{prefix}_pixels_float")).reshape(-1, 4)
+        np.testing.assert_allclose(pixels[:, 3], .25, atol=1/255)
+    assert not reference_cache._references
+    bpy.context.scene.anyimage_settings.color_reference = reference
+    pixels = np.asarray(reference_cache._previews[key].icon_pixels_float).reshape(-1, 4)
+    np.testing.assert_allclose(pixels[:, 3], .25, atol=1/255)
+    bpy.context.scene.anyimage_settings.color_reference = None
+    bpy.data.images.remove(reference)
+    properties.color_reference_items(None, None)
+    assert key not in reference_cache._previews

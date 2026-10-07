@@ -3,6 +3,7 @@
 import hashlib
 from typing import NamedTuple
 
+import bpy
 import numpy as np
 
 from .color_match import prepare_color_reference, resize_rgba_proxy
@@ -25,9 +26,11 @@ _retained = {}
 _previews = None
 
 
-def color_reference_preview_icon(image):
+def color_reference_preview_icon(image, *, prepare=False):
     """Return a prepared preview detached from Image dependency graph updates."""
     key = str(image.as_pointer())
+    if prepare and (_previews is None or key not in _previews):
+        _prepare_reference_preview(image, image_rgba_to_linear(image, image_rgba(image)))
     if _previews is not None and key in _previews:
         return _previews[key].icon_id
     return 0
@@ -62,13 +65,18 @@ def invalidate_color_reference(image):
 
 
 def release_unused_color_references(images):
-    """Keep resources selected by scenes or retained by active interactions."""
+    """Keep selected reference data and gallery candidate previews."""
     keys = {image.as_pointer() for image in images if image is not None} | set(_retained)
     for key in tuple(_references):
         if key not in keys:
             _references.pop(key)
-            if _previews is not None and str(key) in _previews:
-                del _previews[str(key)]
+    preview_keys = {str(key) for key in keys} | {
+        str(image.as_pointer()) for image in bpy.data.images if is_color_reference_candidate(image)
+    }
+    if _previews is not None:
+        for key in tuple(_previews):
+            if key not in preview_keys:
+                del _previews[key]
 
 
 def retain_color_reference(image):

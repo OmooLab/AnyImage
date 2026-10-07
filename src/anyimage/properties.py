@@ -52,6 +52,10 @@ def invalidate_color_reference_items():
 def color_reference_items(_settings, _context):
     global _COLOR_REFERENCE_ITEMS, _COLOR_REFERENCE_ITEMS_KEY
     candidates = color_reference_candidates()
+    release_unused_color_references(
+        getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
+        for scene in bpy.data.scenes
+    )
     key = tuple(
         (image.session_uid, image.name, tuple(image.size), color_reference_preview_icon(image))
         for image in candidates
@@ -61,8 +65,8 @@ def color_reference_items(_settings, _context):
     items = [("NONE", "None", "No color reference", "X", 0)]
     for index, image in enumerate(candidates, start=1):
         try:
-            icon = color_reference_preview_icon(image) or image.preview_ensure().icon_id
-        except (AttributeError, ReferenceError, RuntimeError):
+            icon = color_reference_preview_icon(image, prepare=True)
+        except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
             icon = "IMAGE_DATA"
         items.append(
             (
@@ -110,7 +114,7 @@ def update_color_reference_palette(settings, _context, *, refresh=True):
         colors, weights = (), ()
     release_unused_color_references(
         getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
-        for scene in getattr(bpy.data, "scenes", ())
+        for scene in bpy.data.scenes
     )
     invalidate_color_reference_items()
     settings.color_reference_palette_count = len(colors)
@@ -124,6 +128,7 @@ def update_color_reference_palette(settings, _context, *, refresh=True):
 def refresh_edited_color_reference(image):
     """Synchronize scenes using an edited reference image."""
     invalidate_color_reference(image)
+    invalidate_color_reference_items()
     for scene in bpy.data.scenes:
         settings = getattr(scene, "anyimage_settings", None)
         if settings is not None and settings.color_reference == image:

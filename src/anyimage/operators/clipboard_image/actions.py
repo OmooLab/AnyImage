@@ -6,9 +6,8 @@ import bpy
 
 from ...common.material import create_image_material
 from ...common.color_image import material_color_image
-from ...common.image import cleanup_image_input, image_pixels, save_packed_image
+from ...common.image import CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_pixels, save_packed_image
 
-CLIPBOARD_HASH_PROPERTY = "anyimage_clipboard_sha256"
 CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 CLIPBOARD_TEXTURE_PROPERTY = "anyimage_clipboard_texture"
 DEFAULT_STENCIL_SIZE = 256.0

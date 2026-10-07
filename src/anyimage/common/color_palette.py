@@ -25,7 +25,12 @@ def extract_reference_palette(rgba):
     positions = (np.arange(count) + 0.5) * (cumulative[-1] / count)
     rgb = np.clip(pixels[np.searchsorted(cumulative, positions), :3], 0.0, 1.0)
     srgb = linear_rgb_to_srgb(rgb)
-    populations = QuantizeCelebi(np.rint(srgb * 255).astype(np.uint8).tolist(), 128)
+    channels = np.rint(srgb * 255).astype(np.uint32)
+    if np.all(channels == channels[:, :1]):
+        levels, counts = np.unique(channels[:, 0], return_counts=True)
+        populations = dict(zip((0xFF000000 | levels * 0x010101).tolist(), counts.tolist()))
+    else:
+        populations = QuantizeCelebi(channels.tolist(), 128)
     selected = Score.score(populations, ScoreOptions(desired=4, filter=False))
     candidates = np.asarray(list(populations), dtype=np.uint32)
 

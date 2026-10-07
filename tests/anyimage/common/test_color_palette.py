@@ -31,8 +31,9 @@ def test_palette_weights_follow_visible_area():
     assert weights[np.argmax(colors[:, 0])] == pytest.approx(0.8, abs=0.02)
 
 
-def test_neutral_reference_does_not_produce_a_fallback_hue():
-    rgb = np.broadcast_to(np.linspace(0.1, 0.8, 16)[None, :, None], (16, 16, 3))
+@pytest.mark.parametrize("levels,start,end", [(16, 0.1, 0.8), (256, 0.0, 1.0)])
+def test_neutral_reference_does_not_produce_a_fallback_hue(levels, start, end):
+    rgb = np.broadcast_to(np.linspace(start, end, levels)[None, :, None], (16, levels, 3))
     colors, _weights = extract_reference_palette(_rgba(rgb))
     assert np.max(np.ptp(colors, axis=1)) < 0.005
 

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 from anyimage import properties
 from anyimage.common import color_reference as reference_cache
+from anyimage.common.image import CLIPBOARD_HASH_PROPERTY
 from anyimage.operators.color_match import MatchColorReference
 
 
@@ -30,6 +31,12 @@ def create_image_empty(name, image):
     owner.data = image
     bpy.context.scene.collection.objects.link(owner)
     return owner
+
+
+def create_clipboard_image(name, rgba, *, floating=False):
+    image = create_rgba_image(name, rgba, floating=floating)
+    image[CLIPBOARD_HASH_PROPERTY] = "test-clipboard-image"
+    return image
 
 
 @pytest.fixture(autouse=True)

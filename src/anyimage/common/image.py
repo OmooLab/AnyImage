@@ -9,6 +9,7 @@ import bpy
 image_content_handlers = []
 
 TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
+CLIPBOARD_HASH_PROPERTY = "anyimage_clipboard_sha256"
 
 IMAGE_NAME_SUFFIXES = (
     ".jpeg",
@@ -169,11 +170,9 @@ def is_color_reference_candidate(image):
         get = getattr(image, "get", None)
         if get is not None and get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
             return False
-        name = image_base_name(image)
-        stem, separator, duplicate = name.rpartition(".")
-        if separator and duplicate.isdigit():
-            name = stem
-        return not name.lower().endswith(("_normal", "_depth", "_color"))
+        if get is not None and get(CLIPBOARD_HASH_PROPERTY):
+            return True
+        return any(is_image_empty(owner) and owner.data == image for owner in bpy.data.objects)
     except (AttributeError, ReferenceError, TypeError, ValueError):
         return False
 

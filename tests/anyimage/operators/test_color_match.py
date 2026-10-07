@@ -5,7 +5,7 @@ import bpy
 import numpy as np
 import pytest
 
-from tests.support.color_reference import create_rgba_image, create_image_empty, registered_color_reference, isolate_reference_cache
+from tests.support.color_reference import create_clipboard_image, create_image_empty, registered_color_reference, isolate_reference_cache
 from anyimage.common import color_reference as reference_cache
 from anyimage.common.color_match import build_color_match, apply_color_match
 from anyimage.common.color_space import image_rgba_to_linear, linear_rgba_to_image, srgb_to_linear_rgb
@@ -84,8 +84,8 @@ def preview_texture_without_graphics_context():
 def test_match_checks_reference_pixels_and_reuses_prepared_data(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference_cache.clear_color_references()
-    reference = create_rgba_image("Cached reference", np.full((8, 8, 4), (0.7, 0.2, 0.1, 1.0)))
-    source = create_rgba_image("Target", np.full((8, 8, 4), (0.1, 0.2, 0.6, 1.0)))
+    reference = create_clipboard_image("Cached reference", np.full((8, 8, 4), (0.7, 0.2, 0.1, 1.0)))
+    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.1, 0.2, 0.6, 1.0)))
     owner = create_image_empty("Owner", source)
     context = _modal_context(owner, reference)
     with patch.object(reference_cache, "image_rgba", wraps=reference_cache.image_rgba) as read_reference:
@@ -102,7 +102,7 @@ def test_match_checks_reference_pixels_and_reuses_prepared_data(registered_color
 
 def test_match_rejects_missing_same_or_animated_images():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    image = create_rgba_image("Static", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
+    image = create_clipboard_image("Static", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
     context = _context(create_image_empty("Owner", image))
 
     assert not MatchColorReference.poll(context)
@@ -119,8 +119,8 @@ def test_match_transforms_all_rgb_and_preserves_target_alpha():
     target_rgba = np.full((8, 8, 4), (0.06, 0.16, 0.5, 1.0), dtype=np.float32)
     target_rgba[0, 0, 3] = 0.0
     target_rgba[0, 1, 3] = 0.5
-    reference = create_rgba_image("Reference.png", reference_rgba)
-    target = create_rgba_image("Target_color.png.001", target_rgba)
+    reference = create_clipboard_image("Reference.png", reference_rgba)
+    target = create_clipboard_image("Target_color.png.001", target_rgba)
     target.colorspace_settings.name = "Non-Color"
     owner = create_image_empty("Target owner", target)
     context = _context(owner, reference)
@@ -138,8 +138,8 @@ def test_match_transforms_all_rgb_and_preserves_target_alpha():
 @pytest.mark.parametrize("space", ["sRGB", "AgX Base sRGB", "Non-Color"])
 def test_match_preview_and_commit_ignore_color_space_and_preserve_settings(space):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    source = create_rgba_image("Target_color", np.full((4, 4, 4), (.1, .2, .6, .5)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    source = create_clipboard_image("Target_color", np.full((4, 4, 4), (.1, .2, .6, .5)))
     source.colorspace_settings.name = space
     source.alpha_mode = "CHANNEL_PACKED"
     reference.colorspace_settings.name = space
@@ -165,8 +165,8 @@ def test_match_preview_and_commit_ignore_color_space_and_preserve_settings(space
 @pytest.mark.parametrize("phase", ["initialize", "refresh"])
 def test_preview_texture_failure_preserves_source_and_cleans_resources(phase):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    source = create_rgba_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    source = create_clipboard_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
     owner = create_image_empty("Owner", source)
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
@@ -188,8 +188,8 @@ def test_preview_texture_failure_preserves_source_and_cleans_resources(phase):
 
 def test_match_isolates_an_image_shared_with_another_empty():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
-    source = create_rgba_image("Shared.png", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
+    source = create_clipboard_image("Shared.png", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
     first = create_image_empty("First", source)
     second = create_image_empty("Second", source)
     before = image_rgba(source).copy()
@@ -204,9 +204,9 @@ def test_match_isolates_an_image_shared_with_another_empty():
 
 def test_repeated_match_uses_current_pixels():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    warm = create_rgba_image("Warm", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    green = create_rgba_image("Green", np.full((8, 8, 4), (0.15, 0.65, 0.2, 1.0)))
-    source = create_rgba_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
+    warm = create_clipboard_image("Warm", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
+    green = create_clipboard_image("Green", np.full((8, 8, 4), (0.15, 0.65, 0.2, 1.0)))
+    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
     owner = create_image_empty("Owner", source)
     assert _execute(MatchColorReference, _context(owner, warm)) == {"FINISHED"}
     first_result = image_rgba(owner.data).copy()
@@ -225,9 +225,9 @@ def test_repeated_match_uses_current_pixels():
 
 def test_repeated_match_keeps_one_isolated_working_image():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    first_reference = create_rgba_image("First reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
-    second_reference = create_rgba_image("Second reference", np.full((4, 4, 4), (0.2, 0.65, 0.15, 1.0)))
-    source = create_rgba_image("Shared", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
+    first_reference = create_clipboard_image("First reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
+    second_reference = create_clipboard_image("Second reference", np.full((4, 4, 4), (0.2, 0.65, 0.15, 1.0)))
+    source = create_clipboard_image("Shared", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
     first = create_image_empty("First", source)
     second = create_image_empty("Second", source)
 
@@ -242,9 +242,9 @@ def test_repeated_match_keeps_one_isolated_working_image():
 
 def test_match_rejects_a_target_changed_during_processing():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
-    source = create_rgba_image("Source", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
-    replacement = create_rgba_image("Replacement", np.full((4, 4, 4), (0.2, 0.2, 0.2, 1.0)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
+    source = create_clipboard_image("Source", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
+    replacement = create_clipboard_image("Replacement", np.full((4, 4, 4), (0.2, 0.2, 0.2, 1.0)))
     owner = create_image_empty("Owner", source)
     context = _context(owner, reference)
     reports = []
@@ -266,8 +266,8 @@ def test_match_rejects_a_target_changed_during_processing():
 
 def test_modal_match_updates_controls_and_cancels_cleanly():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    source = create_rgba_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
+    reference = create_clipboard_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
+    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
     owner = create_image_empty("Owner", source)
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
@@ -302,8 +302,8 @@ def test_modal_match_updates_controls_and_cancels_cleanly():
 
 def test_modal_match_throttles_preview_updates():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    source = create_rgba_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
+    reference = create_clipboard_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
+    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
     owner = create_image_empty("Owner", source)
     context = _modal_context(owner, reference)
     operator, _reports = _modal_operator()
@@ -341,8 +341,8 @@ def test_modal_match_throttles_preview_updates():
 @pytest.mark.parametrize("changed", ["reference", "target", "binding", "color_space", "alpha_mode"])
 def test_modal_rejects_external_changes_and_releases_snapshots(changed):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    target = create_rgba_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    target = create_clipboard_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
     owner = create_image_empty("Owner", target)
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
@@ -369,8 +369,8 @@ def test_modal_rejects_external_changes_and_releases_snapshots(changed):
 
 def test_zero_controls_confirmation_preserves_image_identity_and_pixels():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    target = create_rgba_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
+    target = create_clipboard_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
     owner = create_image_empty("Owner", target)
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
@@ -388,8 +388,8 @@ def test_zero_controls_confirmation_preserves_image_identity_and_pixels():
 
 def test_modal_match_confirms_one_full_resolution_result():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    source = create_rgba_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
+    reference = create_clipboard_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
+    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
     owner = create_image_empty("Owner", source)
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
@@ -410,8 +410,8 @@ def test_modal_match_confirms_one_full_resolution_result():
 
 def test_match_undo_redo_restores_pixels_and_keeps_reference(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Undo reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    source = create_rgba_image("Undo target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
+    reference = create_clipboard_image("Undo reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
+    source = create_clipboard_image("Undo target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
     owner = create_image_empty("Undo owner", source)
     bpy.context.view_layer.objects.active = owner
     owner.select_set(True)
@@ -436,8 +436,8 @@ def test_match_undo_redo_restores_pixels_and_keeps_reference(registered_color_re
 
 def test_deleted_reference_cancels_and_releases_interaction_resources():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_rgba_image("Reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
-    target = create_rgba_image("Target", np.full((4, 4, 4), (.1, .2, .7, 1)))
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
+    target = create_clipboard_image("Target", np.full((4, 4, 4), (.1, .2, .7, 1)))
     context = _modal_context(create_image_empty("Owner", target), reference)
     operator, reports = _modal_operator()
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}

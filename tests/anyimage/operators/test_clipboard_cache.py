@@ -26,6 +26,7 @@ def clipboard():
 @pytest.mark.parametrize("edit", ["paint", "packed", "hidden_rgb", "size", "space", "alpha", "unreadable"])
 def test_changed_cache_is_skipped_without_modifying_candidate(clipboard, edit, monkeypatch):
     original, reused = actions.acquire_packed_image(clipboard, ".png")
+    assert images.is_color_reference_candidate(original)
     expected = images.image_pixels(original)
     assert not reused
     assert actions.acquire_packed_image(clipboard, ".png") == (original, True)

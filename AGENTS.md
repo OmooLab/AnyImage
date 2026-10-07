@@ -25,10 +25,10 @@
 
 下列是重要文档
 
-- [总览](docs/internals/index.md)：内部实现的总揽
-- [程序架构](docs/internals/architecture.md)：进程边界、职责与调用主链
-- [Operator 索引](docs/internals/operators/index.md)：Operator 实现功能和对应源码
-- [节点资产](docs/internals/node-assets.md)：节点组的构建与验证（节点组不在运行时新建）
+- [总览](docs/develop/index.md)：内部实现的总揽
+- [程序架构](docs/develop/architecture.md)：进程边界、职责与调用主链
+- [Operator 索引](docs/develop/operators/index.md)：Operator 实现功能和对应源码
+- [节点资产](docs/develop/node-assets.md)：节点组的构建与验证（节点组不在运行时新建）
 
 ## 常见命令
 
@@ -81,7 +81,7 @@ uv run --group models model sync
 
 ## 文档规范
 
-- `README.md` 面向用户，不在其中堆叠内部细节。实现原理放入 `docs/internals` 对应主题
+- `README.md` 面向用户，不在其中堆叠内部细节。实现原理放入 `docs/develop` 对应主题
 - 文档只正面描述当前主题的职责与实现，不记录无关模块、未采用路径、历史差异、边界辩解、“不做什么”的排除性信息。
 - 根据内容选择最清晰的表达方式，优先简洁文字；复杂流程或关系在有助于理解时使用图表。Mermaid 流程图默认从上到下。
 - 文档版本只使用 `pyproject.toml` 中的 major.minor，写成 `x.y.x` 系列标识，不写具体 patch；`uv run docs build` 和 `uv run docs deploy` 都构建到该版本并更新 `latest`
@@ -112,4 +112,4 @@ uv run --group models model sync
 - 内部临时命名属性使用专用名称，在最后消费者之后精确清理，保留用户属性；源码和保存资产均检查 Capture 为零。
 - 节点布局通过区域内输入、字段排列和必要的 Reroute 保持可读；存储须有数据生命周期依据，构建阶段通过明确的节点或 socket 引用接线。
 - 修改节点组的逻辑、接口、布局或共用构建函数后，必须运行 `uv run --group blender node-group build`，无需另行确认；生成资产并验证通过才算完成。
-- 具体构建规范与操作步骤见[节点资产](docs/internals/node-assets.md)。
+- 具体构建规范与操作步骤见[节点资产](docs/develop/node-assets.md)。

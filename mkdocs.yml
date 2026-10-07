@@ -1,7 +1,7 @@
-site_name: AnyImage 文档
+site_name: AnyImage Docs
 site_url: https://docs.omoolab.xyz/anyimage/
 site_author: OmooLab
-site_description: AnyImage 是一款将图片、视频和序列帧转换为立体面片的 Blender 扩展。
+site_description: Fast image-guided structure building tools for Blender
 
 repo_name: OmooLab/AnyImage
 repo_url: https://github.com/OmooLab/AnyImage
@@ -17,28 +17,33 @@ nav:
       - 图片处理: ai-image-tools.md
       - 空间转化: convert-to.md
       - 图片工具: image-tools.md
-  - 内部实现:
-      - 总览: internals/index.md
-      - 程序架构: internals/architecture.md
-      - 公共函数: internals/common.md
+      - 颜色匹配: color-match.md
+      - 烘焙网格: bake-mesh.md
+  - 开发文档:
+      - 总览: develop/index.md
+      - 程序架构: develop/architecture.md
+      - 公共函数: develop/common.md
       - 基础设施:
-          - Job Runtime 与 Server: internals/runtime.md
-          - Job 产物: internals/outputs.md
+          - Job Runtime 与 Server: develop/runtime.md
+          - Job 产物: develop/outputs.md
       - Operators:
-          - 总览: internals/operators/index.md
-          - AI 环境管理: internals/operators/ai-setup.md
-          - Clipboard Image: internals/operators/clipboard-image.md
-          - Convert to Plane: internals/operators/convert-to-plane.md
-          - Convert to Panorama: internals/operators/convert-to-panorama.md
-          - Cutout Tool: internals/operators/cutout-tool.md
-          - Frame: internals/operators/frame.md
-          - Mask: internals/operators/mask.md
-          - Rectify: internals/operators/rectify.md
-          - Remove Background: internals/operators/remove-background.md
-          - Upscale: internals/operators/upscale.md
+          - 总览: develop/operators/index.md
+          - AI 环境管理: develop/operators/ai-setup.md
+          - Clipboard Image: develop/operators/clipboard-image.md
+          - Convert to Plane: develop/operators/convert-to-plane.md
+          - Convert to Panorama: develop/operators/convert-to-panorama.md
+          - Cutout Tool: develop/operators/cutout-tool.md
+          - Frame: develop/operators/frame.md
+          - Mask: develop/operators/mask.md
+          - Rectify: develop/operators/rectify.md
+          - Color Match: develop/operators/color-match.md
+          - Bake Mesh: develop/operators/bake-mesh.md
+          - Job 文件清理: develop/operators/job-files.md
+          - Remove Background: develop/operators/remove-background.md
+          - Upscale: develop/operators/upscale.md
       - 开发维护:
-          - 开发与发布: internals/development.md
-          - 节点资产: internals/node-assets.md
+          - 开发与发布: develop/development.md
+          - 节点资产: develop/node-assets.md
 
 theme:
   name: material

@@ -358,10 +358,15 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
             modifier.node_group, name, subtype=subtype))
 
     assert value(modifier, "Mode") == (1 if gesture == "POLYLINE" else 0)
-    for subtype in ("NONE", "DISTANCE"):
-        assert value(modifier, "Thickness", subtype) == 0
+    assert value(modifier, "Thickness", "NONE") == 1.0
+    assert value(modifier, "Thickness", "DISTANCE") == 0.0
+    assert value(modifier, "Front Inflation") == 0.0
+    assert next(
+        socket.default_value for socket in modifier.node_group.interface.items_tree
+        if socket.item_type == "SOCKET" and socket.name == "Front Inflation"
+    ) == pytest.approx(0.2)
     initialized = {
-        "Mode", "Depth Scale", "Uniform Scale", "Reference Depth", "Depth Limit", "Depth Image",
+        "Mode", "Thickness", "Front Inflation", "Depth Scale", "Uniform Scale", "Reference Depth", "Depth Limit", "Depth Image",
     }
     for socket in modifier.node_group.interface.items_tree:
         if (socket.item_type == "SOCKET" and socket.in_out == "INPUT"
@@ -394,14 +399,15 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     positions = _evaluated_positions(result)
     assert len(positions) and np.isfinite(positions).all()
     assert cKDTree(positions).query(positions * (-1, 1, 1))[0].max() < 1e-5
-    # Both modes start from the same front, including after changing the menu.
+    # Both modes preserve symmetric geometry after changing the menu.
     object_data.set_modifier_input(modifier,
         object_data.modifier_input_identifier(modifier.node_group, "Mode"),
         0 if gesture == "POLYLINE" else 1)
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     changed = _evaluated_positions(result)
-    np.testing.assert_array_equal(changed, positions)
+    assert len(changed) and np.isfinite(changed).all()
+    assert cKDTree(changed).query(changed * (-1, 1, 1))[0].max() < 1e-5
 
 
 @pytest.mark.parametrize("float_buffer", (False, True))

@@ -679,7 +679,7 @@ def build_image_depth_cutout_group():
     interface_socket(group, 'Geometry', 'INPUT', 'NodeSocketGeometry')
     interface_socket(group, 'Mode', 'INPUT', 'NodeSocketMenu')
     float_input(group, 'Thickness', 0.0, maximum=2.0).description = 'Control how much the surface bulges in Balloon mode. Zero removes the bulge.'
-    float_input(group, 'Front Inflation', 0.3, maximum=1, subtype='FACTOR').description = 'Control how much the front surface bulges in Balloon mode, as a share of the balloon thickness. Zero keeps the original front surface.'
+    float_input(group, 'Front Inflation', 0.2, maximum=1, subtype='FACTOR').description = 'Control how much the front surface bulges in Balloon mode, as a share of the balloon thickness. Zero keeps the original front surface.'
     float_input(group, 'Shell Thickness', 0.0, maximum=1.0, subtype='DISTANCE').description = 'Add thickness behind the original surface while keeping the front surface in place.'
     float_input(group, 'Depth Scale', 1.0, maximum=2.0)
     float_input(group, 'Depth Split', 0.1, maximum=1, subtype='FACTOR').description = 'Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.'

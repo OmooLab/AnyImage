@@ -50,7 +50,7 @@ def test_saved_parameter_interfaces_match_definitions():
                 inflation = next(item for item in inputs if item.name == "Front Inflation")
                 thickness = next(item for item in inputs if item.name == "Thickness" and item.subtype == "NONE")
                 assert not inflation.parent.name
-                assert abs(inflation.default_value - 0.3) < 1e-6
+                assert abs(inflation.default_value - 0.2) < 1e-6
                 assert inputs.index(inflation) == inputs.index(thickness) + 1
                 split = next(item for item in inputs if item.name == "Depth Split")
                 limit = next(item for item in inputs if item.name == "Depth Limit")

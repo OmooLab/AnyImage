@@ -184,16 +184,15 @@ def create_shape_object(
         modifier = mesh_object.modifiers.new(name=node_group.name, type="NODES")
         modifier.node_group = node_group
         modifier.show_group_selector = False
-        if shape != "DEPTH_SYMMETRY":
-            set_modifier_input(
-                modifier,
-                modifier_input_identifier(
-                    node_group,
-                    "Thickness",
-                    subtype="NONE" if shape in DEPTH_CUTOUT_SHAPES else None,
-                ),
-                0.0 if shape == "FLAT" else 1.0,
-            )
+        set_modifier_input(
+            modifier,
+            modifier_input_identifier(
+                node_group,
+                "Thickness",
+                subtype="NONE" if shape in DEPTH_CUTOUT_SHAPES else None,
+            ),
+            0.0 if shape == "FLAT" else 1.0,
+        )
         if shape == "DEPTH_SOLID":
             set_modifier_input(
                 modifier,
@@ -226,6 +225,11 @@ def create_shape_object(
                     value,
                 )
         if shape == "DEPTH_SYMMETRY":
+            set_modifier_input(
+                modifier,
+                modifier_input_identifier(node_group, "Front Inflation"),
+                0.0,
+            )
             symmetry_group = load_cutout_node_group("DEPTH_SYMMETRY")
             symmetry = mesh_object.modifiers.new(name=symmetry_group.name, type="NODES")
             symmetry.node_group = symmetry_group

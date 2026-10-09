@@ -1,12 +1,13 @@
 # 安装
 
-不建议使用 Microsoft Store 或 Steam 版 Blender 安装插件，可能出现依赖安装或加载异常。建议使用 [Blender 官网](https://www.blender.org/download/)下载的版本。
+## 安装条件
 
-AnyImage 支持拖拽和手动安装，选择一种方式即可。
+- Blender 版本 4.5+
+- 非 Microsoft Store、Steam 版 Blender (可能出现依赖安装或加载异常)
 
-下方安装按钮和下载链接对应 **v1.1.0**，需要 **Blender 4.5 或更高版本**。
+## 安装方式
 
-## 拖入 Blender
+### 拖入 Blender
 
 按住下方按钮，将它拖到 Blender 窗口中。
 
@@ -14,7 +15,7 @@ AnyImage 支持拖拽和手动安装，选择一种方式即可。
 
 --8<-- "docs/includes/install.html"
 
-## 手动安装
+### 手动安装
 
 点击安装按钮下方的 **download**，下载适合当前系统的 Zip 文件，请勿解压。
 

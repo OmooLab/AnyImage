@@ -9,7 +9,7 @@ class OImageDepthPanorama(CustomGeometryGroup):
 
     def _build_group(self, tree: TreeBuilder[GeometryNodeTree]) -> None:
         geometry = tree.inputs.geometry("Geometry", structure_type="SINGLE", force_non_field=True)
-        subdivide = tree.inputs.integer("Subdivide", 8, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=8, structure_type="SINGLE", force_non_field=True)
+        subdivide = tree.inputs.integer("Subdivide", 8, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=10, structure_type="SINGLE", force_non_field=True)
         dome_radius = tree.inputs.float("Dome Radius", 50.0, description="Radius of the sphere kept at Depth Scale 0, and where mask areas below Mask Threshold land.", min_value=1.0, max_value=100.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         depth_scale = tree.inputs.float("Depth Scale", 1.0, description="Blend between a sphere at zero and the estimated depth surface at one.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
         depth_split = tree.inputs.float("Depth Split", 0.1, description="Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)

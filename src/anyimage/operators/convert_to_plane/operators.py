@@ -58,7 +58,6 @@ class GenerateDepthPlane(JobOperatorBase, bpy.types.Operator):
         default="DEPTH",
         options=_HIDDEN,
     )
-    mesh_detail: bpy.props.IntProperty(default=6, min=0, max=10, options=_HIDDEN)
     model: bpy.props.StringProperty(default=DEFAULT_GEOMETRY_MODEL_KEY, options=_HIDDEN)
     resolution_level: bpy.props.IntProperty(default=5, min=0, max=9, options=_HIDDEN)
     max_input_size: bpy.props.IntProperty(
@@ -116,7 +115,6 @@ def start_depth_plane_job(operator, context, plane_type):
             source_object_name=source_object.name,
             source_identity=str(source_object.as_pointer()),
             image_identity=str(source_object.data.as_pointer()),
-            mesh_detail=operator.mesh_detail,
             plane_type=plane_type,
             model=model,
             resolution_level=resolution_level,
@@ -137,8 +135,6 @@ class ConvertToPlane(bpy.types.Operator):
     bl_description = "Convert the complete Image Empty into a rectangular plane"
     bl_options = {"REGISTER", "UNDO"}
 
-    mesh_detail: bpy.props.IntProperty(name="Subdivide", default=0, min=0, max=10)
-
     @classmethod
     def poll(cls, context):
         return is_image_empty(context.object)
@@ -157,7 +153,7 @@ class ConvertToPlane(bpy.types.Operator):
                     source_object.data, color_image,
                     scene=context.scene,
                 )
-                create_plane_object(context, source_object, self.mesh_detail, material)
+                create_plane_object(context, source_object, 0, material)
         except Exception as error:
             if material is not None and material.users == 0:
                 bpy.data.materials.remove(material, do_unlink=True)
@@ -177,8 +173,6 @@ class ConvertToDepthPlane(bpy.types.Operator):
     )
     bl_options = {"REGISTER", "UNDO"}
 
-    mesh_detail: bpy.props.IntProperty(name="Subdivide", default=6, min=0, max=10)
-
     @classmethod
     def poll(cls, context):
         from ...runtime import runtime
@@ -194,8 +188,6 @@ class ConvertToReliefPlane(bpy.types.Operator):
     bl_label = "Convert to Relief Plane"
     bl_description = "Use AI-estimated depth to create a raised relief on a flat base."
     bl_options = {"REGISTER", "UNDO"}
-
-    mesh_detail: bpy.props.IntProperty(name="Subdivide", default=6, min=0, max=10)
 
     @classmethod
     def poll(cls, context):

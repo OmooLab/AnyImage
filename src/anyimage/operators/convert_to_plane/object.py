@@ -139,7 +139,7 @@ def create_depth_plane_from_result(context, result, operator):
                 scene=context.scene,
             )
             create_depth_plane_object(
-                context, source_object, operator.mesh_detail, material,
+                context, source_object, 6, material,
                 depth_image, depth_metadata, operator.plane_type,
             )
     except Exception:

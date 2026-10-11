@@ -257,7 +257,6 @@ class PreferencesTest(BlenderTestCase):
         operator.input_path = __file__
         operator.analysis_input_path = __file__
         operator.source_object_name = "Source"
-        operator.mesh_detail = 0
         operator.model = self.anyimage.preferences.DEFAULT_GEOMETRY_MODEL_KEY
         operator.resolution_level = 5
         operator.max_input_size = 1536

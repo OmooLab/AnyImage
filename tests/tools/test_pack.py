@@ -1,5 +1,6 @@
 from tests.support.paths import PROJECT_ROOT
 import importlib.util
+import subprocess
 import tempfile
 import tomllib
 import unittest
@@ -42,13 +43,26 @@ class ArchiveContents:
 
 
 class ExtensionPackagingTest(unittest.TestCase):
+    def test_asset_failure_stops_packaging(self):
+        pack = load_pack()
+        failure = subprocess.CalledProcessError(1, "build-assets")
+        with (
+            patch.object(pack.subprocess, "run", side_effect=failure),
+            patch.object(pack, "build_all") as build,
+            patch.object(pack, "download_wheels") as download,
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                pack.main([])
+        build.assert_not_called()
+        download.assert_not_called()
+
     def test_rejects_missing_generated_node_asset(self):
         pack = load_pack()
         with tempfile.TemporaryDirectory() as directory:
             with patch.object(pack, "SOURCE_DIR", Path(directory)):
                 with self.assertRaisesRegex(
                     RuntimeError,
-                    "uv run --group blender omoonodes build; copy dist/b45/O_AnyImage/O_AnyImage.blend to src/anyimage/assets/",
+                    "uv run --group blender build-assets",
                 ):
                     pack._build_extension("windows-x64", [])
 
@@ -394,10 +408,15 @@ class ExtensionPackagingTest(unittest.TestCase):
             extension = Path(directory) / "AnyImage.v1.0.1.linux-x64.zip"
             extension.write_bytes(b"extension")
             with (
+                patch.object(pack.subprocess, "run") as assets,
                 patch.object(pack, "build_extension", return_value=extension) as build,
                 patch.object(pack, "build_all") as build_all,
             ):
                 pack.main(["-p", "linux-x64"])
+            assets.assert_called_once_with(
+                ["uv", "run", "--group", "blender", "build-assets"],
+                cwd=pack.PROJECT_ROOT, check=True,
+            )
             build.assert_called_once_with("linux-x64")
             build_all.assert_not_called()
 
@@ -407,10 +426,15 @@ class ExtensionPackagingTest(unittest.TestCase):
             extension = Path(directory) / "AnyImage.v1.0.1.windows-x64.zip"
             extension.write_bytes(b"extension")
             with (
+                patch.object(pack.subprocess, "run") as assets,
                 patch.object(pack, "build_all", return_value=[extension]) as build_all,
                 patch.object(pack, "build_extension") as build_extension,
             ):
                 pack.main([])
+            assets.assert_called_once_with(
+                ["uv", "run", "--group", "blender", "build-assets"],
+                cwd=pack.PROJECT_ROOT, check=True,
+            )
             build_all.assert_called_once_with()
             build_extension.assert_not_called()
 

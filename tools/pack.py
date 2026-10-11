@@ -40,7 +40,7 @@ def require_node_asset():
     asset_path = SOURCE_DIR / "assets" / "O_AnyImage.blend"
     if not asset_path.is_file():
         raise RuntimeError(
-            "Node asset is missing; run: uv run --group blender omoonodes build; copy dist/b45/O_AnyImage/O_AnyImage.blend to src/anyimage/assets/"
+            "Node asset is missing; run: uv run --group blender build-assets"
         )
 
 
@@ -253,6 +253,10 @@ def main(argv=None):
         )
         print(f"Updated {SOURCE_DIR / 'blender_manifest.toml'}")
         return
+    subprocess.run(
+        ["uv", "run", "--group", "blender", "build-assets"],
+        cwd=PROJECT_ROOT, check=True,
+    )
     extension_paths = [build_extension(args.platform)] if args.platform else build_all()
     for extension_path in extension_paths:
         size_mib = extension_path.stat().st_size / (1024 * 1024)

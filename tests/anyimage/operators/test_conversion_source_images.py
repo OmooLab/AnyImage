@@ -46,7 +46,7 @@ def share_image(source, sharing):
 
 def run_conversion(source, entry, monkeypatch):
     if entry == "PLANE":
-        operators.ConvertToPlane.execute(SimpleNamespace(mesh_detail=0), bpy.context)
+        operators.ConvertToPlane.execute(SimpleNamespace(), bpy.context)
     else:
         metadata = {"image_size": (2, 1),
                     "intrinsics": ((2, 0, 1), (0, 2, 0.5), (0, 0, 1))}
@@ -64,7 +64,7 @@ def run_conversion(source, entry, monkeypatch):
         try:
             conversion.create_depth_plane_from_result(bpy.context, SimpleNamespace(file=lambda key: key),
                 SimpleNamespace(source_object_name=source.name, source_identity=str(source.as_pointer()),
-                                image_identity=str(source.data.as_pointer()), color_path=str(path), plane_type=entry, mesh_detail=0))
+                                image_identity=str(source.data.as_pointer()), color_path=str(path), plane_type=entry))
         finally:
             cleanup_material_color_input(path)
     return bpy.context.object

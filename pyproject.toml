@@ -35,6 +35,7 @@ docs = [
 ]
 
 [project.scripts]
+build-assets = "tools.assets:main"
 pack = "tools.pack:main"
 model = "tools.models.cli:main"
 docs = "tools.docs:main"

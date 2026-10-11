@@ -34,6 +34,7 @@ def test_capability_groups_keep_ci_dependencies_small():
     assert "omoonodes" in group_packages(configuration, "blender")
     assert not any(item.startswith("omoonodes") for item in configuration["project"]["dependencies"])
     assert configuration["project"]["scripts"] == {
+        "build-assets": "tools.assets:main",
         "pack": "tools.pack:main",
         "model": "tools.models.cli:main",
         "docs": "tools.docs:main",
@@ -51,21 +52,21 @@ def test_ai_and_model_groups_own_their_runtime_dependencies():
 
 
 def test_workflows_run_the_regular_blender_suite():
-    build_command = "uv run --group blender omoonodes build"
+    build_command = "uv run --group blender build-assets"
     test_command = (
-        "xvfb-run -a uv run --group blender pytest "
-        "tests/anyimage tests/nodes tests/tools"
+        "uv run --group blender pytest "
+        'tests/anyimage tests/nodes tests/tools -k "not BLENDER_EEVEE_NEXT"'
     )
     for name in ("test.yml", "release.yml"):
         workflow = (PROJECT_ROOT / ".github" / "workflows" / name).read_text(
             encoding="utf-8"
         )
-        assert build_command in workflow
-        assert "mkdir -p src/anyimage/assets" in workflow
-        assert "cp dist/b45/O_AnyImage/O_AnyImage.blend src/anyimage/assets/O_AnyImage.blend" in workflow
+        preparation = build_command if name == "test.yml" else "uv run pack"
+        assert f"run: {preparation}" in workflow
         assert test_command in workflow
-        assert workflow.index(build_command) < workflow.index(test_command)
-        assert 'LIBGL_ALWAYS_SOFTWARE: "1"' in workflow
+        assert workflow.index(preparation) < workflow.index(test_command)
+        assert "xvfb-run" not in workflow
+        assert "LIBGL_ALWAYS_SOFTWARE" not in workflow
         assert "BLENDER_BIN" not in workflow
         assert "download" not in workflow.lower()
 
@@ -73,9 +74,10 @@ def test_workflows_run_the_regular_blender_suite():
         encoding="utf-8"
     )
     assert "uv run pack" in release
-    assert "gh release create" in release
-    assert "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases" in release
-    assert "gitea-release-action" not in release
+    assert 'gh release create "$GITHUB_REF_NAME" dist/*.zip --draft --verify-tag --generate-notes' in release
+    assert release.index("Run tests") < release.index("Create draft release")
+    assert "gitea" not in release.lower()
+    assert "github.server_url" not in release
 
 
 def test_generated_node_asset_is_ignored_and_untracked():

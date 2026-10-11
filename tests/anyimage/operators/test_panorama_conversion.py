@@ -46,10 +46,10 @@ def test_entry_submits_current_alpha_preferences_and_cleans_cancelled_input(sour
     monkeypatch.setattr(operators, "configured_geometry_model", lambda _: "MOGE2_VITB_NORMAL")
     monkeypatch.setattr(operators, "configured_max_ai_input_size", lambda _: 1024)
     monkeypatch.setattr(operators, "bpy", SimpleNamespace(ops=SimpleNamespace(anyimage=SimpleNamespace(generate_panorama=submit))))
-    operator = SimpleNamespace(mesh_detail=4, report=Mock())
+    operator = SimpleNamespace(report=Mock())
     assert operators.ConvertToPanorama.execute(operator, bpy.context) == {"CANCELLED"}
     assert submitted["model"] == "MOGE2_VITB_NORMAL" and submitted["resolution_level"] == 2
-    assert submitted["max_input_size"] == 1024 and submitted["mesh_detail"] == 4
+    assert submitted["max_input_size"] == 1024
     assert submitted["color_path"] == submitted["input_path"]
     operator.report.assert_not_called()
     from pathlib import Path
@@ -76,7 +76,7 @@ def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkey
     monkeypatch.setattr(operators, "configured_max_ai_input_size", lambda _: 1024)
     monkeypatch.setattr(operators, "bpy", SimpleNamespace(
         ops=SimpleNamespace(anyimage=SimpleNamespace(generate_panorama=submit))))
-    operator = SimpleNamespace(mesh_detail=4, report=Mock())
+    operator = SimpleNamespace(report=Mock())
 
     assert operators.ConvertToPanorama.execute(operator, bpy.context) == {"CANCELLED"}
     operator.report.assert_called_once_with(
@@ -100,7 +100,7 @@ def artifacts(tmp_path, source):
     (tmp_path / "depth.json").write_text(json.dumps({"projection": "equirectangular", "image_size": [32, 16]}))
     result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / {"depth": "depth.exr", "depth_metadata": "depth.json"}[key])
     operator = SimpleNamespace(source_object_name=source.name, source_identity=str(source.as_pointer()),
-                               image_identity=str(source.data.as_pointer()), mesh_detail=2,
+                               image_identity=str(source.data.as_pointer()),
                                color_path=str(prepare_material_color_input(source.data)))
     yield result, operator
     cleanup_material_color_input(operator.color_path)
@@ -138,7 +138,7 @@ def test_result_replaces_source_with_zero_rotation_and_emission_material(source,
     graph = bpy.context.evaluated_depsgraph_get()
     mesh = obj.evaluated_get(graph).to_mesh()
     try:
-        assert len(mesh.polygons) == 96 and mesh.uv_layers.active
+        assert len(mesh.polygons) == 6 * 4 ** 8 and mesh.uv_layers.active
         assert mesh.materials[0].original == material
         assert all(face.material_index == 0 and face.use_smooth for face in mesh.polygons)
     finally:

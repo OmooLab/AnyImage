@@ -48,7 +48,7 @@ def create_panorama_from_result(context, result, operator):
             modifier.node_group = group
             modifier.show_group_selector = False
             for name, value in (
-                ("Subdivide", operator.mesh_detail), ("Depth Image", depth),
+                ("Subdivide", 8), ("Depth Image", depth),
             ):
                 set_modifier_input(modifier, modifier_input_identifier(group, name), value)
             finalize_object_result(context, source, obj)

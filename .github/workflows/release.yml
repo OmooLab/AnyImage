@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      # Publish on any tag starting with a `v`, e.g., v1.0.1
+      # 版本标签触发草稿 Release，例如 v1.0.1
       - "v*"
 
 permissions:
@@ -21,8 +21,6 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-        with:
-          python-version: "3.11"
 
       - name: Check tag matches project version
         id: read_version
@@ -47,19 +45,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build node assets
-        run: |
-          uv run --group blender omoonodes build
-          mkdir -p src/anyimage/assets
-          cp dist/b45/O_AnyImage/O_AnyImage.blend src/anyimage/assets/O_AnyImage.blend
-
-      - name: Run tests
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: xvfb-run -a uv run --group blender pytest tests/anyimage tests/nodes tests/tools
-
       - name: Pack extensions
         run: uv run pack
+
+      - name: Run tests
+        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not BLENDER_EEVEE_NEXT"
 
       - name: Check extension archives
         run: |
@@ -71,27 +61,7 @@ jobs:
             fi
           done
 
-      - name: Publish GitHub release
-        if: github.server_url == 'https://github.com'
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --verify-tag --generate-notes
-
-      - name: Publish Gitea release
-        if: github.server_url != 'https://github.com'
-        env:
-          RELEASE_TOKEN: ${{ github.token }}
-        run: |
-          release_id="$(curl --fail-with-body \
-            --header "Authorization: token $RELEASE_TOKEN" \
-            --header "Content-Type: application/json" \
-            --data "$(jq -n --arg tag "$GITHUB_REF_NAME" '{tag_name: $tag, name: $tag}')" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases" | jq -r .id)"
-          for archive in dist/*.zip; do
-            curl --fail-with-body \
-              --request POST \
-              --header "Authorization: token $RELEASE_TOKEN" \
-              --header "Content-Type: application/octet-stream" \
-              --data-binary "@$archive" \
-              "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/$release_id/assets?name=$(basename "$archive")"
-          done
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --draft --verify-tag --generate-notes

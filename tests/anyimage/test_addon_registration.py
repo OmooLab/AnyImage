@@ -82,6 +82,10 @@ class AddonRegistrationTest(BlenderTestCase):
 
         self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
         self.assertIn(GeneratePanorama, self.anyimage.CLASSES)
+        for operator in (ConvertToPanorama, GeneratePanorama, self.convert_to_plane.ConvertToPlane,
+                         self.convert_to_plane.ConvertToDepthPlane, self.convert_to_plane.ConvertToReliefPlane,
+                         self.convert_to_plane.GenerateDepthPlane):
+            self.assertNotIn("mesh_detail", getattr(operator, "__annotations__", {}))
         for generator in (GeneratePanorama, self.convert_to_plane.GenerateDepthPlane):
             self.assertIn(generator, self.anyimage.CLASSES)
             for name in ("source_object_name", "source_identity", "image_identity"):

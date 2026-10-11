@@ -20,7 +20,7 @@ class PlaneOperatorsTest(BlenderTestCase):
 
 
     def test_depth_plane_rejects_animation_and_requests_ai_setup(self):
-        operator = SimpleNamespace(mesh_detail=6, report=Mock())
+        operator = SimpleNamespace(report=Mock())
         context = SimpleNamespace(object=SimpleNamespace(data=object()))
         with (
             patch.object(self.convert_to_plane, "require_static_color_image", side_effect=ValueError("Material conversion supports static images only")),
@@ -44,7 +44,7 @@ class PlaneOperatorsTest(BlenderTestCase):
             source = SimpleNamespace(name="Source", as_pointer=lambda: 1,
                                      data=SimpleNamespace(as_pointer=lambda: 2))
             context = SimpleNamespace(object=source, scene=object())
-            operator = SimpleNamespace(mesh_detail=4, report=Mock())
+            operator = SimpleNamespace(report=Mock())
             generate = Mock(return_value={"FINISHED"})
             with (
                 patch.object(module, "invoke_ai_setup_if_needed", return_value=None),
@@ -80,7 +80,7 @@ class PlaneOperatorsTest(BlenderTestCase):
                 directory=Path("result"),
                 file=lambda key: files[key],
             )
-            operator = SimpleNamespace(source_object_name="Source", color_path="color.png", mesh_detail=6, plane_type=plane_type)
+            operator = SimpleNamespace(source_object_name="Source", color_path="color.png", plane_type=plane_type)
             context = SimpleNamespace(scene=object())
             ops = SimpleNamespace(
                 ed=SimpleNamespace(undo_push=Mock(return_value={"FINISHED"}))
@@ -175,7 +175,7 @@ class PlaneOperatorsTest(BlenderTestCase):
             module.create_depth_plane_from_result(
                 SimpleNamespace(scene=object()),
                 result,
-                SimpleNamespace(source_object_name="Source", color_path="color.png", mesh_detail=6, plane_type="DEPTH"),
+                SimpleNamespace(source_object_name="Source", color_path="color.png", plane_type="DEPTH"),
             )
 
         remove_material.assert_called_once_with(material, do_unlink=True)

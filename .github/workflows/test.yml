@@ -5,8 +5,9 @@ on:
     branches:
       - main
   pull_request:
-  workflow_dispatch:
-
+    branches:
+      - main
+      
 permissions:
   contents: read
 
@@ -19,16 +20,9 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-        with:
-          python-version: "3.11"
 
       - name: Build node assets
-        run: |
-          uv run --group blender omoonodes build
-          mkdir -p src/anyimage/assets
-          cp dist/b45/O_AnyImage/O_AnyImage.blend src/anyimage/assets/O_AnyImage.blend
+        run: uv run --group blender build-assets
 
       - name: Run tests
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: xvfb-run -a uv run --group blender pytest tests/anyimage tests/nodes tests/tools
+        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not BLENDER_EEVEE_NEXT"

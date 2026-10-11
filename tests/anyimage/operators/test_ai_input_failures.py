@@ -58,7 +58,7 @@ class AiInputFailuresTest(BlenderTestCase):
                     path = Path(directory) / "prepared" / "input.png"
                     path.parent.mkdir()
                     path.touch()
-                    operator = SimpleNamespace(mesh_detail=4, report=Mock())
+                    operator = SimpleNamespace(report=Mock())
                     context = SimpleNamespace(object=SimpleNamespace(name="source", as_pointer=lambda: 1,
                         data=SimpleNamespace(as_pointer=lambda: 2)), scene=object())
                     generate = Mock(side_effect=failure, return_value={"CANCELLED"})

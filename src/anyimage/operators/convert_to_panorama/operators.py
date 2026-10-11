@@ -26,7 +26,6 @@ class GeneratePanorama(JobOperatorBase, bpy.types.Operator):
     source_object_name: bpy.props.StringProperty(options=_HIDDEN)
     source_identity: bpy.props.StringProperty(options=_HIDDEN)
     image_identity: bpy.props.StringProperty(options=_HIDDEN)
-    mesh_detail: bpy.props.IntProperty(default=8, min=0, max=8, options=_HIDDEN)
     model: bpy.props.StringProperty(default=DEFAULT_GEOMETRY_MODEL_KEY, options=_HIDDEN)
     resolution_level: bpy.props.IntProperty(default=5, min=0, max=9, options=_HIDDEN)
     max_input_size: bpy.props.IntProperty(default=DEFAULT_MAX_AI_INPUT_SIZE,
@@ -55,8 +54,6 @@ class ConvertToPanorama(bpy.types.Operator):
     bl_label = "Convert to Panorama"
     bl_description = "Turn a still panoramic image into a surrounding 3D surface using AI-estimated depth."
     bl_options = {"REGISTER", "UNDO"}
-
-    mesh_detail: bpy.props.IntProperty(name="Subdivide", default=8, min=0, max=8)
 
     @classmethod
     def poll(cls, context):
@@ -92,7 +89,7 @@ class ConvertToPanorama(bpy.types.Operator):
             result = bpy.ops.anyimage.generate_panorama(
                 input_path=str(path), color_path=str(color_path), source_object_name=source.name,
                 source_identity=str(source.as_pointer()),
-                image_identity=str(image.as_pointer()), mesh_detail=self.mesh_detail,
+                image_identity=str(image.as_pointer()),
                 model=configured_geometry_model(context),
                 resolution_level=int(getattr(preferences, "geometry_resolution_level", 5)),
                 max_input_size=configured_max_ai_input_size(context),

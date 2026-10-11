@@ -42,17 +42,10 @@ def _material(kind="PLAIN", image=None):
     color = image or bpy.data.images.new(f"{kind} Color", width=4, height=3, alpha=True)
     if kind == "PANORAMA":
         return material_data.create_emission_material(source, color), color
-    if kind == "DEPTH":
-        depth = bpy.data.images.new("Depth", width=4, height=3, alpha=True, float_buffer=True)
-        return material_data.create_image_material(
-            source,
-            color,
-            displacement_image=depth,
-        ), color
     return material_data.create_image_material(source, color), color
 
 
-@pytest.mark.parametrize("kind", ["PLAIN", "DEPTH", "PANORAMA"])
+@pytest.mark.parametrize("kind", ["PLAIN", "PANORAMA"])
 def test_marked_object_resolves_generated_material_color(kind):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, color = _material(kind)

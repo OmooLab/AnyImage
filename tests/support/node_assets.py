@@ -11,7 +11,7 @@ GEOMETRY_NAMES = {
     "O Image Plane", "O Image Depth Plane", "O Image Relief Plane",
     "O Image Cutout", "O Image Depth Cutout", "O Image Cutout Symmetry",
 }
-SHADER_NAMES = {"O Image Layer", "O Image Depth Layer", "O Shadeless"}
+SHADER_NAMES = {"O Image Layer", "O Shadeless"}
 
 
 def check_asset_library(asset_path):

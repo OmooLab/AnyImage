@@ -27,16 +27,3 @@ class MaterialSettingsTest(unittest.TestCase):
                     self.modules.material.material_color_space_name(scene),
                     expected,
                 )
-
-
-    def test_surface_displacement_is_set_to_displacement_only(self):
-        class Material:
-            surface_displacement_method = "BUMP"
-
-        material = Material()
-        self.modules.material.set_displacement_only(material)
-
-        self.assertEqual(
-            material.surface_displacement_method,
-            "DISPLACEMENT",
-        )

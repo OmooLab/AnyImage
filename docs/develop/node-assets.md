@@ -16,7 +16,6 @@
 | `O Image Cutout Symmetry` | `geometry/o_image_cutout_symmetry.py` |
 | `O Image Depth Panorama` | `geometry/o_image_depth_panorama.py` |
 | `O Image Layer` | `shader/o_image_layer.py` |
-| `O Image Depth Layer` | `shader/o_image_depth_layer.py` |
 | `O Shadeless` | `shader/o_shadeless.py` |
 
 ## 构建与验证

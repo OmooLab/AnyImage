@@ -117,10 +117,9 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
     settings = SimpleNamespace(adapt_material_to_view_transform=True)
     data_textures = {}
     if entry == "depth":
-        for key in ("displacement_image", "normal_image"):
-            image = bpy.data.images.new(key, width=2, height=2, float_buffer=True)
-            image.colorspace_settings.name = "Non-Color"
-            data_textures[key] = image
+        image = bpy.data.images.new("Normal", width=2, height=2, float_buffer=True)
+        image.colorspace_settings.name = "Non-Color"
+        data_textures["normal_image"] = image
     data_states = {
         key: (image.colorspace_settings.name, image.alpha_mode, images.image_pixels(image))
         for key, image in data_textures.items()

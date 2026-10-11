@@ -12,7 +12,6 @@ def test_generated_materials_use_implicit_uv_and_readable_layout():
     source = SimpleNamespace(name="Source")
     color = bpy.data.images.new("Color", width=4, height=2)
     normal = bpy.data.images.new("Normal", width=4, height=2)
-    depth = bpy.data.images.new("Depth", width=4, height=2)
 
     material = material_data.create_image_material(source, color, normal_image=normal)
     nodes = material.node_tree.nodes
@@ -26,24 +25,6 @@ def test_generated_materials_use_implicit_uv_and_readable_layout():
     assert tuple(next(node for node in nodes if node.type == "GROUP").location) == (-300.0, 300.0)
     assert tuple(next(node for node in nodes if node.type == "BSDF_PRINCIPLED").location) == (100.0, 300.0)
     assert tuple(next(node for node in nodes if node.type == "OUTPUT_MATERIAL").location) == (500.0, 300.0)
-
-    depth_material = material_data.create_image_material(
-        source,
-        color,
-        displacement_image=depth,
-        displacement_midlevel=0.5,
-        displacement_scale=2.0,
-    )
-    nodes = depth_material.node_tree.nodes
-    assert not any(node.bl_idname == "ShaderNodeUVMap" for node in nodes)
-    assert all(not node.inputs["Vector"].is_linked for node in nodes if node.type == "TEX_IMAGE")
-    depth_texture = next(node for node in nodes if node.type == "TEX_IMAGE" and node.image == depth)
-    assert tuple(depth_texture.location) == (-1200.0, -300.0)
-    math_locations = {node.operation: tuple(node.location) for node in nodes if node.type == "MATH"}
-    assert math_locations == {
-        "SUBTRACT": (-950.0, -300.0),
-        "MULTIPLY": (-700.0, -300.0),
-    }
 
     panorama = material_data.create_image_material(
         source, color, shadeless=True, texture_extension="REPEAT")
@@ -161,10 +142,10 @@ def test_cutout_material_uses_ior_1_2():
         and link.to_socket == shader.inputs["Specular IOR Level"]
     )
     assert ior_level_link.from_node == image_layer
-    assert ior_level_link.from_socket == image_layer.outputs["Color"]
+    assert ior_level_link.from_socket == image_layer.outputs["Specular"]
 
 
-def test_plane_material_color_drives_ior_level_but_shadeless_does_not():
+def test_plane_material_specular_drives_ior_level_but_shadeless_does_not():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     image = bpy.data.images.new("Plane", width=2, height=2, alpha=True)
     source = SimpleNamespace(data=SimpleNamespace(name="Plane"))
@@ -180,7 +161,7 @@ def test_plane_material_color_drives_ior_level_but_shadeless_does_not():
     assert image_layer.inputs["Bump Scale"].default_value == 0.0
     assert any(
         link.from_node == image_layer
-        and link.from_socket == image_layer.outputs["Color"]
+        and link.from_socket == image_layer.outputs["Specular"]
         and link.to_node == shader
         and link.to_socket == shader.inputs["Specular IOR Level"]
         for link in material.node_tree.links

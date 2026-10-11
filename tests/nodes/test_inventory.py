@@ -12,6 +12,32 @@ def test_saved_assets_evaluate():
     check_asset_library(node_asset_path())
 
 
+def test_saved_image_layer_specular_is_clamped():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    with bpy.data.libraries.load(str(node_asset_path())) as (library, target):
+        target.node_groups = ["O Image Layer"]
+    group = target.node_groups[0]
+    outputs = [item.name for item in group.interface.items_tree
+               if item.item_type == "SOCKET" and item.in_out == "OUTPUT"]
+    assert outputs == ["Color", "Roughness", "Alpha", "Normal", "Specular"]
+
+    def source(socket):
+        socket = socket.links[0].from_socket
+        while socket.node.bl_idname == "NodeReroute":
+            socket = socket.node.inputs[0].links[0].from_socket
+        return socket
+
+    output = next(node for node in group.nodes if node.bl_idname == "NodeGroupOutput")
+    clamp = source(output.inputs["Specular"]).node
+    assert clamp.bl_idname == "ShaderNodeClamp"
+    assert clamp.clamp_type == "MINMAX"
+    assert clamp.inputs["Min"].default_value == 0.0
+    assert clamp.inputs["Max"].default_value == 1.0
+    color = source(clamp.inputs["Value"])
+    assert color.node.bl_idname == "NodeGroupInput"
+    assert color.name == "Color"
+
+
 def test_saved_parameter_interfaces_match_definitions():
     from omoonodes.assets import Library
     from tests.support.paths import PROJECT_ROOT
@@ -25,7 +51,6 @@ def test_saved_parameter_interfaces_match_definitions():
         "O Image Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
         "O Image Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Image Layer": {"Alpha Fix", "Normal Scale", "Bump Scale", "Object Space"},
-        "O Image Depth Layer": {"Bump Scale"},
     }
 
     def interfaces(groups):

@@ -21,6 +21,7 @@ class OImageLayer(CustomShaderGroup):
         roughness = tree.outputs.float("Roughness")
         alpha_1 = tree.outputs.float("Alpha")
         normal_1 = tree.outputs.vector("Normal")
+        specular = tree.outputs.float("Specular", min_value=0.0, max_value=1.0, subtype="FACTOR")
 
         attribute = s.Attribute(attribute_name="o_depth_face")
         float_curve = g.FloatCurve(value=color, items=((0.0, 0.5), (1.0, 0.1)))
@@ -45,6 +46,7 @@ class OImageLayer(CustomShaderGroup):
         float_curve >> roughness
         float_curve_1 >> alpha_1
         bump >> normal_1
+        g.Clamp(value=color, min=0.0, max=1.0) >> specular
 
 ASSET = OImageLayer
 

@@ -6,7 +6,6 @@ from uuid import uuid4
 import bpy
 
 from .material import (
-    DEPTH_MATERIAL_NODE_GROUP_NAME,
     IMAGE_MATERIAL_NODE_GROUP_NAME,
     SHADELESS_NODE_GROUP_NAME,
 )
@@ -64,10 +63,7 @@ def _linked_source(socket):
 def _image_layer_texture(node):
     if node is None or node.bl_idname != "ShaderNodeGroup":
         return None
-    if getattr(getattr(node, "node_tree", None), "name", "") not in {
-        IMAGE_MATERIAL_NODE_GROUP_NAME,
-        DEPTH_MATERIAL_NODE_GROUP_NAME,
-    }:
+    if getattr(getattr(node, "node_tree", None), "name", "") != IMAGE_MATERIAL_NODE_GROUP_NAME:
         return None
     source = _linked_source(node.inputs.get("Color"))
     return source if getattr(source, "bl_idname", None) == "ShaderNodeTexImage" else None

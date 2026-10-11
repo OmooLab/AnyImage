@@ -3,7 +3,6 @@ import pytest
 
 
 from tests.support.materials import image_layer
-from nodes.O_AnyImage.O_AnyImage.shader.o_image_depth_layer import OImageDepthLayer
 
 
 def test_alpha_curve_preserves_endpoints_and_suppresses_soft_edges(image_layer):
@@ -28,12 +27,3 @@ def test_alpha_curve_preserves_endpoints_and_suppresses_soft_edges(image_layer):
     ])
     np.testing.assert_allclose(samples[:801], 0, atol=3e-4)
     assert samples[-1] == pytest.approx(1)
-
-
-def test_depth_layer_keeps_foreground_alpha_threshold(image_layer):
-    depth = OImageDepthLayer.create_group()
-    output = next(node for node in depth.nodes if node.type == "GROUP_OUTPUT")
-    threshold = output.inputs["Alpha"].links[0].from_node
-    assert threshold.operation == "GREATER_THAN"
-    assert threshold.inputs[1].default_value == 0.5
-    assert threshold.inputs[0].links[0].from_socket.name == "Alpha"

@@ -9,7 +9,6 @@ from omoonodes.arrangement.arrange import arrange_nodes
 from omoonodes.arrangement.dimensions import estimate_node_dimensions
 from tests.support.node_assets import ASSET_PATH, SHADER_NAMES
 from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_cutout import OImageDepthCutout
-from nodes.O_AnyImage.O_AnyImage.shader.o_image_depth_layer import OImageDepthLayer
 from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
 from nodes.O_AnyImage.O_AnyImage.shader.o_shadeless import OShadeless
 
@@ -21,7 +20,6 @@ BUILDERS = (
 
 SHADER_BUILDERS = {
     "O Image Layer": OImageLayer.create_group,
-    "O Image Depth Layer": OImageDepthLayer.create_group,
     "O Shadeless": OShadeless.create_group,
 }
 

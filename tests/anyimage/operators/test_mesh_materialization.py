@@ -11,8 +11,8 @@ from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures, PROTOCOL_ATTRIBUTES
 from anyimage.operators.bake_mesh import BakeMesh
-from nodes.groups.image_cutout import build_image_cutout_group
-from nodes.groups.image_layer import build_image_layer_group
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout import OImageCutout
+from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
 from tests.support.depth_symmetry import symmetry
 from tests.support.mesh_bake import render_normal
 
@@ -20,7 +20,7 @@ from tests.support.mesh_bake import render_normal
 @pytest.fixture
 def cutout():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    build_image_layer_group()
+    OImageLayer.create_group()
     mesh = bpy.data.meshes.new("Cutout")
     mesh.from_pydata([(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)], [], [(0, 1, 2, 3)])
     uv = mesh.uv_layers.new(name="UVMap")
@@ -44,7 +44,7 @@ def cutout():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     modifier = obj.modifiers.new("Cutout", "NODES")
-    modifier.node_group = build_image_cutout_group()
+    modifier.node_group = OImageCutout.create_group()
     set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Mode"), 1)
     set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"), .2)
     obj.update_tag(refresh={"DATA"})
@@ -84,7 +84,6 @@ def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     assert bpy.context.window.scene == source_scene
     assert bpy.context.object == cutout and list(bpy.context.selected_objects) == source_selection
     assert not any(g.name.endswith('.001') for g in bpy.data.node_groups)
-
 
 
 @pytest.mark.parametrize("sharing", ["mesh", "material", "images"])
@@ -148,7 +147,7 @@ def test_static_normal_matches_shader_after_attributes_are_removed(cutout, tmp_p
 def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thickness):
     obj, _, _, set_cutout, set_mirror = symmetry
     obj["o_image_object"] = True
-    build_image_layer_group()
+    OImageLayer.create_group()
     set_cutout("Mode", 1)
     set_cutout("Thickness", thickness, subtype="DISTANCE")
     set_cutout("Depth Scale", .5)
@@ -186,7 +185,7 @@ def test_depth_cutout_conversion_removes_unused_depth(symmetry, mirrored):
     if not mirrored:
         obj.modifiers.remove(mirror)
     obj["o_image_object"] = True
-    build_image_layer_group()
+    OImageLayer.create_group()
     color = bpy.data.images.new("Color", width=16, height=16, float_buffer=True)
     obj.data.materials.append(create_image_material(color, color))
     obj.select_set(True)

@@ -7,11 +7,11 @@
 
 - [x] 2.1 Update Relief Plane geometry tests to verify far depths stop at `Thickness`, positive depths remain unrestricted, and the fixed base and side interpolation remain valid.
 - [x] 2.2 Add positive, negative, and zero `Depth Offset` tests, including direction adjustment, `Depth Scale = 0`, and checks that Depth Offset is scaled as part of the corrected relative depth while the depth-zero height remains fixed.
-- [x] 2.3 Update the node-group interface inventory test for `Depth Direction` and `Depth Offset` names, order, panel placement, and old base-plane clamp behavior.
+- [x] 2.3 Update the node group interface inventory test for `Depth Direction` and `Depth Offset` names, order, panel placement, and old base-plane clamp behavior.
 
 ## 3. Node asset
 
-- [x] 3.1 Run `uv run node-group build` to rebuild and validate `src/anyimage/assets/O_AnyImage.blend` from the updated source and tests.
+- [x] 3.1 Run 当时的节点资产构建命令 to rebuild and validate `src/anyimage/assets/O_AnyImage.blend` from the updated source and tests.
 - [x] 3.2 Run the relevant Relief Plane and plane-object tests, then inspect the final diff for stale inward-limit nodes or old behavior references.
 
 ## 4. Initial depth direction

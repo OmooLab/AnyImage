@@ -55,7 +55,10 @@ uv run --group docs docs dev
 uv run --group docs docs deploy
 
 # 构建并验证 Blender 节点资产
-uv run --group blender node-group build
+uv run --group blender omoonodes build
+mkdir -p src/anyimage/assets
+cp dist/b45/O_AnyImage/O_AnyImage.blend src/anyimage/assets/O_AnyImage.blend
+uv run --group blender pytest tests/nodes
 
 # 准备、校验并同步 ONNX 模型到 R2
 uv run --group models model sync
@@ -102,7 +105,9 @@ uv run --group models model sync
 
 ## Blender 节点组规范
 
-- 节点组源码位于顶层 `nodes/`，`tools/nodes` 只负责构建、校验、布局和预览。
+- 节点资产由 PyPI 的 `omoonodes` 管理，版本锁定在 `blender` dependency group；使用默认源码目录 `nodes/`、目标 `b45` 及默认 Blender 版本，无需额外配置。
+- 资产库位于 `nodes/O_AnyImage/`，`collection.json` 将 `O_AnyImage.blend` 映射到库内的 `O_AnyImage/` 源码目录；节点源码使用 `omoonodes dump` 导出的 nodebpy 写法。
+- 首次 dump 前必须将待导出的节点组标记为 Asset 并保存；在 Blender 中编辑时，先用 `omoonodes dev nodes/O_AnyImage` 生成开发库，再用 `omoonodes dev nodes/O_AnyImage --sync workspaces` 同步源码。命令均通过 `uv run --group blender` 执行。
 - `src/anyimage/assets/O_AnyImage.blend` 是发布构建产物，由节点源码生成且不得提交到 Git。
 - 插件运行时必须使用 `load_node_group(group_name)` 从资产加载，禁止调用 `bpy.data.node_groups.new()` 创建节点组。
 - `nodes/` 构建代码和节点测试允许通过代码创建节点组。
@@ -111,5 +116,5 @@ uv run --group models model sync
 - Store Named Attribute 仅用于实际命名协议或经论证仍需跨几何变化保存的最少数据；明确名称、类型、域、Selection、写入阶段及消费者。多个消费者或跨区域连线不构成存值理由。
 - 内部临时命名属性使用专用名称，在最后消费者之后精确清理，保留用户属性；源码和保存资产均检查 Capture 为零。
 - 节点布局通过区域内输入、字段排列和必要的 Reroute 保持可读；存储须有数据生命周期依据，构建阶段通过明确的节点或 socket 引用接线。
-- 修改节点组的逻辑、接口、布局或共用构建函数后，必须运行 `uv run --group blender node-group build`，无需另行确认；生成资产并验证通过才算完成。
+- 修改节点组的逻辑、接口或布局后，必须运行 `uv run --group blender omoonodes build`，将 `dist/b45/O_AnyImage/O_AnyImage.blend` 复制到 `src/anyimage/assets/O_AnyImage.blend`，并运行相关节点测试，无需另行确认；生成资产并验证通过才算完成。
 - 具体构建规范与操作步骤见[节点资产](docs/develop/node-assets.md)。

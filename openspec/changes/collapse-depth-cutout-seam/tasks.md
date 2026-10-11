@@ -19,7 +19,7 @@
 
 ## 4. 节点资产
 
-- [x] 4.1 运行 `uv run --group blender node-group build`，生成并验证 `O Image Depth Cutout` 资产
+- [x] 4.1 运行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`），生成并验证 `O Image Depth Cutout` 资产
 - [x] 4.2 复查 UV 方向、影响范围、最终差异与相关测试结果
 
 ## 5. 实图反馈修正

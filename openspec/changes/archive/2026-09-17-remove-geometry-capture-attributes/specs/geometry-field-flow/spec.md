@@ -54,4 +54,4 @@
 
 #### Scenario: Deliver a geometry graph change
 - **WHEN** 本次节点整理完成
-- **THEN** 源码、规范、测试和 O_AnyImage.blend 同步，Capture 旧结构断言已替换，uv run node-group build 与 uv run pytest 成功且正常退出
+- **THEN** 源码、规范、测试和 O_AnyImage.blend 同步，Capture 旧结构断言已替换，当时的节点资产构建命令与 uv run pytest 成功且正常退出

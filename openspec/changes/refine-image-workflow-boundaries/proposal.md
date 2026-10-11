@@ -30,5 +30,5 @@
 
 - Blender 侧：`common/`、`operators/`、`properties.py`、`panel.py`、`preferences.py`、菜单及扩展注册入口。
 - 服务端：模型目录、Session 缓存、首次加载校验和模型下载流程。
-- 维护：相关 `tests/`、`nodes/common/cutout.py`、节点资产校验及 `docs/internals/`。
+- 维护：相关 `tests/`、`nodes/O_AnyImage/O_AnyImage/geometry/` 中的 Cutout 节点源码、节点资产校验及 `docs/internals/`。
 - 本次交付为提案、设计、规格和未完成任务清单。实施时保持模型、图片、材质与节点组的现有有效功能，按任务核对；依赖与发布方式沿用当前配置。

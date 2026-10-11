@@ -2,7 +2,7 @@
 
 - [x] 1.1 Rename `CUT_ATTRIBUTE` from `.o_anyimage_depth_cut` to `_o_anyimage_depth_cut` and update `depth_surface.py`, `image_depth_panorama.py`, and asset checks.
 - [x] 1.2 Replace the internal split-marker removal path with one wildcard `Remove Named Attribute` matching `_o_*` before each depth surface output.
-- [x] 1.3 Update `tests/tools/nodes/test_temporary_attributes.py`, `test_depth_surface_split.py`, and `tools/nodes/check.py` to assert the new prefix and remove stale `.o_anyimage_*` expectations.
+- [x] 1.3 Update 当时的节点模块（test_temporary_attributes.py）, `test_depth_surface_split.py`, and 当时的节点模块（check.py） to assert the new prefix and remove stale `.o_anyimage_*` expectations.
 
 ## 2. Reuse the projected outline field
 
@@ -31,6 +31,6 @@
 ## 6. Rebuild assets and run regression
 
 - [x] 6.1 Run the focused Cutout and Depth Cutout test files and fix any behavioral differences.
-- [x] 6.2 Run `uv run node-group build` to rebuild and validate `O_AnyImage.blend`.
+- [x] 6.2 Run 当时的节点资产构建命令 to rebuild and validate `O_AnyImage.blend`.
 - [x] 6.3 Run the full `uv run pytest` suite and confirm normal exit with no new expected failures.
 - [x] 6.4 Review `git diff --check` and the final node/attribute inventory to confirm no stale `.o_anyimage_*` references remain.

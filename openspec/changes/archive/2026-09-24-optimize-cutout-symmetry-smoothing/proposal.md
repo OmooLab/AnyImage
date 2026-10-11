@@ -23,8 +23,8 @@ None.
 
 ## Impact
 
-- `nodes/common/smoothing.py`
-- `nodes/groups/image_cutout_symmetry.py`
+- 当时的节点模块（smoothing.py）
+- 当时的节点模块（image_cutout_symmetry.py）
 - Symmetry node tests and interface inventory
 - Generated node asset validation
 - No dependency or file-format changes

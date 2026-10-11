@@ -161,8 +161,6 @@ def test_texture_commit_preserves_structure_and_isolates_users(texture, tmp_path
     assert len(reopened.id_data.links) == len(links)
 
 
-
-
 @pytest.mark.parametrize("source", ["MOVIE", "SEQUENCE"])
 def test_target_rejects_animated_image(texture, source):
     texture.image.source = source

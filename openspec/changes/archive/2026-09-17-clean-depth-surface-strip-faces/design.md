@@ -25,7 +25,7 @@ flowchart TD
     H --> I[现有厚度与 Smooth 流程]
 ```
 
-共用实现放在 `tools/nodes/common/depth_surface.py`，将删除节点接在 Split Edges 输出与现有启用 Switch 的 True 输入之间。删除选择在该时刻的完整拆后几何上求值一次。
+共用实现放在当时的节点模块（depth_surface.py），将删除节点接在 Split Edges 输出与现有启用 Switch 的 True 输入之间。删除选择在该时刻的完整拆后几何上求值一次。
 
 ### 2. 按面角顺序识别边界对边
 

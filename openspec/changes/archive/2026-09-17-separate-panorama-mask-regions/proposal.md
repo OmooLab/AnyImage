@@ -23,7 +23,7 @@
 
 ## Impact
 
-- `tools/nodes/groups/image_depth_panorama.py`：Separate Geometry 分面、双分支位移、Join Geometry 合并，不再调用 `validity.delete_invalid_faces`（该函数仍由 `O Image Depth Plane` 使用）。
-- `tests/tools/nodes/test_image_depth_panorama.py`：Mask Threshold 分面、开关分支选择、Dome Radius 位移与合并结果的断言。
+- 当时的节点模块（image_depth_panorama.py）：Separate Geometry 分面、双分支位移、Join Geometry 合并，不再调用 `validity.delete_invalid_faces`（该函数仍由 `O Image Depth Plane` 使用）。
+- 当时的节点模块（test_image_depth_panorama.py）：Mask Threshold 分面、开关分支选择、Dome Radius 位移与合并结果的断言。
 - `src/anyimage/assets/O_AnyImage.blend`：重新构建节点资产。
 - 不改动 `O Image Depth Plane`、`O Image Depth Cutout`、`O Image Relief Plane`、Operator 入口、材质与依赖。

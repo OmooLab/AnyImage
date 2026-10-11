@@ -14,5 +14,5 @@
 ## 3. 节点资产验证
 
 - [x] 3.1 运行相关节点测试并检查所有 `pinned_smooth` 调用方的既有几何行为
-- [x] 3.2 运行 `uv run --group blender node-group build`，验证生成资产、临时属性清理及 Capture Attribute 为零
+- [x] 3.2 运行当时的节点资产构建命令，验证生成资产、临时属性清理及 Capture Attribute 为零
 - [x] 3.3 检查最终差异与旧的 UV 恒定断言，确认未改变其他 Smooth 路径

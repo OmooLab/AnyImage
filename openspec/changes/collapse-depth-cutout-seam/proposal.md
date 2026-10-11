@@ -28,4 +28,4 @@ Depth Cutout 原有单段 Edges Extrude 能形成清晰、稳定的前后转折�
 
 ## Impact
 
-影响 `nodes/groups/image_depth_cutout.py`、必要的 `nodes/common/` 共用字段函数、Depth Cutout 节点布局与行为测试，以及重新生成的 `src/anyimage/assets/O_AnyImage.blend`。公开节点接口新增 `Side Roundness`，材质、运行时 Python API 和依赖不变。
+影响 `nodes/O_AnyImage/O_AnyImage/geometry/o_image_depth_cutout.py` 中的节点定义、Depth Cutout 节点布局与行为测试，以及重新生成的 `src/anyimage/assets/O_AnyImage.blend`。公开节点接口新增 `Side Roundness`，材质、运行时 Python API 和依赖不变。

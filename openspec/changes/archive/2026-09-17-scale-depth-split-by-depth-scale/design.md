@@ -1,6 +1,6 @@
 ## Context
 
-Depth Split 的判据在 `split_depth_surface`（`tools/nodes/common/depth_surface.py`），在边域求值，被 `O Image Depth Plane`、`O Image Depth Cutout`、`O Image Depth Panorama` 共用。当前式子是：
+Depth Split 的判据在 `split_depth_surface`（当时的节点模块（depth_surface.py）），在边域求值，被 `O Image Depth Plane`、`O Image Depth Cutout`、`O Image Depth Panorama` 共用。当前式子是：
 
 ```
 |Δ射线距离| × Reference × Strength  >  面中心距离 × 平均射线距离 × 2.5

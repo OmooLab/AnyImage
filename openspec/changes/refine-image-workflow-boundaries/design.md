@@ -72,7 +72,7 @@ UI 在本地检查声明文件是否存在及大小是否符合，明确表示�
 - 参考缓存缩减影响 Modal 内容变化判断 → 保留内容身份检查、连续编辑、跨 Scene 共享和 Undo/Redo 覆盖。
 - 服务端首次读取大模型会增加加载时间 → 复用现有完整校验缓存，UI 保持本地快速检查。
 - Bake 分支校验放宽影响烘焙假设 → 分别覆盖纯几何、多区 Color 和 Normal 三类操作，验证实际外观和失败回滚。
-- 节点构建帮助函数清理影响生成资产 → 修改后运行 `uv run --group blender node-group build`，验证资产及 Capture Attribute 为零。
+- 节点构建帮助函数清理影响生成资产 → 修改后运行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`），验证资产及 Capture Attribute 为零。
 
 ## Migration Plan
 

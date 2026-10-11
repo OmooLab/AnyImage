@@ -23,7 +23,7 @@
 
 ## Impact
 
-- `tools/nodes/common`、`tools/nodes/groups`，重点是 Depth Surface、Depth Cutout 和 Panorama。
-- `tools/nodes/arrangement` 的现有布局能力与相关测试需验证能正确处理直连及匿名属性；仅在发现实际问题时修改。
-- `tests/tools/nodes`、相关 Operator 与材质测试、`src/anyimage/assets/O_AnyImage.blend`。
+- 当时的节点共用构建目录、当时的节点定义目录，重点是 Depth Surface、Depth Cutout 和 Panorama。
+- 当时的节点模块（arrangement）的现有布局能力与相关测试需验证能正确处理直连及匿名属性；仅在发现实际问题时修改。
+- 当时的节点工具目录、相关 Operator 与材质测试、`src/anyimage/assets/O_AnyImage.blend`。
 - `AGENTS.md`、`docs/internals/node-assets.md`。

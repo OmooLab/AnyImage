@@ -48,7 +48,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             with patch.object(pack, "SOURCE_DIR", Path(directory)):
                 with self.assertRaisesRegex(
                     RuntimeError,
-                    "uv run --group blender node-group build",
+                    "uv run --group blender omoonodes build; copy dist/b45/O_AnyImage/O_AnyImage.blend to src/anyimage/assets/",
                 ):
                     pack._build_extension("windows-x64", [])
 

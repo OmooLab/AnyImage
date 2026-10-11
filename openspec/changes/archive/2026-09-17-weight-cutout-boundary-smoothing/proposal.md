@@ -20,4 +20,4 @@
 
 ## Impact
 
-影响 `tools/nodes/common/boundary_smoothing.py`、`tools/nodes/groups/image_depth_cutout.py`、相关节点测试和 `src/anyimage/assets/O_AnyImage.blend`；不增加或移除公开输入。
+影响当时的节点模块（boundary_smoothing.py）、当时的节点模块（image_depth_cutout.py）、相关节点测试和 `src/anyimage/assets/O_AnyImage.blend`；不增加或移除公开输入。

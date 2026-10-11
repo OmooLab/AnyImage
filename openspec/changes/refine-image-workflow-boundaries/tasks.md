@@ -73,7 +73,7 @@
 
 ## 14. 已有残留清理
 
-- [x] 14.1 核对 `_profile_field()`、`_remove_zero_thickness()` 的真实调用、注册和工具入口，删除无用途定义及随之无用的导入；运行 `uv run --group blender node-group build` 并验证生成资产及 Capture Attribute 为零。
+- [x] 14.1 核对 `_profile_field()`、`_remove_zero_thickness()` 的真实调用、注册和工具入口，删除无用途定义及随之无用的导入；运行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`） 并验证生成资产及 Capture Attribute 为零。
 - [x] 14.2 核对 `models_status(refresh=False)` 的全部调用，删除无效参数及旧调用形式；检查本轮迁移产生的悬空引用和转发层。
 
 ## 15. 内部文档与最终职责对应

@@ -48,7 +48,10 @@ jobs:
           python-version: "3.11"
 
       - name: Build node assets
-        run: uv run --group blender node-group build --skip-tests
+        run: |
+          uv run --group blender omoonodes build
+          mkdir -p src/anyimage/assets
+          cp dist/b45/O_AnyImage/O_AnyImage.blend src/anyimage/assets/O_AnyImage.blend
 
       - name: Run tests
         env:

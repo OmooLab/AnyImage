@@ -25,4 +25,4 @@ AnyImage 生成对象的局部坐标系仍沿用 Image Empty 的 `XY + depth -Z`
 
 ## Impact
 
-影响 `src/anyimage/operators/cutout_tool/geometry.py`、`object.py`、`depth_calibration.py`，`src/anyimage/operators/convert_to_plane/`，`tools/nodes/groups/` 下的 Plane、Depth Plane、Relief Plane、Cutout、Depth Cutout、Symmetry 与材质节点，`tools/nodes/common/` 的深度表面、Cutout 和法线映射辅助，以及相关测试与 `src/anyimage/assets/O_AnyImage.blend`。不新增依赖。
+影响 `src/anyimage/operators/cutout_tool/geometry.py`、`object.py`、`depth_calibration.py`，`src/anyimage/operators/convert_to_plane/`，当时的节点定义目录下的 Plane、Depth Plane、Relief Plane、Cutout、Depth Cutout、Symmetry 与材质节点，当时的节点共用构建目录的深度表面、Cutout 和法线映射辅助，以及相关测试与 `src/anyimage/assets/O_AnyImage.blend`。不新增依赖。

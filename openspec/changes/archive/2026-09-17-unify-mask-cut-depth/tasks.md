@@ -20,10 +20,10 @@
 - [x] 3.3 断言切口点保持自身射线方向（Plane 相机横纵坐标不变、Panorama 经纬方向不变）
 - [x] 3.4 把 `test_valid_only_deletes_invalid_points_and_wire_edges` 的保留点断言改为「面中心采样低于 Mask Threshold 才删面」（改名 `test_valid_only_keeps_faces_covering_valid_samples`），保留 Depth Mask 关闭时逐位不变的对比
 - [x] 3.5 断言 Plane 原画幅外框取相邻面深（`test_outline_points_use_adjacent_face_depth_without_split`），以及不存在相邻保留面的自由点输出坐标有限（`test_validity.py`）
-- [x] 3.6 运行 `uv run pytest`（至少覆盖 `tests/tools/nodes/test_depth_relief_planes.py`、`test_boundary_depth.py`、`test_depth_surface_split.py`、`test_image_depth_panorama.py`）
+- [x] 3.6 运行 `uv run pytest`（至少覆盖当时的节点模块（test_depth_relief_planes.py）、`test_boundary_depth.py`、`test_depth_surface_split.py`、`test_image_depth_panorama.py`）
 
 ## 4. 资产与收尾
 
-- [x] 4.1 运行 `uv run node-group build`，确认节点资产构建与校验通过、Capture Attribute 为零
+- [x] 4.1 运行当时的节点资产构建命令，确认节点资产构建与校验通过、Capture Attribute 为零
 - [x] 4.2 检查源码与测试中不再有 `always_vertex` 及旧路径引用，确认最终差异只涉及本次范围
 - [x] 4.3 `O Image Depth Panorama` 的无效判定改在面心求值并去掉 `Invalid Distance`，Depth Mask 关闭时保留的无效面整片落到 `Dome Radius`（同时是 Depth Scale 0 的球半径），并补面心轮廓、切口点半径与 dome 回退断言

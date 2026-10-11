@@ -75,7 +75,7 @@ Boundary Smooth 与 bridge UV Blur 保持独立：前者继续在 pinned smooth 
 2. 保留 Front / Rear source-index lookup，计算可调的共享 Side ring target。
 3. 为每张 leaf 计算四次 Blur、边缘 falloff 与厚度渐变，分别构建到中间环的 Edges Extrude Side。
 4. Join leaves 与两半 Side，以固定容差焊接。
-5. 更新测试，运行相关测试及 `uv run --group blender node-group build`。
+5. 更新测试，运行相关测试及 节点资产构建与验证流程（见 `docs/develop/node-assets.md`）。
 
 回滚时可恢复上一版中值收口节点链；公开接口和存量对象无需迁移。
 

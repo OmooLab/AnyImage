@@ -25,4 +25,4 @@ Depth Cutout 当前通过 Faces Extrude 同时生成背面和侧壁；背面轮�
 
 ## Impact
 
-影响 `nodes/groups/image_depth_cutout.py`、必要的 `nodes/common/` 共用字段函数、节点布局规则、Depth Cutout 行为测试和生成的 `src/anyimage/assets/O_AnyImage.blend`。公开节点接口、依赖和运行时 Python API 不变。
+影响当时的节点模块（image_depth_cutout.py）、必要的当时的节点共用构建目录共用字段函数、节点布局规则、Depth Cutout 行为测试和生成的 `src/anyimage/assets/O_AnyImage.blend`。公开节点接口、依赖和运行时 Python API 不变。

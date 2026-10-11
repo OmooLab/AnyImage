@@ -24,5 +24,5 @@
 
 - [x] 4.1 更新 Cutout 对象与材质集成测试，验证 Color、Normal 使用双区布局、Depth 保持单区且单一材质正确采样 Front 和 Rear
 - [x] 4.2 运行相关 Python 与 Blender 测试，修复双区尺寸或 UV 协议引起的回归
-- [x] 4.3 运行 `uv run --group blender node-group build` 重建并验证节点资产，确认 Capture Attribute 为零且无临时 `_o_*` 属性泄漏
+- [x] 4.3 运行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`） 重建并验证节点资产，确认 Capture Attribute 为零且无临时 `_o_*` 属性泄漏
 - [x] 4.4 检查最终差异和旧重叠 UV 假设，确认未新增兼容路径、材质槽、公开节点输入或非 Cutout 行为变化

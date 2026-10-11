@@ -25,5 +25,5 @@
 
 ## 5. 资产交付
 
-- [x] 5.1 更新资产清单和相关测试，运行 `uv run node-group build`，保存并验证 `src/anyimage/assets/O_AnyImage.blend`。
+- [x] 5.1 更新资产清单和相关测试，运行当时的节点资产构建命令，保存并验证 `src/anyimage/assets/O_AnyImage.blend`。
 - [x] 5.2 运行相关对象创建与节点测试，检查源码、资产中的旧名称及最终差异，确认工作正常退出；不构建文档或打包扩展。

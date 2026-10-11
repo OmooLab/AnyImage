@@ -17,41 +17,6 @@ def evaluated_mesh(obj):
     return evaluated, evaluated.to_mesh()
 
 
-def test_material_inheritance_removes_only_source_vertices():
-    from nodes.common.material_slots import inherit_material_slots
-
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    source_count = 4
-    mesh = bpy.data.meshes.new("Source")
-    mesh.from_pydata([(20 + i % 3, i // 3, 0) for i in range(source_count)], [],
-                     [(0, 1, 3, 2)])
-    materials = [bpy.data.materials.new(name) for name in ("First", "Second")]
-    for material in materials:
-        mesh.materials.append(material)
-    obj = bpy.data.objects.new("Material Source", mesh)
-    bpy.context.collection.objects.link(obj)
-    group = bpy.data.node_groups.new("Material Inheritance", "GeometryNodeTree")
-    group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-    group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-    source = group.nodes.new("NodeGroupInput")
-    grid = group.nodes.new("GeometryNodeMeshGrid")
-    grid.inputs["Vertices X"].default_value = 3
-    grid.inputs["Vertices Y"].default_value = 2
-    geometry = inherit_material_slots(group, grid.outputs["Mesh"], source.outputs["Geometry"])
-    group.links.new(geometry, group.nodes.new("NodeGroupOutput").inputs["Geometry"])
-    obj.modifiers.new("Material Inheritance", "NODES").node_group = group
-    obj.update_tag(refresh={"DATA"})
-    ev, result = evaluated_mesh(obj)
-    try:
-        assert len(result.vertices) == 6 and len(result.polygons) == 2
-        assert all(abs(v.co.x) <= 0.5 for v in result.vertices)
-        assert [material.original for material in result.materials if material] == materials
-        assert result.materials[0].original == materials[0]
-        assert all(face.material_index == 0 for face in result.polygons)
-    finally:
-        ev.to_mesh_clear()
-
-
 def test_saved_image_plane_evaluation():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     mesh = create_image_plane_mesh("Image Plane", (-1.0, 1.0, -0.5, 0.5))

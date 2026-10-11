@@ -25,4 +25,4 @@
 
 ## Impact
 
-影响 `src/anyimage/server/geometry/depth_texture.py`、`geometry/prediction_artifacts.py`、`jobs/cutout.py`、`src/anyimage/common/depth.py`、Plane 转换与 Cutout 的对象创建逻辑、`tools/nodes/groups/image_relief_plane.py`、相关测试与 `src/anyimage/assets/O_AnyImage.blend`。不新增依赖、不改变 AI 推理与节点组接口；已有场景中保存的 Modifier 数值不变，但重新生成深度几何的结果会变化。
+影响 `src/anyimage/server/geometry/depth_texture.py`、`geometry/prediction_artifacts.py`、`jobs/cutout.py`、`src/anyimage/common/depth.py`、Plane 转换与 Cutout 的对象创建逻辑、当时的节点模块（image_relief_plane.py）、相关测试与 `src/anyimage/assets/O_AnyImage.blend`。不新增依赖、不改变 AI 推理与节点组接口；已有场景中保存的 Modifier 数值不变，但重新生成深度几何的结果会变化。

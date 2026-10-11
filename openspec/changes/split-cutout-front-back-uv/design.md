@@ -90,7 +90,7 @@ Plane、Depth Plane、Relief Plane、Panorama 与 Clipboard 继续生成单区�
 2. 对单区 Color 与 Depth 执行既有 Boundary Padding，再让 Cutout Color、Normal 采用 `W × 2H` 布局；Depth 与 metadata 保持 `W × H` 单区标定。
 3. 将基础 Cutout UV 初始化到上半区，更新所有 CPU 侧 Depth/Alpha/方向计算使用单 tile 语义。
 4. 更新普通、Depth 与对称节点组的 Rear、Front-side 和 Rear-side Face Corner UV；普通 Cutout 必要时建立共享中圈。
-5. 运行相关 Python 与 Blender 测试，再执行 `uv run --group blender node-group build` 重建并验证节点资产。
+5. 运行相关 Python 与 Blender 测试，再执行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`） 重建并验证节点资产。
 
 本变更直接替换 Cutout 的旧重叠 UV 输出，不保留旧布局开关或兼容节点。
 

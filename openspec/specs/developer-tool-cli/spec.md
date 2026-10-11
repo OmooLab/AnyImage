@@ -5,55 +5,47 @@ TBD - created by archiving change organize-tool-cli. Update Purpose after archiv
 ## Requirements
 ### Requirement: Grouped command entry points
 
-系统 SHALL 提供 `uv run node-group` 和 `uv run model` 入口，使用小写子命令，并移除旧脚本入口 `build-nodes`、`sync-models`。
+系统 SHALL 通过 `uv run --group blender omoonodes` 管理节点资产，通过 `uv run model` 管理模型，使用小写子命令。
 
 #### Scenario: Display help
-- **WHEN** 用户未指定子命令或传入 `--help`
-- **THEN** 命令显示帮助并成功退出，不启动 Blender、模型准备或上传
+- **WHEN** 用户传入 `--help`
+- **THEN** 命令显示帮助并成功退出，不执行构建、模型准备或上传
 
 #### Scenario: Invalid arguments
 - **WHEN** 用户传入未知子命令或参数
 - **THEN** 命令显示参数错误并非零退出，业务动作不执行
 
-### Requirement: Build and check node groups
+### Requirement: Build and validate node assets
 
-`node-group build` SHALL 使用当前 Python 环境中的 `bpy`，通过独立 Python 子进程依次构建资产、校验保存的资产、运行 `tests/nodes` 与 `tests/tools/nodes`；`node-group check` SHALL 仅执行后两步。两者 SHALL 支持 `--skip-tests` 仅跳过节点相关 pytest，且 SHALL 不查找或启动外部 Blender 可执行程序。
+`omoonodes build` SHALL 默认读取 `nodes/`，使用默认 `b45` 目标及工具包准备的隔离 Blender 环境，将校验通过的资产库输出到 `dist/b45/O_AnyImage/`。项目 SHALL 将生成的 `O_AnyImage.blend` 复制到 `src/anyimage/assets/`，再独立运行节点测试。
 
 #### Scenario: Build assets
-- **WHEN** 用户运行 `uv run --group blender node-group build`
-- **THEN** 使用固定 bpy 环境更新 O_AnyImage.blend，并在独立进程的资产校验和节点相关测试成功后成功退出
+- **WHEN** 用户运行 `uv run --group blender omoonodes build`
+- **THEN** 构建并校验 nodebpy 源码定义的资产库，成功后更新输出目录
 
-#### Scenario: Check existing assets
-- **WHEN** 用户运行 `uv run --group blender node-group check`
-- **THEN** 使用固定 bpy 环境检查已有资产并运行节点相关测试，资产文件内容保持原样
-
-#### Scenario: Skip Python tests
-- **WHEN** build 或 check 指定 `--skip-tests`
-- **THEN** 仍执行独立进程的资产校验，跳过 pytest
+#### Scenario: Validate saved assets
+- **WHEN** 用户复制生成资产并运行 `uv run --group blender pytest tests/nodes`
+- **THEN** 测试验证节点求值、接口、布局、属性协议和保存资产
 
 #### Scenario: Stop after failure
-- **WHEN** 构建、校验或测试任一步失败
-- **THEN** 命令非零退出且不执行后续步骤
+- **WHEN** 构建或校验失败
+- **THEN** 命令非零退出，正式输出保持完整
 
-#### Scenario: Missing bpy environment
-- **WHEN** 当前 Python 环境无法导入 bpy
-- **THEN** 命令非零退出并提示使用 `--group blender`，不尝试查找外部 Blender
+### Requirement: Edit and import node assets
 
-### Requirement: Preview node groups
+系统 SHALL 通过 `omoonodes dev` 生成 Blender 开发库，通过 `dev --sync` 将编辑结果同步回 nodebpy 源码；首次导入 SHALL 使用 `dump`，导入前将节点组标记为 Asset 并保存。
 
-`node-group preview` SHALL 使用当前 Python 环境中的 `bpy`，从当前源码在独立 Python 子进程中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--output PATH`、`--no-open` 和 `--fragment`，不支持选择外部 Blender 可执行程序。
+#### Scenario: Edit current source
+- **WHEN** 用户运行 `uv run --group blender omoonodes dev nodes/O_AnyImage`
+- **THEN** 开发库生成于 `workspaces/b45/O_AnyImage/`，可在 Blender 中编辑
 
-#### Scenario: Preview current source
-- **WHEN** 用户运行 `uv run --group blender node-group preview`
-- **THEN** 生成当前源码的可查看 HTML 并尝试打开浏览器
+#### Scenario: Sync edited assets
+- **WHEN** 用户保存开发库并运行 `uv run --group blender omoonodes dev nodes/O_AnyImage --sync workspaces`
+- **THEN** 编辑结果经校验后同步回资产库源码
 
-#### Scenario: Save without opening
-- **WHEN** 用户指定 `--output PATH --no-open`
-- **THEN** HTML 写入指定路径且不启动浏览器
-
-#### Scenario: Export fragment
-- **WHEN** 用户指定 `--fragment`
-- **THEN** 输出 HTML 片段及其路径，不自动打开浏览器
+#### Scenario: Import an asset library
+- **WHEN** 用户将包含 Asset 节点组的文件通过 `omoonodes dump` 导出到尚不存在的源码目录
+- **THEN** 工具生成 nodebpy 源码和 `collection.json`，并校验往返构建
 
 ### Requirement: Prepare and sync models
 

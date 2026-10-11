@@ -17,7 +17,7 @@ uv run pytest
 | Server | `test_job_server.py`、`test_server_jobs.py`、`test_input_validation.py`、`test_geometry_artifacts.py` |
 | 模型 | `test_model_manager.py`、下载、推理与各 ONNX 模型测试 |
 | 节点资产 | 布局与接口等价、几何求值、Cutout 与临时属性清理 |
-| 工具与包协议 | 扩展 Manifest、打包、模型同步与节点启动器 |
+| 工具与包协议 | 扩展 Manifest、打包、模型同步与节点构建流程 |
 
 Blender Stub 共用 `tests/support/blender.py`；Server 和实际 Blender 几何 fixture 按使用范围存放在对应 support 模块。测试命名描述功能、触发条件与可观察结果。
 
@@ -27,10 +27,13 @@ Blender Stub 共用 `tests/support/blender.py`；Server 和实际 Blender 几何
 | --- | --- |
 | `uv run pack` | 生成 Windows、macOS arm64、Linux 扩展包 |
 | `uv run pack --prepare` | 为本机同步扩展 wheel 与 Manifest |
-| `uv run --group blender node-group build` | 构建、验证节点资产并运行节点测试 |
+| `uv run --group blender omoonodes build` | 从 `nodes/` 构建并校验节点资产库 |
+| `uv run --group blender pytest tests/nodes` | 验证节点行为与保存资产 |
 | `uv run model sync` | 准备、校验并上传模型声明的文件 |
 | `uv run docs -dev` | 本地预览文档 |
 | `uv run docs` | 通过 Mike 发布项目版本并更新 latest |
+
+节点库生成于 `dist/b45/O_AnyImage/`；测试与打包前，将其中的 `O_AnyImage.blend` 复制到 `src/anyimage/assets/`。完整流程见[节点资产](node-assets.md)。
 
 `tools/pack.py` 从 `pyproject.toml` 读取依赖，按平台与 Blender Python 版本解析 wheel，使用 Blender 提供的 NumPy。产物命名为 `AnyImage.v<version>.<platform>.zip`，写入 `dist/`。本地 BlendJob wheel 内容变化后运行 `uv lock --refresh`，并核对锁文件、Manifest 与打包测试。
 

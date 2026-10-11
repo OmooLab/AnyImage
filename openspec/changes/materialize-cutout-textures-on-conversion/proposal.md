@@ -26,7 +26,7 @@ Cutout 在创建阶段建立双区图片，使基础 UV、Depth 采样、侧壁�
 
 ## Impact
 
-- 涉及 `src/anyimage/operators/cutout_tool`、新增转换 Operator、材质及图片共用函数、菜单和注册入口，以及 `nodes/common/cutout.py`、Cutout、Depth Cutout 和 Symmetry 节点源码。
-- 涉及相关图片、节点求值、法线渲染、Undo / Redo、共享材质原位更新和注册测试；节点修改后运行 `uv run --group blender node-group build`。
+- 涉及 `src/anyimage/operators/cutout_tool`、新增转换 Operator、材质及图片共用函数、菜单和注册入口，以及 `nodes/O_AnyImage/O_AnyImage/geometry/` 中的 Cutout、Depth Cutout 和 Symmetry 节点源码。
+- 涉及相关图片、节点求值、法线渲染、Undo / Redo、共享材质原位更新和注册测试；节点修改后运行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`）。
 - 优先使用现有 Blender 与 NumPy 能力。共享 `O Image Layer` 的实时法线能力继续服务于可编辑对象；转换结果通过 Tangent 路径读取静态图。
 - 实施更新相关测试和 OpenSpec，不主动同步说明文档、构建文档或打包扩展。

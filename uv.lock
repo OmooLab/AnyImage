@@ -21,6 +21,7 @@ ai = [
 ]
 blender = [
     { name = "bpy" },
+    { name = "omoonodes" },
 ]
 dev = [
     { name = "pip" },
@@ -54,7 +55,10 @@ ai = [
     { name = "onnxruntime", specifier = "==1.24.4" },
     { name = "trimesh", specifier = "==4.11.2" },
 ]
-blender = [{ name = "bpy", specifier = "==4.5.3" }]
+blender = [
+    { name = "bpy", specifier = "==4.5.3" },
+    { name = "omoonodes", specifier = "==0.1.1" },
+]
 dev = [
     { name = "pip", specifier = ">=25,<27" },
     { name = "pytest" },
@@ -778,6 +782,18 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/f3/d86c845465a2723ad7e1e5c36dcd75ddb82898b3f53be47ebd429fb2fa5d/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:4936d1d6780fbe68db454f5e72a42ff64d1fd6397df9f363ae786930fd5c1cd4", size = 148047, upload-time = "2025-09-04T08:29:01.761Z" },
     { url = "https://files.pythonhosted.org/packages/a8/64/3708a90d1ebe202ffdeb7185f878a3c84d15c2b2c31858da2ce0583e2def/nvidia_nvtx-13.0.85-py3-none-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:cb7780edb6b14107373c835bf8b72e7a178bac7367e23da7acb108f973f157a6", size = 148878, upload-time = "2025-09-04T08:28:53.627Z" },
+]
+
+[[package]]
+name = "omoonodes"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "zstandard" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ad/ff/e05409b63c5e3b63ce22ec6c3e09a32d7b26f4f11251d8fedf48e8aae963/omoonodes-0.1.1.tar.gz", hash = "sha256:49ddc1d325b23c6969528f2b82396356c6e8abf867596fe466c314113e951aab", size = 197277, upload-time = "2026-10-11T07:21:04.246Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/b3/3af1758f3a4e29bd44efc3e43dc6fc237e1b11cb34481a04fe23910f56e3/omoonodes-0.1.1-py3-none-any.whl", hash = "sha256:090db49d5f4e5d3f75d084b56afde3977d7d22aeee229793b78ed5a1bef7639f", size = 249299, upload-time = "2026-10-11T07:21:03.013Z" },
 ]
 
 [[package]]

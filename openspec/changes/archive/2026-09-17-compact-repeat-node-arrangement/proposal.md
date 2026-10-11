@@ -19,4 +19,4 @@ Repeat 为取值支线预留宽度，导致单个 Set Position 的循环被拉�
 
 ## Impact
 
-涉及 `tools/nodes/arrangement`、`tools/nodes/preview`、相关测试和 `O_AnyImage.blend`。
+涉及当时的节点模块（arrangement）、当时的节点模块（preview）、相关测试和 `O_AnyImage.blend`。

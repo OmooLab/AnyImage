@@ -1,6 +1,6 @@
 ## Context
 
-`tools/nodes/groups/image_cutout_symmetry.py` 当前先对齐方向、按 `Offset` 与 `Scale` 成形，再用 `_delete_positive_faces` 删除越过对称面的几何，最后镜像、补侧壁并合并。
+当时的节点模块（image_cutout_symmetry.py）当前先对齐方向、按 `Offset` 与 `Scale` 成形，再用 `_delete_positive_faces` 删除越过对称面的几何，最后镜像、补侧壁并合并。
 
 两处现状造成中缝杂乱：
 
@@ -61,7 +61,7 @@ Fill Sides 关闭时跳过侧壁与侧壁平滑，折叠、贴平面片清理与
 - 切口环的面内折线仍是网格分辨率级近似 → 由 Seam Smooth 与上游 Boundary Smooth 共同改善，测试明确其为近似边界。
 - 壳体折叠后的非法贴平边由清理移除，缝隙在有 Fill Sides 时由侧壁补上 → 测试断言无越过对称面的顶点、无四面共边、切口自焊。
 - 参考深度把整片几何置于界外时输出为空 → 沿用现有空结果处理与测试。
-- 源码与资产不同步 → 修改后运行 `uv run node-group build`，源码、测试与 `.blend` 一并更新。
+- 源码与资产不同步 → 修改后运行当时的节点资产构建命令，源码、测试与 `.blend` 一并更新。
 
 ## Migration Plan
 

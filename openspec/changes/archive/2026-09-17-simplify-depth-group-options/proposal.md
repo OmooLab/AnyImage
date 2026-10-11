@@ -22,5 +22,5 @@
 ## Impact
 
 - 影响 `O Image Depth Plane`、`O Image Depth Cutout`、`O Image Depth Panorama`、`O Image Relief Plane` 的公开 modifier 接口。
-- 影响 `tools/nodes/groups`、`tools/nodes/common` 的边界平滑构建代码、节点资产与节点相关测试。
+- 影响当时的节点定义目录、当时的节点共用构建目录的边界平滑构建代码、节点资产与节点相关测试。
 - 现有依赖 `Smooth Weight` socket identifier 的 modifier 配置或调用方需要停止写入该输入；默认值下的几何结果保持不变。

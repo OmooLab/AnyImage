@@ -23,5 +23,5 @@ Cutout 目前只能自由绘制 Lasso，沿直线轮廓剪出时需要逐点定�
 ## Impact
 
 - `properties.py`、`common/viewport.py`、`operators/cutout_tool`、`operators/mask_tool.py` 和相关注册、交互、对象创建测试。
-- `tools/nodes/groups/image_depth_cutout.py`、节点资产 `O_AnyImage.blend` 及节点测试；实现阶段需运行节点构建与验证。
+- 当时的节点模块（image_depth_cutout.py）、节点资产 `O_AnyImage.blend` 及节点测试；实现阶段需运行节点构建与验证。
 - 无新增依赖。已有 change 中的 Mask、Polyline 和 Cutout 提案作为实现背景，本 change 定义本次行为。

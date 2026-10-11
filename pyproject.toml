@@ -14,6 +14,7 @@ dev = [
 ]
 blender = [
     "bpy==4.5.3",
+    "omoonodes==0.1.1",
 ]
 ai = [
     "onnxruntime==1.24.4",
@@ -35,7 +36,6 @@ docs = [
 
 [project.scripts]
 pack = "tools.pack:main"
-node-group = "tools.nodes.cli:main"
 model = "tools.models.cli:main"
 docs = "tools.docs:main"
 

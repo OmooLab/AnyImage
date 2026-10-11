@@ -40,7 +40,7 @@ def require_node_asset():
     asset_path = SOURCE_DIR / "assets" / "O_AnyImage.blend"
     if not asset_path.is_file():
         raise RuntimeError(
-            "Node asset is missing; run: uv run --group blender node-group build"
+            "Node asset is missing; run: uv run --group blender omoonodes build; copy dist/b45/O_AnyImage/O_AnyImage.blend to src/anyimage/assets/"
         )
 
 

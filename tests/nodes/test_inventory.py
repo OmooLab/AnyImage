@@ -2,18 +2,19 @@
 import bpy
 import pytest
 from anyimage.common.node import node_asset_path
-from tools.nodes.check import GEOMETRY_NAMES
+from tests.support.node_assets import GEOMETRY_NAMES
 
 
 def test_saved_assets_evaluate():
-    from tools.nodes.check import check_asset_library
+    from tests.support.node_assets import check_asset_library
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     check_asset_library(node_asset_path())
 
 
 def test_saved_parameter_interfaces_match_definitions():
-    from tools.nodes.build import build_node_groups
+    from omoonodes.assets import Library
+    from tests.support.paths import PROJECT_ROOT
 
     parameters = {
         "O Image Plane": {"Subdivide"},
@@ -85,7 +86,7 @@ def test_saved_parameter_interfaces_match_definitions():
         return result
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    expected = interfaces(build_node_groups())
+    expected = interfaces(list(Library(PROJECT_ROOT / "nodes/O_AnyImage").build()))
     bpy.ops.wm.read_factory_settings(use_empty=True)
     with bpy.data.libraries.load(str(node_asset_path())) as (library, target):
         target.node_groups = list(library.node_groups)
@@ -93,10 +94,11 @@ def test_saved_parameter_interfaces_match_definitions():
 
 
 def test_geometry_nodes_contribute_to_output():
-    from tools.nodes.build import build_node_groups
+    from omoonodes.assets import Library
+    from tests.support.paths import PROJECT_ROOT
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    groups = build_node_groups()
+    groups = list(Library(PROJECT_ROOT / "nodes/O_AnyImage").build())
     for group in groups:
         if group.bl_idname != "GeometryNodeTree":
             continue
@@ -116,10 +118,11 @@ def test_geometry_nodes_contribute_to_output():
 
 
 def test_geometry_attribute_contract_includes_nested_groups():
-    from tools.nodes.build import build_node_groups
+    from omoonodes.assets import Library
+    from tests.support.paths import PROJECT_ROOT
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    pending = build_node_groups()
+    pending = list(Library(PROJECT_ROOT / "nodes/O_AnyImage").build())
     seen = set()
     allowed = {
         "UVMap": ("FLOAT2", "CORNER"),

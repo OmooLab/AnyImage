@@ -41,7 +41,7 @@
 
 - [x] 5.1 运行相关图片、Operator、注册、节点求值和渲染测试，按原型阈值验证 1/2/4 区、薄壳、非默认 symmetry、无 Normal、HDR、共享材质及保存重载。
 - [x] 5.2 检查转换结果没有任何被消费的 AnyImage 形状、法线、区域或中间属性，并验证清理后的渲染与用户数据保留。
-- [x] 5.3 运行 `uv run --group blender node-group build`，验证生成资产、来源协议、单图 UV、Capture Attribute 为零及旧 Atlas 节点消失。
+- [x] 5.3 运行 节点资产构建与验证流程（见 `docs/develop/node-assets.md`），验证生成资产、来源协议、单图 UV、Capture Attribute 为零及旧 Atlas 节点消失。
 - [x] 5.4 沿真实调用链检查旧拼接代码、旧节点、旧测试及引用全部清除，检查最终差异并保留其他已有修改；不构建文档或打包扩展。
 - [x] 5.5 准备 split-cutout-front-back-uv 之后应用的规格 delta，废止旧双区要求并恢复创建期单图规格，记录归档先后顺序并校验；实施阶段不自动归档。
 

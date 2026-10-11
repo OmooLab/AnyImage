@@ -11,7 +11,7 @@ from anyimage.common.material import create_emission_material, create_image_mate
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh import materialization
-from nodes.groups.image_layer import build_image_layer_group
+from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
 from tests.support.planes import create_surface
 from tests.support.panorama import panorama
 from tests.support.mesh_bake import render_normal
@@ -29,7 +29,7 @@ def image_object(request):
         else:
             set_value("Depth Scale", .5)
             set_value("Subdivide", 4)
-    build_image_layer_group()
+    OImageLayer.create_group()
     color = bpy.data.images.new("Color", width=128, height=64, alpha=True, float_buffer=True)
     color.colorspace_settings.name = "Non-Color"
     color.pixels.foreach_set(np.linspace(0, 1, 128 * 64 * 4, dtype=np.float32))

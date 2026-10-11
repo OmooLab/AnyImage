@@ -12,6 +12,6 @@
 
 ## 3. 资产与验证
 
-- [x] 3.1 同步 `tools/nodes` 与 `docs/internals` 中相关接口和实现说明，检查仓库内不存在失效的整体 `Smooth` 引用
-- [x] 3.2 运行 `uv run node-group build`，更新并验证 `src/anyimage/assets/O_AnyImage.blend`
+- [x] 3.1 同步当时的节点工具目录与 `docs/internals` 中相关接口和实现说明，检查仓库内不存在失效的整体 `Smooth` 引用
+- [x] 3.2 运行当时的节点资产构建命令，更新并验证 `src/anyimage/assets/O_AnyImage.blend`
 - [x] 3.3 运行相关节点与 operator 测试，检查最终差异并确认专用平滑路径仍正常

@@ -7,7 +7,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from tests.support.depth_surface import assert_closed
-from nodes.common.normal_map import AXIS_ATTRIBUTE, FACE_ATTRIBUTE, ROTATION_ATTRIBUTE
+from tests.support.nodes import AXIS_ATTRIBUTE, FACE_ATTRIBUTE, ROTATION_ATTRIBUTE
 
 
 from tests.support.depth_symmetry import symmetry

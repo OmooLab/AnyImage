@@ -11,9 +11,8 @@ from anyimage.operators.clipboard_image import actions as clipboard_actions
 from anyimage.operators.convert_to_plane import object as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from tests.support.image_objects import _depth_image, _depth_metadata, _evaluated_positions, _inputs
-from nodes.groups.image_plane import build_image_plane_group
-from nodes.groups.image_depth_plane import build_image_depth_plane_group
-from nodes.groups.image_relief_plane import build_image_relief_plane_group
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_plane import OImageDepthPlane
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_relief_plane import OImageReliefPlane
 
 
 def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
@@ -75,7 +74,7 @@ def test_clipboard_plane_uses_the_mesh_material_slot():
 
 def test_converted_planes_center_the_origin_without_moving_world_corners():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    saved = build_image_depth_plane_group(build_image_plane_group())
+    saved = OImageDepthPlane.create_group()
 
     def create_source(name):
         image = bpy.data.images.new(name, width=200, height=100)
@@ -173,7 +172,7 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
 
 def test_relief_plane_builds_a_fixed_base_terrain_block():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    build_image_relief_plane_group(build_image_plane_group())
+    OImageReliefPlane.create_group()
     image = bpy.data.images.new("Terrain", width=4, height=4)
     source = bpy.data.objects.new("Terrain", None)
     source.empty_display_type = "IMAGE"
@@ -282,7 +281,7 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
 
 def test_relief_plane_initializes_a_fitted_depth_direction():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    build_image_relief_plane_group(build_image_plane_group())
+    OImageReliefPlane.create_group()
     image = bpy.data.images.new("Sloped Relief", width=5, height=3)
     source = bpy.data.objects.new("Sloped Relief", None)
     source.empty_display_type = "IMAGE"

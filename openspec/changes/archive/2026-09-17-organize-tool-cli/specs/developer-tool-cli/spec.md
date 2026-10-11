@@ -6,7 +6,7 @@
 
 ### Requirement: Grouped command entry points
 
-系统 SHALL 提供 `uv run node-group` 和 `uv run model` 入口，使用小写子命令，并移除旧脚本入口 `build-nodes`、`sync-models`。
+系统 SHALL 提供当时的节点资产管理命令和 `uv run model` 入口，使用小写子命令，并移除旧脚本入口 `build-nodes`、`sync-models`。
 
 #### Scenario: Display help
 - **WHEN** 用户未指定子命令或传入 `--help`
@@ -18,14 +18,14 @@
 
 ### Requirement: Build and check node groups
 
-`node-group build` SHALL 依次构建资产、校验保存的资产、运行全量 pytest；`node-group check` SHALL 仅执行后两步。两者 SHALL 支持 `--blender` 选择 Blender，支持 `--skip-tests` 仅跳过 pytest。
+当时的节点资产构建命令 SHALL 依次构建资产、校验保存的资产、运行全量 pytest；当时的节点资产校验命令 SHALL 仅执行后两步。两者 SHALL 支持 `--blender` 选择 Blender，支持 `--skip-tests` 仅跳过 pytest。
 
 #### Scenario: Build assets
-- **WHEN** 用户运行 `uv run node-group build`
+- **WHEN** 用户运行当时的节点资产构建命令
 - **THEN** 更新 O_AnyImage.blend，并在资产校验和全量测试成功后成功退出
 
 #### Scenario: Check existing assets
-- **WHEN** 用户运行 `uv run node-group check`
+- **WHEN** 用户运行当时的节点资产校验命令
 - **THEN** 检查已有资产并运行全量测试，资产文件内容保持原样
 
 #### Scenario: Skip Python tests
@@ -38,10 +38,10 @@
 
 ### Requirement: Preview node groups
 
-`node-group preview` SHALL 从当前源码在内存中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--blender`、`--output PATH`、`--no-open` 和 `--fragment`。
+当时的节点资产预览命令 SHALL 从当前源码在内存中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--blender`、`--output PATH`、`--no-open` 和 `--fragment`。
 
 #### Scenario: Preview current source
-- **WHEN** 用户运行 `uv run node-group preview`
+- **WHEN** 用户运行当时的节点资产预览命令
 - **THEN** 生成当前源码的可查看 HTML 并尝试打开浏览器
 
 #### Scenario: Save without opening

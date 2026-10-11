@@ -26,7 +26,7 @@ None.
 
 ## Impact
 
-- `nodes/common/smoothing.py`
+- 当时的节点模块（smoothing.py）
 - Boundary smoothing and Depth Cutout node tests
 - Generated node asset validation
 - No public input, dependency, or file-format changes

@@ -13,7 +13,7 @@
 ## 3. Asset and verification
 
 - [x] 3.1 Run the focused common depth, Cutout object, node inventory, and Depth Cutout behavior tests.
-- [x] 3.2 Run `uv run --group blender node-group build` to regenerate and verify the node asset.
+- [x] 3.2 Run 当时的节点资产构建命令 to regenerate and verify the node asset.
 - [x] 3.3 Re-run affected tests against the saved asset, search for stale interface assumptions, and review the final diff.
 
 ## 4. Depth Split boundary integration

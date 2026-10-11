@@ -22,7 +22,7 @@
 1. 以“主几何构建完成后，由 `Smooth` socket 控制的 `expand_smooth()`”作为删除边界。这样可直接对应用户可见接口和五条真实调用链，避免把名称含 smooth 的不同业务误删。备选方案是删除所有含 smooth 的节点，但会破坏边界、法线和墙体生成能力。
 2. 五个节点组均删除 `Smooth` socket，并把原本送入整体平滑的几何直接连接至现有 shade smooth 或 group output。此方式不引入旁路或兼容 socket，符合项目不保留旧路径的约束。
 3. `Smooth Weight` 按消费者保留：`O Image Depth Cutout`、`O Image Depth Plane`、`O Image Depth Panorama` 继续用于 `smooth_cut_boundary()`；`O Image Cutout` 与 `O Image Relief Plane` 删除该 socket。共享 `expand_smooth()` 仍由边界平滑实现使用，因此保留公共实现。
-4. 测试从“整体 smooth 可配置”改为验证接口不存在、未追加整体平滑、专用平滑仍有效。节点组逻辑与接口变化后执行规定的 `uv run node-group build`，由构建流程更新并验证 `.blend` 资产。
+4. 测试从“整体 smooth 可配置”改为验证接口不存在、未追加整体平滑、专用平滑仍有效。节点组逻辑与接口变化后执行规定的当时的节点资产构建命令，由构建流程更新并验证 `.blend` 资产。
 
 ## Risks / Trade-offs
 

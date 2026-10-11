@@ -20,4 +20,4 @@
 
 ## Impact
 
-涉及 `tools/nodes/arrangement/`、`tests/tools/nodes/test_arrangement.py` 和 `src/anyimage/assets/O_AnyImage.blend`。沿用现有构建与预览入口，无新增依赖或节点组公开接口变更。
+涉及当时的节点模块（arrangement）、当时的节点模块（test_arrangement.py）和 `src/anyimage/assets/O_AnyImage.blend`。沿用现有构建与预览入口，无新增依赖或节点组公开接口变更。

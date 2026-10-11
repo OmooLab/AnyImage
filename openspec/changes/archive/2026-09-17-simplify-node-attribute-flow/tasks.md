@@ -20,6 +20,6 @@
 
 ## 4. 重建与整体交付
 
-- [x] 4.1 运行 `uv run node-group build`，更新 `src/anyimage/assets/O_AnyImage.blend`，确认构建、保存后独立 Blender 加载和求值验证全部成功。
+- [x] 4.1 运行当时的节点资产构建命令，更新 `src/anyimage/assets/O_AnyImage.blend`，确认构建、保存后独立 Blender 加载和求值验证全部成功。
 - [x] 4.2 运行 `uv run pytest` 并确认正常退出，对照基线检查相关几何、UV、材质属性和修改器接口结果，修复本次变更引入的失败。
 - [x] 4.3 检查最终差异、旧引用和临时属性清理，交付逐组调整结论、存取节点数量变化及测试结果，确认源码、测试、规范和 `.blend` 资产同步完成。

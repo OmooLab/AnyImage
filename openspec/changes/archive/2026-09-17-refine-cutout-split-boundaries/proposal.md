@@ -19,7 +19,7 @@ Depth Cutout 的 Split 新边界仍继承原 Balloon 厚度，容易膨胀成尖
 
 ## Impact
 
-- `tools/nodes/groups/image_depth_cutout.py` 及必要的 `tools/nodes/common` 构建函数。
-- `tests/tools/nodes` 的 Cutout、边界平滑及属性生命周期测试。
+- 当时的节点模块（image_depth_cutout.py）及必要的当时的节点共用构建目录构建函数。
+- 当时的节点工具目录的 Cutout、边界平滑及属性生命周期测试。
 - `src/anyimage/assets/O_AnyImage.blend` 中的 Cutout 节点资产及对应加载版本。
 - 基于当前工作区的边界深度平滑继续实施，保留已有修改。

@@ -1,11 +1,15 @@
 """Shared assertions and asset selection for node tests."""
-from nodes.groups.image_cutout import build_image_cutout_group
-from nodes.groups.image_depth_cutout import build_image_depth_cutout_group
-from nodes.groups.image_cutout_symmetry import build_image_cutout_symmetry_group
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout import OImageCutout
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_cutout import OImageDepthCutout
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout_symmetry import OImageCutoutSymmetry
 
 CUTOUT_BUILDERS = {
-    "FLAT": build_image_cutout_group,
-    "SOLID": build_image_cutout_group,
-    "DEPTH_SOLID": build_image_depth_cutout_group,
-    "DEPTH_SYMMETRY": build_image_cutout_symmetry_group,
+    "FLAT": OImageCutout.create_group,
+    "SOLID": OImageCutout.create_group,
+    "DEPTH_SOLID": OImageDepthCutout.create_group,
+    "DEPTH_SYMMETRY": OImageCutoutSymmetry.create_group,
 }
+
+ROTATION_ATTRIBUTE = "o_depth_rotation"
+FACE_ATTRIBUTE = "o_depth_face"
+AXIS_ATTRIBUTE = "o_depth_axis"

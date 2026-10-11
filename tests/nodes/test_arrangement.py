@@ -5,24 +5,24 @@ import numpy as np
 import pytest
 
 
-from tools.nodes.arrangement.arrange import arrange_nodes
-from tools.nodes.arrangement.dimensions import estimate_node_dimensions
-from tools.nodes.check import ASSET_PATH, SHADER_NAMES
-from nodes.groups.image_depth_cutout import build_image_depth_cutout_group
-from nodes.groups.image_depth_layer import build_image_depth_layer_group
-from nodes.groups.image_layer import build_image_layer_group
-from nodes.groups.shadeless import build_shadeless_group
+from omoonodes.arrangement.arrange import arrange_nodes
+from omoonodes.arrangement.dimensions import estimate_node_dimensions
+from tests.support.node_assets import ASSET_PATH, SHADER_NAMES
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_cutout import OImageDepthCutout
+from nodes.O_AnyImage.O_AnyImage.shader.o_image_depth_layer import OImageDepthLayer
+from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
+from nodes.O_AnyImage.O_AnyImage.shader.o_shadeless import OShadeless
 
 
 BUILDERS = (
-    ("O Image Depth Cutout", build_image_depth_cutout_group),
-    ("O Image Layer", build_image_layer_group),
+    ("O Image Depth Cutout", OImageDepthCutout.create_group),
+    ("O Image Layer", OImageLayer.create_group),
 )
 
 SHADER_BUILDERS = {
-    "O Image Layer": build_image_layer_group,
-    "O Image Depth Layer": build_image_depth_layer_group,
-    "O Shadeless": build_shadeless_group,
+    "O Image Layer": OImageLayer.create_group,
+    "O Image Depth Layer": OImageDepthLayer.create_group,
+    "O Shadeless": OShadeless.create_group,
 }
 
 

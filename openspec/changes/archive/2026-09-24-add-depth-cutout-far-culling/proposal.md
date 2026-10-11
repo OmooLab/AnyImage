@@ -23,4 +23,4 @@ Depth Cutout 会保留选区内所有有效深度，即使远处深度明显脱�
 
 ## Impact
 
-影响 `src/anyimage/common/depth.py`、Cutout 对象创建、`nodes/groups/image_depth_cutout.py`、相关测试和生成的 `src/anyimage/assets/O_AnyImage.blend`。不增加依赖；节点组公开接口新增一个输入，既有 `.blend` 内嵌旧节点组不会自动获得该控制。
+影响 `src/anyimage/common/depth.py`、Cutout 对象创建、当时的节点模块（image_depth_cutout.py）、相关测试和生成的 `src/anyimage/assets/O_AnyImage.blend`。不增加依赖；节点组公开接口新增一个输入，既有 `.blend` 内嵌旧节点组不会自动获得该控制。

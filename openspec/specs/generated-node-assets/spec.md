@@ -5,7 +5,7 @@ TBD - created by archiving change separate-node-sources-and-tools. Update Purpos
 ## Requirements
 ### Requirement: Node asset is generated from source
 
-系统 SHALL 能够仅根据版本控制中的 `nodes/` 定义和 `tools/nodes` 构建工具生成 `src/anyimage/assets/O_AnyImage.blend`。生成文件 SHALL 不纳入 Git 版本控制。
+系统 SHALL 能够仅根据版本控制中的 `nodes/O_AnyImage/` nodebpy 定义和锁定版本的 `omoonodes`，经构建并复制资产后生成 `src/anyimage/assets/O_AnyImage.blend`。生成文件 SHALL 不纳入 Git 版本控制。
 
 #### Scenario: Build from a clean checkout
 - **WHEN** 干净源码检出中不存在 `O_AnyImage.blend` 并执行节点资产构建
@@ -17,7 +17,7 @@ TBD - created by archiving change separate-node-sources-and-tools. Update Purpos
 
 ### Requirement: CI validates generated node assets
 
-测试 CI SHALL 通过统一的 `node-group` 入口和固定版本的 `bpy` wheel，在运行节点资产相关测试前生成并独立校验节点资产，不得要求额外的 Blender 应用程序安装。
+测试 CI SHALL 通过 `uv run --group blender omoonodes build` 和工具包准备的默认 `b45` 隔离环境，在运行节点资产相关测试前生成并独立校验节点资产，不得要求额外的 Blender 应用程序安装。
 
 #### Scenario: Validate a pull request
 - **WHEN** 测试工作流检出不含节点资产的源码

@@ -20,8 +20,8 @@ Alpha 轮廓和有效性剔除留下的网格边界仍可能采到突变深度�
 
 ## Impact
 
-- `tools/nodes/common/boundary_smoothing.py` 及三个深度表面节点构建模块。
-- `tests/tools/nodes` 中的边界平滑、深度表面、Cutout 和全景行为测试。
+- 当时的节点模块（boundary_smoothing.py）及三个深度表面节点构建模块。
+- 当时的节点工具目录中的边界平滑、深度表面、Cutout 和全景行为测试。
 - `src/anyimage/assets/O_AnyImage.blend` 中对应节点组及必要的资产版本标识。
 - Cutout、Depth Plane 和 Panorama 的资产读取入口：新建对象请求本次节点版本，保留场景内旧组的现有使用者。
 - 使用现有 Blender 节点与依赖；深度平滑在几何节点求值阶段完成。

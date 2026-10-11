@@ -6,7 +6,7 @@ from mathutils import Euler, Vector, Matrix
 
 from tests.support.materials import image_layer
 from anyimage.common.object import blender_frame_rotation
-from nodes.common.normal_map import ROTATION_ATTRIBUTE, FACE_ATTRIBUTE, AXIS_ATTRIBUTE
+from tests.support.nodes import ROTATION_ATTRIBUTE, FACE_ATTRIBUTE, AXIS_ATTRIBUTE
 
 
 SYMMETRY_Y_TO_X = Matrix.Rotation(1.5707963267948966, 4, "Z").to_3x3()

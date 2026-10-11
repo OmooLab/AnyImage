@@ -31,7 +31,7 @@ flowchart TD
 
 ### 节点厚度默认值
 
-将构建内部 Uniform Thickness 默认值设为 0.5，并验证最终资产对应 socket 的默认值和新修改器实际值。检查现有通用 Thickness 赋值只初始化其目标输入，避免同名 socket 覆盖 Uniform 默认值。按现有资产修订机制更新 Depth Solid 版本并运行 `uv run node-group build`。
+将构建内部 Uniform Thickness 默认值设为 0.5，并验证最终资产对应 socket 的默认值和新修改器实际值。检查现有通用 Thickness 赋值只初始化其目标输入，避免同名 socket 覆盖 Uniform 默认值。按现有资产修订机制更新 Depth Solid 版本并运行当时的节点资产构建命令。
 
 ### Mask 模式
 

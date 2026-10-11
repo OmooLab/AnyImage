@@ -25,9 +25,9 @@
 
 ## Impact
 
-- `tools/nodes/common/smoothing.py`：共享 pinned 平滑实现与边界字段。
-- `tools/nodes/common/boundary_smoothing.py`：深度三组的顶点平滑改走共享实现。
-- `tools/nodes/groups/image_cutout_symmetry.py`：Fill/Seam 改走共享实现，删除旧的平面内偏移路径。
-- `tools/nodes/groups/image_depth_plane.py`、`image_depth_cutout.py`、`image_depth_panorama.py`：调用点收敛到共享实现。
-- `src/anyimage/assets/O_AnyImage.blend` 与 `tests/tools/nodes` 下相关测试。
+- 当时的节点模块（smoothing.py）：共享 pinned 平滑实现与边界字段。
+- 当时的节点模块（boundary_smoothing.py）：深度三组的顶点平滑改走共享实现。
+- 当时的节点模块（image_cutout_symmetry.py）：Fill/Seam 改走共享实现，删除旧的平面内偏移路径。
+- 当时的节点模块（image_depth_plane.py）、`image_depth_cutout.py`、`image_depth_panorama.py`：调用点收敛到共享实现。
+- `src/anyimage/assets/O_AnyImage.blend` 与当时的节点工具目录下相关测试。
 - 公开 modifier 接口不变，不涉及依赖与打包。

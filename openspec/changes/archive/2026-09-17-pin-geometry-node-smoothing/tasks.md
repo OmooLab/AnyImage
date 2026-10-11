@@ -1,8 +1,8 @@
 ## 1. 共享实现
 
-- [x] 1.1 在 `tools/nodes/common/smoothing.py` 实现 pinned 平滑构建函数：Repeat 每轮生成内部 Blur 目标、边界条带 0.5 权重目标与 `|Blur(Normal, 10)|` 锐度系数，按 `weight × region` 混向目标，并支持可移动分量掩码
+- [x] 1.1 在当时的节点模块（smoothing.py）实现 pinned 平滑构建函数：Repeat 每轮生成内部 Blur 目标、边界条带 0.5 权重目标与 `|Blur(Normal, 10)|` 锐度系数，按 `weight × region` 混向目标，并支持可移动分量掩码
 - [x] 1.2 删除 `expand_smooth()`，保留 `edge_boundary_field()` 供作用范围与边界分支使用
-- [x] 1.3 更新 `tools/nodes/common/boundary_smoothing.py`，轮廓与切边权重留在作用范围层，顶点平滑改走共享函数
+- [x] 1.3 更新当时的节点模块（boundary_smoothing.py），轮廓与切边权重留在作用范围层，顶点平滑改走共享函数
 
 ## 2. 节点组
 
@@ -12,13 +12,13 @@
 
 ## 3. 测试
 
-- [x] 3.1 在 `tests/tools/nodes/test_boundary_smoothing.py` 覆盖边界条带松弛、尖锐处位移更小与可移动分量掩码，保留范围外不动、迭代 0 关闭、轮廓与切边权重差异的既有覆盖
+- [x] 3.1 在当时的节点模块（test_boundary_smoothing.py）覆盖边界条带松弛、尖锐处位移更小与可移动分量掩码，保留范围外不动、迭代 0 关闭、轮廓与切边权重差异的既有覆盖
 - [x] 3.2 确认 Fill 与 Seam 改走共享函数后镜像焊接与闭合性测试通过；`test_cutout_symmetry.py` 中 4 个失败属于 `refine-cutout-symmetry-seam` 未完成项，改动前后一致
 - [x] 3.3 运行节点与 operator 测试：919 passed（含 60 subtests），仅上述 4 个既有失败
 
 ## 4. 资产
 
-- [x] 4.1 运行 `uv run node-group build` 更新并验证 `src/anyimage/assets/O_AnyImage.blend`
+- [x] 4.1 运行当时的节点资产构建命令更新并验证 `src/anyimage/assets/O_AnyImage.blend`
 - [x] 4.2 检查几何节点与嵌套组 Capture Attribute 为零，确认源码、资产与测试无残留旧平滑路径
 
 ## 5. Fill Smooth 语义调整

@@ -22,5 +22,5 @@ None.
 ## Impact
 
 - Tangent-normal geometry-group builders, especially Relief Plane.
-- Normal-scale node tests; saved node assets must be rebuilt with `uv run node-group build`.
+- Normal-scale node tests; saved node assets must be rebuilt with 当时的节点资产构建命令.
 - No server inference format, user-facing modifier socket, or dependency changes.

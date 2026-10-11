@@ -43,6 +43,7 @@ secrets.bak/
 blender_assets.cats.txt~
 blendcache_*
 /src/anyimage/assets/O_AnyImage.blend
+/workspaces/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -52,7 +52,7 @@ Balloon 模式 `t = Thickness`；Uniform 模式 `t = Thickness / max(Reference D
 
 Split Threshold、Boundary Smooth、Thickness、Normal Smooth、Edge Round 保留现有接口与实时输入。清理与轮廓计算全部在节点求值阶段完成。正式资产使用项目现有布局与加载版本机制，按实施时基线更新版本。
 
-实现完成后运行相关测试和 `uv run node-group build`，更新源码、测试、资产并独立加载验证。当前提案阶段只产出 OpenSpec 文件。
+实现完成后运行相关测试和当时的节点资产构建命令，更新源码、测试、资产并独立加载验证。当前提案阶段只产出 OpenSpec 文件。
 
 ## Risks / Trade-offs
 

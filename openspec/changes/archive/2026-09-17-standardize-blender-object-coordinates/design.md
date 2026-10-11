@@ -89,7 +89,7 @@ final step:
 
 ## Risks / Trade-offs
 
-- 影响面很大，几乎覆盖所有生成几何和节点资产 → 使用既有 `uv run node-group build` 与全量测试闭环；不保留兼容层。
+- 影响面很大，几乎覆盖所有生成几何和节点资产 → 使用既有当时的节点资产构建命令与全量测试闭环；不保留兼容层。
 - BaseShape 和 Plane 世界位置可能出现符号/方向回归 → 对每个入口比较源 Image Empty 的世界 bounds 和生成网格 world-space 包围盒。
 - Object Space Normal 在渲染中的表现可能不易从网格位置直接推断 → 保留/扩展材质渲染测试，覆盖 front、back、wall 和最终朝向。
 - Depth Symmetry 最终 front 从 -Y 变为 -X，可能影响后续用户操作 → 在 spec 中明确该行为，不提供旧行为。
@@ -100,7 +100,7 @@ final step:
 1. 先在 Python 建网层实现新 canonical frame，并同步 Cutout BaseShape、Plane、Depth Plane、Relief Plane 的顶点/UV/法线。
 2. 重写 Geometry Nodes 的轴语义并删除 `Depth Axis`。
 3. 调整 Depth Symmetry 与 Object Normal 属性契约。
-4. 更新测试、`tools/nodes/check.py` 和资产构建；运行 `uv run node-group build`。
+4. 更新测试、当时的节点模块（check.py）和资产构建；运行当时的节点资产构建命令。
 5. 运行全量测试并检查旧 `Depth Axis`、旧轴常量与旧 world-space 方向引用。
 
 回滚策略为从版本控制恢复本次变更前的源码与 `O_AnyImage.blend`，不涉及数据迁移。

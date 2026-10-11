@@ -128,6 +128,5 @@ class Moge2OnnxTest(unittest.TestCase):
         self.assertFalse(run.call_args.kwargs["release_memory"])
 
 
-
 if __name__ == "__main__":
     unittest.main()

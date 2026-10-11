@@ -16,7 +16,7 @@
 ## 自动化验证
 
 - `uv run --no-sync --group blender --group ai pytest -q`：1099 passed、105 subtests passed，160.31 秒，退出码 0。
-- `uv run --no-sync --group blender node-group build`：生成并校验 10 个保存节点组；169 项节点与工具测试通过，108.92 秒；退出码 0。生成资产位于项目约定的本地构建路径，Capture Attribute 校验通过。
+- 当时的节点资产构建命令：生成并校验 10 个保存节点组；169 项节点与工具测试通过，108.92 秒；退出码 0。生成资产位于项目约定的本地构建路径，Capture Attribute 校验通过。
 - `openspec validate refine-image-workflow-boundaries --strict`：通过。
 - `git diff --check`：通过。内部文档的相对链接及源码路径检查通过。
 

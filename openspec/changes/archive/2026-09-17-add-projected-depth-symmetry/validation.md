@@ -25,4 +25,4 @@
 
 ## 交付检查
 
-`uv run node-group build` 正常退出，10 个保存节点组通过 Blender 重载校验，附带全量测试 1064 项全部通过（188.83 秒）。源码、测试和构建清单中旧名称引用为零；资产清单验证新组存在且旧组不存在。`openspec validate add-projected-depth-symmetry` 通过。
+当时的节点资产构建命令正常退出，10 个保存节点组通过 Blender 重载校验，附带全量测试 1064 项全部通过（188.83 秒）。源码、测试和构建清单中旧名称引用为零；资产清单验证新组存在且旧组不存在。`openspec validate add-projected-depth-symmetry` 通过。

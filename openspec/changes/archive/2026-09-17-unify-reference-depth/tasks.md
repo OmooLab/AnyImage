@@ -22,8 +22,8 @@
 
 ## 4. Relief base plane
 
-- [x] 4.1 Change the `Depth Offset` default to `0` in `tools/nodes/groups/image_relief_plane.py`.
-- [x] 4.2 Run `uv run node-group build` to rebuild and validate `src/anyimage/assets/O_AnyImage.blend`.
+- [x] 4.1 Change the `Depth Offset` default to `0` in 当时的节点模块（image_relief_plane.py）.
+- [x] 4.2 Run 当时的节点资产构建命令 to rebuild and validate `src/anyimage/assets/O_AnyImage.blend`.
 - [x] 4.3 Update the Relief Plane node tests and interface inventory for the new default and the reference-depth-driven base plane.
 
 ## 5. Verification

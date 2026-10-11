@@ -34,8 +34,8 @@
 ## Final Verification
 
 - `uv run --group blender pytest tests/nodes/test_depth_cutout_leaf_bridge.py -q` — 21 passed。
-- `uv run --group blender pytest tests/tools/nodes/test_inventory.py -q` — 4 passed。
-- `uv run --group blender node-group build` — 成功生成资产并重载检查 Blender 4.5.3 LTS 中的 10 个节点组；节点与节点工具测试 151 passed。
-- 本次权重冻结调整后的 `uv run --group blender node-group build` — 151 passed，保存资产无缺失属性警告。
-- 移除中途 cut marker 删除后的 `uv run --group blender node-group build` — 151 passed；最终输出属性测试确认 `_o_cut_boundary` 与 `_o_boundary_smooth_weight` 均未泄漏。
-- 收窄 projection 清理范围、启用完整 cut weight，并完成 Rear Smooth / profile exponent / Edge Turn 调整后的 `uv run --group blender node-group build` — 151 passed。强平滑验证采用无双边界边三角形的拓扑门槛。
+- `uv run --group blender pytest 当时的节点模块（test_inventory.py） -q` — 4 passed。
+- 当时的节点资产构建命令 — 成功生成资产并重载检查 Blender 4.5.3 LTS 中的 10 个节点组；节点与节点工具测试 151 passed。
+- 本次权重冻结调整后的当时的节点资产构建命令 — 151 passed，保存资产无缺失属性警告。
+- 移除中途 cut marker 删除后的当时的节点资产构建命令 — 151 passed；最终输出属性测试确认 `_o_cut_boundary` 与 `_o_boundary_smooth_weight` 均未泄漏。
+- 收窄 projection 清理范围、启用完整 cut weight，并完成 Rear Smooth / profile exponent / Edge Turn 调整后的当时的节点资产构建命令 — 151 passed。强平滑验证采用无双边界边三角形的拓扑门槛。

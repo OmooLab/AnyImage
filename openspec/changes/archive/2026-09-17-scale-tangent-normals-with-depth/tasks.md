@@ -8,4 +8,4 @@
 
 - [x] 2.1 Update definition and rendered node tests for absent, zero, fractional, and greater-than-one `o_normal_reduction` values in both normal spaces.
 - [x] 2.2 Run the relevant node tests and fix regressions.
-- [x] 2.3 Run `uv run node-group build` and verify the regenerated `O_AnyImage.blend` asset and inventory tests.
+- [x] 2.3 Run 当时的节点资产构建命令 and verify the regenerated `O_AnyImage.blend` asset and inventory tests.

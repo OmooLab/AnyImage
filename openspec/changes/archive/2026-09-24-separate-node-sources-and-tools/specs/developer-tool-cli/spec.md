@@ -2,14 +2,14 @@
 
 ### Requirement: Build and check node groups
 
-`node-group build` SHALL 使用当前 Python 环境中的 `bpy`，通过独立 Python 子进程依次构建资产、校验保存的资产、运行 `tests/nodes` 与 `tests/tools/nodes`；`node-group check` SHALL 仅执行后两步。两者 SHALL 支持 `--skip-tests` 仅跳过节点相关 pytest，且 SHALL 不查找或启动外部 Blender 可执行程序。
+当时的节点资产构建命令 SHALL 使用当前 Python 环境中的 `bpy`，通过独立 Python 子进程依次构建资产、校验保存的资产、运行 `tests/nodes` 与当时的节点工具目录；当时的节点资产校验命令 SHALL 仅执行后两步。两者 SHALL 支持 `--skip-tests` 仅跳过节点相关 pytest，且 SHALL 不查找或启动外部 Blender 可执行程序。
 
 #### Scenario: Build assets
-- **WHEN** 用户运行 `uv run --group blender node-group build`
+- **WHEN** 用户运行当时的节点资产构建命令
 - **THEN** 使用固定 bpy 环境更新 O_AnyImage.blend，并在独立进程的资产校验和节点相关测试成功后成功退出
 
 #### Scenario: Check existing assets
-- **WHEN** 用户运行 `uv run --group blender node-group check`
+- **WHEN** 用户运行当时的节点资产校验命令
 - **THEN** 使用固定 bpy 环境检查已有资产并运行节点相关测试，资产文件内容保持原样
 
 #### Scenario: Skip Python tests
@@ -26,10 +26,10 @@
 
 ### Requirement: Preview node groups
 
-`node-group preview` SHALL 使用当前 Python 环境中的 `bpy`，从当前源码在独立 Python 子进程中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--output PATH`、`--no-open` 和 `--fragment`，不支持选择外部 Blender 可执行程序。
+当时的节点资产预览命令 SHALL 使用当前 Python 环境中的 `bpy`，从当前源码在独立 Python 子进程中构建并排列几何节点组，生成 HTML，输出绝对路径并默认打开浏览器，保持资产文件内容原样。默认文件 SHALL 保存于系统临时目录并在命令退出后可供查看。命令 SHALL 支持 `--output PATH`、`--no-open` 和 `--fragment`，不支持选择外部 Blender 可执行程序。
 
 #### Scenario: Preview current source
-- **WHEN** 用户运行 `uv run --group blender node-group preview`
+- **WHEN** 用户运行当时的节点资产预览命令
 - **THEN** 生成当前源码的可查看 HTML 并尝试打开浏览器
 
 #### Scenario: Save without opening

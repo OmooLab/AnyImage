@@ -66,7 +66,7 @@ flowchart TD
     G --> H[材质与临时属性清理]
 ```
 
-提取并复用 `tools/nodes/common/depth_surface.py` 中的相邻面采样、内边判断、Split Edges、面角归属和条带面清理。共用逻辑消费明确的深度字段、基础面中心和归一化比例；Depth Plane 的调用同步适配，保持已有求值结果。
+提取并复用当时的节点模块（depth_surface.py）中的相邻面采样、内边判断、Split Edges、面角归属和条带面清理。共用逻辑消费明确的深度字段、基础面中心和归一化比例；Depth Plane 的调用同步适配，保持已有求值结果。
 
 对全景，令相邻面距离为 rA/rB，单位球面上的面中心为 cA/cB，参考距离为 R。沿用现有 2.5 系数，以 `abs(rA-rB) / R × Split Threshold > 2.5 × distance(cA,cB)` 选择有两个邻面的内边。阈值为 0 时直接保留通过有效性剔除的原网格；阈值增大时选择更多断层边。
 

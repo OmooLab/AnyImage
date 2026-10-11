@@ -87,11 +87,3 @@ def check_asset_library(asset_path):
     bpy.data.images.remove(depth_image)
     print(f"Checked {len(target.node_groups)} saved node groups in Blender {bpy.app.version_string}")
 
-
-def main():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    check_asset_library(ASSET_PATH)
-
-
-if __name__ == "__main__":
-    main()

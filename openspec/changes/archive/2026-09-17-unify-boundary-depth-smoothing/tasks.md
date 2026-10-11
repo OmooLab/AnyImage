@@ -24,7 +24,7 @@
 
 ## 5. 资产与交付
 
-- [x] 5.1 运行 uv run node-group build，更新 O_AnyImage.blend 和必要资产版本标识，在独立 Blender 进程中加载并验证。
+- [x] 5.1 运行当时的节点资产构建命令，更新 O_AnyImage.blend 和必要资产版本标识，在独立 Blender 进程中加载并验证。
 - [x] 5.2 运行相关节点及 Operator 测试，确认正常退出；核对源码与资产的一致性、最终差异和旧引用，保留已有其他修改。
 
 ## 6. Cutout 轮廓自适应深度平滑

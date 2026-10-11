@@ -11,6 +11,6 @@
 
 ## 3. 资产与规范
 
-- [x] 3.1 运行 `uv run node-group build` 重建并验证 `O_AnyImage.blend`。
+- [x] 3.1 运行当时的节点资产构建命令重建并验证 `O_AnyImage.blend`。
 - [x] 3.2 修订 `reorganize-cutout-shapes` 中 `depth-cutout-volume` 的 Split 条目，使其与投影后落差判据一致。
 - [x] 3.3 运行相关节点测试并确认通过。

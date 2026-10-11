@@ -26,12 +26,12 @@
 
 ## Impact
 
-- `tools/nodes/groups/image_cutout.py`
-- `tools/nodes/groups/image_depth_cutout.py`
-- `tools/nodes/common/depth_surface.py`
-- `tools/nodes/common/cutout_boundary.py`
-- `tools/nodes/common/boundary_smoothing.py`
-- `tools/nodes/common/cutout.py`
-- `tests/tools/nodes/` 中 Cutout、Depth Cutout、Split 和临时属性测试
+- 当时的节点模块（image_cutout.py）
+- 当时的节点模块（image_depth_cutout.py）
+- 当时的节点模块（depth_surface.py）
+- 当时的节点模块（cutout_boundary.py）
+- 当时的节点模块（boundary_smoothing.py）
+- 当时的节点模块（cutout.py）
+- 当时的节点工具目录中 Cutout、Depth Cutout、Split 和临时属性测试
 - `src/anyimage/assets/O_AnyImage.blend`
 

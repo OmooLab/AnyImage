@@ -13,12 +13,12 @@
 - [x] 2.3 更新 `O Image Relief Plane` 的 Depth Direction 默认 `(0,1,0)`、基座平移和位移方向为 Y。
 - [x] 2.4 更新 `O Image Cutout` 删除 `Depth Axis`，Balloon/Shell 厚度方向改为 Y。
 - [x] 2.5 更新 `O Image Depth Cutout` 删除 `Depth Axis`，深度投影、Split、Shell 与 Balloon 字段改为 Y 轴语义。
-- [x] 2.6 更新 `tools/nodes/common/` 中 depth surface、cutout、boundary smoothing、validity 等共享节点辅助，消除旧 Z 轴假设。
+- [x] 2.6 更新当时的节点共用构建目录中 depth surface、cutout、boundary smoothing、validity 等共享节点辅助，消除旧 Z 轴假设。
 
 ## 3. Depth Symmetry 与 Object Normal
 
 - [x] 3.1 重写 `O Image Cutout Symmetry` 为 canonical Y 镜像，并在最后执行固定 yaw 旋转 `+Y → +X`，保持 up=Z，写入最终朝向属性。
-- [x] 3.2 更新 `tools/nodes/common/normal_map.py`：移除旧 `Depth Axis`/`CUTOUT_Z_TO_X` 补偿，按 canonical frame、Y 背面反射和最终 yaw 旋转解释 Object Normal。
+- [x] 3.2 更新当时的节点模块（normal_map.py）：移除旧 `Depth Axis`/`CUTOUT_Z_TO_X` 补偿，按 canonical frame、Y 背面反射和最终 yaw 旋转解释 Object Normal。
 - [x] 3.3 更新 `O Image Layer` 与材质创建流程，使 Object Space Normal 读取新朝向属性并在渲染中匹配最终几何。
 - [x] 3.4 验证 Depth Symmetry 最终 front 从 -Y 变为 -X，且 up=Z、对称轴=X 的行为可测试。
 
@@ -26,6 +26,6 @@
 
 - [x] 4.1 更新或新增 canonical frame、BaseShape、UV、Depth Direction、厚度方向和 Depth Axis 移除的测试。
 - [x] 4.2 更新 Depth Symmetry 镜像、最终朝向和 Object Space Normal 的 front/back/wall 渲染测试。
-- [x] 4.3 更新 `tools/nodes/check.py`、节点 inventory 测试和 `tests/tools/test_pack.py` 中受影响的名称与接口断言。
-- [x] 4.4 运行 `uv run node-group build` 构建并校验 `O_AnyImage.blend`，检查无旧 Depth Axis、旧轴常量和 Capture Attribute。
+- [x] 4.3 更新当时的节点模块（check.py）、节点 inventory 测试和 `tests/tools/test_pack.py` 中受影响的名称与接口断言。
+- [x] 4.4 运行当时的节点资产构建命令构建并校验 `O_AnyImage.blend`，检查无旧 Depth Axis、旧轴常量和 Capture Attribute。
 - [x] 4.5 运行全量测试并确认正常退出，检查旧引用与最终差异；不构建文档或打包扩展。

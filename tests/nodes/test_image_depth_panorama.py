@@ -291,26 +291,3 @@ def test_split_corners_keep_their_rays_and_own_face_distance():
     np.testing.assert_allclose(radii[uncut], original_radii[indices[uncut]], atol=1e-5)
     assert any(np.ptp(radii[indices == index]) > 4 for index, count in counts.items() if count > 1)
     assert np.max(np.ptp(uv.reshape(-1, 4, 2)[..., 0], axis=1)) <= 0.5 + 1e-5
-
-
-def test_zero_split_bypasses_single_snapshot_strip_cleanup(monkeypatch):
-    from nodes.common import depth_surface
-
-    depth = np.broadcast_to(1 + 6 * (np.arange(128) % 16 < 8), (64, 128))
-    with monkeypatch.context() as patch:
-        patch.setattr(depth_surface, "_remove_strip_faces", lambda group, geometry, **kw: geometry)
-        obj, set_value = panorama(depth)
-        set_value("Depth Split", 1)
-        _, faces, _ = evaluated(obj)
-    edges = Counter(tuple(sorted((a, b))) for f in faces for a, b in zip(f, (*f[1:], f[0])))
-    strips = 0
-    for face in faces:
-        boundaries = [edges[tuple(sorted((a, b)))] == 1 for a, b in zip(face, (*face[1:], face[0]))]
-        strips += (boundaries[0] and boundaries[2]) or (boundaries[1] and boundaries[3])
-    assert strips > 0
-    obj, set_value = panorama(depth)
-    original_faces = evaluated(obj)[1]
-    set_value("Depth Split", 1)
-    assert len(evaluated(obj)[1]) == len(faces) - strips
-    set_value("Depth Split", 0)
-    assert evaluated(obj)[1] == original_faces

@@ -4,8 +4,8 @@ import bpy
 import numpy as np
 import pytest
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from nodes.groups.image_depth_cutout import build_image_depth_cutout_group
-from nodes.groups.image_cutout_symmetry import build_image_cutout_symmetry_group
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_cutout import OImageDepthCutout
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout_symmetry import OImageCutoutSymmetry
 
 
 def _set_value(obj, modifier, group):
@@ -65,8 +65,8 @@ def symmetry():
     obj = bpy.data.objects.new("Symmetry", mesh)
     bpy.context.collection.objects.link(obj)
 
-    cutout_group = build_image_depth_cutout_group()
-    mirror_group = build_image_cutout_symmetry_group()
+    cutout_group = OImageDepthCutout.create_group()
+    mirror_group = OImageCutoutSymmetry.create_group()
     cutout = obj.modifiers.new(cutout_group.name, "NODES")
     cutout.node_group = cutout_group
     mirror = obj.modifiers.new(mirror_group.name, "NODES")

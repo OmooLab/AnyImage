@@ -23,7 +23,7 @@
 
 ## Impact
 
-- `tools/nodes/groups/image_depth_balloon.py`、相关公共构建函数、节点组构建与校验入口。
+- 当时的节点模块（image_depth_balloon.py）、相关公共构建函数、节点组构建与校验入口。
 - `src/anyimage/operators/cutout_tool` 的 Shape 菜单、手势分派、深度校准与对象创建，以及相关界面文本。
 - `src/anyimage/assets/O_AnyImage.blend` 和对应节点、对象创建、资产清单测试。
-- 实现时运行相关测试与 `uv run node-group build`，更新并验证源码及资产；不新增依赖。
+- 实现时运行相关测试与当时的节点资产构建命令，更新并验证源码及资产；不新增依赖。

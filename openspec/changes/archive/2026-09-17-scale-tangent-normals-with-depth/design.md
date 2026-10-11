@@ -50,5 +50,5 @@ Alternative: split the material paths and limit the factor to Tangent Space. Thi
 
 1. Update relevant Tangent-normal geometry builders to write `1 - Depth Scale` as `o_normal_reduction`.
 2. Extend rendered node tests with Relief Plane depth-scale coverage.
-3. Run focused node tests, then `uv run node-group build` to regenerate and verify `src/anyimage/assets/O_AnyImage.blend`.
+3. Run focused node tests, then 当时的节点资产构建命令 to regenerate and verify `src/anyimage/assets/O_AnyImage.blend`.
 4. Roll back by restoring the previous asset and source together.

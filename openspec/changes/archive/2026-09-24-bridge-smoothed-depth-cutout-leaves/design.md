@@ -72,4 +72,4 @@ Front / Rear 的共同 Repeat 只直接读取最终 `_o_boundary_smooth_weight`�
 2. 从同一投影生成 Front 与 pre-flipped Rear，按厚度选择 Front 或 joined leaves，共同平滑一次。
 3. 平滑后按 leaf id 分离，按 source index lookup Rear target，生成 Wall 并精确焊接。
 4. 用相同输入等价测试和结构检查验证顺序与单 Repeat。
-5. 运行相关测试与 `node-group build`，保存并验证资产。
+5. 运行相关测试与当时的节点资产构建命令，保存并验证资产。

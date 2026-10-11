@@ -21,15 +21,15 @@ TBD - created by archiving change remove-debug-workflows. Update Purpose after a
 
 ### Requirement: Node asset modules reflect responsibilities
 
-根目录 `nodes/` 的模块 MUST 只包含节点组及其共用构建定义，`tools/nodes/` MUST 只包含构建入口、布局、资产校验和预览工具。所有移动 MUST 同步导入、wheel 包清单、构建与验证入口及测试路径，并删除旧路径和转发层。
+根目录 `nodes/O_AnyImage/` MUST 包含资产库清单和 nodebpy 节点定义，构建、导出与开发库同步 MUST 使用 PyPI 的 `omoonodes`。所有移动 MUST 同步导入、wheel 包清单、构建与验证入口及测试路径，并删除旧路径和转发层。
 
 #### Scenario: Load reorganized node definitions
 - **WHEN** 构建工具和节点行为测试导入节点组定义
-- **THEN** 导入指向 `nodes.groups` 或 `nodes.common`，不存在 `tools.nodes.groups` 或 `tools.nodes.common` 兼容路径
+- **THEN** 导入指向 `nodes.O_AnyImage.O_AnyImage.geometry` 或 `nodes.O_AnyImage.O_AnyImage.shader` 中的节点模块
 
 #### Scenario: Load node asset tools
-- **WHEN** 启动器加载节点构建、布局、验证或预览模块
-- **THEN** 工具从 `tools.nodes` 加载，并从顶层 `nodes` 包使用节点定义
+- **WHEN** 开发者执行资产构建、导出或开发库同步
+- **THEN** 通过 `uv run --group blender omoonodes` 调用已安装工具包，读取资产库清单和 nodebpy 源码
 
 #### Scenario: Preserve node behavior
 - **WHEN** 对重组后的节点构建函数运行针对性测试
@@ -37,7 +37,7 @@ TBD - created by archiving change remove-debug-workflows. Update Purpose after a
 
 #### Scenario: Locate node tests
 - **WHEN** 维护者按测试路径查找节点相关覆盖
-- **THEN** 节点定义行为测试位于 `tests/nodes`，构建与资产工具测试位于 `tests/tools/nodes`
+- **THEN** 节点定义与保存资产测试位于 `tests/nodes`，工作流和打包协议测试位于 `tests/tools`
 
 ### Requirement: Internal documentation matches implementation
 

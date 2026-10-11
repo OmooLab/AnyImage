@@ -8,7 +8,7 @@
 - [x] 2.1 将本次 Gesture 快照从选区提交经 Shape 菜单传入转换 Operator 和对象创建链路；覆盖异步期间切换设置的行为。
 - [x] 2.2 为 Polyline 创建的 Depth Solid 设置 Mode 为 Uniform，验证 Lasso 与其他 Shape 的初始化行为。
 - [x] 2.3 将节点内部 Uniform Thickness 默认值改为 0.5，检查同名 Thickness socket 的赋值目标并更新资产修订号；补充资产默认值与实际修改器值测试。
-- [x] 2.4 运行 `uv run node-group build`，更新并验证 O_AnyImage.blend，确认源码与保存资产的 Capture Attribute 数量为零。
+- [x] 2.4 运行当时的节点资产构建命令，更新并验证 O_AnyImage.blend，确认源码与保存资产的 Capture Attribute 数量为零。
 
 ## 3. Mask 模式
 

@@ -24,7 +24,7 @@
 
 ## 4. 资产与收尾
 
-- [x] 4.1 运行 `uv run node-group build`，确认节点资产构建与校验通过、Capture Attribute 为零
+- [x] 4.1 运行当时的节点资产构建命令，确认节点资产构建与校验通过、Capture Attribute 为零
 - [x] 4.2 检查源码、测试与资产中不再有 Panorama 走 Delete Geometry 的旧路径，确认最终差异只涉及本次范围
 - [x] 4.3 简要报告调整内容与验证结果
 
@@ -34,4 +34,4 @@
 - [x] 5.2 Depth Scale 为 0 且 Depth Mask 关闭时旁路分面与后续处理，直接输出 `Dome Radius` 的完整球面；Depth Mask 打开时仍按 mask 排除
 - [x] 5.3 `test_boundary_smooth_relaxes_both_masked_region_boundaries`：两个区域的接缝带都移动、内部不动，低 mask 区域内部仍在 `Dome Radius`
 - [x] 5.4 `test_flat_scale_without_mask_returns_a_whole_sphere`：面数与顶点数同完整球面一致、无自由边、半径等于 `Dome Radius`
-- [x] 5.5 重跑 `uv run node-group build` 与 `uv run pytest`，确认资产与测试通过
+- [x] 5.5 重跑当时的节点资产构建命令与 `uv run pytest`，确认资产与测试通过

@@ -25,8 +25,8 @@
 
 ## Impact
 
-- `tools/nodes/common/depth_surface.py`：切口边界内建在 `build_surface_camera`，`always_vertex` 参数移除。
-- `tools/nodes/groups/image_depth_plane.py`、`tools/nodes/groups/image_depth_panorama.py`：接入切口规则，Plane 额外声明原画幅外框。
-- `tests/tools/nodes/`：切口面深断言，以及既有「Depth Mask 只删点、不改位置」断言的重写。
+- 当时的节点模块（depth_surface.py）：切口边界内建在 `build_surface_camera`，`always_vertex` 参数移除。
+- 当时的节点模块（image_depth_plane.py）、当时的节点模块（image_depth_panorama.py）：接入切口规则，Plane 额外声明原画幅外框。
+- 当时的节点工具目录：切口面深断言，以及既有「Depth Mask 只删点、不改位置」断言的重写。
 - `src/anyimage/assets/O_AnyImage.blend`：重新构建节点资产。
 - 不改动 `O Image Depth Cutout`、`O Image Relief Plane`、Cutout 创建入口、材质与依赖。

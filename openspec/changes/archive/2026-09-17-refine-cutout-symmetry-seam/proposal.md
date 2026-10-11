@@ -22,7 +22,7 @@
 
 ## Impact
 
-- `tools/nodes/groups/image_cutout_symmetry.py`：删除、吸附与补面选择。
-- `tests/tools/nodes/test_cutout_symmetry.py`：切口位置、封闭性与属性断言。
+- 当时的节点模块（image_cutout_symmetry.py）：删除、吸附与补面选择。
+- 当时的节点模块（test_cutout_symmetry.py）：切口位置、封闭性与属性断言。
 - `src/anyimage/assets/O_AnyImage.blend`：重新构建节点资产。
 - 不改动 `O Image Depth Cutout`、Cutout 创建入口、材质或依赖。

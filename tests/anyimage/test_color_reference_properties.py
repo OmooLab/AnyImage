@@ -33,7 +33,6 @@ def test_scene_reference_defaults_replaces_and_clears(registered_color_reference
     assert settings.color_reference_palette_count == 0
 
 
-
 def test_reference_edit_refreshes_detached_preview_and_palette_without_reselection(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     rgba = np.full((4, 4, 4), (0.7, 0.2, 0.1, 1.0), dtype=np.float32)
@@ -57,7 +56,6 @@ def test_reference_edit_refreshes_detached_preview_and_palette_without_reselecti
     np.testing.assert_allclose(settings.color_reference_palette_0, srgb_to_linear_rgb((.1, .7, .2)), atol=.005)
 
 
-
 def test_color_reference_gallery_selects_only_candidates(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
@@ -75,7 +73,6 @@ def test_color_reference_gallery_selects_only_candidates(registered_color_refere
     assert properties.get_color_reference_choice(settings) == 0
 
 
-
 def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Persistent reference", np.full((2, 2, 4), (0.4, 0.3, 0.2, 1.0)))
@@ -87,7 +84,6 @@ def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_ref
     bpy.ops.wm.open_mainfile(filepath=str(path))
 
     assert bpy.context.scene.anyimage_settings.color_reference == bpy.data.images["Persistent reference"]
-
 
 
 def test_reference_reload_and_lifecycle_invalidate_cache(tmp_path, registered_color_reference):
@@ -119,7 +115,6 @@ def test_reference_reload_and_lifecycle_invalidate_cache(tmp_path, registered_co
     assert reference_cache.color_reference_preview_icon(reference) == 0
 
 
-
 def test_undo_redo_rebuilds_selected_preview_from_restored_pixels(registered_color_reference):
     from anyimage.common.image import image_content_state, restore_image_content
 
@@ -146,7 +141,6 @@ def test_undo_redo_rebuilds_selected_preview_from_restored_pixels(registered_col
         properties.unregister_color_references()
 
 
-
 def test_failed_reference_preparation_does_not_keep_old_pixels(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
@@ -159,7 +153,6 @@ def test_failed_reference_preparation_does_not_keep_old_pixels(registered_color_
     with pytest.raises(ValueError, match="no visible"):
         reference_cache.get_color_reference(reference)
     assert reference_cache.color_reference_preview_icon(reference) == 0
-
 
 
 @pytest.mark.parametrize("shared", [False, True])

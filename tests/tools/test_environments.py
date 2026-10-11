@@ -31,6 +31,13 @@ def test_capability_groups_keep_ci_dependencies_small():
     assert ci_packages.isdisjoint(
         {"onnx", "onnxruntime", "torch"}
     )
+    assert "omoonodes" in group_packages(configuration, "blender")
+    assert not any(item.startswith("omoonodes") for item in configuration["project"]["dependencies"])
+    assert configuration["project"]["scripts"] == {
+        "pack": "tools.pack:main",
+        "model": "tools.models.cli:main",
+        "docs": "tools.docs:main",
+    }
 
 
 def test_ai_and_model_groups_own_their_runtime_dependencies():
@@ -44,7 +51,7 @@ def test_ai_and_model_groups_own_their_runtime_dependencies():
 
 
 def test_workflows_run_the_regular_blender_suite():
-    build_command = "uv run --group blender node-group build --skip-tests"
+    build_command = "uv run --group blender omoonodes build"
     test_command = (
         "xvfb-run -a uv run --group blender pytest "
         "tests/anyimage tests/nodes tests/tools"
@@ -54,6 +61,8 @@ def test_workflows_run_the_regular_blender_suite():
             encoding="utf-8"
         )
         assert build_command in workflow
+        assert "mkdir -p src/anyimage/assets" in workflow
+        assert "cp dist/b45/O_AnyImage/O_AnyImage.blend src/anyimage/assets/O_AnyImage.blend" in workflow
         assert test_command in workflow
         assert workflow.index(build_command) < workflow.index(test_command)
         assert 'LIBGL_ALWAYS_SOFTWARE: "1"' in workflow

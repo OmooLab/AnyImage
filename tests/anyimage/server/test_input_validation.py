@@ -42,8 +42,6 @@ def test_processing_error_is_not_relabelled(media, tmp_path):
     assert error.value is failure
 
 
-
-
 @pytest.mark.parametrize("suffix", [".mp4", ".mts", ".gif", ".tiff", ""])
 def test_unsupported_formats_are_rejected(media, tmp_path, suffix):
     path = tmp_path / f"input{suffix}"

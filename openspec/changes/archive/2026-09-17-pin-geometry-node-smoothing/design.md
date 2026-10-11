@@ -1,6 +1,6 @@
 ## Context
 
-`O_AnyImage` 的顶点位置平滑只有两条路径：`tools/nodes/common/smoothing.py` 的 `expand_smooth()` 供三个深度节点组的边界平滑使用，`tools/nodes/groups/image_cutout_symmetry.py` 的 `_apply_planar_relax()` 供 Fill 与 Seam 使用。
+`O_AnyImage` 的顶点位置平滑只有两条路径：当时的节点模块（smoothing.py）的 `expand_smooth()` 供三个深度节点组的边界平滑使用，当时的节点模块（image_cutout_symmetry.py）的 `_apply_planar_relax()` 供 Fill 与 Seam 使用。
 
 两者用同一套 Blur Attribute 结构，但形态不同：`expand_smooth()` 用 Repeat 逐轮把顶点位置混向「内部模糊结果，边界点改用边界条带模糊结果」，并乘上作用于切边带的影响场；`_apply_planar_relax()` 一次性做 N 次模糊，再取平面内分量、乘固定 0.5 与轮廓/切缝的两圈 falloff 后作为位移。前者已经等于 OmooNodes `O Smooth` 的 `Pin Boundary = 1`，但两者都没有 `Pin Sharp`，`_apply_planar_relax()` 也没有边界条带分支，轮廓会被内部模糊往里拖。
 

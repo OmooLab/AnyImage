@@ -8,8 +8,8 @@
 
 ## Decisions
 
-- 在现有两个 cli.py 使用 argparse 子命令，脚本入口为 `node-group` 和 `model`。Python 包继续使用表示业务集合的 `tools/nodes`、`tools/models`。
-- `node-group build` 保持构建、资产校验、全量 pytest 的顺序；`check` 复用后两步。两者支持 `--blender` 和现有 `--skip-tests`，后者只跳过 pytest。任一步失败立即以非零状态退出。
+- 在现有两个 cli.py 使用 argparse 子命令，脚本入口为当时的节点资产管理命令和 `model`。Python 包继续使用表示业务集合的当时的节点工具目录、`tools/models`。
+- 当时的节点资产构建命令保持构建、资产校验、全量 pytest 的顺序；`check` 复用后两步。两者支持 `--blender` 和现有 `--skip-tests`，后者只跳过 pytest。任一步失败立即以非零状态退出。
 - `preview` 复用 Blender 启动流程及现有预览导出器，默认写入系统临时目录的独立 HTML，输出绝对路径，再由父进程打开浏览器。支持 `--blender`、`--output PATH`、`--no-open`、`--fragment`；fragment 模式仅输出片段且不自动打开。文件保留供查看，资产文件保持原样。
 - 模型子命令为 `prepare` 和 `sync`。`prepare` 替代 `--prepare-only`，统一下载现成 ONNX 或准备源权重并导出，包含 PiSA-SR；按既有目录输出，复用已校验的缓存及独立转换环境。`sync` 复用全部准备成功后上传的流程。
 - PiSA-SR 在模型目录下的临时目录导出整组文件，全部通过目录清单校验后再更新正式产物，临时目录随流程退出清理。
@@ -17,7 +17,7 @@
 
 ```mermaid
 flowchart TD
-    A[解析命令] --> B[node-group]
+    A[解析命令] --> B[节点资产命令]
     A --> C[model]
     B --> D[build 构建资产]
     D --> E[校验资产]

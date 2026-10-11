@@ -23,4 +23,4 @@
 
 ## Impact
 
-影响 `tools/nodes/groups/image_relief_plane.py`、`src/anyimage/common/depth.py`、Plane 创建逻辑、相关测试、节点资产接口清单，以及 `src/anyimage/assets/O_AnyImage.blend`。不增加依赖，也不改变 AI 深度产物；已有 Modifier 会获得新的节点组输入，原先依赖负向深度进入基础厚度区域的结果将发生变化。
+影响当时的节点模块（image_relief_plane.py）、`src/anyimage/common/depth.py`、Plane 创建逻辑、相关测试、节点资产接口清单，以及 `src/anyimage/assets/O_AnyImage.blend`。不增加依赖，也不改变 AI 深度产物；已有 Modifier 会获得新的节点组输入，原先依赖负向深度进入基础厚度区域的结果将发生变化。

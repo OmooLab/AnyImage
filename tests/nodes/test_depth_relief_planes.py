@@ -282,7 +282,6 @@ def test_curved_shell_smooths_normals_without_shrinking_thickness(surface):
     assert roughness(normals) < roughness(raw_normals)
 
 
-
 def test_relief_direction_adjusts_depth_and_keeps_base(relief):
     thickness = 0.4
     direction = (0.2, 1, -0.1)

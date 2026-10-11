@@ -20,7 +20,7 @@
 
 - [x] 4.1 把错误的不同顺序对照替换为相同 raw leaf 输入的共同/独立平滑等价测试。
 - [x] 4.2 增加单 Repeat、Rear 预先 Flip、source-index 对应、投影 merge 退化和零厚度路径检查。
-- [x] 4.3 运行相关测试与 `uv run --group blender node-group build`，更新验证记录并严格校验 change。
+- [x] 4.3 运行相关测试与当时的节点资产构建命令，更新验证记录并严格校验 change。
 
 ## 5. 冻结边界平滑权重
 

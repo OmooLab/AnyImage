@@ -4,7 +4,7 @@ import bpy
 
 import numpy as np
 import pytest
-from nodes.groups.image_cutout import build_image_cutout_group
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout import OImageCutout
 from tests.support.nodes import CUTOUT_BUILDERS
 
 
@@ -35,7 +35,7 @@ def test_cutout_thickness_modes():
     obj = bpy.data.objects.new("Profile", mesh)
     bpy.context.collection.objects.link(obj)
     modifier = obj.modifiers.new("Cutout", "NODES")
-    modifier.node_group = build_image_cutout_group()
+    modifier.node_group = OImageCutout.create_group()
     for mode, thickness in ((0, 0), (0, 1), (1, 0), (1, 0.4)):
         for name, value in (("Mode", mode), ("Thickness", thickness)):
             subtype = ("DISTANCE" if mode else "NONE") if name == "Thickness" else None

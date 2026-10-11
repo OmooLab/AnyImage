@@ -6,4 +6,4 @@
 ## 2. Verification and asset
 
 - [x] 2.1 更新相关行为与接口测试，覆盖 Split 优先、Outline 弱权重、默认值和关闭行为。
-- [x] 2.2 运行相关测试，执行 `uv run node-group build` 并确认保存资产验证通过。
+- [x] 2.2 运行相关测试，执行当时的节点资产构建命令并确认保存资产验证通过。

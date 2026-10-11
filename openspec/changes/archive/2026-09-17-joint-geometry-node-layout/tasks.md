@@ -12,4 +12,4 @@
 - [x] 2.3 构建并保存 O_AnyImage.blend，在独立 Blender 进程重新加载检查。
 - [x] 2.4 导出全部几何资产的交互预览，对照选定风格检查 Cutout、Depth Plane 和 Panorama 的完整布局。
 
-验证记录：上一轮使用 `uv run --no-sync node-group build --skip-tests` 完成构建及保存后检查；在 Blender 4.5.10 LTS 中运行排列与 Image Plane 相关测试，11 项通过。常规 `uv run` 同步遇到占用文件后，使用既有环境构建，并从同版本缓存恢复缺失的 bpy 文件。
+验证记录：上一轮使用当时的节点资产构建命令完成构建及保存后检查；在 Blender 4.5.10 LTS 中运行排列与 Image Plane 相关测试，11 项通过。常规 `uv run` 同步遇到占用文件后，使用既有环境构建，并从同版本缓存恢复缺失的 bpy 文件。

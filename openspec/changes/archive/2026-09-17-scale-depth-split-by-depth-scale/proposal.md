@@ -22,8 +22,8 @@ Depth Split 现在的判据只由深度采样差和局部采样密度决定，De
 
 ## Impact
 
-- `tools/nodes/common/depth_surface.py`：`split_depth_surface` 增加 Depth Scale 输入，比较式乘该因子。
-- `tools/nodes/groups/image_depth_plane.py`、`image_depth_cutout.py`、`image_depth_panorama.py`：传入各自的 Depth Scale。
-- `tests/tools/nodes/test_depth_surface_split.py`：反转「Depth Scale 不改变切边」的断言，补充 Depth Scale 0 不切开的覆盖。
+- 当时的节点模块（depth_surface.py）：`split_depth_surface` 增加 Depth Scale 输入，比较式乘该因子。
+- 当时的节点模块（image_depth_plane.py）、`image_depth_cutout.py`、`image_depth_panorama.py`：传入各自的 Depth Scale。
+- 当时的节点模块（test_depth_surface_split.py）：反转「Depth Scale 不改变切边」的断言，补充 Depth Scale 0 不切开的覆盖。
 - `src/anyimage/assets/O_AnyImage.blend`：重新构建节点资产。
 - 不改动 `O Image Relief Plane`、Cutout 创建入口、材质与依赖。

@@ -22,4 +22,4 @@
 
 ## Impact
 
-影响 `nodes/common/smoothing.py`、调用 `pinned_smooth` 的边界与对称节点组行为、相关 `tests/nodes/` 测试，以及重新生成的 `src/anyimage/assets/O_AnyImage.blend`。不新增公开输入、依赖或兼容层；不改变未使用 `pinned_smooth` 的 Smooth 行为。
+影响当时的节点模块（smoothing.py）、调用 `pinned_smooth` 的边界与对称节点组行为、相关 `tests/nodes/` 测试，以及重新生成的 `src/anyimage/assets/O_AnyImage.blend`。不新增公开输入、依赖或兼容层；不改变未使用 `pinned_smooth` 的 Smooth 行为。

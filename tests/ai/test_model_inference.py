@@ -71,7 +71,6 @@ class ModelInferenceTest(unittest.TestCase):
                     )
 
 
-
 upscale = load_server_module("models.upscale")
 
 @pytest.mark.parametrize("key", ["REALESRGAN_GENERAL_WDN_X4V3", "HAT_GAN_X4_SHARPER", "REALESRGAN_X4PLUS"])

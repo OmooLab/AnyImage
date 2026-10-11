@@ -23,5 +23,5 @@
 ## Impact
 
 - 影响 `O Image Cutout`、`O Image Depth Cutout`、`O Image Depth Plane`、`O Image Depth Panorama`、`O Image Relief Plane` 的公开 modifier 接口与生成图。
-- 影响 `tools/nodes/groups`、共享 smoothing 构建代码的实际引用、节点资产与节点相关测试。
+- 影响当时的节点定义目录、共享 smoothing 构建代码的实际引用、节点资产与节点相关测试。
 - 现有依赖 `Smooth` socket identifier 的 modifier 配置或调用方需要停止写入该输入；`Smooth Weight` 只在没有其他消费者的节点组中移除。

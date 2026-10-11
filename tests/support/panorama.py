@@ -3,12 +3,12 @@
 import bpy
 import numpy as np
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from nodes.groups.image_depth_panorama import build_image_depth_panorama_group
+from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_panorama import OImageDepthPanorama
 
 
 def panorama(depth=3, alpha=1, subdivide=3):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    group = build_image_depth_panorama_group()
+    group = OImageDepthPanorama.create_group()
     image = bpy.data.images.new("Radial Depth", width=128, height=64, float_buffer=True)
     image.colorspace_settings.name = "Non-Color"
     image.alpha_mode = "CHANNEL_PACKED"

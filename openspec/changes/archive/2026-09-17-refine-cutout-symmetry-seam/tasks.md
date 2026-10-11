@@ -17,7 +17,7 @@
 
 ## 3. 验证
 
-- [x] 3.1 运行 `uv run node-group build --skip-tests` 并确认资产重载校验通过
-- [x] 3.2 更新节点测试后运行 `pytest tests/tools/nodes/test_cutout_symmetry.py`，全部通过
+- [x] 3.1 运行当时的节点资产构建命令并确认资产重载校验通过
+- [x] 3.2 更新节点测试后运行 `pytest 当时的节点模块（test_cutout_symmetry.py）`，全部通过
 - [x] 3.3 运行受影响的 Cutout 对象创建测试
 - [x] 3.4 记录样例上折叠前越界量分布，作为折面跨度的验证证据

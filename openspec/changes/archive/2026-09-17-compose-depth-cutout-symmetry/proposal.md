@@ -25,4 +25,4 @@ Depth Cutout 已负责深度置换及 Balloon / Shell 成形，对称应当作�
 
 ## Impact
 
-影响 `tools/nodes/groups/image_cutout_symmetry.py`、`image_depth_cutout.py`、相关共用节点函数、Cutout 对象创建与参数初始化、相关测试及 `src/anyimage/assets/O_AnyImage.blend`。不增加依赖。既有 `.blend` 内嵌节点不会自动迁移，后续从资产加载使用新接口。
+影响当时的节点模块（image_cutout_symmetry.py）、`image_depth_cutout.py`、相关共用节点函数、Cutout 对象创建与参数初始化、相关测试及 `src/anyimage/assets/O_AnyImage.blend`。不增加依赖。既有 `.blend` 内嵌节点不会自动迁移，后续从资产加载使用新接口。

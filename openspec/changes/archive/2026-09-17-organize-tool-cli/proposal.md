@@ -4,8 +4,8 @@
 
 ## What Changes
 
-- **BREAKING**：将 `build-nodes` 替换为 `node-group build`，将 `sync-models` 替换为 `model sync`，删除旧入口。
-- 提供 `node-group check`，检查已有资产并运行测试；提供 `node-group preview`，生成当前源码的 HTML 预览并打开浏览器。
+- **BREAKING**：将 `build-nodes` 替换为当时的节点资产构建命令，将 `sync-models` 替换为 `model sync`，删除旧入口。
+- 提供当时的节点资产校验命令，检查已有资产并运行测试；提供当时的节点资产预览命令，生成当前源码的 HTML 预览并打开浏览器。
 - 提供 `model prepare`，按模型来源下载现成文件或准备源权重并导出，统一校验全部模型。
 - 使用统一的小写子命令；未提供动作时显示帮助。
 
@@ -21,4 +21,4 @@
 
 ## Impact
 
-涉及 `pyproject.toml` 的脚本入口、`tools/nodes`、`tools/models` 和相关命令测试。使用现有 argparse、Blender 与模型转换依赖。实施范围为命令代码与测试；本次产出为 OpenSpec 规划文件。
+涉及 `pyproject.toml` 的脚本入口、当时的节点工具目录、`tools/models` 和相关命令测试。使用现有 argparse、Blender 与模型转换依赖。实施范围为命令代码与测试；本次产出为 OpenSpec 规划文件。

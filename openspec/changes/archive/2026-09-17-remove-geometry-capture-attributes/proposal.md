@@ -23,8 +23,8 @@
 
 ## Impact
 
-- tools/nodes/common、tools/nodes/groups，以及实际受影响的排列代码。
-- tests/tools/nodes、tests/support 及相关材质、Operator 测试。
+- 当时的节点共用构建目录、当时的节点定义目录，以及实际受影响的排列代码。
+- 当时的节点工具目录、tests/support 及相关材质、Operator 测试。
 - src/anyimage/assets/O_AnyImage.blend。
 - AGENTS.md、docs/internals/node-assets.md 及检索确认受影响的当前内部说明。
 - 公开接口、几何功能与属性协议保持一致；实施时保留工作区已有修改。该提案取代 simplify-node-attribute-flow 中关于 Capture 的设计决策。

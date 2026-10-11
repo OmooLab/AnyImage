@@ -6,34 +6,8 @@ import numpy as np
 import pytest
 
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from nodes.common.boundary_smoothing import boundary_influence
-from nodes.common.nodes import store_float_attribute
-from nodes.groups.image_depth_cutout import (
-    BOUNDARY_FALLOFF_ATTRIBUTE,
-    SIDE_UV_INFLUENCE_ITERATIONS,
-    prepare_bridge_uv,
-)
 from tests.support.boundary import boundary_neighbors
 from tests.support.depth_surface import evaluated, surface
-
-
-def _geometry_group(name):
-    group = bpy.data.node_groups.new(name, "GeometryNodeTree")
-    group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
-    group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-    source = group.nodes.new("NodeGroupInput")
-    output = group.nodes.new("NodeGroupOutput")
-    return group, source.outputs["Geometry"], output.inputs["Geometry"]
-
-
-def _object(points, edges, faces, group):
-    mesh = bpy.data.meshes.new("Leaf Bridge")
-    mesh.from_pydata(points, edges, faces)
-    obj = bpy.data.objects.new("Leaf Bridge", mesh)
-    bpy.context.collection.objects.link(obj)
-    obj.modifiers.new("Leaf Bridge", "NODES").node_group = group
-    bpy.context.view_layer.update()
-    return obj
 
 
 def _evaluated_corner_uv(obj):
@@ -43,18 +17,6 @@ def _evaluated_corner_uv(obj):
         return np.array([loop.uv[:] for loop in mesh.uv_layers["UVMap"].data])
     finally:
         result.to_mesh_clear()
-
-
-def _bridge_uv_group(name):
-    group, geometry, result = _geometry_group(name)
-    geometry = store_float_attribute(
-        group,
-        geometry,
-        BOUNDARY_FALLOFF_ATTRIBUTE,
-        boundary_influence(group, iterations=SIDE_UV_INFLUENCE_ITERATIONS),
-    )
-    group.links.new(prepare_bridge_uv(group, geometry, 1.0), result)
-    return group
 
 
 def _assert_oriented_closed(faces):
@@ -74,44 +36,6 @@ def _assert_positive_face_areas(points, faces):
             for i in range(1, len(face) - 1)
         ) / 2
         assert area > 1e-10
-
-
-def test_leaf_uv_pull_fades_through_four_boundary_rings_and_preserves_the_core():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    size = 13
-    points = np.array([(x, 0.0, z) for z in range(size) for x in range(size)], dtype=float)
-    faces = []
-    for z in range(size - 1):
-        for x in range(size - 1):
-            a = z * size + x
-            faces.append((a, a + 1, a + size + 1, a + size))
-    obj = _object(points, [], faces, _bridge_uv_group("Leaf Boundary UV Pull"))
-    uv_layer = obj.data.uv_layers.new(name="UVMap")
-    original = np.empty((len(obj.data.loops), 2), dtype=float)
-    for loop in obj.data.loops:
-        point = obj.data.vertices[loop.vertex_index].co
-        value = (point.x / (size - 1), point.z / (size - 1))
-        uv_layer.data[loop.index].uv = value
-        original[loop.index] = value
-    obj.data.update()
-    bpy.context.view_layer.update()
-
-    result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    mesh = result.to_mesh()
-    try:
-        pulled = np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
-        vertices = np.array([loop.vertex_index for loop in mesh.loops])
-        coordinates = points[vertices][:, (0, 2)]
-        boundary = np.any((coordinates == 0) | (coordinates == size - 1), axis=1)
-        core = np.all((coordinates >= 5) & (coordinates <= size - 6), axis=1)
-        assert np.max(np.abs(pulled[boundary] - original[boundary])) > 1e-4
-        np.testing.assert_allclose(pulled[core], original[core], atol=1e-7)
-        assert np.all(pulled[coordinates[:, 0] == 0, 0] >= -1e-7)
-        assert np.all(pulled[coordinates[:, 0] == size - 1, 0] <= 1.0 + 1e-7)
-        assert np.all(pulled[coordinates[:, 1] == 0, 1] >= -1e-7)
-        assert np.all(pulled[coordinates[:, 1] == size - 1, 1] <= 1.0 + 1e-7)
-    finally:
-        result.to_mesh_clear()
 
 
 def test_depth_cutout_bridge_preserves_topology_and_side_uv():
@@ -237,10 +161,10 @@ def test_depth_cutout_leaf_controls_preserve_valid_solid(mode, boundary_smooth, 
 
 
 def test_depth_cutout_shares_smoothing_and_side_construction():
-    from nodes.groups.image_depth_cutout import build_image_depth_cutout_group
+    from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_cutout import OImageDepthCutout
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    group = build_image_depth_cutout_group()
+    group = OImageDepthCutout.create_group()
     for kind in ("GeometryNodeRepeatOutput", "GeometryNodeExtrudeMesh"):
         assert sum(node.bl_idname == kind for node in group.nodes) == 1
     for name in ("_o_side_base_uv", "_o_side_top_uv"):

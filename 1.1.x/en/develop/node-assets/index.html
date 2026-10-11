@@ -1534,7 +1534,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        资产清单
+        源码与资产清单
       
     </span>
   </a>
@@ -1545,7 +1545,18 @@
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        构建节点资产
+        构建与验证
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blender" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        在 Blender 中编辑
       
     </span>
   </a>
@@ -1556,7 +1567,18 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        构建资产脚本
+        首次导入
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        节点规则
       
     </span>
   </a>
@@ -1617,7 +1639,7 @@
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        资产清单
+        源码与资产清单
       
     </span>
   </a>
@@ -1628,7 +1650,18 @@
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       
-        构建节点资产
+        构建与验证
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#blender" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        在 Blender 中编辑
       
     </span>
   </a>
@@ -1639,7 +1672,18 @@
   <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
-        构建资产脚本
+        首次导入
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        节点规则
       
     </span>
   </a>
@@ -1667,83 +1711,95 @@
 
 
 <h1 id="_1">节点资产</h1>
-<h2 id="_2">资产清单</h2>
-<p>节点组由 <code>nodes/groups/</code> 中的构建模块定义，共用构建逻辑位于 <code>nodes/common/</code>。</p>
+<h2 id="_2">源码与资产清单</h2>
+<p>节点资产由 PyPI 的 <code>omoonodes</code> 管理，依赖版本锁定在 <code>blender</code> dependency group。<code>nodes/O_AnyImage/</code> 是资产库目录，<code>collection.json</code> 将 <code>O_AnyImage.blend</code> 映射到库内的 <code>O_AnyImage/</code> 源码目录。</p>
+<p>源码采用 <code>omoonodes dump</code> 导出的 nodebpy 写法，通过 <code>TreeBuilder</code>、节点类型和 socket 引用定义接口与连线。</p>
 <table>
 <thead>
 <tr>
 <th>节点组</th>
-<th>构建模块</th>
+<th>源码（相对于 <code>nodes/O_AnyImage/O_AnyImage/</code>）</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>O Image Plane</code></td>
-<td><code>image_plane.py</code></td>
+<td><code>geometry/o_image_plane.py</code></td>
 </tr>
 <tr>
 <td><code>O Image Depth Plane</code></td>
-<td><code>image_depth_plane.py</code></td>
+<td><code>geometry/o_image_depth_plane.py</code></td>
 </tr>
 <tr>
 <td><code>O Image Relief Plane</code></td>
-<td><code>image_relief_plane.py</code></td>
+<td><code>geometry/o_image_relief_plane.py</code></td>
 </tr>
 <tr>
 <td><code>O Image Cutout</code></td>
-<td><code>image_cutout.py</code></td>
+<td><code>geometry/o_image_cutout.py</code></td>
 </tr>
 <tr>
 <td><code>O Image Depth Cutout</code></td>
-<td><code>image_depth_cutout.py</code></td>
+<td><code>geometry/o_image_depth_cutout.py</code></td>
 </tr>
 <tr>
 <td><code>O Image Cutout Symmetry</code></td>
-<td><code>image_cutout_symmetry.py</code></td>
-</tr>
-<tr>
-<td><code>O Image Layer</code></td>
-<td><code>image_layer.py</code></td>
-</tr>
-<tr>
-<td><code>O Image Depth Layer</code></td>
-<td><code>image_depth_layer.py</code></td>
-</tr>
-<tr>
-<td><code>O Shadeless</code></td>
-<td><code>shadeless.py</code></td>
+<td><code>geometry/o_image_cutout_symmetry.py</code></td>
 </tr>
 <tr>
 <td><code>O Image Depth Panorama</code></td>
-<td><code>image_depth_panorama.py</code></td>
+<td><code>geometry/o_image_depth_panorama.py</code></td>
+</tr>
+<tr>
+<td><code>O Image Layer</code></td>
+<td><code>shader/o_image_layer.py</code></td>
+</tr>
+<tr>
+<td><code>O Image Depth Layer</code></td>
+<td><code>shader/o_image_depth_layer.py</code></td>
+</tr>
+<tr>
+<td><code>O Shadeless</code></td>
+<td><code>shader/o_shadeless.py</code></td>
 </tr>
 </tbody>
 </table>
-<h2 id="_3">构建节点资产</h2>
-<p>生产节点组由 <code>uv run --group blender node-group build</code> 构建到 <code>src/anyimage/assets/O_AnyImage.blend</code>。该文件是 Git 忽略的发布构建产物；CI 与本地发布都从节点源码重新生成。</p>
-<p>节点组规则：</p>
-<ul>
-<li>字段默认直接连接，多个消费者可复用同一输出；按消费位置的几何、域、类型和输入属性版本验证求值等价性</li>
-<li>所有几何节点、嵌套组及测试辅助图禁止使用 Capture Attribute；构建定义和保存资产递归检查 Capture 为零</li>
-<li>域转换使用 Evaluate on Domain 或明确域的采样节点表达；跨几何变化优先调整消费顺序或在源几何上采样，明确索引对应关系</li>
-<li>Store Named Attribute 用于实际命名协议或仍需跨几何变化保存的最少数据，逐项明确名称、类型、域、Selection、写入阶段、消费者及必要性；内部临时属性使用 <code>_o_</code> 前缀，在最后消费者之后用通配符 <code>_o_*</code> 清理，保留 UV、用户属性和外部协议属性。清理必须走 <code>remove_attribute_pattern</code>：按精确名称删除时，若某个几何分支从未写入该属性，Remove Named Attribute 会报出缺失警告</li>
-<li>Group Input 按区域重复放置，通过字段排列和必要的 Reroute 保持连线可读，隐藏未使用输出；存储须有数据生命周期依据</li>
-<li>构建阶段通过明确的节点或 socket 引用接线</li>
-<li>保留节点默认 <code>name</code> 和标题，不用 <code>label</code> 覆盖，不用 String 节点注解。Frame 仅用于确有包裹语义的区域</li>
-<li>全接线的简单数学运算可折叠；需要阅读的常数、运算域和模式保持可见</li>
-<li>比较统一用 Compare 节点并按操作数数据类型选择输入，布尔运算统一用 Boolean Math，不用 Math 节点做比较、也不用数值乘法代替布尔运算；材质树不支持这两个节点，仍用 Math</li>
-<li>修改器 Geometry Nodes 的输入 socket 默认使用 <code>SINGLE</code></li>
-<li>socket <code>subtype</code> 按业务语义设置：长度用 <code>DISTANCE</code>，<code>0–1</code> 比例用 <code>FACTOR</code>，<code>0–100</code> 用 <code>PERCENTAGE</code>；无对应范围语义时保留默认</li>
-<li>接口或布局变更须验证 socket 顺序与结构、未使用输出隐藏及几何求值；纯布局变更比较运算、默认值和实际连接，确认功能不变</li>
-</ul>
-<h2 id="_4">构建资产脚本</h2>
-<p><code>tools/nodes/build.py</code> 按依赖顺序加载 <code>nodes/groups/</code> 的定义，调用 <code>arrangement/</code> 统一排列几何节点组后保存。<code>nodes/common/</code> 提供共用构建函数：<code>nodes.py</code> 创建接口与节点，<code>depth_surface.py</code>、<code>cutout.py</code> 等组装几何，<code>shader.py</code> 构建材质着色节点，<code>material_slots.py</code> 继承几何材质槽；<code>tools/nodes/preview/</code> 导出交互预览。</p>
-<p>命令通过当前 uv Python 的独立子进程执行构建、检查和预览，<code>bpy</code> 由 <code>blender</code> dependency group 提供。保存后，<code>check.py</code> 重新加载资产并做基本几何求值；<code>tests/nodes/</code> 覆盖节点定义行为，<code>tests/tools/nodes/</code> 覆盖工具行为。CI 使用同一入口先生成资产，再运行常规测试和打包。</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>build
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>build<span class="w"> </span>--skip-tests
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>check
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>node-group<span class="w"> </span>preview
+<h2 id="_3">构建与验证</h2>
+<p>在项目根目录执行以下命令（Git Bash）：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>omoonodes<span class="w"> </span>build
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>src/anyimage/assets
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>cp<span class="w"> </span>dist/b45/O_AnyImage/O_AnyImage.blend<span class="w"> </span>src/anyimage/assets/O_AnyImage.blend
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>pytest<span class="w"> </span>tests/nodes
 </span></code></pre></div>
+<p>OmooNodes 默认读取 <code>nodes/</code>，目标为 <code>b45</code>，由工具包准备默认版本的隔离 Blender 环境；项目直接使用这些默认值，无需配置 <code>[tool.omoonodes]</code>。</p>
+<p>构建与校验成功后，资产库输出到 <code>dist/b45/O_AnyImage/</code>。CI 使用同样的构建和复制步骤，再运行测试与打包。<code>src/anyimage/assets/O_AnyImage.blend</code> 是 Git 忽略的发布产物；插件运行时通过 <code>load_node_group(group_name)</code> 加载其中的节点组。</p>
+<p><code>tests/nodes/</code> 覆盖节点求值、接口、布局和属性协议；<code>test_inventory.py</code> 重新加载保存资产，检查资产清单、接口一致性和几何行为。修改节点逻辑、接口或布局后，应重新构建、复制资产并运行相关测试。</p>
+<h2 id="blender">在 Blender 中编辑</h2>
+<p>先从源码生成开发库：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>omoonodes<span class="w"> </span>dev<span class="w"> </span>nodes/O_AnyImage
+</span></code></pre></div>
+<p>在 Blender 中打开 <code>workspaces/b45/O_AnyImage/O_AnyImage.blend</code>，编辑并保存节点资产，再同步回源码：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>omoonodes<span class="w"> </span>dev<span class="w"> </span>nodes/O_AnyImage<span class="w"> </span>--sync<span class="w"> </span>workspaces
+</span></code></pre></div>
+<p>同步后检查源码差异，再按上面的构建与验证步骤更新发布资产。</p>
+<h2 id="_4">首次导入</h2>
+<p>导入现有 <code>.blend</code> 前，先将需要导出的节点组标记为 Asset 并保存。<code>dump</code> 将资产节点组导出为 nodebpy 源码，同时生成 <code>collection.json</code> 并验证往返构建。目标目录必须尚不存在：</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>--group<span class="w"> </span>blender<span class="w"> </span>omoonodes<span class="w"> </span>dump<span class="w"> </span>path/to/O_Library.blend<span class="w"> </span>-o<span class="w"> </span>nodes/O_Library
+</span></code></pre></div>
+<p>已有资产库通过 <code>dev --sync</code> 同步 Blender 中的修改。</p>
+<h2 id="_5">节点规则</h2>
+<ul>
+<li>字段默认直接连接，多个消费者可复用同一输出；按消费位置的几何、域、类型和输入属性版本验证求值等价性。</li>
+<li>所有几何节点、嵌套组及测试辅助图禁止使用 Capture Attribute；源码构建和保存资产均检查 Capture 为零。</li>
+<li>域转换使用 Evaluate on Domain 或明确域的采样节点表达；跨几何变化优先调整消费顺序或在源几何上采样，明确索引对应关系。</li>
+<li>Store Named Attribute 仅用于实际命名协议或跨几何变化必需的最少数据，明确名称、类型、域、Selection、写入阶段及消费者。内部临时属性使用 <code>_o_</code> 前缀，在最后消费者之后用 Remove Named Attribute 的 Wildcard 模式清理 <code>_o_*</code>，保留 UV、用户属性和外部协议属性。</li>
+<li>通过区域内输入、字段排列和必要的 Reroute 保持连线可读；存储须有数据生命周期依据，构建阶段通过明确的节点或 socket 引用接线。</li>
+<li>保留节点默认 <code>name</code> 和标题，不用 <code>label</code> 覆盖，不用 String 节点注解；Frame 仅用于确有包裹语义的区域。</li>
+<li>全接线的简单数学运算可折叠；需要阅读的常数、运算域和模式保持可见。</li>
+<li>几何树比较使用 Compare，布尔运算使用 Boolean Math；材质树使用 Math。</li>
+<li>修改器 Geometry Nodes 的输入 socket 默认使用 <code>SINGLE</code>；socket <code>subtype</code> 按语义设置，长度用 <code>DISTANCE</code>，比例用 <code>FACTOR</code>，百分比用 <code>PERCENTAGE</code>。</li>
+<li>接口或布局变更须验证 socket 顺序与结构及几何求值；纯布局变更比较运算、默认值和实际连接，确认功能不变。</li>
+</ul>
 
 
 

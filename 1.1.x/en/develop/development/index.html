@@ -1708,7 +1708,7 @@
 </tr>
 <tr>
 <td>工具与包协议</td>
-<td>扩展 Manifest、打包、模型同步与节点启动器</td>
+<td>扩展 Manifest、打包、模型同步与节点构建流程</td>
 </tr>
 </tbody>
 </table>
@@ -1731,8 +1731,12 @@
 <td>为本机同步扩展 wheel 与 Manifest</td>
 </tr>
 <tr>
-<td><code>uv run --group blender node-group build</code></td>
-<td>构建、验证节点资产并运行节点测试</td>
+<td><code>uv run --group blender omoonodes build</code></td>
+<td>从 <code>nodes/</code> 构建并校验节点资产库</td>
+</tr>
+<tr>
+<td><code>uv run --group blender pytest tests/nodes</code></td>
+<td>验证节点行为与保存资产</td>
 </tr>
 <tr>
 <td><code>uv run model sync</code></td>
@@ -1748,6 +1752,7 @@
 </tr>
 </tbody>
 </table>
+<p>节点库生成于 <code>dist/b45/O_AnyImage/</code>；测试与打包前，将其中的 <code>O_AnyImage.blend</code> 复制到 <code>src/anyimage/assets/</code>。完整流程见<a href="../node-assets/">节点资产</a>。</p>
 <p><code>tools/pack.py</code> 从 <code>pyproject.toml</code> 读取依赖，按平台与 Blender Python 版本解析 wheel，使用 Blender 提供的 NumPy。产物命名为 <code>AnyImage.v&lt;version&gt;.&lt;platform&gt;.zip</code>，写入 <code>dist/</code>。本地 BlendJob wheel 内容变化后运行 <code>uv lock --refresh</code>，并核对锁文件、Manifest 与打包测试。</p>
 <p><code>tools/models/cli.py</code> 根据模型目录选择上游 ONNX 或本地导出流程；<code>tools/models/exports.py</code> 处理对应 PyTorch 权重导出。文件校验依据声明大小和 SHA-256，上传使用逐文件复制。<code>uv run model prepare</code> 用于本地准备。</p>
 <h2 id="ci">CI 与文档导航</h2>

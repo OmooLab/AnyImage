@@ -20,7 +20,5 @@ AnyImage 是为 Blender 准备的图片工具组。让图片不再只是参考�
 - **Plane / Depth Plane**：把图片变成平面或立体面片。
 - **Cutout**：圈选主体，创建 Surface、Balloon 或 Depth Shape。
 - **图片工具**：重新取景、编辑透明区域、校正透视、去背景和高清放大。
-- **[颜色匹配](color-match.md)**：用参考图片统一色彩与亮度。
-- **[烘焙网格](bake-mesh.md)**：将图片对象固化为带贴图的普通 Mesh。
 
 AI 任务产生的输出与日志可通过[清理任务文件](job-files.md)管理。

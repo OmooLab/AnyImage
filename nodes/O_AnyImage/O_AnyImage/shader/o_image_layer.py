@@ -6,7 +6,10 @@ from omoonodes.builder import CustomShaderGroup
 class OImageLayer(CustomShaderGroup):
     _name = "O Image Layer"
     _color_tag = "SHADER"
-    _tree_properties = {"description": "Prepare O Image Layer material outputs."}
+    _tree_properties = {
+        "description": "Prepare O Image Layer material outputs.",
+        "default_group_node_width": 190,
+    }
 
     def _build_group(self, tree: TreeBuilder[ShaderNodeTree]) -> None:
         color = tree.inputs.color("Color", (0.0, 0.0, 0.0, 1.0))

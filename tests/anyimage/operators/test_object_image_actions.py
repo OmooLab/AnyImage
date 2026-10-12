@@ -40,12 +40,14 @@ def _context(obj):
 def _material(kind="PLAIN", image=None):
     source = SimpleNamespace(name=f"{kind} Source")
     color = image or bpy.data.images.new(f"{kind} Color", width=4, height=3, alpha=True)
+    if kind == "SHADELESS":
+        return material_data.create_image_material(source, color, shadeless=True), color
     if kind == "PANORAMA":
         return material_data.create_emission_material(source, color), color
     return material_data.create_image_material(source, color), color
 
 
-@pytest.mark.parametrize("kind", ["PLAIN", "PANORAMA"])
+@pytest.mark.parametrize("kind", ["PLAIN", "PANORAMA", "SHADELESS"])
 def test_marked_object_resolves_generated_material_color(kind):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, color = _material(kind)
@@ -76,6 +78,51 @@ def test_object_target_rejects_unknown_material_and_never_falls_back():
     assert image_edit_owner(context) is None
     with pytest.raises(RuntimeError, match="Select an Image Empty or a material Image Texture"):
         ImageEditTarget.capture(context)
+
+
+@pytest.mark.parametrize("edit", ["reroute", "disconnect", "remove_shader"])
+def test_object_color_target_survives_shader_edits(edit):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    material, color = _material()
+    obj = _image_object(material)
+    target = ImageEditTarget.capture(_context(obj))
+    tree = material.node_tree
+    shader = next(node for node in tree.nodes if node.bl_idname == "ShaderNodeBsdfPrincipled")
+    if edit == "reroute":
+        source = shader.inputs["Base Color"].links[0].from_socket
+        reroute = tree.nodes.new("NodeReroute")
+        tree.links.new(source, reroute.inputs[0])
+        tree.links.new(reroute.outputs[0], shader.inputs["Base Color"])
+    elif edit == "disconnect":
+        tree.links.clear()
+    else:
+        tree.nodes.remove(shader)
+    assert object_color_texture(obj).image == color
+    target.validate()
+    with patch.object(runtime, "server_busy", return_value=False):
+        assert remove_background.RemoveImageBackground.poll(_context(obj))
+
+
+@pytest.mark.parametrize("edit", ["unmark", "remove", "missing_image", "duplicate"])
+def test_object_color_target_rejects_missing_or_ambiguous_marker(edit):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    material, _color = _material()
+    obj = _image_object(material)
+    target = ImageEditTarget.capture(_context(obj))
+    node = object_color_texture(obj)
+    if edit == "unmark":
+        del node["o_image_color"]
+    elif edit == "remove":
+        material.node_tree.nodes.remove(node)
+    elif edit == "missing_image":
+        node.image = None
+    else:
+        other = material.node_tree.nodes.new("ShaderNodeTexImage")
+        other["o_image_color"] = True
+        other.image = node.image
+    assert object_color_texture(obj) is None
+    with pytest.raises(RuntimeError, match="no longer available"):
+        target.validate()
 
 
 def test_object_target_rejects_changed_material_slot():
@@ -220,12 +267,13 @@ def test_object_menu_and_operator_polls_use_marked_object():
         menu.AnyImageObjectMenu.draw(SimpleNamespace(layout=layout), context)
     identifiers = [call.args[0] for call in layout.operator.call_args_list]
     assert identifiers == [
+        "anyimage.bake_mesh",
         "anyimage.remove_image_background",
         "anyimage.upscale_image",
         "anyimage.match_color_reference",
         "anyimage.open_ai_environment_settings",
     ], identifiers
-    assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
+    assert layout.operator.call_args_list[2].kwargs["text"] == "Upscale (8 × 6)"
 
     with patch.object(runtime, "server_busy", return_value=False), patch.object(
         upscale,

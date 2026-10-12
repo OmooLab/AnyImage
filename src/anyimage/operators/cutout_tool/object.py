@@ -193,12 +193,6 @@ def create_shape_object(
             ),
             0.0 if shape == "FLAT" else 1.0,
         )
-        if shape == "DEPTH_SOLID":
-            set_modifier_input(
-                modifier,
-                modifier_input_identifier(node_group, "Thickness", subtype="DISTANCE"),
-                0.2,
-            )
         if gesture == "POLYLINE":
             set_modifier_input(
                 modifier,

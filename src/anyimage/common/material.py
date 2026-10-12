@@ -102,6 +102,7 @@ def create_emission_material(
     emission = nodes.new("ShaderNodeEmission")
     output = nodes.new("ShaderNodeOutputMaterial")
     color_texture.image = material_image
+    color_texture["o_image_color"] = True
     color_texture.interpolation = "Linear"
     color_texture.extension = texture_extension
     color_texture.location = (-700.0, 300.0)
@@ -141,6 +142,7 @@ def create_image_material(
         output = nodes.new("ShaderNodeOutputMaterial")
 
         color_texture.image = material_image
+        color_texture["o_image_color"] = True
         color_texture.interpolation = "Linear"
         color_texture.extension = texture_extension
         color_texture.location = (-700.0, 300.0)
@@ -158,6 +160,7 @@ def create_image_material(
             return material
         material_inputs = nodes.new("ShaderNodeGroup")
         material_inputs.node_tree = material_node_group()
+        material_inputs.width = material_inputs.node_tree.default_group_node_width
         material_inputs.location = (-300.0, 300.0)
         material_inputs.inputs["Bump Scale"].default_value = bump_scale
         if normal_space not in {"TANGENT", "OBJECT"}:
@@ -182,18 +185,10 @@ def create_image_material(
         )
         links.new(
             material_inputs.outputs["Color"],
-            shader.inputs["Subsurface Radius"],
-        )
-        links.new(
-            material_inputs.outputs["Color"],
             shader.inputs["Emission Color"],
         )
         links.new(material_inputs.outputs["Alpha"], shader.inputs["Alpha"])
         links.new(material_inputs.outputs["Normal"], shader.inputs["Normal"])
-        links.new(
-            material_inputs.outputs["Normal"],
-            shader.inputs["Coat Normal"],
-        )
         links.new(
             material_inputs.outputs["Roughness"],
             shader.inputs["Roughness"],

@@ -187,7 +187,7 @@ def test_depth_surface_object_evaluates(gesture):
     layer = _group_node(material_data.material_node_group(), result.data.materials[0].node_tree)
     assert layer.inputs["Object Space"].default_value is True
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Mode")) == (1 if gesture == "POLYLINE" else 0)
-    assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.2)
+    assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.1)
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE")) == 1.0
     object_data.set_modifier_input(
         modifier,
@@ -359,7 +359,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
 
     assert value(modifier, "Mode") == (1 if gesture == "POLYLINE" else 0)
     assert value(modifier, "Thickness", "NONE") == 1.0
-    assert value(modifier, "Thickness", "DISTANCE") == 0.0
+    assert value(modifier, "Thickness", "DISTANCE") == pytest.approx(0.1)
     assert value(modifier, "Front Inflation") == 0.0
     assert next(
         socket.default_value for socket in modifier.node_group.interface.items_tree

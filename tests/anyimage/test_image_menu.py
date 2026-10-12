@@ -12,9 +12,12 @@ class ImageMenuTest(BlenderTestCase):
             operator=lambda identifier, **options: calls.append(identifier),
             separator=lambda: None,
         ))
-        with patch.object(menu.BakeMesh, "poll", return_value=True), patch.object(menu, "draw_image_actions"):
-            menu.AnyImageObjectMenu.draw(owner, SimpleNamespace())
-        self.assertEqual(calls, [menu.BakeMesh.bl_idname])
+        for available in (True, False):
+            with self.subTest(available=available):
+                calls.clear()
+                with patch.object(menu.BakeMesh, "poll", return_value=available), patch.object(menu, "draw_image_actions"):
+                    menu.AnyImageObjectMenu.draw(owner, SimpleNamespace())
+                self.assertEqual(calls, [menu.BakeMesh.bl_idname])
 
     def test_marked_mesh_draws_object_image_menu(self):
         calls = []

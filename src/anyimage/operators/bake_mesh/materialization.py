@@ -31,27 +31,56 @@ PROTOCOL_ATTRIBUTES = frozenset({
 })
 
 
-def supports_mesh_baking(obj):
-    """Recognize supported image geometry modifier stacks."""
+def mesh_bake_modifiers(obj):
+    """Return the supported image geometry prefix of the modifier stack."""
     if not is_image_object(obj) or not getattr(obj, "modifiers", None):
-        return False
-    groups = []
-    for modifier in obj.modifiers:
-        if modifier.type != "NODES" or modifier.node_group is None or not modifier.show_viewport or not modifier.show_render:
-            return False
-        groups.append(modifier.node_group.name)
-    return (len(groups) == 1 and groups[0] in SINGLE_REGION_GROUPS) or groups in (
-        [CUTOUT_NODE_GROUP_NAMES["SOLID"]],
-        [CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"]],
-        [CUTOUT_NODE_GROUP_NAMES["SOLID"], CUTOUT_NODE_GROUP_NAMES["DEPTH_SYMMETRY"]],
-        [CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"], CUTOUT_NODE_GROUP_NAMES["DEPTH_SYMMETRY"]],
-    )
+        return ()
+    first = obj.modifiers[0]
+    if first.type != "NODES" or first.node_group is None:
+        return ()
+    group = first.node_group.name
+    if group not in SINGLE_REGION_GROUPS and group not in {
+        CUTOUT_NODE_GROUP_NAMES["SOLID"], CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"],
+    }:
+        return ()
+    modifiers = (first,)
+    if group == CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"] and len(obj.modifiers) > 1:
+        second = obj.modifiers[1]
+        if (second.type == "NODES" and second.node_group is not None
+                and second.node_group.name == CUTOUT_NODE_GROUP_NAMES["DEPTH_SYMMETRY"]):
+            modifiers += (second,)
+    return modifiers if all(m.show_viewport and m.show_render for m in modifiers) else ()
 
 
-def material_inputs(obj):
+@contextmanager
+def isolate_bake_modifiers(context, obj, modifiers):
+    """Evaluate the image prefix and restore subsequent modifier states."""
+    states = [(modifier, modifier.show_viewport) for modifier in tuple(obj.modifiers)[len(modifiers):]]
+    paths = {modifier.path_from_id("show_viewport") for modifier, _ in states}
+    drivers = [(curve, curve.mute) for curve in obj.animation_data.drivers
+               if curve.data_path in paths] if obj.animation_data else []
+    try:
+        for curve, _ in drivers:
+            curve.mute = True
+        for modifier, _ in states:
+            modifier.show_viewport = False
+        if states:
+            obj.update_tag(refresh={"DATA"})
+        yield context.evaluated_depsgraph_get()
+    finally:
+        for modifier, show_viewport in states:
+            modifier.show_viewport = show_viewport
+        for curve, mute in drivers:
+            curve.mute = mute
+        if states:
+            obj.update_tag(refresh={"DATA"})
+            context.view_layer.update()
+
+
+def material_inputs(obj, modifiers):
     """Validate the generated material before preparing any replacement data."""
-    if not supports_mesh_baking(obj):
-        raise ValueError("Select an image object with a supported Geometry Nodes stack")
+    if not modifiers:
+        raise ValueError("Select an image object with a supported Geometry Nodes prefix")
     if not obj.is_editable or obj.library is not None or obj.override_library is not None:
         raise ValueError("Bake Mesh requires an editable local object")
     if len(obj.data.materials) != 1 or obj.data.shape_keys is not None:
@@ -65,7 +94,7 @@ def material_inputs(obj):
     layers = [node for node in material.node_tree.nodes
               if node.type == "GROUP" and node.node_tree is not None
               and node.node_tree.name == IMAGE_MATERIAL_NODE_GROUP_NAME]
-    single_region = obj.modifiers[0].node_group.name in SINGLE_REGION_GROUPS
+    single_region = modifiers[0].node_group.name in SINGLE_REGION_GROUPS
     if not layers and single_region:
         output = next(n for n in material.node_tree.nodes if n.type == "OUTPUT_MATERIAL" and n.is_active_output)
         shader = output.inputs["Surface"].links[0].from_node
@@ -241,8 +270,9 @@ def materialize_mesh_and_textures(context, obj):
     Keep the object mesh and modifiers unchanged for the operator to assign.
     Restore source images and material inputs if materialization fails.
     """
-    material, layer, color, normal = material_inputs(obj)
-    single_region = obj.modifiers[0].node_group.name in SINGLE_REGION_GROUPS
+    modifiers = mesh_bake_modifiers(obj)
+    material, layer, color, normal = material_inputs(obj, modifiers)
+    single_region = modifiers[0].node_group.name in SINGLE_REGION_GROUPS
     mesh = None
     bake_material = None
     source_color = color.image
@@ -257,8 +287,8 @@ def materialize_mesh_and_textures(context, obj):
     images = []
     transferred = False
     try:
-        graph = context.evaluated_depsgraph_get()
-        mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(graph), preserve_all_data_layers=True, depsgraph=graph)
+        with isolate_bake_modifiers(context, obj, modifiers) as graph:
+            mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(graph), preserve_all_data_layers=True, depsgraph=graph)
         if not mesh.polygons:
             raise ValueError("The evaluated image object has no faces")
         tiles = build_layout(mesh, single_region=single_region)

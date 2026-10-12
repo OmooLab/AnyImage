@@ -3,7 +3,7 @@
 import bpy
 
 from ...common.object import get_modifier_input
-from .materialization import PROTOCOL_ATTRIBUTES, materialize_mesh_and_textures, supports_mesh_baking
+from .materialization import PROTOCOL_ATTRIBUTES, materialize_mesh_and_textures, mesh_bake_modifiers
 
 
 class BakeMesh(bpy.types.Operator):
@@ -14,15 +14,14 @@ class BakeMesh(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return getattr(context, "mode", None) == "OBJECT" and supports_mesh_baking(getattr(context, "object", None))
+        return getattr(context, "mode", None) == "OBJECT" and bool(mesh_bake_modifiers(getattr(context, "object", None)))
 
     def execute(self, context):
         obj = context.object
         depth_images = set()
         try:
-            for modifier in obj.modifiers:
-                if modifier.type != "NODES" or modifier.node_group is None:
-                    continue
+            modifiers = mesh_bake_modifiers(obj)
+            for modifier in modifiers:
                 for socket in modifier.node_group.interface.items_tree:
                     if (socket.item_type == "SOCKET" and socket.in_out == "INPUT"
                             and socket.name == "Depth Image" and socket.socket_type == "NodeSocketImage"):
@@ -34,7 +33,8 @@ class BakeMesh(bpy.types.Operator):
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
         obj.data = mesh
-        obj.modifiers.clear()
+        for modifier in modifiers:
+            obj.modifiers.remove(modifier)
         del obj["o_image_object"]
         for name in tuple(obj.keys()):
             if name in PROTOCOL_ATTRIBUTES:

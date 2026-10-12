@@ -11,9 +11,9 @@ class OImageDepthCutout(CustomGeometryGroup):
     def _build_group(self, tree: TreeBuilder[GeometryNodeTree]) -> None:
         geometry = tree.inputs.geometry("Geometry", structure_type="SINGLE", force_non_field=True)
         mode = tree.inputs.menu("Mode", "Balloon", structure_type="SINGLE", force_non_field=True)
-        thickness = tree.inputs.float("Thickness", 0.0, description="Control how much the surface bulges in Balloon mode. Zero removes the bulge.", min_value=0.0, max_value=2.0, structure_type="SINGLE", force_non_field=True)
+        thickness = tree.inputs.float("Thickness", 1.0, description="Control how much the surface bulges in Balloon mode. Zero removes the bulge.", min_value=0.0, max_value=2.0, structure_type="SINGLE", force_non_field=True)
         front_inflation = tree.inputs.float("Front Inflation", 0.2, description="Control how much the front surface bulges in Balloon mode, as a share of the balloon thickness. Zero keeps the original front surface.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
-        thickness_1 = tree.inputs.float("Thickness", 0.0, description="Add thickness behind the original surface while keeping the front surface in place.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
+        thickness_1 = tree.inputs.float("Thickness", 0.1, description="Add thickness behind the original surface while keeping the front surface in place.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         depth_scale = tree.inputs.float("Depth Scale", 1.0, min_value=0.0, max_value=2.0, structure_type="SINGLE", force_non_field=True)
         depth_split = tree.inputs.float("Depth Split", 0.1, description="Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
         depth_limit = tree.inputs.float("Depth Limit", 1.0, description="Remove faces whose center lies beyond this distance behind the reference plane.", min_value=-1.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)

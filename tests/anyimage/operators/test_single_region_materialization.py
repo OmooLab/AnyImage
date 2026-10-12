@@ -14,7 +14,7 @@ from anyimage.operators.bake_mesh import materialization
 from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
 from tests.support.planes import create_surface
 from tests.support.panorama import panorama
-from tests.support.mesh_bake import render_normal
+from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_normal
 
 
 @pytest.fixture(params=["PLANE", "DEPTH", "RELIEF", "PANORAMA"])
@@ -61,6 +61,13 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     positions = np.array([v.co[:] for v in evaluated.vertices])
     uv = np.array([v.uv[:] for v in evaluated.uv_layers["UVMap"].data])
     faces = [tuple(p.vertices) for p in evaluated.polygons]
+    trailing = add_post_bake_modifiers(obj)
+    states = [(m.show_viewport, m.show_render) for m in trailing]
+    final_positions, final_faces = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
+    group = trailing[1].node_group
+    node_inputs = modifier_inputs(trailing[1])
+    animation = obj.animation_data.action
+    drivers = [(d.data_path, d.driver.expression) for d in obj.animation_data.drivers]
     material = obj.active_material
     images = {i.name: i.as_pointer() for i in bpy.data.images}
     color_pixels = image_pixels(color).copy()
@@ -70,7 +77,11 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert BakeMesh.poll(bpy.context)
     operator = SimpleNamespace(report=Mock())
     assert BakeMesh.execute(operator, bpy.context) == {"FINISHED"}
-    assert not obj.modifiers and not BakeMesh.poll(bpy.context)
+    assert tuple(obj.modifiers) == trailing and not BakeMesh.poll(bpy.context)
+    assert [(m.show_viewport, m.show_render) for m in trailing] == states
+    assert trailing[1].node_group == group and modifier_inputs(trailing[1]) == node_inputs
+    assert obj.animation_data.action == animation
+    assert [(d.data_path, d.driver.expression) for d in obj.animation_data.drivers] == drivers
     assert "o_image_object" not in obj
     assert obj.active_material == material
     remaining = {i.name: i.as_pointer() for i in bpy.data.images}
@@ -81,6 +92,9 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     np.testing.assert_array_equal([v.co[:] for v in obj.data.vertices], positions)
     np.testing.assert_array_equal([v.uv[:] for v in obj.data.uv_layers["UVMap"].data], uv)
     assert [tuple(p.vertices) for p in obj.data.polygons] == faces
+    actual_positions, actual_faces = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
+    np.testing.assert_allclose(actual_positions, final_positions, atol=1e-6)
+    assert actual_faces == final_faces
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
     assert list(obj.data.uv_layers.keys()) == ["UVMap"]
     if normal is not None:
@@ -91,6 +105,28 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
         assert layer.inputs["Normal Scale"].default_value == 1
     else:
         bake.assert_not_called()
+    bpy.context.scene.frame_set(2)
+    assert trailing[0].strength == pytest.approx(.6)
+
+
+@pytest.mark.parametrize("image_object", ["PLANE"], indirect=True)
+@pytest.mark.parametrize("animation", ["keyframe", "driver"])
+def test_visibility_animation_does_not_apply_subsequent_modifier_twice(image_object, animation):
+    obj, *_ = image_object
+    expected, faces = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
+    trailing = add_post_bake_modifiers(obj)
+    if animation == "driver":
+        visibility = trailing[0].driver_add("show_viewport")
+        visibility.driver.expression = "True"
+    else:
+        trailing[0].keyframe_insert(data_path="show_viewport", frame=1)
+    bpy.context.view_layer.update()
+    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
+    np.testing.assert_array_equal(mesh_geometry(obj.data)[0], expected)
+    assert mesh_geometry(obj.data)[1] == faces
+    assert trailing[0].show_viewport
+    if animation == "driver":
+        assert not visibility.mute
 
 
 @pytest.mark.parametrize("image_object,depth_scale", [
@@ -128,6 +164,8 @@ def test_four_conversions_support_undo_redo(image_object):
     depth_name = "Radial Depth" if kind == "PANORAMA" else "Camera" if kind != "PLANE" else None
     if depth_name:
         bpy.data.images[depth_name].pack()
+    trailing = add_post_bake_modifiers(obj)
+    names = [m.name for m in trailing]
     bpy.context.preferences.edit.use_global_undo = True
     bpy.utils.register_class(BakeMesh)
     try:
@@ -136,14 +174,14 @@ def test_four_conversions_support_undo_redo(image_object):
         assert "o_image_object" not in bpy.data.objects[name]
         converted_pixels = {name: image_pixels(bpy.data.images[name]).copy() for name in image_names}
         assert bpy.ops.ed.undo() == {"FINISHED"}
-        assert len(bpy.data.objects[name].modifiers) == 1
+        assert len(bpy.data.objects[name].modifiers) == len(names) + 1
         assert bpy.data.objects[name]["o_image_object"] is True
         if depth_name:
             assert depth_name in bpy.data.images
         for image_name in image_names:
             np.testing.assert_array_equal(image_pixels(bpy.data.images[image_name]), original_pixels[image_name])
         assert bpy.ops.ed.redo() == {"FINISHED"}
-        assert not bpy.data.objects[name].modifiers
+        assert [m.name for m in bpy.data.objects[name].modifiers] == names
         assert "o_image_object" not in bpy.data.objects[name]
         if depth_name:
             assert depth_name not in bpy.data.images

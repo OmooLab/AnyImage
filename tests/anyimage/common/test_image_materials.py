@@ -25,6 +25,18 @@ def test_generated_materials_use_implicit_uv_and_readable_layout():
     assert tuple(next(node for node in nodes if node.type == "GROUP").location) == (-300.0, 300.0)
     assert tuple(next(node for node in nodes if node.type == "BSDF_PRINCIPLED").location) == (100.0, 300.0)
     assert tuple(next(node for node in nodes if node.type == "OUTPUT_MATERIAL").location) == (500.0, 300.0)
+    layer = next(node for node in nodes if node.type == "GROUP")
+    shader = next(node for node in nodes if node.type == "BSDF_PRINCIPLED")
+    assert layer.width == 190.0
+    assert {
+        (link.from_socket.name, link.to_socket.name)
+        for link in material.node_tree.links
+        if link.from_node == layer and link.to_node == shader
+    } == {
+        ("Color", "Base Color"), ("Color", "Emission Color"),
+        ("Alpha", "Alpha"), ("Normal", "Normal"),
+        ("Roughness", "Roughness"), ("Specular", "Specular IOR Level"),
+    }
 
     panorama = material_data.create_image_material(
         source, color, shadeless=True, texture_extension="REPEAT")

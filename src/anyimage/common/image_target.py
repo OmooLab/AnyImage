@@ -5,10 +5,6 @@ from uuid import uuid4
 
 import bpy
 
-from .material import (
-    IMAGE_MATERIAL_NODE_GROUP_NAME,
-    SHADELESS_NODE_GROUP_NAME,
-)
 from .image import (
     image_content_state,
     image_user_settings,
@@ -55,64 +51,23 @@ def is_image_object(obj):
     )
 
 
-def _linked_source(socket):
-    links = tuple(getattr(socket, "links", ()))
-    return links[0].from_node if len(links) == 1 else None
-
-
-def _image_layer_texture(node):
-    if node is None or node.bl_idname != "ShaderNodeGroup":
-        return None
-    if getattr(getattr(node, "node_tree", None), "name", "") != IMAGE_MATERIAL_NODE_GROUP_NAME:
-        return None
-    source = _linked_source(node.inputs.get("Color"))
-    return source if getattr(source, "bl_idname", None) == "ShaderNodeTexImage" else None
-
-
-def _material_color_source(shader):
-    if shader is None:
-        return None
-    if shader.bl_idname == "ShaderNodeBsdfPrincipled":
-        return _image_layer_texture(_linked_source(shader.inputs.get("Base Color")))
-    if shader.bl_idname == "ShaderNodeEmission":
-        source = _linked_source(shader.inputs.get("Color"))
-        return source if getattr(source, "bl_idname", None) == "ShaderNodeTexImage" else None
-    if (
-        shader.bl_idname == "ShaderNodeGroup"
-        and getattr(getattr(shader, "node_tree", None), "name", "")
-        == SHADELESS_NODE_GROUP_NAME
-    ):
-        source = _linked_source(shader.inputs.get("Color"))
-        if getattr(source, "bl_idname", None) == "ShaderNodeTexImage":
-            return source
-        return _image_layer_texture(source)
-    return None
-
-
 def object_color_texture(obj):
-    """Resolve the Color Image Texture from a generated image object's material."""
+    """Return the unique marked Color texture in the active image material."""
     if not is_image_object(obj):
         return None
     material = getattr(obj, "active_material", None)
     tree = getattr(material, "node_tree", None)
     if tree is None or not tree.is_editable:
         return None
-    outputs = [
+    textures = [
         node
         for node in tree.nodes
-        if node.bl_idname == "ShaderNodeOutputMaterial"
-        and node.is_active_output
-        and node.inputs["Surface"].is_linked
+        if node.bl_idname == "ShaderNodeTexImage" and node.get("o_image_color", False)
     ]
-    if len(outputs) != 1:
+    if len(textures) != 1:
         return None
-    node = _material_color_source(_linked_source(outputs[0].inputs["Surface"]))
-    if (
-        node is None
-        or node.id_data != tree
-        or node.image is None
-        or not node.image.is_editable
-    ):
+    node = textures[0]
+    if node.image is None or not node.image.is_editable:
         return None
     return node
 

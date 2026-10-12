@@ -61,9 +61,8 @@ class AnyImageObjectMenu(bpy.types.Menu):
     bl_label = "AnyImage"
 
     def draw(self, context):
-        if BakeMesh.poll(context):
-            self.layout.operator(BakeMesh.bl_idname, icon="MESH_DATA")
-            self.layout.separator()
+        self.layout.operator(BakeMesh.bl_idname, icon="MESH_DATA")
+        self.layout.separator()
         draw_image_actions(self.layout, context)
 
 

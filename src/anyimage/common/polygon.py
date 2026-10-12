@@ -128,8 +128,7 @@ def triangulated_polygon_vertices(vertices):
         return _triangulated_polygon_vertices_python(vertices)
 
 
-def _scanline_intervals(vertices, sample_y):
-    edges = tuple(zip(vertices, (*vertices[1:], vertices[0])))
+def _scanline_intervals(edges, sample_y):
     events = []
     for start, end in edges:
         if (start[1] <= sample_y < end[1]) or (end[1] <= sample_y < start[1]):
@@ -163,17 +162,36 @@ def _scanline_intervals(vertices, sample_y):
 
 
 def scanline_fill_bands(vertices, step=2.0):
+    """Fill screen bands using only edges crossing each sample row."""
+    if step <= 0:
+        raise ValueError("Scanline step must be positive")
     vertices = tuple(tuple(float(value) for value in vertex) for vertex in vertices)
     if len(vertices) < 3:
         return ()
     minimum_y = min(vertex[1] for vertex in vertices)
     maximum_y = max(vertex[1] for vertex in vertices)
+    edges = sorted(
+        ((start, end) for start, end in zip(vertices, (*vertices[1:], vertices[0]))
+         if start[1] != end[1]),
+        key=lambda edge: min(edge[0][1], edge[1][1]),
+    )
+    active = []
+    edge_index = 0
     band_bottom = minimum_y
     bands = []
     while band_bottom < maximum_y:
         band_top = min(band_bottom + step, maximum_y)
         sample_y = (band_bottom + band_top) * 0.5
-        intervals = _scanline_intervals(vertices, sample_y)
+        active = [(start, end) for start, end in active
+                  if max(start[1], end[1]) > sample_y]
+        while edge_index < len(edges):
+            start, end = edges[edge_index]
+            if min(start[1], end[1]) > sample_y:
+                break
+            if max(start[1], end[1]) > sample_y:
+                active.append((start, end))
+            edge_index += 1
+        intervals = _scanline_intervals(active, sample_y)
         bands.append((band_bottom, band_top, tuple(intervals)))
         band_bottom = band_top
     return tuple(bands)
@@ -200,7 +218,7 @@ def scanline_union_bands(polygons, step=2.0):
     maximum_y = math.ceil(max(point[1] for polygon in polygons for point in polygon) / step) * step
     bounds = tuple(
         (
-            polygon,
+            tuple(zip(polygon, (*polygon[1:], polygon[0]))),
             min(point[1] for point in polygon),
             max(point[1] for point in polygon),
         )
@@ -213,9 +231,9 @@ def scanline_union_bands(polygons, step=2.0):
         sample_y = (band_bottom + band_top) * 0.5
         intervals = merge_intervals(
             interval
-            for polygon, bottom, top in bounds
+            for edges, bottom, top in bounds
             if bottom <= sample_y < top
-            for interval in _scanline_intervals(polygon, sample_y)
+            for interval in _scanline_intervals(edges, sample_y)
         )
         bands.append((band_bottom, band_top, intervals))
         band_bottom = band_top

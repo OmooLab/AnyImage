@@ -14,7 +14,7 @@ from anyimage.operators.bake_mesh import BakeMesh
 from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout import OImageCutout
 from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
 from tests.support.depth_symmetry import symmetry
-from tests.support.mesh_bake import render_normal
+from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_normal
 
 
 @pytest.fixture
@@ -161,15 +161,25 @@ def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thi
     obj.data.materials.append(create_image_material(color, color, normal_image=normal, normal_space="OBJECT"))
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
+    prefix_geometry = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
+    trailing = add_post_bake_modifiers(obj, bpy.data.images["Depth"])
+    final_geometry = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
     directions = ((1, 0, 0), (-1, 0, 0))
     before = [render_normal(obj, tmp_path / f"s-before-{i}.exr", d) for i, d in enumerate(directions)]
     result = materialize_mesh_and_textures(bpy.context, obj)
+    np.testing.assert_allclose(mesh_geometry(result)[0], prefix_geometry[0], atol=1e-6)
+    assert mesh_geometry(result)[1] == prefix_geometry[1]
     assert not set(result.attributes.keys()) & PROTOCOL_ATTRIBUTES
     normal_result = next(n.image for n in result.materials[0].node_tree.nodes
                          if n.type == "TEX_IMAGE" and n.image.colorspace_settings.name == "Non-Color")
     assert tuple(normal_result.size) == ((256, 256) if thickness else (256, 128))
     obj.data = result
-    obj.modifiers.clear()
+    for modifier in tuple(obj.modifiers)[:2]:
+        obj.modifiers.remove(modifier)
+    assert tuple(obj.modifiers) == trailing
+    actual_geometry = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
+    np.testing.assert_allclose(actual_geometry[0], final_geometry[0], atol=1e-6)
+    assert actual_geometry[1] == final_geometry[1]
     for i, (direction, original) in enumerate(zip(directions, before)):
         static = render_normal(obj, tmp_path / f"s-after-{i}.exr", direction)
         from scipy.ndimage import binary_erosion
@@ -179,8 +189,8 @@ def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thi
         assert np.quantile(differences, .95) < .04, (thickness, direction, np.quantile(differences, [.5, .95, 1]))
 
 
-@pytest.mark.parametrize("mirrored", [False, True])
-def test_depth_cutout_conversion_removes_unused_depth(symmetry, mirrored):
+@pytest.mark.parametrize("mirrored,retained_user", [(False, False), (True, False), (True, True)])
+def test_depth_cutout_conversion_removes_unused_depth(symmetry, mirrored, retained_user):
     obj, _, mirror, *_ = symmetry
     if not mirrored:
         obj.modifiers.remove(mirror)
@@ -192,8 +202,10 @@ def test_depth_cutout_conversion_removes_unused_depth(symmetry, mirrored):
     bpy.context.view_layer.objects.active = obj
     depth_name = "Depth"
     assert depth_name in bpy.data.images
+    trailing = add_post_bake_modifiers(obj, bpy.data.images[depth_name] if retained_user else None)
     assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
-    assert depth_name not in bpy.data.images
+    assert (depth_name in bpy.data.images) is retained_user
+    assert tuple(obj.modifiers) == trailing
     assert color.name in bpy.data.images
 
 
@@ -206,12 +218,15 @@ def test_conversion_operator_undo_redo(cutout, execution):
     material_name = cutout.active_material.name
     source_color_name = next(n.image.name for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
     original_pixels = image_pixels(bpy.data.images[source_color_name]).copy()
+    trailing = add_post_bake_modifiers(cutout)
+    names = [m.name for m in trailing]
+    group_name = trailing[1].node_group.name
     bpy.context.preferences.edit.use_global_undo = True
     bpy.utils.register_class(BakeMesh)
     try:
         bpy.ops.ed.undo_push(message="Before Bake Mesh")
         assert bpy.ops.anyimage.bake_mesh(execution, True) == {"FINISHED"}
-        assert len(bpy.data.objects[name].modifiers) == 0
+        assert [m.name for m in bpy.data.objects[name].modifiers] == names
         assert "o_image_object" not in bpy.data.objects[name]
         assert bpy.data.objects[other_name].data.name == mesh_name
         assert bpy.data.objects[other_name].active_material.name == material_name
@@ -224,14 +239,15 @@ def test_conversion_operator_undo_redo(cutout, execution):
         converted_pixels = image_pixels(bpy.data.images[converted_color_name]).copy()
         assert not BakeMesh.poll(bpy.context)
         assert bpy.ops.ed.undo() == {"FINISHED"}
-        assert len(bpy.data.objects[name].modifiers) == 1
+        assert len(bpy.data.objects[name].modifiers) == len(names) + 1
         assert bpy.data.objects[name]["o_image_object"] is True
         assert bpy.data.objects[name].data.name == mesh_name
         assert tuple(bpy.data.images[source_color_name].size) == (64, 64)
         np.testing.assert_array_equal(image_pixels(bpy.data.images[source_color_name]), original_pixels)
         assert next(n.image.name for n in bpy.data.objects[name].active_material.node_tree.nodes if n.type == "TEX_IMAGE") == source_color_name
         assert bpy.ops.ed.redo() == {"FINISHED"}
-        assert len(bpy.data.objects[name].modifiers) == 0
+        assert [m.name for m in bpy.data.objects[name].modifiers] == names
+        assert bpy.data.objects[name].modifiers[1].node_group.name == group_name
         assert "o_image_object" not in bpy.data.objects[name]
         assert tuple(bpy.data.images[converted_color_name].size) == (64, 128)
         np.testing.assert_array_equal(image_pixels(bpy.data.images[converted_color_name]), converted_pixels)
@@ -251,8 +267,12 @@ def test_packed_static_images_survive_library_reload(cutout, tmp_path, float_col
         color.colorspace_settings.name = "sRGB"
         color.pixels.foreach_set(np.linspace(0, 1, 13 * 9 * 4, dtype=np.float32))
         next(n for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE").image = color
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
-    cutout.modifiers.clear()
+    trailing = add_post_bake_modifiers(cutout)
+    modifier_names = [m.name for m in trailing]
+    modifier_states = [(m.show_viewport, m.show_render) for m in trailing]
+    node_inputs = modifier_inputs(trailing[1])
+    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
+    positions, faces = mesh_geometry(cutout.data)
     images = [n.image for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE"]
     expected = {i.name: (image_pixels(i), i.colorspace_settings.name, i.alpha_mode, i.is_float) for i in images}
     library = tmp_path / "static.blend"
@@ -261,6 +281,15 @@ def test_packed_static_images_survive_library_reload(cutout, tmp_path, float_col
     with bpy.data.libraries.load(str(library)) as (available, loaded):
         loaded.objects = available.objects
     obj = loaded.objects[0]
+    assert [m.name for m in obj.modifiers] == modifier_names
+    assert [(m.show_viewport, m.show_render) for m in obj.modifiers] == modifier_states
+    assert modifier_inputs(obj.modifiers[1]) == node_inputs
+    assert obj.animation_data.action is not None
+    assert [(d.data_path, d.driver.expression) for d in obj.animation_data.drivers] == [
+        ('modifiers["User displacement"].mid_level', "0"),
+    ]
+    np.testing.assert_array_equal(mesh_geometry(obj.data)[0], positions)
+    assert mesh_geometry(obj.data)[1] == faces
     assert not set(obj.data.attributes.keys()) & PROTOCOL_ATTRIBUTES
     for node in obj.active_material.node_tree.nodes:
         if node.type != "TEX_IMAGE":
@@ -341,6 +370,8 @@ def test_single_region_without_normal_preserves_user_attributes(cutout):
 def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch):
     from anyimage.operators.bake_mesh import materialization
 
+    trailing = add_post_bake_modifiers(cutout)
+    states = [(m.show_viewport, m.show_render) for m in trailing]
     counts = tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.scenes, bpy.data.node_groups))
     source = cutout.data
     material = cutout.active_material
@@ -350,17 +381,44 @@ def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch):
     monkeypatch.setattr(materialization, "bake_normal", fail)
     with pytest.raises(RuntimeError, match="Injected"):
         materialize_mesh_and_textures(bpy.context, cutout)
-    assert cutout.data == source and len(cutout.modifiers) == 1
+    assert cutout.data == source and tuple(cutout.modifiers)[1:] == trailing
+    assert [(m.show_viewport, m.show_render) for m in trailing] == states
     assert cutout["o_image_object"] is True
     assert cutout.active_material == material
     assert images == [n.image for n in material.node_tree.nodes if n.type == "TEX_IMAGE"]
     assert counts == tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.scenes, bpy.data.node_groups))
 
 
+def test_mesh_evaluation_failure_restores_subsequent_modifiers(cutout):
+    trailing = add_post_bake_modifiers(cutout)
+    visibility = trailing[0].driver_add("show_viewport")
+    visibility.driver.expression = "True"
+    states = [(m.show_viewport, m.show_render) for m in trailing]
+    source = cutout.data
+    counts = tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.scenes))
+
+    def fail():
+        assert all(not m.show_viewport for m in trailing)
+        raise RuntimeError("Injected evaluation failure")
+
+    context = SimpleNamespace(object=cutout, view_layer=bpy.context.view_layer, evaluated_depsgraph_get=fail)
+    operator = SimpleNamespace(report=Mock())
+    assert BakeMesh.execute(operator, context) == {"CANCELLED"}
+    operator.report.assert_called_once_with({"ERROR"}, "Injected evaluation failure")
+    assert cutout.data == source and tuple(cutout.modifiers)[1:] == trailing
+    assert [(m.show_viewport, m.show_render) for m in trailing] == states
+    assert not visibility.mute
+    assert cutout["o_image_object"] is True
+    assert counts == tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.images, bpy.data.scenes))
+
+
 @pytest.mark.parametrize("packed,shared_color", [(False, False), (True, True)])
 def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed, shared_color):
     from anyimage.operators.bake_mesh import materialization
 
+    trailing = add_post_bake_modifiers(cutout)
+    states = [(m.show_viewport, m.show_render) for m in trailing]
+    source = cutout.data
     images = [n.image for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE"]
     if shared_color:
         other_material = bpy.data.materials.new("Other Color user")
@@ -387,6 +445,9 @@ def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed, s
     with pytest.raises(RuntimeError, match="Injected image write"):
         materialize_mesh_and_textures(bpy.context, cutout)
     assert layer.inputs["Object Space"].default_value is True
+    assert cutout.data == source and tuple(cutout.modifiers)[1:] == trailing
+    assert [(m.show_viewport, m.show_render) for m in trailing] == states
+    assert cutout["o_image_object"] is True
     assert {image.name: image.as_pointer() for image in bpy.data.images} == identities
     assert counts == tuple(len(items) for items in (bpy.data.meshes, bpy.data.materials, bpy.data.scenes))
     for image, original, expected in zip(images, contents, pixels):
@@ -537,6 +598,7 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
 
     if invalid_input == "modifier":
         cutout.modifiers.new("User bevel", "BEVEL")
+        cutout.modifiers.move(1, 0)
     elif invalid_input == "linked_strength":
         tree = cutout.active_material.node_tree
         layer = next(n for n in tree.nodes if n.type == "GROUP")

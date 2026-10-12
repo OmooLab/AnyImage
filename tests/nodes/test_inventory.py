@@ -72,7 +72,8 @@ def test_saved_parameter_interfaces_match_definitions():
                 smooth = controls["Boundary Smooth"]
                 assert (smooth.default_value, smooth.min_value, smooth.max_value) == (4, 0, 16)
                 thicknesses = [item for item in inputs if item.name == "Thickness"]
-                assert len(thicknesses) == 2 and all(item.default_value == 0 for item in thicknesses)
+                assert len(thicknesses) == 2
+                assert {item.subtype: item.default_value for item in thicknesses} == pytest.approx({"NONE": 1.0, "DISTANCE": 0.1})
                 inflation = next(item for item in inputs if item.name == "Front Inflation")
                 thickness = next(item for item in inputs if item.name == "Thickness" and item.subtype == "NONE")
                 assert not inflation.parent.name

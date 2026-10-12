@@ -246,7 +246,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
     )
 
     def draw(self, _context):
-        from .operators.ai_setup import MigrateAIServer, SetupAIServer
+        from .operators.ai_setup import SetupAIServer
         from .properties import ai_setup_label, ai_status, model_catalog
         from .runtime import runtime
 
@@ -257,12 +257,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         server = self._draw_box(layout, "Server")
         location_row = server.row(align=True)
         location_row.label(text=str(storage_root()), icon="FILE_FOLDER")
-        pending_migration = runtime.pending_migration()
-        if pending_migration:
-            migrate_row = location_row.row(align=True)
-            migrate_row.enabled = not runtime.server_busy()
-            migrate_row.operator(MigrateAIServer.bl_idname, text="Continue Migration", icon="FILE_REFRESH")
-        elif not status["environment_ready"]:
+        if not status["environment_ready"]:
             setup_row = server.row(align=True)
             setup_row.enabled = not runtime.server_busy()
             setup_row.operator(
@@ -273,7 +268,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         else:
             migrate_row = location_row.row(align=True)
             migrate_row.enabled = not runtime.server_busy()
-            migrate_row.operator(MigrateAIServer.bl_idname, icon="FILE_FOLDER")
+            migrate_row.operator("anyimage.migrate_server", icon="FILE_FOLDER")
             server.label(text="Installed", icon="CHECKMARK")
 
         if status["environment_ready"]:

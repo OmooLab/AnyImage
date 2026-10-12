@@ -55,12 +55,6 @@ class AddonRegistrationTest(BlenderTestCase):
         for name in properties.COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES:
             self.assertEqual(getattr(settings, name), 0.0)
 
-    def test_job_cleanup_is_registered_without_undo(self):
-        from anyimage.operators.job_files import ClearJobFiles
-
-        self.assertIn(ClearJobFiles, self.anyimage.CLASSES)
-        self.assertNotIn("UNDO", getattr(ClearJobFiles, "bl_options", set()))
-
     def test_import_does_not_add_addon_directories_to_sys_path(self):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
 

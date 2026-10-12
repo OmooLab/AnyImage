@@ -43,7 +43,7 @@ models = [
 
 [package.metadata]
 requires-dist = [
-    { name = "blendjob", specifier = "==0.1.21" },
+    { name = "blendjob", specifier = "==0.1.23" },
     { name = "materialyoucolor", specifier = "==3.0.4" },
     { name = "numpy", specifier = ">=1.26,<2.0" },
     { name = "pillow", specifier = "==12.1.1" },
@@ -98,11 +98,11 @@ wheels = [
 
 [[package]]
 name = "blendjob"
-version = "0.1.21"
+version = "0.1.23"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1e/04/ed1a3901f58f0561e50283cd43156cc9225c9038e6578e16ee84ce0eb698/blendjob-0.1.21.tar.gz", hash = "sha256:aefc72b965053eeac1fb734ed6f203190a0e68d32081128e7d07e1f847f3e762", size = 29223, upload-time = "2026-10-12T09:13:57.789Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/df/e6f1e366cd09ac47b7c0024b1429c65c9a45567333a2f17f970c71bbe9f7/blendjob-0.1.23.tar.gz", hash = "sha256:ee2743a77216b16dcd09218e2b08c0b3c5203c93562bfeb8651bd3fd3b1c75db", size = 29569, upload-time = "2026-10-12T16:11:18.707Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/df/97eb014ba68f14cf51b0c36efee9457e9bc8568566413d6c6a15b72b130c/blendjob-0.1.21-py3-none-any.whl", hash = "sha256:1f914c44c0f5de4fb610303a2a3494f6457cb774f84c3415ef31e29d216a7255", size = 34372, upload-time = "2026-10-12T09:13:56.704Z" },
+    { url = "https://files.pythonhosted.org/packages/94/0d/855b48285537231e61b5164c3cc361d1a605d1158b6b3424f031b9c1c94b/blendjob-0.1.23-py3-none-any.whl", hash = "sha256:cd47c8ac95a474f549c8e194e56ab93f87c3197fa3febc2653a73f6432fb95c8", size = 34776, upload-time = "2026-10-12T16:11:17.758Z" },
 ]
 
 [[package]]

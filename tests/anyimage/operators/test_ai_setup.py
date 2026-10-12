@@ -7,6 +7,19 @@ from tests.support.blender import BlenderTestCase
 
 
 class AiSetupTest(BlenderTestCase):
+    def test_setup_checks_changed_location_before_starting(self):
+        operator = self.ai_setup.SetupAIServer()
+        operator.location = "D:/first"
+        operator.report = Mock()
+        with patch.object(self.ai_setup, "inspect_installation", return_value={"environment_ready": True, "missing_models": ()}) as inspect:
+            self.assertTrue(operator.check(None))
+            operator.location = "D:/second"
+            inspect.side_effect = ValueError("Invalid location")
+            with patch.object(self.ai_setup.JobOperatorBase, "execute") as execute:
+                self.assertEqual(operator.execute(None), {"CANCELLED"})
+                execute.assert_not_called()
+            inspect.assert_called_with(Path("D:/second/.anyimage"))
+
     def test_setup_preview_checks_each_selected_location_only_once(self):
         operator = self.ai_setup.SetupAIServer()
         operator.layout = Mock()
@@ -34,8 +47,11 @@ class AiSetupTest(BlenderTestCase):
             target = Path(directory) / ".anyimage"
             target.mkdir()
             (target / "unrelated.txt").write_text("unrelated", encoding="utf-8")
-            with self.assertRaises(ValueError):
-                operator.controller(self.anyimage.runtime)
+            setup = Mock(side_effect=RuntimeError("The target is not a BlendJob installation"))
+            operator.report = Mock()
+            with patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(setup_server=setup)), create=True):
+                self.assertEqual(operator.execute(None), {"CANCELLED"})
+                setup.assert_called_once_with(directory=str(target), use_mirror=False)
 
     def test_post_setup_downloads_only_missing_or_corrupt_models(self):
         import hashlib
@@ -152,43 +168,19 @@ class AiSetupTest(BlenderTestCase):
             operator.use_mirror = True
             self.fake_bpy.context.preferences.addons["anyimage"].preferences.storage_root = str(Path(directory) / "current")
             original = self.anyimage.preferences.storage_root()
-            controller = operator.controller(self.anyimage.runtime)
-            self.assertEqual(controller.target, Path(directory) / ".anyimage")
-            self.assertTrue(controller.mirror)
+            setup = Mock(return_value={"RUNNING_MODAL"})
+            with patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(setup_server=setup)), create=True):
+                self.assertEqual(operator.execute(None), {"FINISHED"})
+            setup.assert_called_once_with(directory=str(Path(directory) / ".anyimage"), use_mirror=True)
             self.assertEqual(self.anyimage.preferences.storage_root(), original)
 
 
     def test_ai_environment_ui_types_are_registered(self):
-        for operator in (self.ai_setup.MigrateAIServer,):
-            self.assertIn(operator, self.anyimage.CLASSES)
-            self.assertNotIn("UNDO", getattr(operator, "bl_options", set()))
         self.assertIn(self.ai_setup.SetupAIServer, self.anyimage.CLASSES)
         self.assertIn(
             self.ai_setup.OpenAIEnvironmentSettings,
             self.anyimage.CLASSES,
         )
-
-    def test_folder_selection_uses_one_migrate_operator(self):
-        operator = self.ai_setup.MigrateAIServer()
-        context = SimpleNamespace(window_manager=SimpleNamespace(fileselect_add=Mock()))
-        self.assertEqual(operator.invoke(context, None), {"RUNNING_MODAL"})
-        context.window_manager.fileselect_add.assert_called_once_with(operator)
-        operator.directory = "D:/destination"
-        with patch.object(self.anyimage.runtime, "migrate_controller") as migrate:
-            self.assertIs(operator.controller(self.anyimage.runtime), migrate.return_value)
-        migrate.assert_called_once_with(Path("D:/destination/.anyimage"))
-
-    def test_pending_cleanup_skips_folder_selection(self):
-        operator = self.ai_setup.MigrateAIServer()
-        with (
-            patch.object(self.anyimage.runtime, "pending_migration", return_value={"source": "old", "target": "new"}),
-            patch.object(operator, "execute", return_value={"RUNNING_MODAL"}) as execute,
-            patch.object(self.anyimage.runtime, "migrate_controller") as migrate,
-        ):
-            self.assertEqual(operator.invoke(None, None), {"RUNNING_MODAL"})
-            execute.assert_called_once_with(None)
-            operator.controller(self.anyimage.runtime)
-            migrate.assert_called_once_with(None)
 
     def test_model_preparation_passes_offline_policy_to_server(self):
         request = Mock()

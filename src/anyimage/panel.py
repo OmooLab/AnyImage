@@ -1,7 +1,6 @@
 import bpy
 
 from .operators.ai_setup import UnloadModels, SetupAIServer
-from .operators.job_files import ClearJobFiles
 from .properties import (
     COLOR_REFERENCE_PALETTE_PROPERTIES,
     COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES,
@@ -172,5 +171,4 @@ class DangerZonePanel(bpy.types.Panel):
     def draw(self, _context):
         row = self.layout.row()
         row.operator_context = "INVOKE_DEFAULT"
-        row.enabled = ClearJobFiles.poll(None)
-        row.operator(ClearJobFiles.bl_idname, icon="TRASH")
+        row.operator("anyimage.clear_job_files", icon="TRASH")

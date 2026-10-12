@@ -121,7 +121,7 @@ class PreferencesTest(BlenderTestCase):
 
         ready = {"environment_ready": True, "missing_models": (), "ready": True}
         operators = self.draw_preferences(ready, catalog)
-        self.assertIn("anyimage.migrate_ai_server", [identifier for identifier, _operator in operators])
+        self.assertIn("anyimage.migrate_server", [identifier for identifier, _operator in operators])
         downloads = [
             operator.model
             for identifier, operator in operators
@@ -175,7 +175,6 @@ class PreferencesTest(BlenderTestCase):
             patch.object(self.anyimage.properties, "ai_status", return_value=status),
             patch.object(self.anyimage.properties, "model_catalog", return_value=catalog),
             patch.object(self.anyimage.runtime, "server_busy", return_value=False),
-            patch.object(self.anyimage.runtime, "pending_migration", return_value={}),
         ):
             preferences.draw(None)
         return operators

@@ -103,9 +103,9 @@ class ServerPanelTest(BlenderTestCase):
         self.assertIn(panel_type, self.anyimage.CLASSES)
         self.assertEqual(panel_type.bl_options, {"DEFAULT_CLOSED"})
         self.assertGreater(panel_type.bl_order, panel_module.ServerPanel.bl_order)
-        for state, enabled in (("READY", True), ("BUSY", False), ("STOPPED", True)):
-            events = self._draw_server_panel(state, panel_type=panel_type)
-            self.assertEqual(events.operators, [("anyimage.clear_job_files", enabled)])
+        events = self._draw_server_panel("READY", panel_type=panel_type)
+        self.assertEqual(events.operators, [("anyimage.clear_job_files", True)])
+        self.assertEqual(events.parents["anyimage.clear_job_files"].operator_context, "INVOKE_DEFAULT")
 
     def _draw_server_panel(self, state, cached_names=(), environment_ready=True, panel_type=None, migrating=False):
         events = SimpleNamespace(labels=[], operators=[], options={}, sequence=[], parents={})

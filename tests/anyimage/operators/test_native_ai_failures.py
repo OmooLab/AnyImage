@@ -80,11 +80,14 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
 
 def test_native_setup_operator_preserves_plain_error(capfd):
     with patch.object(ai_setup.runtime, "setup_controller", side_effect=RuntimeError("Setup unavailable")):
-        bpy.utils.register_class(ai_setup.SetupAIServer)
+        classes = (*ai_setup.runtime.operator_classes(), ai_setup.SetupAIServer)
+        for cls in classes:
+            bpy.utils.register_class(cls)
         try:
             with pytest.raises(RuntimeError) as error:
                 bpy.ops.anyimage.setup_ai_server(location="D:/", use_mirror=False)
             assert str(error.value).strip() == "Error: Setup unavailable"
             assert "Traceback" not in capfd.readouterr().err
         finally:
-            bpy.utils.unregister_class(ai_setup.SetupAIServer)
+            for cls in reversed(classes):
+                bpy.utils.unregister_class(cls)

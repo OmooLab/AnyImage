@@ -7,7 +7,7 @@ from ..properties import (
     model_download_size,
     model_record,
 )
-from ..common.ai import require_environment
+from ..common.ai import require_environment, report_ai_error
 from ..common.server_location import inspect_installation, server_root
 
 
@@ -15,12 +15,10 @@ def format_download_size(size):
     return f"{size / 1_000_000:.0f} MB"
 
 
-class SetupAIServer(JobOperatorBase, bpy.types.Operator):
+class SetupAIServer(bpy.types.Operator):
     bl_idname = "anyimage.setup_ai_server"
     bl_label = "Set Up AI Server"
     bl_description = "Install the environment and required AI models"
-    job_type = "setup-server"
-    starting_message = "Preparing AI Server"
 
     location: bpy.props.StringProperty(
         name="Server Location",
@@ -45,9 +43,7 @@ class SetupAIServer(JobOperatorBase, bpy.types.Operator):
             self, width=520, title="Set Up AI Server", confirm_text="Continue"
         )
 
-    def draw(self, _context):
-        layout = self.layout
-        layout.prop(self, "location")
+    def _inspect_location(self):
         preview = getattr(self, "_location_preview", None)
         if preview is None or preview[0] != self.location:
             try:
@@ -56,6 +52,28 @@ class SetupAIServer(JobOperatorBase, bpy.types.Operator):
             except (OSError, ValueError) as error:
                 preview = (self.location, None, None, str(error))
             self._location_preview = preview
+        return preview
+
+    def check(self, _context):
+        self._inspect_location()
+        return True
+
+    def execute(self, _context):
+        _, target, _, error = self._inspect_location()
+        if error:
+            self.report({"ERROR"}, error)
+            return {"CANCELLED"}
+        try:
+            result = bpy.ops.anyimage.setup_server(directory=str(target), use_mirror=self.use_mirror)
+        except RuntimeError as error:
+            report_ai_error(self, error)
+            return {"CANCELLED"}
+        return {"CANCELLED"} if "CANCELLED" in result else {"FINISHED"}
+
+    def draw(self, _context):
+        layout = self.layout
+        layout.prop(self, "location")
+        preview = self._inspect_location()
         _, target, status, error = preview
         if error:
             layout.label(text=error, icon="ERROR")
@@ -93,37 +111,6 @@ class SetupAIServer(JobOperatorBase, bpy.types.Operator):
         layout.label(
             text=f"{format_download_size(missing_size)} · Usually 2–10 minutes."
         )
-
-    def controller(self, runtime):
-        target = server_root(self.location)
-        return runtime.setup_controller(target, mirror=self.use_mirror, online=bpy.app.online_access)
-
-
-class MigrateAIServer(JobOperatorBase, bpy.types.Operator):
-    bl_idname = "anyimage.migrate_ai_server"
-    bl_label = "Migrate AI Server"
-    bl_description = "Migrate the complete .anyimage folder to another location"
-    job_type = "migrate-server"
-    starting_message = "Migrating AI Server"
-
-    directory: bpy.props.StringProperty(subtype="DIR_PATH", options={"SKIP_SAVE"})
-    filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
-
-    @classmethod
-    def poll(cls, _context):
-        return not runtime.server_busy()
-
-    def invoke(self, context, _event):
-        if runtime.pending_migration():
-            return self.execute(context)
-        self.directory = str(storage_root().parent)
-        context.window_manager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
-
-    def controller(self, runtime):
-        target = None if runtime.pending_migration() else server_root(self.directory)
-        return runtime.migrate_controller(target)
-
 
 class OpenAIEnvironmentSettings(bpy.types.Operator):
     bl_idname = "anyimage.open_ai_environment_settings"
@@ -193,6 +180,6 @@ class UnloadModels(bpy.types.Operator):
 
 
 CLASSES = (
-    SetupAIServer, MigrateAIServer, OpenAIEnvironmentSettings,
+    SetupAIServer, OpenAIEnvironmentSettings,
     DownloadModel, DownloadRequiredModels, UnloadModels,
 )

@@ -9,7 +9,6 @@ from .upscale import UpscaleImage
 from .convert_to_panorama import CLASSES as PANORAMA_CLASSES
 from .color_match import CLASSES as COLOR_MATCH_CLASSES
 from .bake_mesh import CLASSES as MESH_CLASSES
-from .job_files import ClearJobFiles
 
 
 CLASSES = (
@@ -19,7 +18,6 @@ CLASSES = (
     *PLANE_CLASSES,
     *CUTOUT_CLASSES,
     *AI_SETUP_CLASSES,
-    ClearJobFiles,
     *FRAME_CLASSES,
     EditImageAlpha,
     *RECTIFY_CLASSES,

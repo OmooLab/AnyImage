@@ -3,6 +3,7 @@ import importlib
 import builtins
 import sys
 import unittest
+import tempfile
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
@@ -170,6 +171,8 @@ class BlenderTestCase(unittest.TestCase):
 
 
     def setUp(self):
+        server_storage = tempfile.TemporaryDirectory(prefix="anyimage-server-test-")
+        self.addCleanup(server_storage.cleanup)
         timer_callbacks = set()
         self.fake_bpy.app.handlers = SimpleNamespace(load_post=[], undo_post=[], redo_post=[])
         self.fake_bpy.app.timers = SimpleNamespace(
@@ -178,7 +181,7 @@ class BlenderTestCase(unittest.TestCase):
             unregister=timer_callbacks.remove,
         )
         preferences = SimpleNamespace(
-            storage_root="",
+            storage_root=server_storage.name,
             device="CUDA",
             upscale_model="REALESRGAN_GENERAL_WDN_X4V3",
             max_ai_input_size=2048,

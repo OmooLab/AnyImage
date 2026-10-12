@@ -1,24 +1,32 @@
 import bpy
 
-from ..preferences import ADDON_PACKAGE
+from ..preferences import ADDON_PACKAGE, storage_root
 from ..runtime import JobOperatorBase, runtime
-from ..server.model_catalog import DEFAULT_MODEL_KEYS
+from ..server.model_catalog import DEFAULT_MODEL_KEYS, get_downloadable_model
 from ..properties import (
-    ai_status,
     model_download_size,
     model_record,
 )
-from ..common.ai import report_ai_error, require_environment
+from ..common.ai import require_environment
+from ..common.server_location import inspect_installation, server_root
 
 
 def format_download_size(size):
     return f"{size / 1_000_000:.0f} MB"
 
 
-class SetupAIEnvironment(bpy.types.Operator):
-    bl_idname = "anyimage.setup_ai_environment"
+class SetupAIServer(JobOperatorBase, bpy.types.Operator):
+    bl_idname = "anyimage.setup_ai_server"
     bl_label = "Set Up AI Server"
     bl_description = "Install the environment and required AI models"
+    job_type = "setup-server"
+    starting_message = "Preparing AI Server"
+
+    location: bpy.props.StringProperty(
+        name="Server Location",
+        description="Choose .anyimage, a folder inside it, or a parent folder for a new installation",
+        subtype="DIR_PATH", options={"SKIP_SAVE"},
+    )
 
     use_mirror: bpy.props.BoolProperty(
         name="Use China Mirror",
@@ -31,17 +39,30 @@ class SetupAIEnvironment(bpy.types.Operator):
         return not runtime.server_busy()
 
     def invoke(self, context, _event):
+        self._location_preview = None
+        self.location = str(storage_root().parent)
         return context.window_manager.invoke_props_dialog(
-            self, width=440, title="Set Up AI", confirm_text="Install"
+            self, width=520, title="Set Up AI Server", confirm_text="Continue"
         )
 
     def draw(self, _context):
         layout = self.layout
-        status = ai_status()
+        layout.prop(self, "location")
+        preview = getattr(self, "_location_preview", None)
+        if preview is None or preview[0] != self.location:
+            try:
+                target = server_root(self.location)
+                preview = (self.location, target, inspect_installation(target), "")
+            except (OSError, ValueError) as error:
+                preview = (self.location, None, None, str(error))
+            self._location_preview = preview
+        _, target, status, error = preview
+        if error:
+            layout.label(text=error, icon="ERROR")
+            return
+        layout.label(text=str(target), icon="FILE_FOLDER")
         if not status["environment_ready"]:
-            required_size = sum(
-                model_download_size(model_key) for model_key in DEFAULT_MODEL_KEYS
-            )
+            required_size = sum(model_download_size(key) for key in status["missing_models"])
             layout.label(
                 text="Set up AI features for depth, background removal and upscaling."
             )
@@ -55,14 +76,11 @@ class SetupAIEnvironment(bpy.types.Operator):
             layout.prop(self, "use_mirror")
             return
 
-        if status["ready"]:
-            layout.label(text="AI Server is ready.", icon="CHECKMARK")
+        if not status["missing_models"]:
+            layout.label(text="Use existing AI Server installation.", icon="CHECKMARK")
             return
 
-        labels = []
-        for model_key in status["missing_models"]:
-            model = model_record(model_key)
-            labels.append(model["label"] if model else model_key)
+        labels = [get_downloadable_model(key).label for key in status["missing_models"]]
         missing_size = sum(
             model_download_size(model_key)
             for model_key in status["missing_models"]
@@ -76,22 +94,35 @@ class SetupAIEnvironment(bpy.types.Operator):
             text=f"{format_download_size(missing_size)} · Usually 2–10 minutes."
         )
 
-    def execute(self, _context):
-        status = ai_status()
-        if status["ready"]:
-            return {"FINISHED"}
-        try:
-            if status["environment_ready"]:
-                return bpy.ops.anyimage.download_required_models("INVOKE_DEFAULT")
-            installer = (
-                bpy.ops.anyimage.install_environment_mirror
-                if self.use_mirror
-                else bpy.ops.anyimage.install_environment
-            )
-            return installer("INVOKE_DEFAULT")
-        except RuntimeError as error:
-            report_ai_error(self, error)
-            return {"CANCELLED"}
+    def controller(self, runtime):
+        target = server_root(self.location)
+        return runtime.setup_controller(target, mirror=self.use_mirror, online=bpy.app.online_access)
+
+
+class MigrateAIServer(JobOperatorBase, bpy.types.Operator):
+    bl_idname = "anyimage.migrate_ai_server"
+    bl_label = "Migrate AI Server"
+    bl_description = "Migrate the complete .anyimage folder to another location"
+    job_type = "migrate-server"
+    starting_message = "Migrating AI Server"
+
+    directory: bpy.props.StringProperty(subtype="DIR_PATH", options={"SKIP_SAVE"})
+    filter_folder: bpy.props.BoolProperty(default=True, options={"HIDDEN"})
+
+    @classmethod
+    def poll(cls, _context):
+        return not runtime.server_busy()
+
+    def invoke(self, context, _event):
+        if runtime.pending_migration():
+            return self.execute(context)
+        self.directory = str(storage_root().parent)
+        context.window_manager.fileselect_add(self)
+        return {"RUNNING_MODAL"}
+
+    def controller(self, runtime):
+        target = None if runtime.pending_migration() else server_root(self.directory)
+        return runtime.migrate_controller(target)
 
 
 class OpenAIEnvironmentSettings(bpy.types.Operator):
@@ -143,14 +174,14 @@ class DownloadRequiredModels(JobOperatorBase, bpy.types.Operator):
         return {"models": list(DEFAULT_MODEL_KEYS)}
 
 
-class ClearModels(bpy.types.Operator):
-    bl_idname = "anyimage.clear_models"
+class UnloadModels(bpy.types.Operator):
+    bl_idname = "anyimage.unload_models"
     bl_label = "Unload Models"
     bl_description = "Free memory used by AI models to keep viewport and rendering responsive"
 
     @classmethod
     def poll(cls, _context):
-        return runtime.server_status().get("state") == "READY"
+        return not runtime.maintenance_busy() and runtime.server_status().get("state") == "READY"
 
     def execute(self, _context):
         try:
@@ -159,3 +190,9 @@ class ClearModels(bpy.types.Operator):
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
         return {"FINISHED"}
+
+
+CLASSES = (
+    SetupAIServer, MigrateAIServer, OpenAIEnvironmentSettings,
+    DownloadModel, DownloadRequiredModels, UnloadModels,
+)

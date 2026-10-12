@@ -6,6 +6,16 @@ from tests.support.blender import BlenderTestCase
 
 class ServerPanelTest(BlenderTestCase):
 
+    def test_server_panel_disables_all_controls_during_migration(self):
+        for state, installed in (("STOPPED", True), ("ERROR", True), ("READY", True), ("STOPPED", False)):
+            with self.subTest(state=state, installed=installed):
+                events = self._draw_server_panel(
+                    state, environment_ready=installed, migrating=True,
+                    cached_names=("BIREFNET_LITE",),
+                )
+                self.assertTrue(events.operators)
+                self.assertTrue(all(not enabled for _identifier, enabled in events.operators))
+
 
     def test_server_panel_shows_controls_for_every_running_state(self):
         for state, label, icon in (
@@ -19,7 +29,7 @@ class ServerPanelTest(BlenderTestCase):
                 self.assertIn("anyimage.restart_server", operators)
                 self.assertIn("anyimage.stop_server", operators)
                 self.assertIn(("row", "Models Loaded", None), events.labels)
-                self.assertNotIn("anyimage.clear_models", operators)
+                self.assertNotIn("anyimage.unload_models", operators)
                 self.assertIn(("row", "Generate Depth Map", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Remove Background", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Upscale Image", "RADIOBUT_OFF"), events.labels)
@@ -69,8 +79,8 @@ class ServerPanelTest(BlenderTestCase):
         for count in (1, 3):
             events = self._draw_server_panel("READY", cached_names=names[:count])
             header = events.parents["Models Loaded"]
-            self.assertIs(events.parents["anyimage.clear_models"].parent, header)
-            self.assertEqual(events.options["anyimage.clear_models"]["text"], "Unload")
+            self.assertIs(events.parents["anyimage.unload_models"].parent, header)
+            self.assertEqual(events.options["anyimage.unload_models"]["text"], "Unload")
             for task in (
                 "Generate Depth Map  [ Fast ]",
                 "Remove Background  [ Fast ]",
@@ -78,7 +88,7 @@ class ServerPanelTest(BlenderTestCase):
             )[:count]:
                 self.assertIn(("row", task, "RADIOBUT_ON"), events.labels)
                 self.assertIs(events.parents[task].parent.parent, header.parent)
-                self.assertGreater(events.sequence.index(task), events.sequence.index("anyimage.clear_models"))
+                self.assertGreater(events.sequence.index(task), events.sequence.index("anyimage.unload_models"))
 
 
     def test_maintenance_controls_without_environment(self):
@@ -97,14 +107,22 @@ class ServerPanelTest(BlenderTestCase):
             events = self._draw_server_panel(state, panel_type=panel_type)
             self.assertEqual(events.operators, [("anyimage.clear_job_files", enabled)])
 
-    def _draw_server_panel(self, state, cached_names=(), environment_ready=True, panel_type=None):
+    def _draw_server_panel(self, state, cached_names=(), environment_ready=True, panel_type=None, migrating=False):
         events = SimpleNamespace(labels=[], operators=[], options={}, sequence=[], parents={})
 
         class Layout:
             def __init__(self, kind="layout", parent=None):
                 self.kind = kind
                 self.parent = parent
-                self.enabled = True
+                self._enabled = True
+
+            @property
+            def enabled(self):
+                return self._enabled and (self.parent is None or self.parent.enabled)
+
+            @enabled.setter
+            def enabled(self, value):
+                self._enabled = value
 
             def row(self, **_options):
                 return Layout("row", self)
@@ -141,8 +159,9 @@ class ServerPanelTest(BlenderTestCase):
             patch.object(
                 panel_module.runtime,
                 "server_busy",
-                return_value=state == "BUSY",
+                return_value=state == "BUSY" or migrating,
             ),
+            patch.object(panel_module.runtime, "maintenance_busy", return_value=migrating),
             patch.object(
                 panel_module.runtime,
                 "server_status",

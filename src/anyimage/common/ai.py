@@ -16,12 +16,12 @@ from ..runtime import runtime
 
 
 def draw_ai_setup(layout):
-    from ..operators.ai_setup import SetupAIEnvironment
+    from ..operators.ai_setup import SetupAIServer
 
     status = ai_status()
     if not status["ready"]:
         layout.operator(
-            SetupAIEnvironment.bl_idname,
+            SetupAIServer.bl_idname,
             text=ai_setup_label(status),
             icon="IMPORT",
         )
@@ -56,7 +56,7 @@ def invoke_ai_setup_if_needed(operator):
     if ai_ready():
         return None
     try:
-        return bpy.ops.anyimage.setup_ai_environment("INVOKE_DEFAULT")
+        return bpy.ops.anyimage.setup_ai_server("INVOKE_DEFAULT")
     except RuntimeError as error:
         report_ai_error(operator, error)
         return {"CANCELLED"}

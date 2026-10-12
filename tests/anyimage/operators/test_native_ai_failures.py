@@ -8,6 +8,28 @@ from anyimage.operators.remove_background import operators as remove_background
 from anyimage.operators.convert_to_plane import operators as plane
 
 
+def test_native_server_controls_are_disabled_during_migration():
+    from types import SimpleNamespace
+    from blendjob.maintenance import MigrateController
+    from anyimage.runtime import runtime
+
+    controller = MigrateController.__new__(MigrateController)
+    controller._committed = False
+    classes = runtime.operator_classes()
+    for operator in classes:
+        bpy.utils.register_class(operator)
+    try:
+        with patch.object(runtime, "active_job", SimpleNamespace(controller=controller)):
+            for action in ("start_server", "stop_server", "restart_server", "open_server_log"):
+                assert not getattr(bpy.ops.anyimage, action).poll()
+            assert bpy.ops.anyimage.cancel_job.poll()
+            controller._committed = True
+            assert not bpy.ops.anyimage.cancel_job.poll()
+    finally:
+        for operator in reversed(classes):
+            bpy.utils.unregister_class(operator)
+
+
 @pytest.mark.parametrize("kind", ["background", "depth", "relief"])
 def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
     reason = "Unsupported input format: .tiff"
@@ -57,22 +79,12 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
 
 
 def test_native_setup_operator_preserves_plain_error(capfd):
-    class RejectInstall(bpy.types.Operator):
-        bl_idname = "anyimage.install_environment"
-        bl_label = "Reject Install"
-
-        def execute(self, context):
-            self.report({"ERROR"}, "Setup unavailable")
-            return {"CANCELLED"}
-
-    with patch.object(ai_setup, "ai_status", return_value={"ready": False, "environment_ready": False}):
-        bpy.utils.register_class(RejectInstall)
-        bpy.utils.register_class(ai_setup.SetupAIEnvironment)
+    with patch.object(ai_setup.runtime, "setup_controller", side_effect=RuntimeError("Setup unavailable")):
+        bpy.utils.register_class(ai_setup.SetupAIServer)
         try:
             with pytest.raises(RuntimeError) as error:
-                bpy.ops.anyimage.setup_ai_environment(use_mirror=False)
+                bpy.ops.anyimage.setup_ai_server(location="D:/", use_mirror=False)
             assert str(error.value).strip() == "Error: Setup unavailable"
             assert "Traceback" not in capfd.readouterr().err
         finally:
-            bpy.utils.unregister_class(ai_setup.SetupAIEnvironment)
-            bpy.utils.unregister_class(RejectInstall)
+            bpy.utils.unregister_class(ai_setup.SetupAIServer)

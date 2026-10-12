@@ -59,7 +59,7 @@ class JobOperatorTest(BlenderTestCase):
         runtime = self.anyimage.runtime
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with patch.object(runtime, "storage_root_factory", root):
+            with patch.object(runtime, "storage_root_setting", root):
                 self.assertEqual(runtime.storage_root(), root.resolve())
                 self.assertEqual(runtime.environment_directory(), root / ".venv")
                 self.assertEqual(
@@ -84,7 +84,7 @@ class JobOperatorTest(BlenderTestCase):
                 json.dumps({"environment_hash": runtime.environment_hash}),
                 encoding="utf-8",
             )
-            with patch.object(runtime, "storage_root_factory", root):
+            with patch.object(runtime, "storage_root_setting", root):
                 self.assertTrue(runtime.environment_ready())
 
 
@@ -92,7 +92,7 @@ class JobOperatorTest(BlenderTestCase):
         runtime = self.anyimage.runtime
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with patch.object(runtime, "storage_root_factory", root):
+            with patch.object(runtime, "storage_root_setting", root):
                 command = runtime.install_command()
         self.assertEqual(command[0], sys.executable)
         self.assertEqual(Path(command[1]).name, "environment.py")

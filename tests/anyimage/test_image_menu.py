@@ -71,11 +71,11 @@ class ImageMenuTest(BlenderTestCase):
                 ("anyimage.upscale_image", True),
                 ("anyimage.match_color_reference", True),
                 ("separator", True),
-                ("anyimage.setup_ai_environment", True),
+                ("anyimage.setup_ai_server", True),
             ],
         )
         self.assertEqual(
-            labels["anyimage.setup_ai_environment"],
+            labels["anyimage.setup_ai_server"],
             "Download Required Models…",
         )
 
@@ -92,8 +92,8 @@ class ImageMenuTest(BlenderTestCase):
                 ("anyimage.open_ai_environment_settings", True),
             ],
         )
-        self.assertNotIn(("anyimage.setup_ai_environment", True), calls)
-        self.assertNotIn(("anyimage.clear_models", True), calls)
+        self.assertNotIn(("anyimage.setup_ai_server", True), calls)
+        self.assertNotIn(("anyimage.unload_models", True), calls)
 
     def test_image_menu_uses_invoke_context(self):
         calls, _labels, operators = self.draw_menu(

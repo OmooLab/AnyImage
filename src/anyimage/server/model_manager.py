@@ -123,11 +123,14 @@ class ModelManager:
     def download(self, context, model_key):
         return self._download(context, model_key, context.progress)
 
-    def download_missing(self, context, model_keys):
+    def download_missing(self, context, model_keys, *, online=True):
         missing = [key for key in model_keys if not self.ready(key)]
         if not missing:
             context.progress(1.0, "Required models are ready")
             return {"downloaded": []}
+
+        if not online:
+            raise RuntimeError("Online Access is disabled in Blender Preferences")
 
         total = len(missing)
         for index, model_key in enumerate(missing):

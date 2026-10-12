@@ -11,6 +11,7 @@ from .common.color_reference import (
     release_unused_color_references,
 )
 from .common.image import image_content_handlers, is_color_reference_candidate
+from .common.server_location import model_files_installed
 from .runtime import runtime
 from .server import model_catalog as shared_model_catalog
 
@@ -190,18 +191,6 @@ def supports_coreml():
 
 
 def supported_devices():
-    devices = runtime.environment_manifest().get("devices")
-    if isinstance(devices, list) and devices:
-        names = [
-            name
-            for device in devices
-            if (name := str(device).lower()) in DEVICE_LABELS
-        ]
-        if not supports_coreml():
-            names = [name for name in names if name != "coreml"]
-        elif "cpu" in names:
-            names = ["cpu", *(name for name in names if name != "cpu")]
-        return names or ["cpu"]
     if sys.platform == "win32":
         return ["directml", "cpu"]
     return ["cpu", "coreml"] if supports_coreml() else ["cpu"]
@@ -219,23 +208,12 @@ def models_status():
     errors = status.get("validation_errors", {})
     return {
         "catalog": tuple(
-            {**shared_model_catalog.model_record(model, _model_files_installed(model)),
+            {**shared_model_catalog.model_record(model, model_files_installed(runtime.storage_root(), model)),
              "validation_error": errors.get(model.key, "")}
             for model in shared_model_catalog.DOWNLOADABLE_MODELS.values()
         ),
         "loaded": status.get("loaded", {}),
     }
-
-
-def _model_files_installed(model):
-    directory = runtime.storage_root() / "models" / model.directory_name
-    try:
-        return all(
-            (directory / name).stat().st_size == size
-            for name, size, _checksum in model.files
-        )
-    except OSError:
-        return False
 
 
 def model_ready(model_key):

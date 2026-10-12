@@ -401,7 +401,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             "missing_models": (),
             "ready": False,
         }
-        setup = ("operator", "anyimage.setup_ai_environment", True)
+        setup = ("operator", "anyimage.setup_ai_server", True)
         with patch.object(self.ai, "ai_status", return_value=missing):
             cutout_tool = importlib.import_module("anyimage.tools").CutoutTool
             layout = Layout()

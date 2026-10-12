@@ -4,13 +4,7 @@ from .frame_tool import CLASSES as FRAME_CLASSES
 from .mask_tool import EditImageAlpha
 from .rectify_tool import CLASSES as RECTIFY_CLASSES
 from .convert_to_plane import CLASSES as PLANE_CLASSES
-from .ai_setup import (
-    ClearModels,
-    DownloadModel,
-    DownloadRequiredModels,
-    OpenAIEnvironmentSettings,
-    SetupAIEnvironment,
-)
+from .ai_setup import CLASSES as AI_SETUP_CLASSES
 from .upscale import UpscaleImage
 from .convert_to_panorama import CLASSES as PANORAMA_CLASSES
 from .color_match import CLASSES as COLOR_MATCH_CLASSES
@@ -24,11 +18,7 @@ CLASSES = (
     *PANORAMA_CLASSES,
     *PLANE_CLASSES,
     *CUTOUT_CLASSES,
-    SetupAIEnvironment,
-    OpenAIEnvironmentSettings,
-    DownloadModel,
-    DownloadRequiredModels,
-    ClearModels,
+    *AI_SETUP_CLASSES,
     ClearJobFiles,
     *FRAME_CLASSES,
     EditImageAlpha,

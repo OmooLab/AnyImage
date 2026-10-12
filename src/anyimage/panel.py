@@ -1,6 +1,6 @@
 import bpy
 
-from .operators.ai_setup import ClearModels, SetupAIEnvironment
+from .operators.ai_setup import UnloadModels, SetupAIServer
 from .operators.job_files import ClearJobFiles
 from .properties import (
     COLOR_REFERENCE_PALETTE_PROPERTIES,
@@ -56,6 +56,7 @@ class ServerPanel(bpy.types.Panel):
 
     def draw(self, _context):
         layout = self.layout
+        layout.enabled = not runtime.maintenance_busy()
         busy = runtime.server_busy()
         if not runtime.environment_ready():
             layout.label(
@@ -66,7 +67,7 @@ class ServerPanel(bpy.types.Panel):
             setup_row = layout.row()
             setup_row.enabled = not busy
             setup_row.operator(
-                SetupAIEnvironment.bl_idname,
+                SetupAIServer.bl_idname,
                 text="Set Up AI Server…",
                 icon="IMPORT",
             )
@@ -144,7 +145,7 @@ class ServerPanel(bpy.types.Panel):
             clear = cached_row.row(align=True)
             clear.enabled = state == "READY"
             clear.operator(
-                ClearModels.bl_idname,
+                UnloadModels.bl_idname,
                 text="Unload",
                 icon="TRASH",
             )

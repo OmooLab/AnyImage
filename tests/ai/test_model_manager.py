@@ -176,6 +176,19 @@ def test_required_downloads_skip_ready_models_and_aggregate_progress(tmp_path):
     context.progress.assert_called_once_with(0.5, "loading")
 
 
+@pytest.mark.parametrize("ready", (True, False))
+def test_offline_preparation_only_accepts_verified_models(tmp_path, ready):
+    manager = ModelManager(tmp_path)
+    context = SimpleNamespace(progress=Mock())
+    with patch.object(manager, "ready", return_value=ready), patch.object(manager, "_download") as download:
+        if ready:
+            assert manager.download_missing(context, ("BEN2_BASE",), online=False) == {"downloaded": []}
+        else:
+            with pytest.raises(RuntimeError, match="Online Access"):
+                manager.download_missing(context, ("BEN2_BASE",), online=False)
+    download.assert_not_called()
+
+
 def test_corrupt_file_blocks_loading_and_repair_clears_only_its_state(tmp_path, monkeypatch):
     key = "BEN2_BASE"
     manager = ModelManager(tmp_path)

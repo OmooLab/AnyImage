@@ -7,7 +7,7 @@ from .common.image_target import (
     is_image_object,
     owner_image,
 )
-from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIEnvironment
+from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIServer
 from .operators.convert_to_panorama import ConvertToPanorama
 from .operators.color_match import MatchColorReference
 from .operators.bake_mesh import BakeMesh
@@ -89,7 +89,7 @@ def draw_image_actions(layout, context):
         )
     else:
         layout.operator(
-            SetupAIEnvironment.bl_idname,
+            SetupAIServer.bl_idname,
             text=ai_setup_label(status),
             icon="IMPORT",
         )

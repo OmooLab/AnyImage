@@ -40,7 +40,7 @@ def download_model(context, parameters):
 @server.job("download-required-models")
 def download_required_models(context, parameters):
     manager = context.resource("model_manager")
-    return manager.download_missing(context, parameters["models"])
+    return manager.download_missing(context, parameters["models"], online=parameters.get("online", True))
 
 
 @server.job("remove-background")

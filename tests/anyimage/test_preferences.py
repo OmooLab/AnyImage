@@ -41,93 +41,21 @@ class RecordingLayout:
 
 
 class PreferencesTest(BlenderTestCase):
-    def test_apple_silicon_architectures_support_coreml(self):
+    def test_device_choices_follow_anyimage_platform_support(self):
         properties = self.anyimage.properties
-        for architecture in ("arm64", "aarch64"):
+        for system, architecture, expected in (
+            ("darwin", "arm64", ["cpu", "coreml"]),
+            ("darwin", "aarch64", ["cpu", "coreml"]),
+            ("darwin", "x86_64", ["cpu"]),
+            ("win32", "AMD64", ["directml", "cpu"]),
+            ("linux", "x86_64", ["cpu"]),
+        ):
             with (
-                self.subTest(architecture=architecture),
-                patch.object(
-                    self.anyimage.runtime,
-                    "environment_manifest",
-                    return_value={},
-                ),
-                patch.object(properties.sys, "platform", "darwin"),
-                patch.object(
-                    properties.platform,
-                    "machine",
-                    return_value=architecture,
-                ),
+                self.subTest(system=system, architecture=architecture),
+                patch.object(properties.sys, "platform", system),
+                patch.object(properties.platform, "machine", return_value=architecture),
             ):
-                self.assertEqual(
-                    properties.supported_devices(),
-                    ["cpu", "coreml"],
-                )
-
-
-    def test_non_apple_silicon_mac_uses_cpu(self):
-        properties = self.anyimage.properties
-        with (
-            patch.object(
-                self.anyimage.runtime,
-                "environment_manifest",
-                return_value={},
-            ),
-            patch.object(properties.sys, "platform", "darwin"),
-            patch.object(
-                properties.platform,
-                "machine",
-                return_value="x86_64",
-            ),
-        ):
-            self.assertEqual(properties.supported_devices(), ["cpu"])
-
-
-    def test_manifest_coreml_requires_apple_silicon(self):
-        properties = self.anyimage.properties
-        manifest = {"devices": ["coreml", "cpu"]}
-        with (
-            patch.object(
-                self.anyimage.runtime,
-                "environment_manifest",
-                return_value=manifest,
-            ),
-            patch.object(properties.sys, "platform", "linux"),
-        ):
-            self.assertEqual(properties.supported_devices(), ["cpu"])
-        with (
-            patch.object(
-                self.anyimage.runtime,
-                "environment_manifest",
-                return_value=manifest,
-            ),
-            patch.object(properties.sys, "platform", "darwin"),
-            patch.object(
-                properties.platform,
-                "machine",
-                return_value="aarch64",
-            ),
-        ):
-            self.assertEqual(
-                properties.supported_devices(),
-                ["cpu", "coreml"],
-            )
-
-
-    def test_windows_keeps_default_directml_device(self):
-        properties = self.anyimage.properties
-        with (
-            patch.object(
-                self.anyimage.runtime,
-                "environment_manifest",
-                return_value={},
-            ),
-            patch.object(properties.sys, "platform", "win32"),
-        ):
-            self.assertEqual(
-                properties.supported_devices(),
-                ["directml", "cpu"],
-            )
-
+                self.assertEqual(properties.supported_devices(), expected)
 
     def test_model_preferences_keep_valid_choices_and_reset_unknown_keys(self):
         module = self.anyimage.preferences
@@ -188,11 +116,12 @@ class PreferencesTest(BlenderTestCase):
         operators = self.draw_preferences(missing_environment, ())
         self.assertEqual(
             [identifier for identifier, _options in operators],
-            ["anyimage.setup_ai_environment"],
+            ["anyimage.setup_ai_server"],
         )
 
         ready = {"environment_ready": True, "missing_models": (), "ready": True}
         operators = self.draw_preferences(ready, catalog)
+        self.assertIn("anyimage.migrate_ai_server", [identifier for identifier, _operator in operators])
         downloads = [
             operator.model
             for identifier, operator in operators
@@ -246,6 +175,7 @@ class PreferencesTest(BlenderTestCase):
             patch.object(self.anyimage.properties, "ai_status", return_value=status),
             patch.object(self.anyimage.properties, "model_catalog", return_value=catalog),
             patch.object(self.anyimage.runtime, "server_busy", return_value=False),
+            patch.object(self.anyimage.runtime, "pending_migration", return_value={}),
         ):
             preferences.draw(None)
         return operators

@@ -53,11 +53,20 @@ def addon_preferences(context=None):
     return getattr(addon, "preferences", None)
 
 
-def configured_storage_root():
-    configured = getattr(addon_preferences(), "storage_root", "")
-    if configured:
-        return Path(bpy.path.abspath(configured))
-    return DEFAULT_STORAGE_ROOT
+def storage_root(path=None):
+    """Read the Server location or persist a new one in Blender preferences."""
+    preferences = addon_preferences()
+    if path is not None:
+        previous = preferences.storage_root
+        preferences.storage_root = str(path)
+        try:
+            if "FINISHED" not in bpy.ops.wm.save_userpref():
+                raise RuntimeError("Unable to save the Server location")
+        except Exception:
+            preferences.storage_root = previous
+            raise
+    configured = getattr(preferences, "storage_root", "")
+    return Path(bpy.path.abspath(configured)) if configured else DEFAULT_STORAGE_ROOT
 
 
 def _configured_model(context, property_name, models, default):
@@ -137,19 +146,21 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
     bl_idname = ADDON_PACKAGE
 
     adapt_material_to_view_transform: bpy.props.BoolProperty(
-        name="Preserve Image Colors",
+        name="Compensate Image Colors",
         description=(
-            "Compensate for the scene's view transform to keep image colors "
-            "close to the original when creating materials."
+            "Compensate for the scene's view transform when creating materials "
+            "to keep colors close to the source image. "
+            "To view materials, switch the viewport to Material Preview or Rendered mode."
         ),
         default=True,
     )
     storage_root: bpy.props.StringProperty(
-        name="Storage Folder",
+        name="Server Root Folder",
         description=(
             "Choose where AnyImage stores its AI environment, downloaded models, and task files."
         ),
         subtype="DIR_PATH",
+        options={"HIDDEN"},
         default=str(DEFAULT_STORAGE_ROOT),
     )
     device: bpy.props.EnumProperty(
@@ -235,7 +246,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
     )
 
     def draw(self, _context):
-        from .operators.ai_setup import SetupAIEnvironment
+        from .operators.ai_setup import MigrateAIServer, SetupAIServer
         from .properties import ai_setup_label, ai_status, model_catalog
         from .runtime import runtime
 
@@ -244,18 +255,26 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         models = {model["key"]: model for model in model_catalog()}
 
         server = self._draw_box(layout, "Server")
-        server.prop(self, "storage_root")
-        server_row = server.row(align=True)
-        if not status["environment_ready"]:
-            setup_row = server_row.row(align=True)
+        location_row = server.row(align=True)
+        location_row.label(text=str(storage_root()), icon="FILE_FOLDER")
+        pending_migration = runtime.pending_migration()
+        if pending_migration:
+            migrate_row = location_row.row(align=True)
+            migrate_row.enabled = not runtime.server_busy()
+            migrate_row.operator(MigrateAIServer.bl_idname, text="Continue Migration", icon="FILE_REFRESH")
+        elif not status["environment_ready"]:
+            setup_row = server.row(align=True)
             setup_row.enabled = not runtime.server_busy()
             setup_row.operator(
-                SetupAIEnvironment.bl_idname,
+                SetupAIServer.bl_idname,
                 text=ai_setup_label(status),
                 icon="IMPORT",
             )
         else:
-            server_row.label(text="Installed", icon="CHECKMARK")
+            migrate_row = location_row.row(align=True)
+            migrate_row.enabled = not runtime.server_busy()
+            migrate_row.operator(MigrateAIServer.bl_idname, icon="FILE_FOLDER")
+            server.label(text="Installed", icon="CHECKMARK")
 
         if status["environment_ready"]:
             ai = self._draw_box(layout, "AI")

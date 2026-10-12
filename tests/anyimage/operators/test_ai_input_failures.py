@@ -45,7 +45,7 @@ class AiInputFailuresTest(BlenderTestCase):
         with (
             patch.object(self.ai, "ai_ready", return_value=False),
             patch.object(self.ai.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(
-                setup_ai_environment=Mock(side_effect=RuntimeError("Error: setup failed\n")))), create=True),
+                setup_ai_server=Mock(side_effect=RuntimeError("Error: setup failed\n")))), create=True),
         ):
             self.assertEqual(self.ai.invoke_ai_setup_if_needed(owner), {"CANCELLED"})
         owner.report.assert_called_once_with({"ERROR"}, "setup failed")

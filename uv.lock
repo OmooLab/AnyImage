@@ -4,7 +4,7 @@ requires-python = "==3.11.*"
 
 [[package]]
 name = "anyimage"
-version = "1.1.1"
+version = "1.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "blendjob" },
@@ -57,7 +57,7 @@ ai = [
 ]
 blender = [
     { name = "bpy", specifier = "==4.5.3" },
-    { name = "omoonodes", specifier = "==0.1.1" },
+    { name = "omoonodes", specifier = "==0.1.2" },
 ]
 dev = [
     { name = "pip", specifier = ">=25,<27" },
@@ -786,14 +786,14 @@ wheels = [
 
 [[package]]
 name = "omoonodes"
-version = "0.1.1"
+version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ad/ff/e05409b63c5e3b63ce22ec6c3e09a32d7b26f4f11251d8fedf48e8aae963/omoonodes-0.1.1.tar.gz", hash = "sha256:49ddc1d325b23c6969528f2b82396356c6e8abf867596fe466c314113e951aab", size = 197277, upload-time = "2026-10-11T07:21:04.246Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/44/e0/605d3204f1b2e2e32bd1b0f5c4ef50b1d0391046cb5c2442b10b657e04fb/omoonodes-0.1.2.tar.gz", hash = "sha256:31798621d3fd29af158cd0e60a25f9c86ff8dc42792ae453486d7b78eaedf53d", size = 197223, upload-time = "2026-10-19T06:59:15.795Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/b3/3af1758f3a4e29bd44efc3e43dc6fc237e1b11cb34481a04fe23910f56e3/omoonodes-0.1.1-py3-none-any.whl", hash = "sha256:090db49d5f4e5d3f75d084b56afde3977d7d22aeee229793b78ed5a1bef7639f", size = 249299, upload-time = "2026-10-11T07:21:03.013Z" },
+    { url = "https://files.pythonhosted.org/packages/76/0a/a11443e93c3cbfd9862316d0680697266044d3b547044d066955b32951b1/omoonodes-0.1.2-py3-none-any.whl", hash = "sha256:31eaa14f560093b5a062ebc9905a744458910e53db8597d6eb8b9212b9e9683d", size = 249280, upload-time = "2026-10-19T06:59:14.642Z" },
 ]
 
 [[package]]

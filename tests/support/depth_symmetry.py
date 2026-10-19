@@ -78,6 +78,7 @@ def symmetry():
     for name, value in (
         ("Depth Image", image),
         ("Reference Depth", 1.45),
+        ("Front Inflation", 0),
         ("Depth Split", 0),
         ("Boundary Smooth", 0),
     ):

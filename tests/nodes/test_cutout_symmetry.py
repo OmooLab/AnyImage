@@ -6,7 +6,6 @@ import bpy
 import numpy as np
 from scipy.spatial import cKDTree
 
-from tests.support.depth_surface import assert_closed
 from tests.support.nodes import AXIS_ATTRIBUTE, FACE_ATTRIBUTE, ROTATION_ATTRIBUTE
 
 
@@ -75,14 +74,17 @@ def test_fill_closes_sides_and_keeps_the_seam_welded_when_disabled(symmetry):
     tolerance = _tolerance(points)
     band = np.abs(points[:, 0]) <= tolerance
 
-    assert_closed(faces)
+    # 补面应消除开放边；粗网格的多层表面可能在接缝共边，不要求流形拓扑。
+    assert faces and not _open_edges(faces)
+    assert (marker == 3).any()
     assert band.any()
     for face, value in zip(faces, marker):
         if value == 3:
             assert np.abs(points[list(face)][:, 0]).max() > tolerance
 
     mirror_setter("Fill Sides", False)
-    points, faces, _marker = _evaluated(obj)
+    points, faces, marker = _evaluated(obj)
+    assert not (marker == 3).any()
     tolerance = _tolerance(points)
     open_edges = _open_edges(faces)
     assert open_edges
@@ -99,10 +101,9 @@ def test_fill_smooth_relaxes_the_junction_band(symmetry):
     obj.data.update()
     mirror_setter("Fill Sides", True)
     mirror_setter("Smooth", 0)
-    plain_points, plain_faces, plain_marker = _evaluated(obj)
-    plain_uv = _evaluated_uv(obj)
+    plain_points, plain_faces, _ = _evaluated(obj)
     mirror_setter("Smooth", 4)
-    smooth_points, smooth_faces, smooth_marker = _evaluated(obj)
+    smooth_points, smooth_faces, _ = _evaluated(obj)
     smooth_uv = _evaluated_uv(obj)
     tolerance = _tolerance(plain_points)
 
@@ -110,7 +111,7 @@ def test_fill_smooth_relaxes_the_junction_band(symmetry):
         plane = np.abs(points[:, 0]) <= tolerance
         assert plane.any()
         assert not any(all(plane[index] for index in face) for face in faces)
-        assert_closed(faces)
+        assert faces and not _open_edges(faces)
     # 焊好之后衔接带连同补面一起松弛，贴合对称面的一圈随之变形。
     band = 0.25 * np.ptp(plain_points[:, 0])
     plain_band = _positions(plain_points[np.abs(plain_points[:, 0]) <= band])
@@ -173,7 +174,9 @@ def test_symmetry_preserves_source_uv_and_separates_regions(symmetry):
                     for index in polygon.loop_indices
                 )
         assert owner_uv[1] == owner_uv[2]
-        regions = {item.value for item in mesh.attributes['o_image_region'].data}
-        assert regions == {0, 2}
+        regions = np.array([item.value for item in mesh.attributes["o_image_region"].data])
+        assert set(regions[marker == 1]) == {0, 1}
+        assert set(regions[marker == 2]) == {2, 3}
+        assert set(regions[marker == 3]) <= {0, 1, 2, 3}
     finally:
         evaluated_obj.to_mesh_clear()

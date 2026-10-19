@@ -8,22 +8,24 @@ from tests.support.blender import BlenderTestCase
 
 class AiSetupTest(BlenderTestCase):
     def test_setup_checks_changed_location_before_starting(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         operator = self.ai_setup.SetupAIServer()
-        operator.location = "D:/first"
+        operator.location = str(root / "first")
         operator.report = Mock()
         with patch.object(self.ai_setup, "inspect_installation", return_value={"environment_ready": True, "missing_models": ()}) as inspect:
             self.assertTrue(operator.check(None))
-            operator.location = "D:/second"
+            operator.location = str(root / "second")
             inspect.side_effect = ValueError("Invalid location")
             with patch.object(self.ai_setup.JobOperatorBase, "execute") as execute:
                 self.assertEqual(operator.execute(None), {"CANCELLED"})
                 execute.assert_not_called()
-            inspect.assert_called_with(Path("D:/second/.anyimage"))
+            inspect.assert_called_with(root / "second/.anyimage")
 
     def test_setup_preview_checks_each_selected_location_only_once(self):
+        root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         operator = self.ai_setup.SetupAIServer()
         operator.layout = Mock()
-        operator.location = "D:/first/.anyimage/models"
+        operator.location = str(root / "first/.anyimage/models")
         status = {"environment_ready": True, "missing_models": ("BIREFNET_LITE",)}
         with (
             patch.object(self.ai_setup, "inspect_installation", return_value=status) as inspect,
@@ -31,11 +33,11 @@ class AiSetupTest(BlenderTestCase):
         ):
             operator.draw(None)
             operator.draw(None)
-            inspect.assert_called_once_with(Path("D:/first/.anyimage"))
-            operator.location = "D:/second/.anyimage"
+            inspect.assert_called_once_with(root / "first/.anyimage")
+            operator.location = str(root / "second/.anyimage")
             operator.draw(None)
             self.assertEqual(inspect.call_count, 2)
-            inspect.assert_called_with(Path("D:/second/.anyimage"))
+            inspect.assert_called_with(root / "second/.anyimage")
 
     def test_setup_rechecks_directory_after_preview(self):
         with tempfile.TemporaryDirectory() as directory:

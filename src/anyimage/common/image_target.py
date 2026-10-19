@@ -181,12 +181,16 @@ class ImageEditTarget:
             if self.tree is None:
                 valid = is_image_empty(self.owner) and self.owner.data == self.image
             else:
+                # 删除后的节点引用可能仍持有地址，只读取当前集合中节点的属性。
                 valid = (
                     self.tree.is_editable
                     and self.image.is_editable
-                    and self.tree.nodes.get(self.owner.name) == self.owner
-                    and self.owner.image == self.image
-                    and self.owner.get("anyimage_identity") == self.node_identity
+                    and any(
+                        node == self.owner
+                        and node.get("anyimage_identity") == self.node_identity
+                        and node.image == self.image
+                        for node in self.tree.nodes
+                    )
                 )
                 if valid and self.object_owner is not None:
                     slots = self.object_owner.material_slots

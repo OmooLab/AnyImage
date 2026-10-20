@@ -193,7 +193,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             [
                 "blendjob==0.1.23",
                 "numpy>=1.26,<2.0",
-                "scipy==1.15.3",
+                "scipy==1.17.1",
                 "materialyoucolor==3.0.4",
                 "pillow==12.1.1",
             ],
@@ -206,7 +206,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             for name in (
                 "blendjob-0.1.23-py3-none-any.whl",
                 "numpy-1.26.4-cp311-cp311-win_amd64.whl",
-                "scipy-1.15.3-cp311-cp311-win_amd64.whl",
+                "scipy-1.17.1-cp311-cp311-win_amd64.whl",
             )
         ]
         manifest = tomllib.loads(pack.manifest_for_platform("windows-x64", wheels))
@@ -239,7 +239,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                         self.assertNotIn("--constraint", command)
                     for name in (
                         "blendjob-0.1.23-py3-none-any.whl",
-                        f"scipy-1.15.3-{tag}-{tag}-{config.pip_platform}.whl",
+                        f"scipy-1.17.1-{tag}-{tag}-{config.pip_platform}.whl",
                         f"numpy-2.1.0-{tag}-{tag}-{config.pip_platform}.whl",
                     ):
                         (target / name).write_bytes(b"wheel")
@@ -328,7 +328,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             )
             (destination / "scipy-1.14.0-cp311-cp311-win_amd64.whl").write_bytes(b"old")
             (destination / "notes.txt").write_text("keep", encoding="utf-8")
-            wheel = root / "scipy-1.15.3-cp311-cp311-win_amd64.whl"
+            wheel = root / "scipy-1.17.1-cp311-cp311-win_amd64.whl"
             wheel.write_bytes(b"new")
             with (
                 patch.object(pack, "SOURCE_DIR", source),

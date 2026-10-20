@@ -9,7 +9,7 @@ ENVIRONMENT = {
     "python": "3.12",
     "packages": [
         "numpy==2.4.2",
-        "scipy==1.15.3",
+        "scipy==1.17.1",
         "pillow==12.1.1",
 
         "trimesh==4.11.2",

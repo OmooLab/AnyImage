@@ -1,8 +1,38 @@
 import threading
 import time
+import subprocess
+import sys
+import textwrap
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from tests.anyimage.server.runtime_support import ServerTestCase
+from tests.support.paths import PROJECT_ROOT
+
+
+def test_model_download_handler_loads_without_scipy():
+    script = textwrap.dedent("""
+        import sys
+        from types import SimpleNamespace
+
+        class BlockScipy:
+            def find_spec(self, fullname, path=None, target=None):
+                if fullname == "scipy" or fullname.startswith("scipy."):
+                    raise ImportError("SciPy native library cannot load")
+
+        sys.meta_path.insert(0, BlockScipy())
+        from server import app
+
+        manager = SimpleNamespace(download=lambda context, model: {"model": model})
+        context = SimpleNamespace(resource=lambda name: manager)
+        assert app.download_model(context, {"model": "test"}) == {"model": "test"}
+        assert not any(name == "scipy" or name.startswith("scipy.") for name in sys.modules)
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=PROJECT_ROOT / "src/anyimage",
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 class JobServerTest(ServerTestCase):
     def test_model_job_resource_failure_clears_cache_without_retry(self):

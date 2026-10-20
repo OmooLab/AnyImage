@@ -1,9 +1,6 @@
 """Spherical projection and periodic radial-distance fusion."""
 
 import numpy as np
-from scipy.ndimage import map_coordinates
-from scipy.sparse import coo_matrix, diags
-from scipy.sparse.linalg import spsolve
 
 
 def panorama_directions(width, height):
@@ -41,6 +38,8 @@ def view_rays(size):
 
 
 def sample_panorama(image, directions, *, order=1):
+    from scipy.ndimage import map_coordinates
+
     directions = directions / np.linalg.norm(directions, axis=-1, keepdims=True)
     u = np.arctan2(directions[..., 1], directions[..., 0]) / (2 * np.pi) % 1
     v = np.arccos(np.clip(directions[..., 2], -1, 1)) / np.pi
@@ -54,6 +53,8 @@ def sample_panorama(image, directions, *, order=1):
 
 
 def warp_distances(distances, masks, bases, width, height, *, directions=None):
+    from scipy.ndimage import map_coordinates
+
     if directions is None:
         directions = panorama_directions(width, height)
     logs, validities = [], []
@@ -77,6 +78,9 @@ def merge_distances(distances, masks, bases, width, height, *, cancel_check=None
     Algorithm reference: microsoft/MoGe, moge/utils/panorama.py.
     This independent implementation solves normal equations on a bounded panorama grid.
     """
+    from scipy.sparse import coo_matrix, diags
+    from scipy.sparse.linalg import spsolve
+
     if cancel_check is not None:
         cancel_check()
     if width > 512:

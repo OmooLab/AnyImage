@@ -193,8 +193,10 @@ class FrameImages(bpy.types.Operator):
             self._draw_overlay, (), "WINDOW", "POST_PIXEL"
         )
         context.workspace.status_text_set(
-            "Frame: drag a rectangle to merge selected Image Empties; "
-            "RMB or Esc cancels"
+            bpy.app.translations.pgettext_iface(
+                "Frame: drag a rectangle to merge selected Image Empties; "
+                "RMB or Esc cancels"
+            )
         )
         context.window_manager.modal_handler_add(self)
         context.area.tag_redraw()

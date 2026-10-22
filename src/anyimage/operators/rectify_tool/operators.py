@@ -112,16 +112,22 @@ class RectifyImagePerspective(bpy.types.Operator):
     def _set_point_status(self, context):
         remaining = 4 - len(self._points)
         context.workspace.status_text_set(
-            f"Rectify: click {remaining} more corner"
-            f"{'s' if remaining != 1 else ''}; click order does not matter; "
-            "Backspace removes, RMB or Esc cancels"
+            bpy.app.translations.pgettext_iface(
+                "Rectify: click {remaining} more corner; click order does not matter; "
+                "Backspace removes, RMB or Esc cancels"
+                if remaining == 1 else
+                "Rectify: click {remaining} more corners; click order does not matter; "
+                "Backspace removes, RMB or Esc cancels"
+            ).format(remaining=remaining)
         )
 
     def _set_aspect_status(self, context):
         context.workspace.status_text_set(
-            f"Rectify Aspect {self.aspect_ratio:.3f}: "
-            "move mouse horizontally, LMB confirms, Backspace returns, "
-            "RMB or Esc cancels"
+            bpy.app.translations.pgettext_iface(
+                "Rectify Aspect {ratio:.3f}: "
+                "move mouse horizontally, LMB confirms, Backspace returns, "
+                "RMB or Esc cancels"
+            ).format(ratio=self.aspect_ratio)
         )
 
     def _update_aspect(self, context, event):

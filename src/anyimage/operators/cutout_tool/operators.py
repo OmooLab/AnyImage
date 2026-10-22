@@ -49,6 +49,7 @@ from ...common.color_image import (
 )
 from ...common.viewport import (
     ImageGesture,
+    deserialize_matrix,
     report_image_edit_exception,
 )
 from ...common.selection import (
@@ -68,6 +69,7 @@ from .object import (
 )
 from .shape import CUTOUT_SHAPES, DEPTH_CUTOUT_SHAPES
 from .boundary_padding import pad_cutout_images
+from .preview import CutoutGridPreview, screen_to_grid_matrix
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
@@ -112,7 +114,9 @@ def create_cutout_shape(
             units.system if units.system != "NONE" else "METRIC", "LENGTH",
             effective_length * units.scale_length, precision=4,
         )
-        report({"INFO"}, f"Effective Edge Length: {label}")
+        report({"INFO"}, bpy.app.translations.pgettext_rpt(
+            "Effective Edge Length: {length}"
+        ).format(length=label))
     base_shape = build_base_shape(
         context,
         source_object,
@@ -417,6 +421,27 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
 
     _pie_event = None
     _polyline_confirm_type = None
+    _grid_preview = None
+
+    def _draw_selection_fill(self, color):
+        context = bpy.context
+        try:
+            transform = screen_to_grid_matrix(
+                (context.region.width, context.region.height),
+                context.region_data.perspective_matrix,
+                deserialize_matrix(self.source_matrix_data),
+                context.scene.anyimage_settings.cutout_edge_length,
+            )
+        except ValueError:
+            # An edge-on image plane has no invertible screen projection.
+            return super()._draw_selection_fill(color)
+        if self._grid_preview is None:
+            self._grid_preview = CutoutGridPreview()
+        self._grid_preview.draw(self._fill_triangles, color, transform)
+
+    def _finish(self, context):
+        self._grid_preview = None
+        super()._finish(context)
 
     def _read_gesture_settings(self, context):
         self.gesture = context.scene.anyimage_settings.cutout_gesture
@@ -427,7 +452,12 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
             if self.gesture == "POLYLINE" else "drag and release for shapes"
         )
         context.workspace.status_text_set(
-            f"Cutout {self.gesture.title()}: {action}; RMB or Esc cancels"
+            bpy.app.translations.pgettext_iface(
+                "Cutout {gesture}: {action}; RMB or Esc cancels"
+            ).format(
+                gesture=bpy.app.translations.pgettext_iface(self.gesture.title()),
+                action=bpy.app.translations.pgettext_iface(action),
+            )
         )
 
     def invoke(self, context, event):

@@ -72,6 +72,48 @@ def warp_distances(distances, masks, bases, width, height, *, directions=None):
     return np.asarray(logs), np.asarray(validities)
 
 
+def merge_normals(normals, masks, bases, width, height, *, cancel_check=None):
+    """Fuse camera normals in panorama axes using masked, center-weighted samples."""
+    from scipy.ndimage import map_coordinates
+
+    unit_normals = []
+    for normal, mask in zip(normals, masks):
+        length = np.linalg.norm(normal, axis=-1)
+        valid = mask & np.isfinite(normal).all(axis=-1) & (length > 1e-8)
+        unit = np.zeros_like(normal)
+        np.divide(normal, length[..., None], out=unit, where=valid[..., None])
+        unit_normals.append(unit)
+    result = np.empty((height, width, 3), np.float32)
+    tile_height = max(1, 65536 // width)
+    for start in range(0, height, tile_height):
+        if cancel_check is not None:
+            cancel_check()
+        stop = min(start + tile_height, height)
+        u, v = np.meshgrid((np.arange(width) + 0.5) / width,
+                           (np.arange(start, stop) + 0.5) / height)
+        directions = uv_directions(u, v)
+        total = np.zeros_like(directions)
+        for unit, basis in zip(unit_normals, bases):
+            rays = directions @ basis.T
+            projected = rays[..., :2] / np.maximum(rays[..., 2:], 1e-8)
+            inside = (rays[..., 2] > 0) & (np.abs(projected) < 0.98).all(axis=-1)
+            size = unit.shape[0]
+            coords = ((projected[..., 1] + 1) * size / 2 - 0.5,
+                      (projected[..., 0] + 1) * size / 2 - 0.5)
+            sampled = np.stack([
+                map_coordinates(unit[..., c], coords, order=1, mode="nearest")
+                for c in range(3)
+            ], axis=-1) @ basis
+            weight = inside * np.maximum(rays[..., 2], 0) ** 4
+            total += sampled * weight[..., None]
+        length = np.linalg.norm(total, axis=-1, keepdims=True)
+        # Uncovered pixels use the inward dome normal.
+        merged = -directions
+        np.divide(total, length, out=merged, where=length > 1e-8)
+        result[start:stop] = merged
+    return result
+
+
 def merge_distances(distances, masks, bases, width, height, *, cancel_check=None):
     """Fuse log-distance derivatives with a cyclic longitude and a scale anchor.
 

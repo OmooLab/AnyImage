@@ -230,3 +230,30 @@ def test_shared_conversion_images_use_blender_duplicate_suffix():
     assert first is not second
     assert first.name == "Poster_color.png"
     assert second.name == "Poster_color.png.001"
+
+
+def test_panorama_normal_encoding_matches_image_layer_object_axes(tmp_path):
+    from mathutils import Vector
+    from tests.support.mesh_bake import render_normal
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    expected = np.array((0.2, -0.3, 0.9))
+    expected /= np.linalg.norm(expected)
+    encoded = expected[[0, 2, 1]] * (1, 1, -1) * 0.5 + 0.5
+    normal = bpy.data.images.new("Panorama normal", width=4, height=2, float_buffer=True)
+    normal.colorspace_settings.is_data = True
+    normal.pixels.foreach_set(np.tile(np.array((*encoded, 1), np.float32), 8))
+    color = bpy.data.images.new("Color", width=4, height=2)
+    material = material_data.create_image_material(
+        color, color, normal_image=normal, normal_space="OBJECT", emission_strength=1)
+    mesh = bpy.data.meshes.new("Normal probe")
+    mesh.from_pydata([(-2, -2, 0), (2, -2, 0), (2, 2, 0), (-2, 2, 0)], [], [(0, 1, 2, 3)])
+    mesh.materials.append(material)
+    obj = bpy.data.objects.new("Normal probe", mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.rotation_euler = (0.2, 0.1, 0.4)
+    bpy.context.view_layer.update()
+    pixels = render_normal(obj, tmp_path / "normal.exr", (0, 0, 1))
+    actual = pixels[24:40, 24:40, :3] * 2 - 1
+    rotated = np.array(obj.matrix_world.to_3x3() @ Vector(expected))
+    np.testing.assert_allclose(actual, np.broadcast_to(rotated, actual.shape), atol=1e-5)

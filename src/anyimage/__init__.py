@@ -1,6 +1,6 @@
 import bpy
 
-from . import keymaps, tools
+from . import keymaps, tools, translations
 from .operators.clipboard_image import CLASSES as CLIPBOARD_CLASSES
 from .menu import (
     AnyImageImageMenu,
@@ -32,6 +32,7 @@ CLASSES = (
 
 
 def register():
+    bpy.app.translations.register(__package__, translations.TRANSLATIONS)
     for class_type in CLASSES:
         bpy.utils.register_class(class_type)
     tools.register()
@@ -60,3 +61,4 @@ def unregister():
         del bpy.types.Scene.anyimage_settings
     for class_type in reversed(CLASSES):
         bpy.utils.unregister_class(class_type)
+    bpy.app.translations.unregister(__package__)

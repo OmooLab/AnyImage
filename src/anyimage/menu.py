@@ -103,7 +103,9 @@ def upscale_menu_label(context):
     if output_size is None:
         return "Upscale"
     width, height = output_size
-    return f"Upscale ({width} × {height})"
+    return bpy.app.translations.pgettext_iface("Upscale ({width} × {height})").format(
+        width=width, height=height,
+    )
 
 
 def draw_image_context_menu(self, context):

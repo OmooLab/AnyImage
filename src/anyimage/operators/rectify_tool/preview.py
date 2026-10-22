@@ -2,6 +2,8 @@
 
 import math
 
+import bpy
+
 from ...common.image_preview import draw_centered_text
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
@@ -78,7 +80,9 @@ def draw_aspect_hud(bounds, aspect_ratio, preset_label=None):
         (0.25, 0.65, 1.0, 1.0),
     )
     draw_centered_text(
-        "Move horizontally  •  Ctrl snap  •  LMB confirm  •  Backspace edit",
+        bpy.app.translations.pgettext_iface(
+            "Move horizontally  •  Ctrl snap  •  LMB confirm  •  Backspace edit"
+        ),
         center_x,
         bottom - 26.0,
         13,

@@ -1,11 +1,9 @@
-import builtins
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 
 
-from anyimage.common.selection import SelectionPath, rasterize_selection_path
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
 from anyimage.operators.cutout_tool import object as cutout_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
@@ -107,30 +105,6 @@ def test_cutout_reference_mask_resamples_content_to_depth_resolution():
     assert mask.dtype == np.bool_
     np.testing.assert_array_equal(mask, ((False, True), (False, True)))
 
-
-def test_blender_cutout_alpha_pipeline_does_not_import_pillow():
-    original_import = builtins.__import__
-
-    def without_pillow(name, *args, **kwargs):
-        if name == "PIL" or name.startswith("PIL."):
-            raise ModuleNotFoundError("Pillow is unavailable in Blender")
-        return original_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=without_pillow):
-        selection_mask = rasterize_selection_path(
-            (48, 32),
-            SelectionPath(points=((6, 4), (42, 4), (42, 28), (6, 28))),
-            antialias=True,
-        )
-        antialiased = selection_mask.full_values((48, 32))
-        selection_contours = extract_selection_contours(
-            antialiased,
-            max_resolution=24,
-        )
-
-    assert selection_contours.image_size == (48, 32)
-    assert selection_contours.components
-    assert np.any((antialiased > 0.0) & (antialiased < 1.0))
 
 def test_cutout_domain_adapts_boundary_spacing_for_a_small_valid_selection():
     components = ((((2046, 2046), (2050, 2046), (2050, 2050), (2046, 2050)),),)

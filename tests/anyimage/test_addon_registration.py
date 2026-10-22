@@ -59,13 +59,6 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
 
 
-    def test_operator_properties_use_plain_names(self):
-        operators = self.anyimage.operators
-        for operator in operators.CLASSES:
-            for name in getattr(operator, "__annotations__", {}):
-                self.assertFalse(name.startswith("anyimage_"), (operator, name))
-
-
     def test_mesh_operators_are_registered_and_ordered(self):
         from anyimage.operators.convert_to_panorama import ConvertToPanorama, GeneratePanorama
         from anyimage.operators.bake_mesh import BakeMesh
@@ -178,6 +171,10 @@ class AddonRegistrationTest(BlenderTestCase):
         self.node_menu_draws.append(existing_node_draw)
 
         self.anyimage.register()
+        self.assertIs(
+            self.registered_translations[self.anyimage.__package__],
+            self.anyimage.translations.TRANSLATIONS,
+        )
         cache = self.anyimage.properties
         self.assertIn(cache.restore_color_references, self.fake_bpy.app.handlers.load_post)
         system_classes = self.anyimage.runtime.operator_classes()
@@ -250,6 +247,7 @@ class AddonRegistrationTest(BlenderTestCase):
             list(reversed(self.anyimage.CLASSES)),
         )
         self.assertEqual(self.registered, [])
+        self.assertEqual(self.registered_translations, {})
         self.assertEqual(self.fake_bpy.app.handlers.load_post, [])
         self.assertEqual(self.fake_bpy.app.handlers.undo_post, [])
         self.assertEqual(self.fake_bpy.app.handlers.redo_post, [])

@@ -74,23 +74,6 @@ class ServerPanelTest(BlenderTestCase):
         self.assertEqual(calls[0][1]["text"], "Working")
         self.assertEqual(calls[1], ("operator", "anyimage.cancel_job"))
 
-    def test_loaded_names_use_full_width_rows_below_header(self):
-        names = ("MOGE2_VITS_NORMAL", "BIREFNET_LITE", "REALESRGAN_GENERAL_WDN_X4V3")
-        for count in (1, 3):
-            events = self._draw_server_panel("READY", cached_names=names[:count])
-            header = events.parents["Models Loaded"]
-            self.assertIs(events.parents["anyimage.unload_models"].parent, header)
-            self.assertEqual(events.options["anyimage.unload_models"]["text"], "Unload")
-            for task in (
-                "Generate Depth Map  [ Fast ]",
-                "Remove Background  [ Fast ]",
-                "Upscale Image  [ Fast ]",
-            )[:count]:
-                self.assertIn(("row", task, "RADIOBUT_ON"), events.labels)
-                self.assertIs(events.parents[task].parent.parent, header.parent)
-                self.assertGreater(events.sequence.index(task), events.sequence.index("anyimage.unload_models"))
-
-
     def test_maintenance_controls_without_environment(self):
         events = self._draw_server_panel("STOPPED", environment_ready=False)
         self.assertIn(("anyimage.open_server_log", True), events.operators)

@@ -86,7 +86,7 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
 
     def _set_status(self, context):
         if self.gesture == "BRUSH":
-            action = f"paint with radius {self.radius} px"
+            action = bpy.app.translations.pgettext_iface("paint with radius {radius} px").format(radius=self.radius)
         elif self.gesture == "POLYLINE":
             action = (
                 "click points; click start, double-click, or Enter to finish; "
@@ -95,8 +95,13 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
         else:
             action = "draw and release"
         context.workspace.status_text_set(
-            f"Mask {self.gesture.title()}: {action}; {self.mode.title()}; "
-            "RMB or Esc cancels"
+            bpy.app.translations.pgettext_iface(
+                "Mask {gesture}: {action}; {mode}; RMB or Esc cancels"
+            ).format(
+                gesture=bpy.app.translations.pgettext_iface(self.gesture.title()),
+                action=bpy.app.translations.pgettext_iface(action),
+                mode=bpy.app.translations.pgettext_iface(self.mode.title()),
+            )
         )
 
     def _submit_selection_path(self, context, selection_path):

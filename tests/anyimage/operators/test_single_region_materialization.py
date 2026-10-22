@@ -7,7 +7,7 @@ from unittest.mock import Mock
 from types import SimpleNamespace
 
 from anyimage.common.image import image_pixels
-from anyimage.common.material import create_emission_material, create_image_material
+from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh import materialization
@@ -34,13 +34,14 @@ def image_object(request):
     color.colorspace_settings.name = "Non-Color"
     color.pixels.foreach_set(np.linspace(0, 1, 128 * 64 * 4, dtype=np.float32))
     normal = None
-    if kind in {"DEPTH", "RELIEF"}:
+    if kind in {"DEPTH", "RELIEF", "PANORAMA"}:
         normal = bpy.data.images.new("Normal", width=128, height=64, alpha=True, float_buffer=True)
         normal.colorspace_settings.name = "Non-Color"
         normal.pixels.foreach_set(np.tile(np.array([.7, .6, .95, 1], np.float32), 128 * 64))
         normal.pack()
     if kind == "PANORAMA":
-        material = create_emission_material(color, color, texture_extension="REPEAT")
+        material = create_image_material(color, color, normal_image=normal, normal_space="OBJECT",
+                                         texture_extension="REPEAT", emission_strength=1.0)
     else:
         material = create_image_material(color, color, normal_image=normal,
                                          normal_space="OBJECT" if kind == "DEPTH" else "TANGENT")
@@ -238,7 +239,11 @@ def test_conversion_failure_keeps_depth(image_object, monkeypatch):
 
 @pytest.mark.parametrize("image_object", ["PLANE", "PANORAMA"], indirect=True)
 def test_geometry_only_bake_preserves_animated_color_sampling(image_object):
-    obj, _kind, color, _normal = image_object
+    obj, _kind, color, normal = image_object
+    if normal is not None:
+        nodes = obj.active_material.node_tree.nodes
+        nodes.remove(next(n for n in nodes if n.type == "TEX_IMAGE" and n.image == normal))
+        next(n for n in nodes if n.type == "GROUP").inputs["Object Space"].default_value = False
     node = next(n for n in obj.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
     color.source = "SEQUENCE"
     node.interpolation = "Closest"

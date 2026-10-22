@@ -118,8 +118,12 @@ class PasteClipboardImage(bpy.types.Operator):
         except (OSError, RuntimeError, PasteTargetError) as error:
             if image is not None and not image_reused and image.users == 0:
                 bpy.data.images.remove(image)
-            self.report({"ERROR"}, f"Unable to paste clipboard image: {error}")
+            self.report({"ERROR"}, bpy.app.translations.pgettext_rpt(
+                "Unable to paste clipboard image: {error}"
+            ).format(error=bpy.app.translations.pgettext_rpt(str(error))))
             return {"CANCELLED"}
 
-        self.report({"INFO"}, f"Pasted and packed {image.name}")
+        self.report({"INFO"}, bpy.app.translations.pgettext_rpt(
+            "Pasted and packed {name}"
+        ).format(name=image.name))
         return {"FINISHED"}

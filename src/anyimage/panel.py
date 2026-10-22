@@ -154,7 +154,10 @@ class ServerPanel(bpy.types.Panel):
             model = DOWNLOADABLE_MODELS.get(name)
             tier = model.tier if model is not None else None
             slot.label(
-                text=f"{task}  [ {tier} ]" if tier else task,
+                text=bpy.app.translations.pgettext_iface("{task}  [ {tier} ]").format(
+                    task=bpy.app.translations.pgettext_iface(task), tier=tier,
+                ) if tier else bpy.app.translations.pgettext_iface(task),
+                translate=False,
                 icon="RADIOBUT_ON" if name else "RADIOBUT_OFF",
             )
 

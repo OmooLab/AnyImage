@@ -229,21 +229,25 @@ class MatchColorReference(bpy.types.Operator):
         draw_preview_frame(bounds)
         center_x = left + draw_width * 0.5
         draw_centered_text(
-            f"Color {self._color * 100:.0f}%  ·  Lightness {self._lightness * 100:.0f}%",
+            bpy.app.translations.pgettext_iface(
+                "Color {color:.0f}%  ·  Lightness {lightness:.0f}%"
+            ).format(color=self._color * 100, lightness=self._lightness * 100),
             center_x,
             bottom + draw_height * 0.5 - 10.0,
             22,
             (0.25, 0.65, 1.0, 1.0),
         )
         draw_centered_text(
-            "Move horizontally: Color  •  vertically: Lightness  •  Shift: Fine",
+            bpy.app.translations.pgettext_iface(
+                "Move horizontally: Color  •  vertically: Lightness  •  Shift: Fine"
+            ),
             center_x,
             bottom - 26.0,
             13,
             (0.85, 0.9, 1.0, 1.0),
         )
         draw_centered_text(
-            "LMB or Enter: Confirm  •  RMB or Esc: Cancel",
+            bpy.app.translations.pgettext_iface("LMB or Enter: Confirm  •  RMB or Esc: Cancel"),
             center_x,
             bottom - 45.0,
             13,

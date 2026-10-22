@@ -83,37 +83,6 @@ def material_node_group():
     return load_node_group(IMAGE_MATERIAL_NODE_GROUP_NAME)
 
 
-def create_emission_material(
-    source_image,
-    color_image,
-    scene=None,
-    texture_extension="EXTEND",
-):
-    """Emit the color image unchanged, without alpha blending or lighting."""
-    preserve_color = color_image.is_float or not color_image.colorspace_settings.name.endswith("sRGB")
-    material_image = color_image if preserve_color else configure_material_color_image(color_image, scene)
-    if material_image.source == "GENERATED" or material_image.is_dirty:
-        material_image.pack()
-    material = bpy.data.materials.new(image_base_name(source_image))
-    material.use_nodes = True
-    nodes = material.node_tree.nodes
-    nodes.clear()
-    color_texture = nodes.new("ShaderNodeTexImage")
-    emission = nodes.new("ShaderNodeEmission")
-    output = nodes.new("ShaderNodeOutputMaterial")
-    color_texture.image = material_image
-    color_texture["o_image_color"] = True
-    color_texture.interpolation = "Linear"
-    color_texture.extension = texture_extension
-    color_texture.location = (-700.0, 300.0)
-    emission.location = (-300.0, 300.0)
-    output.location = (100.0, 300.0)
-    links = material.node_tree.links
-    links.new(color_texture.outputs["Color"], emission.inputs["Color"])
-    links.new(emission.outputs["Emission"], output.inputs["Surface"])
-    return material
-
-
 def create_image_material(
     source_image,
     color_image,
@@ -123,6 +92,7 @@ def create_image_material(
     normal_space="TANGENT",
     scene=None,
     texture_extension="EXTEND",
+    emission_strength=0.0,
 ):
     preserve_color = color_image.is_float or (
         shadeless and not color_image.colorspace_settings.name.endswith("sRGB")
@@ -172,12 +142,13 @@ def create_image_material(
             normal_texture = nodes.new("ShaderNodeTexImage")
             normal_texture.image = normal_image
             normal_texture.interpolation = "Linear"
-            normal_texture.extension = "EXTEND"
+            normal_texture.extension = texture_extension
             normal_texture.location = (-700.0, 0.0)
             links.new(normal_texture.outputs["Color"], material_inputs.inputs["Normal"])
         shader = nodes.new("ShaderNodeBsdfPrincipled")
         shader.location = (100.0, 300.0)
         shader.inputs["IOR"].default_value = 1.2
+        shader.inputs["Emission Strength"].default_value = emission_strength
 
         links.new(
             material_inputs.outputs["Color"],

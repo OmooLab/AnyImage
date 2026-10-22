@@ -79,8 +79,9 @@ class ConvertToPanorama(bpy.types.Operator):
         crop_width = bounds[2] - bounds[0]
         crop_height = bounds[3] - bounds[1]
         if (crop_width, crop_height) != (width, height):
-            self.report({"WARNING"},
-                f"Panorama input cropped from {width} x {height} to {crop_width} x {crop_height}")
+            self.report({"WARNING"}, bpy.app.translations.pgettext_rpt(
+                "Panorama input cropped from {width} x {height} to {crop_width} x {crop_height}"
+            ).format(width=width, height=height, crop_width=crop_width, crop_height=crop_height))
         color_path = None
         try:
             preferences = addon_preferences(context)

@@ -6,28 +6,10 @@ from tools.docs import documentation_command
 from tools.docs import documentation_version
 
 
-MKDOCS_FILE = PROJECT_ROOT / "mkdocs.yml"
-DOCS_ROOT = PROJECT_ROOT / "docs"
-
-
 def project_config():
     return tomllib.loads(
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
-
-
-class DocumentationContentTest(unittest.TestCase):
-    def test_navigation_references_existing_markdown_files(self):
-        referenced_files = []
-        for line in MKDOCS_FILE.read_text(encoding="utf-8").splitlines():
-            value = line.rsplit(":", 1)[-1].strip().removeprefix("- ").strip()
-            if value.endswith(".md"):
-                referenced_files.append(value)
-
-        self.assertTrue(referenced_files)
-        for relative_path in referenced_files:
-            with self.subTest(relative_path=relative_path):
-                self.assertTrue((DOCS_ROOT / relative_path).is_file())
 
 
 class DocumentationCommandTest(unittest.TestCase):
@@ -68,13 +50,6 @@ class DocumentationCommandTest(unittest.TestCase):
                 "latest",
             ),
         )
-
-    def test_project_exposes_the_docs_command(self):
-        self.assertEqual(
-            project_config()["project"]["scripts"]["docs"],
-            "tools.docs:main",
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

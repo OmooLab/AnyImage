@@ -101,9 +101,18 @@ class BlenderTestCase(unittest.TestCase):
             ),
         )
         fake_bpy.context = SimpleNamespace(
-            preferences=SimpleNamespace(addons={}),
+            preferences=SimpleNamespace(addons={}, view=SimpleNamespace(use_translate_tooltips=True)),
         )
         fake_bpy.app = SimpleNamespace(online_access=True)
+        cls.registered_translations = {}
+        fake_bpy.app.translations = SimpleNamespace(
+            locale="en_US",
+            register=lambda name, catalog: cls.registered_translations.__setitem__(name, catalog),
+            unregister=lambda name: cls.registered_translations.pop(name),
+            pgettext_iface=lambda message: message,
+            pgettext_tip=lambda message: message,
+            pgettext_rpt=lambda message: message,
+        )
         fake_bpy.path = SimpleNamespace(abspath=lambda path: path)
         fake_bpy.data = SimpleNamespace(
             objects=SimpleNamespace(get=lambda _name: None),

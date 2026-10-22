@@ -85,10 +85,10 @@ class SetupAIServer(bpy.types.Operator):
                 text="Set up AI features for depth, background removal and upscaling."
             )
             layout.label(
-                text=(
-                    "Downloads the runtime and required models "
-                    f"({format_download_size(required_size)} for models)."
-                )
+                text=bpy.app.translations.pgettext_iface(
+                    "Downloads the runtime and required models ({size} for models)."
+                ).format(size=format_download_size(required_size)),
+                translate=False,
             )
             layout.separator(type="LINE")
             layout.prop(self, "use_mirror")
@@ -107,9 +107,15 @@ class SetupAIServer(bpy.types.Operator):
             text="AI environment installed.",
             icon="CHECKMARK",
         )
-        layout.label(text=f"Download: {', '.join(labels)}")
         layout.label(
-            text=f"{format_download_size(missing_size)} · Usually 2–10 minutes."
+            text=bpy.app.translations.pgettext_iface("Download: {models}").format(models=", ".join(labels)),
+            translate=False,
+        )
+        layout.label(
+            text=bpy.app.translations.pgettext_iface("{size} · Usually 2–10 minutes.").format(
+                size=format_download_size(missing_size),
+            ),
+            translate=False,
         )
 
 class OpenAIEnvironmentSettings(bpy.types.Operator):

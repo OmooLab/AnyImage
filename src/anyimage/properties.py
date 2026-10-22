@@ -57,9 +57,13 @@ def color_reference_items(_settings, _context):
         getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
         for scene in bpy.data.scenes
     )
-    key = tuple(
-        (image.session_uid, image.name, tuple(image.size), color_reference_preview_icon(image))
-        for image in candidates
+    key = (
+        bpy.app.translations.locale,
+        bpy.context.preferences.view.use_translate_tooltips,
+        tuple(
+            (image.session_uid, image.name, tuple(image.size), color_reference_preview_icon(image))
+            for image in candidates
+        ),
     )
     if key == _COLOR_REFERENCE_ITEMS_KEY:
         return _COLOR_REFERENCE_ITEMS
@@ -73,7 +77,7 @@ def color_reference_items(_settings, _context):
             (
                 str(image.as_pointer()),
                 image.name,
-                f"Use {image.name} as the color reference",
+                bpy.app.translations.pgettext_tip("Use {name} as the color reference").format(name=image.name),
                 icon,
                 index,
             )
@@ -271,7 +275,10 @@ def _model_items(models):
         (
             model["key"],
             f"{model['tier']} | {model['label']}",
-            f"{model['description']}; license: {model['license']}",
+            bpy.app.translations.pgettext_tip("{description}; license: {license}").format(
+                description=bpy.app.translations.pgettext_tip(model["description"]),
+                license=model["license"],
+            ),
             model["enum_value"],
         )
         for model in models

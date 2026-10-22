@@ -43,7 +43,7 @@ def _material(kind="PLAIN", image=None):
     if kind == "SHADELESS":
         return material_data.create_image_material(source, color, shadeless=True), color
     if kind == "PANORAMA":
-        return material_data.create_emission_material(source, color), color
+        return material_data.create_image_material(source, color, emission_strength=1.0), color
     return material_data.create_image_material(source, color), color
 
 

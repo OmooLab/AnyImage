@@ -3,6 +3,7 @@ from pathlib import Path
 from blendjob import JobRuntime
 from .preferences import storage_root
 from .server.model_catalog import DEFAULT_MODEL_KEYS
+from .translations import translate_progress
 
 
 ENVIRONMENT = {
@@ -27,7 +28,19 @@ def prepare_models(setup):
     )
 
 
-runtime = JobRuntime(
+class AnyImageJobRuntime(JobRuntime):
+    """Resolve progress text against Blender's current language when displayed."""
+
+    @property
+    def message(self):
+        return translate_progress(self._progress_message)
+
+    @message.setter
+    def message(self, value):
+        self._progress_message = str(value)
+
+
+runtime = AnyImageJobRuntime(
     "server:server",
     entrypoint_root=Path(__file__).parent,
     storage_root=storage_root,

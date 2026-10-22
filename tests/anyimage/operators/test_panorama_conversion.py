@@ -75,6 +75,7 @@ def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkey
     monkeypatch.setattr(operators, "configured_geometry_model", lambda _: "MOGE2_VITB_NORMAL")
     monkeypatch.setattr(operators, "configured_max_ai_input_size", lambda _: 1024)
     monkeypatch.setattr(operators, "bpy", SimpleNamespace(
+        app=bpy.app,
         ops=SimpleNamespace(anyimage=SimpleNamespace(generate_panorama=submit))))
     operator = SimpleNamespace(report=Mock())
 
@@ -98,7 +99,8 @@ def artifacts(tmp_path, source):
     rgba[..., :3] = 3
     write_float_exr(rgba, tmp_path / "depth.exr")
     (tmp_path / "depth.json").write_text(json.dumps({"projection": "equirectangular", "image_size": [32, 16]}))
-    result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / {"depth": "depth.exr", "depth_metadata": "depth.json"}[key])
+    Image.new("RGB", (32, 16), (128, 128, 255)).save(tmp_path / "normal.png")
+    result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / {"depth": "depth.exr", "depth_metadata": "depth.json", "object_normal": "normal.png"}[key])
     operator = SimpleNamespace(source_object_name=source.name, source_identity=str(source.as_pointer()),
                                image_identity=str(source.data.as_pointer()),
                                color_path=str(prepare_material_color_input(source.data)))
@@ -106,7 +108,7 @@ def artifacts(tmp_path, source):
     cleanup_material_color_input(operator.color_path)
 
 
-def test_result_replaces_source_with_zero_rotation_and_emission_material(source, artifacts, monkeypatch):
+def test_result_replaces_source_with_zero_rotation_and_object_normal_material(source, artifacts, monkeypatch):
     result, operator = artifacts
     from anyimage.common.node import load_node_group
     saved = load_node_group("O Image Depth Panorama")
@@ -117,6 +119,7 @@ def test_result_replaces_source_with_zero_rotation_and_emission_material(source,
     monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=undo))))
     obj = conversion.create_panorama_from_result(bpy.context, result, operator)
     assert obj["o_image_object"] is True
+    assert obj.visible_shadow is False
     assert "anyimage_mesh_shape" not in obj
     assert obj.modifiers[0].node_group == saved
     assert saved.name == "O Image Depth Panorama"
@@ -126,15 +129,19 @@ def test_result_replaces_source_with_zero_rotation_and_emission_material(source,
     np.testing.assert_array_equal(obj.rotation_euler, (0, 0, 0))
     material = obj.data.materials[0]
     nodes = material.node_tree.nodes
-    assert not any(n.bl_idname == "ShaderNodeUVMap" or n.type == "GROUP" for n in nodes)
-    texture = next(n for n in nodes if n.type == "TEX_IMAGE")
-    emission = next(n for n in nodes if n.type == "EMISSION")
-    output = next(n for n in nodes if n.type == "OUTPUT_MATERIAL")
-    assert texture.extension == "REPEAT"
-    assert emission.inputs["Color"].links[0].from_socket == texture.outputs["Color"]
-    assert output.inputs["Surface"].links[0].from_socket == emission.outputs["Emission"]
+    assert not any(n.bl_idname == "ShaderNodeUVMap" for n in nodes)
+    layer = next(n for n in nodes if n.type == "GROUP")
+    shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
+    assert layer.node_tree.name == "O Image Layer"
+    assert layer.inputs["Object Space"].default_value
+    assert shader.inputs["Emission Strength"].default_value == 1.0
+    normal = layer.inputs["Normal"].links[0].from_node
+    assert normal.image.colorspace_settings.is_data and normal.image.packed_file
+    assert all(n.extension == "REPEAT" for n in nodes if n.type == "TEX_IMAGE")
+    assert shader.inputs["Normal"].links[0].from_node == layer
+    assert shader.inputs["Emission Color"].links[0].from_node == layer
     assert bpy.context.view_layer.objects.active == obj
-    assert all(image.packed_file for image in bpy.data.images if image.name.endswith(("_color.png", "_depth.exr")))
+    assert all(image.packed_file for image in bpy.data.images if image.name.endswith(("_color.png", "_depth.exr", "_normal.png")))
     graph = bpy.context.evaluated_depsgraph_get()
     mesh = obj.evaluated_get(graph).to_mesh()
     try:
@@ -181,11 +188,13 @@ def test_panorama_preserves_hdr_pixels_color_space_and_alpha(source, artifacts, 
     np.testing.assert_allclose(restored.pixels[:], rgba.ravel(), atol=1e-6)
 
 
-@pytest.mark.parametrize("failure", ["modifier", "depth_size", "stale", "replaced_image", "finalize"])
+@pytest.mark.parametrize("failure", ["modifier", "normal_size", "depth_size", "stale", "replaced_image", "finalize"])
 def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, monkeypatch, failure):
     result, operator = artifacts
     before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials")}
-    if failure == "modifier":
+    if failure == "normal_size":
+        Image.new("RGB", (4, 4)).save(result.file("object_normal"))
+    elif failure == "modifier":
         monkeypatch.setattr(conversion, "set_modifier_input", Mock(side_effect=RuntimeError("Failed modifier")))
     elif failure == "finalize":
         monkeypatch.setattr(conversion, "finalize_object_result", Mock(side_effect=RuntimeError("Failed finalize")))

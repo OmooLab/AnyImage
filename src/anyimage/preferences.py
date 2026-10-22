@@ -353,7 +353,13 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         if error:
             row.label(text="Validation failed", icon="ERROR")
         elif model.get("installed"):
-            row.label(text=f"{ready_label} (Installed)", icon="CHECKMARK")
+            row.label(
+                text=bpy.app.translations.pgettext_iface("{label} (Installed)").format(
+                    label=bpy.app.translations.pgettext_iface(ready_label),
+                ),
+                translate=False,
+                icon="CHECKMARK",
+            )
             return
         download_row = row.row(align=True)
         download_row.enabled = not runtime.server_busy()

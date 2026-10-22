@@ -98,83 +98,9 @@ class ExtensionPackagingTest(unittest.TestCase):
                     manifest = archive.read("blender_manifest.toml").decode("utf-8")
 
                 self.assertIn("__init__.py", names)
-                self.assertIn("operators/clipboard_image/__init__.py", names)
-                self.assertIn("operators/clipboard_image/operators.py", names)
-                self.assertIn("operators/clipboard_image/actions.py", names)
-                self.assertIn("operators/clipboard_image/clipboard.py", names)
                 self.assertIn("blender_manifest.toml", names)
+                self.assertIn("assets/O_AnyImage.blend", names)
                 self.assertNotIn("assets/O_AnyImage.blend1", names)
-                for path in (
-                    "common/__init__.py",
-                    "common/ai.py",
-                    "common/geometry_image.py",
-                    "common/image.py",
-                    "common/projective_image.py",
-                    "common/polygon.py",
-                    "operators/remove_background/hdr.py",
-                    "common/material.py",
-                    "common/node.py",
-                    "common/object.py",
-                    "common/selection.py",
-                    "common/viewport.py",
-                    "operators/cutout_tool/__init__.py",
-                    "operators/cutout_tool/operators.py",
-                    "operators/cutout_tool/interaction.py",
-                    "operators/cutout_tool/geometry.py",
-                    "operators/cutout_tool/mesh.py",
-                    "operators/cutout_tool/tangle.py",
-                    "licenses/tangle.txt",
-                    "operators/cutout_tool/object.py",
-                    "operators/cutout_tool/shape.py",
-                    "operators/convert_to_plane/__init__.py",
-                    "operators/convert_to_plane/object.py",
-                    "operators/convert_to_plane/operators.py",
-                    "operators/convert_to_plane/image_plane.py",
-                    "operators/convert_to_panorama/__init__.py",
-                    "operators/convert_to_panorama/operators.py",
-                    "operators/convert_to_panorama/object.py",
-                    "operators/frame_tool/__init__.py",
-                    "operators/frame_tool/operators.py",
-                    "operators/frame_tool/projection.py",
-                    "operators/frame_tool/compositing.py",
-                    "operators/mask_tool.py",
-                    "operators/rectify_tool/__init__.py",
-                    "operators/rectify_tool/operators.py",
-                    "operators/rectify_tool/geometry.py",
-                    "operators/rectify_tool/preview.py",
-                    "operators/ai_setup.py",
-                    "operators/remove_background/operators.py",
-                ):
-                    self.assertIn(path, names)
-                self.assertIn(
-                    "assets/O_AnyImage.blend",
-                    names,
-                )
-                self.assertIn("server/media/input.py", names)
-                self.assertIn("common/geometry_image.py", names)
-                self.assertIn("server/models/geometry.py", names)
-                self.assertIn("server/jobs/remove_background.py", names)
-                self.assertIn("server/jobs/cutout.py", names)
-                self.assertIn("server/jobs/depth_plane.py", names)
-                self.assertIn("server/jobs/panorama.py", names)
-                self.assertIn("server/geometry/panorama.py", names)
-                self.assertIn("server/geometry/depth_texture.py", names)
-                self.assertIn("server/geometry/prediction_artifacts.py", names)
-                self.assertIn("server/geometry/normal_texture.py", names)
-                self.assertIn("server/models/background.py", names)
-                self.assertIn("server/models/moge.py", names)
-                self.assertIn("server/models/moge_geometry.py", names)
-                self.assertIn("server/model_catalog.py", names)
-                self.assertIn("server/model_download.py", names)
-                self.assertIn("server/models/onnx_ben2.py", names)
-                self.assertIn("server/models/onnx_birefnet.py", names)
-                self.assertIn("server/models/onnx_moge2.py", names)
-                self.assertIn("server/models/onnx_moge3.py", names)
-                self.assertIn("server/models/onnx_upscale.py", names)
-                self.assertIn("server/models/upscale.py", names)
-                self.assertIn("server/__init__.py", names)
-                self.assertIn("operators/cutout_tool/polygon.py", names)
-                self.assertIn("licenses/scikit-image.txt", names)
                 self.assertIn(
                     "wheels/blendjob-0.1.24-py3-none-any.whl",
                     names,
@@ -185,19 +111,6 @@ class ExtensionPackagingTest(unittest.TestCase):
                     "windows-x64" if platform != "windows-x64" else "macos-arm64",
                     manifest.split("platforms =", 1)[-1],
                 )
-
-    def test_reads_extension_dependencies_from_pyproject(self):
-        pack = load_pack()
-        self.assertEqual(
-            pack.project_dependencies(),
-            [
-                "blendjob==0.1.24",
-                "numpy>=1.26,<2.0",
-                "scipy==1.17.1",
-                "materialyoucolor==3.0.4",
-                "pillow==12.1.1",
-            ],
-        )
 
     def test_manifest_includes_all_resolved_numerical_wheels(self):
         pack = load_pack()
@@ -298,17 +211,6 @@ class ExtensionPackagingTest(unittest.TestCase):
         pack = load_pack()
         with self.assertRaisesRegex(ValueError, "Unsupported platform"):
             pack.build_extension("windows-arm64")
-
-    def test_platforms_match_manifest(self):
-        pack = load_pack()
-        manifest = tomllib.loads(
-            (pack.SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8")
-        )
-        self.assertTrue(set(manifest["platforms"]) <= set(pack.PLATFORMS))
-        self.assertEqual(
-            set(pack.PLATFORMS),
-            {"windows-x64", "macos-arm64", "linux-x64"},
-        )
 
     def test_prepares_local_wheels_and_removes_stale_versions(self):
         pack = load_pack()

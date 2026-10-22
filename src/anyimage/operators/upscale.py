@@ -95,8 +95,9 @@ class UpscaleImage(JobOperatorBase, bpy.types.Operator):
         if not upscale_input_size_allowed(source_image, self.max_input_size):
             self.report(
                 {"ERROR"},
-                "Image long edge must be smaller than Maximum AI Input Size "
-                f"({self.max_input_size} px)",
+                bpy.app.translations.pgettext_rpt(
+                    "Image long edge must be smaller than Maximum AI Input Size ({size} px)"
+                ).format(size=self.max_input_size),
             )
             return {"CANCELLED"}
         try:

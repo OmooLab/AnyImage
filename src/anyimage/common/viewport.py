@@ -497,7 +497,7 @@ class ImageGesture:
             self._preview_polygon = polygon
             self._fill_triangles, self._outline_segments = polygon_geometry.preview_fill_geometry(polygon)
         if self._fill_triangles:
-            draw_polygon_fill(polygon, self._fill_triangles, color)
+            self._draw_selection_fill(color)
         if self._outline_segments:
             draw_dashed_line((), segments=self._outline_segments)
         if (
@@ -517,6 +517,9 @@ class ImageGesture:
                     ui_scale,
                 )
 
+    def _draw_selection_fill(self, color):
+        draw_polygon_fill(self._preview_polygon, self._fill_triangles, color)
+
     def _screen_path(self):
         if self.gesture != "POLYLINE" or self._cursor is None:
             return tuple(self._path)
@@ -526,7 +529,9 @@ class ImageGesture:
 
     def _set_status(self, context):
         context.workspace.status_text_set(
-            f"{self.gesture.title()}: drag and release; RMB or Esc cancels"
+            bpy.app.translations.pgettext_iface(
+                "{gesture}: drag and release; RMB or Esc cancels"
+            ).format(gesture=bpy.app.translations.pgettext_iface(self.gesture.title()))
         )
 
     def _finish(self, context):

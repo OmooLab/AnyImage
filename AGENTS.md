@@ -42,6 +42,9 @@ uv lock --refresh
 # 运行全部测试
 uv run --group blender --group ai pytest
 
+# 为 Windows x64 同步本地插件 wheel 与 Manifest
+uv run pack -l -p windows-x64
+
 # 构建 Windows、macOS、Linux 扩展包到 dist/
 uv run pack
 

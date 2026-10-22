@@ -76,7 +76,7 @@ class OImageDepthPanorama(CustomGeometryGroup):
         math_11 = position_3.z * position_3.z
         combine_xyz = g.CombineXYZ(x=position_3.x * (1.0 - (math_10 + math_11) / 2.0 + math_10 * math_11 / 3.0).sqrt(), y=position_3.y * (1.0 - (math_11 + math_9) / 2.0 + math_11 * math_9 / 3.0).sqrt(), z=position_3.z * (1.0 - (math_9 + math_10) / 2.0 + math_9 * math_10 / 3.0).sqrt())
         vector = position.o.position.normalize()
-        math_12 = vector.y.atan2(vector.x) / 6.2831855
+        math_12 = vector.y.atan2(-vector.x) / 6.2831855
         math_13 = 1.0 - g.Math.maximum(-1.0, g.Math.minimum(1.0, vector.z)).o.value.acos() / 3.1415927
         evaluate_on_domain_10 = g.CombineXYZ(x=math_12, y=math_13).o.vector.point.evaluate()
         separate_xyz = g.SeparateXYZ(vector=evaluate_on_domain_10)
@@ -86,7 +86,7 @@ class OImageDepthPanorama(CustomGeometryGroup):
         switch_2 = (image_texture.o.color.a < image_texture_1.o.color.a - 0.000001).switch.color(image_texture.o.color, image_texture_1.o.color)
         evaluate_on_domain_11 = g.EvaluateOnDomain.point.vector(switch_2)
         vector_1 = evaluate_on_domain_5.normalize()
-        math_14 = vector_1.y.atan2(vector_1.x) / 6.2831855
+        math_14 = vector_1.y.atan2(-vector_1.x) / 6.2831855
         combine_xyz_1 = g.CombineXYZ(x=math_14, y=1.0 - g.Math.maximum(-1.0, g.Math.minimum(1.0, vector_1.z)).o.value.acos() / 3.1415927)
         combine_xyz_2 = g.CombineXYZ(x=(abs(vector.z) > 0.999999).switch.float(math_12 + (math_14 - math_12).round(), math_14), y=math_13)
         store_named_attribute = (

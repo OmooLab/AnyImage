@@ -26,7 +26,7 @@ Blender Stub 共用 `tests/support/blender.py`；Server 和实际 Blender 几何
 | 命令 | 职责 |
 | --- | --- |
 | `uv run pack` | 生成 Windows、macOS arm64、Linux 扩展包 |
-| `uv run pack --prepare` | 为本机同步扩展 wheel 与 Manifest |
+| `uv run pack -l -p windows-x64` | 为 Windows x64 同步本地扩展 wheel 与 Manifest |
 | `uv run --group blender omoonodes build` | 从 `nodes/` 构建并校验节点资产库 |
 | `uv run --group blender pytest tests/nodes` | 验证节点行为与保存资产 |
 | `uv run model sync` | 准备、校验并上传模型声明的文件 |

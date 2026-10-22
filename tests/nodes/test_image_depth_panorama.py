@@ -206,23 +206,40 @@ def test_controls_and_material_slot_inheritance():
             result.to_mesh_clear()
 
 
-def test_material_uv_matches_radial_sampling_and_faces_point_inward():
+def test_material_uv_matches_world_environment_and_faces_point_inward():
     obj, _ = panorama(subdivide=4)
     result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = result.to_mesh()
     try:
         assert all(np.dot(face.normal, face.center) < 0 for face in mesh.polygons)
-        assert any(loop.uv.x < 0 for loop in mesh.uv_layers.active.data)
         for loop in mesh.loops:
             ray = np.array(mesh.vertices[loop.vertex_index].co)
             ray /= np.linalg.norm(ray)
             u, v = mesh.uv_layers.active.data[loop.index].uv
             if abs(ray[2]) < 0.999999:
-                expected_u = np.arctan2(ray[1], ray[0]) / (2 * np.pi)
+                # Blender's zero-rotation equirectangular Environment Texture.
+                expected_u = 0.5 - np.arctan2(ray[1], ray[0]) / (2 * np.pi)
                 assert abs((u - expected_u + 0.5) % 1 - 0.5) < 1e-5
             assert abs(v - (1 - np.arccos(np.clip(ray[2], -1, 1)) / np.pi)) < 1e-5
     finally:
         result.to_mesh_clear()
+
+
+def test_asymmetric_depth_matches_world_environment_directions():
+    u, v = np.meshgrid((np.arange(128) + 0.5) / 128, (np.arange(64) + 0.5) / 64)
+    longitude = np.pi - 2 * np.pi * u
+    latitude = np.pi * (v - 0.5)
+    depth = (3 + 0.4 * np.cos(latitude) * np.cos(longitude)
+             + 0.2 * np.cos(latitude) * np.sin(longitude) + 0.1 * np.sin(latitude))
+    obj, _ = panorama(depth, subdivide=4)
+    points, _, _ = evaluated(obj)
+    radii = np.linalg.norm(points, axis=1)
+    rays = points / radii[:, None]
+    expected = 3 + rays @ (0.4, 0.2, 0.1)
+    # Pole samples clamp to the nearest pixel row, half a pixel from the pole.
+    non_poles = abs(rays[:, 2]) < 0.999999
+    np.testing.assert_allclose(radii[non_poles], expected[non_poles], atol=0.001)
+    np.testing.assert_allclose(radii[~non_poles], expected[~non_poles], atol=0.011)
 
 
 def test_depth_scale_gates_split_selection():

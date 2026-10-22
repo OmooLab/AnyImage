@@ -14,6 +14,12 @@ onnx = load_server_module("models.onnx_moge2")
 job = load_server_module("jobs.panorama")
 
 
+def test_panorama_projection_preserves_asymmetric_source_pixels():
+    image = np.arange(32 * 64, dtype=float).reshape(32, 64)
+    sampled = geometry.sample_panorama(image, geometry.panorama_directions(64, 32))
+    np.testing.assert_allclose(sampled, image, atol=1e-9)
+
+
 def test_known_fov_recovers_shift_metric_and_excludes_invisible_points():
     rays = geometry.view_rays(64)
     depth = 2 + 0.3 * rays[..., 0]

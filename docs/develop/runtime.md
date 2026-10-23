@@ -28,8 +28,8 @@ flowchart TD
 | 用途 | 模型 | Session 分类 |
 | --- | --- | --- |
 | Depth 与 Normal | MoGe-2 ViT-S / ViT-B Normal、MoGe-3 ViT-L | geometry |
-| Remove Background | BiRefNet Lite、BEN2、BiRefNet HR Matting | background |
-| Upscale | Real-ESRGAN WDN、Real-ESRGAN x4plus、HAT Sharper | upscale |
+| **移除背景** | BiRefNet Lite、BEN2、BiRefNet HR Matting | background |
+| **2倍高清** | Real-ESRGAN WDN、Real-ESRGAN x4plus、HAT Sharper | upscale |
 
 `model_catalog.py` 声明模型 key、Fast/Base/Pro 档位、文件来源、许可、大小和 SHA-256；`model_download.py` 下载并校验。ModelManager 在 Session 创建前校验声明文件，按文件身份缓存校验结果，并按模型 key、路径和设备缓存 Session，切换模型或设备时释放对应类别。Clear Models 或关闭 Server 时释放已加载资源。
 

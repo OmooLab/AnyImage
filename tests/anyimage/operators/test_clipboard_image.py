@@ -362,11 +362,24 @@ class ClipboardImageTest(BlenderTestCase):
             stencil_dimension=(256.0, 256.0),
             update_tag=lambda: None,
         )
-        context = SimpleNamespace(brush=brush)
-        image = SimpleNamespace(name="Clipboard Image", size=(1920, 1080))
+        context = SimpleNamespace(
+            brush=brush,
+            scene=SimpleNamespace(view_settings=SimpleNamespace(view_transform="AgX")),
+        )
+        image = SimpleNamespace(
+            name="Clipboard Image", size=(1920, 1080),
+            colorspace_settings=SimpleNamespace(name="sRGB"), alpha_mode="STRAIGHT",
+        )
+        material = importlib.import_module("anyimage.common.material")
         try:
-            first_texture = self.actions.set_tool_texture(context, image)
-            second_texture = self.actions.set_tool_texture(context, image)
+            with patch.object(material, "configured_material_view_adaptation", return_value=True):
+                first_texture = self.actions.set_tool_texture(context, image)
+            self.assertEqual(image.colorspace_settings.name, "AgX Base sRGB")
+            self.assertEqual(image.alpha_mode, "STRAIGHT")
+            with patch.object(material, "configured_material_view_adaptation", return_value=False):
+                second_texture = self.actions.set_tool_texture(context, image)
+            self.assertEqual(image.colorspace_settings.name, "sRGB")
+            self.assertEqual(image.alpha_mode, "PREMUL")
         finally:
             self.actions.bpy.data = original_data
 

@@ -6,7 +6,7 @@ AI 环境管理从当前安装状态出发，补齐独立运行环境和必需�
 
 ```mermaid
 flowchart TD
-    Entry["Set Up AI Server"] --> Status["读取环境与必需模型状态"]
+    Entry["设置 AI 服务器"] --> Status["读取环境与必需模型状态"]
     Status --> Ready{"是否全部就绪？"}
     Ready -- "是" --> Done["结束"]
     Ready -- "否" --> Environment{"运行环境是否就绪？"}

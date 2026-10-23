@@ -68,7 +68,7 @@ uv run --group blender omoonodes dump path/to/O_Library.blend -o nodes/O_Library
 - 域转换使用 Evaluate on Domain 或明确域的采样节点表达；跨几何变化优先调整消费顺序或在源几何上采样，明确索引对应关系。
 - Store Named Attribute 仅用于实际命名协议或跨几何变化必需的最少数据，明确名称、类型、域、Selection、写入阶段及消费者。内部临时属性使用 `_o_` 前缀，在最后消费者之后用 Remove Named Attribute 的 Wildcard 模式清理 `_o_*`，保留 UV、用户属性和外部协议属性。
 - 通过区域内输入、字段排列和必要的 Reroute 保持连线可读；存储须有数据生命周期依据，构建阶段通过明确的节点或 socket 引用接线。
-- 保留节点默认 `name` 和标题，不用 `label` 覆盖，不用 String 节点注解；Frame 仅用于确有包裹语义的区域。
+- 保留节点默认 `name` 和标题，不用 `label` 覆盖，不用 String 节点注解；Frame 节点仅用于确有包裹语义的区域。
 - 全接线的简单数学运算可折叠；需要阅读的常数、运算域和模式保持可见。
 - 几何树比较使用 Compare，布尔运算使用 Boolean Math；材质树使用 Math。
 - 修改器 Geometry Nodes 的输入 socket 默认使用 `SINGLE`；socket `subtype` 按语义设置，长度用 `DISTANCE`，比例用 `FACTOR`，百分比用 `PERCENTAGE`。

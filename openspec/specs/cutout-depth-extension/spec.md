@@ -5,10 +5,10 @@ TBD - created by archiving change restore-cutout-depth-extension. Update Purpose
 ## Requirements
 ### Requirement: Reliable depth sources retain the tested alpha rule
 
-系统 SHALL 按剪裁 Alpha 定义可见域和8连通分量；供体候选 SHALL 位于同一可见分量内，并满足固定 Alpha ≥ 0.95、Validity > 0.5、有限正深度。系统 SHALL 保留内侧2像素保护及旧版回退规则。
+系统 SHALL 按立体裁切 Alpha 定义可见域和8连通分量；供体候选 SHALL 位于同一可见分量内，并满足固定 Alpha ≥ 0.95、Validity > 0.5、有限正深度。系统 SHALL 保留内侧2像素保护及旧版回退规则。
 
 #### Scenario: Low clipping threshold retains translucent edges
-- **WHEN** 剪裁 Alpha 为0.1，边缘 Alpha 为0.1且同分量存在可靠核心
+- **WHEN** 立体裁切 Alpha 为0.1，边缘 Alpha 为0.1且同分量存在可靠核心
 - **THEN** 边缘属于可见域但不能充当供体，其深度使用同分量可靠来源补齐
 
 #### Scenario: Narrow component lacks a core

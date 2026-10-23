@@ -96,6 +96,14 @@ def configured_material_view_adaptation(context=None):
     )
 
 
+def configured_panorama_light_probe(context=None):
+    preferences = addon_preferences(context)
+    return (
+        bool(getattr(preferences, "panorama_light_probe_enabled", True)),
+        max(0.5, float(getattr(preferences, "panorama_light_probe_max_distance", 20.0))),
+    )
+
+
 def configured_min_cutout_relative_edge_length(context=None):
     percent = float(getattr(addon_preferences(context), "min_cutout_relative_edge_length", 1.0))
     return min(max(percent, 0.001), 100.0) / 100.0
@@ -144,6 +152,15 @@ def geometry_model_items(owner, context):
 
 class AnyImagePreferences(bpy.types.AddonPreferences):
     bl_idname = ADDON_PACKAGE
+
+    panorama_light_probe_enabled: bpy.props.BoolProperty(
+        name="Panorama Light Probe", default=True,
+        description="Create and bake a light probe volume from the panorama",
+    )
+    panorama_light_probe_max_distance: bpy.props.FloatProperty(
+        name="Maximum Distance per Direction (m)", default=20.0, min=0.5,
+        description="Maximum distance from the panorama origin in each direction, in meters",
+    )
 
     adapt_material_to_view_transform: bpy.props.BoolProperty(
         name="Compensate Image Colors",
@@ -300,6 +317,10 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
 
         shading = self._draw_box(layout, "Shading")
         shading.prop(self, "adapt_material_to_view_transform")
+        shading.prop(self, "panorama_light_probe_enabled")
+        probe = shading.row()
+        probe.enabled = getattr(self, "panorama_light_probe_enabled", True)
+        probe.prop(self, "panorama_light_probe_max_distance")
 
         tools = self._draw_box(layout, "Tools")
         tools.label(text="Frame Tool")

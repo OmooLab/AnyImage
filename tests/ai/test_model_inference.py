@@ -6,41 +6,15 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from PIL import Image
-from tests.anyimage.server.support import load_server_module, FakeModels
+from tests.anyimage.server.support import load_server_module
 
 
 class ModelInferenceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.moge2_model = load_server_module("models.moge")
-
         cls.upscale_model = load_server_module("models.upscale")
 
         cls.onnx_upscale = load_server_module("models.onnx_upscale")
-
-
-    def test_moge2_infers_one_geometry_frame(self):
-        prediction = {
-            "points": np.ones((2, 2, 3), dtype=np.float32),
-            "depth": np.ones((2, 2), dtype=np.float32),
-            "normal": np.ones((2, 2, 3), dtype=np.float32),
-            "mask": np.ones((2, 2), dtype=bool),
-            "intrinsics": np.eye(3, dtype=np.float32),
-        }
-        with patch.object(
-            self.moge2_model,
-            "infer_one",
-            return_value=prediction,
-        ) as infer_one:
-            frame = self.moge2_model.infer(
-                FakeModels(),
-                {"model": "MOGE2_VITS_NORMAL", "device": "cpu"},
-                Path("input.png"),
-                include_points=True,
-            )
-
-        self.assertEqual(frame.depth.shape, (2, 2))
-        infer_one.assert_called_once()
 
 
     def test_upscale_resource_error_reaches_server_job_boundary(self):

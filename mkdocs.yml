@@ -13,11 +13,11 @@ nav:
   - 开始使用:
       - index.md
       - 安装: installation.md
-      - 剪出工具: cutout.md
+      - 立体裁切: cutout.md
       - 图片处理: ai-image-tools.md
       - 空间转化: convert-to.md
       - 图片工具: image-tools.md
-      - 颜色匹配: color-match.md
+      - 色彩匹配: color-match.md
       - 烘焙网格: bake-mesh.md
   - 开发文档:
       - 总览: develop/index.md
@@ -29,18 +29,18 @@ nav:
       - Operators:
           - 总览: develop/operators/index.md
           - AI 环境管理: develop/operators/ai-setup.md
-          - Clipboard Image: develop/operators/clipboard-image.md
-          - Convert to Plane: develop/operators/convert-to-plane.md
-          - Convert to Panorama: develop/operators/convert-to-panorama.md
-          - Cutout Tool: develop/operators/cutout-tool.md
-          - Frame: develop/operators/frame.md
-          - Mask: develop/operators/mask.md
-          - Rectify: develop/operators/rectify.md
-          - Color Match: develop/operators/color-match.md
-          - Bake Mesh: develop/operators/bake-mesh.md
+          - 粘贴剪贴板图像: develop/operators/clipboard-image.md
+          - 转为平面: develop/operators/convert-to-plane.md
+          - 转为立体全景: develop/operators/convert-to-panorama.md
+          - 立体裁切: develop/operators/cutout-tool.md
+          - 重设画框: develop/operators/frame.md
+          - 局部显隐: develop/operators/mask.md
+          - 透视校正: develop/operators/rectify.md
+          - 色彩匹配: develop/operators/color-match.md
+          - 烘焙网格: develop/operators/bake-mesh.md
           - Job 文件清理: develop/operators/job-files.md
-          - Remove Background: develop/operators/remove-background.md
-          - Upscale: develop/operators/upscale.md
+          - 移除背景: develop/operators/remove-background.md
+          - 2倍高清: develop/operators/upscale.md
       - 开发维护:
           - 开发与发布: develop/development.md
           - 节点资产: develop/node-assets.md

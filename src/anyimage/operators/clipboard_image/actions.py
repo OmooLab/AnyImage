@@ -4,7 +4,7 @@ import tempfile
 
 import bpy
 
-from ...common.material import create_image_material
+from ...common.material import configure_material_color_image, create_image_material
 from ...common.color_image import material_color_image
 from ...common.image import CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_pixels, save_packed_image
 
@@ -354,6 +354,7 @@ def set_tool_texture(context, image):
         raise PasteTargetError("The active tool does not provide an editable brush")
     brush = _ensure_editable_brush(context, brush)
 
+    configure_material_color_image(image, context.scene)
     texture, is_new = _find_or_create_image_texture(image)
     try:
         brush.texture = texture

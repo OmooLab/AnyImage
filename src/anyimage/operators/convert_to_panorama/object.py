@@ -11,6 +11,8 @@ from ...common.color_image import material_color_image
 from ...common.material import create_image_material
 from ...common.node import load_node_group
 from ...common.object import finalize_object_result, modifier_input_identifier, set_modifier_input
+from ...preferences import configured_panorama_light_probe
+from .light_probe import create_panorama_light_probe, bake_panorama_light_probe
 
 
 def load_panorama_metadata(path):
@@ -28,7 +30,7 @@ def load_panorama_metadata(path):
 
 def create_panorama_from_result(context, result, operator):
     source = require_conversion_source(operator)
-    depth = normal = material = mesh = obj = None
+    depth = normal = material = mesh = obj = probe = None
     try:
         with material_color_image(input_path=operator.color_path) as color:
             metadata = load_panorama_metadata(result.file("depth_metadata"))
@@ -40,6 +42,8 @@ def create_panorama_from_result(context, result, operator):
             material = create_image_material(
                 source.data, color, normal_image=normal, normal_space="OBJECT",
                 scene=context.scene, texture_extension="REPEAT", emission_strength=1.0)
+            material.use_backface_culling = True
+            material.use_backface_culling_shadow = True
             mesh = bpy.data.meshes.new(source.name)
             mesh.from_pydata([(0, 0, 0)], [], [])
             mesh.materials.append(material)
@@ -56,8 +60,24 @@ def create_panorama_from_result(context, result, operator):
                 ("Subdivide", 8), ("Depth Image", depth),
             ):
                 set_modifier_input(modifier, modifier_input_identifier(group, name), value)
+            obj.update_tag(refresh={"DATA"})
+            enabled, max_distance = configured_panorama_light_probe(context)
+            if enabled:
+                context.view_layer.update()
+                probe = create_panorama_light_probe(context, obj, max_distance)
+                if probe is None:
+                    operator.report({"WARNING"}, "Panorama has no valid light probe region")
+                else:
+                    probe.name = f"{source.name}_LightProbe"
+                    probe.data.name = probe.name
+                    bake_panorama_light_probe(context, obj, probe)
+                    probe.hide_select = True
             finalize_object_result(context, source, obj)
     except Exception:
+        if probe is not None:
+            probe_data = probe.data
+            bpy.data.objects.remove(probe, do_unlink=True)
+            bpy.data.lightprobes.remove(probe_data)
         if obj is not None:
             bpy.data.objects.remove(obj, do_unlink=True)
         if mesh is not None and mesh.users == 0:

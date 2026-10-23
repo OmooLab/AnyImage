@@ -37,7 +37,7 @@ class TranslationsTest(BlenderTestCase):
             "Upscaling image": "正在生成2倍高清图像",
             "Generating depth texture": "正在生成深度纹理",
             "Removing background": "正在移除背景",
-            "Preparing Cutout Selection": "正在准备剪裁选区",
+            "Preparing Cutout Selection": "正在准备立体裁切选区",
             "3/3 Downloading packages (mirror) 4/10": "3/3 正在通过镜像下载依赖包 4/10",
             "2/3 Installing Python ...": "2/3 正在安装 Python…",
             "Downloading MoGe 2 (mirror) 1.2 MB/s": "正在通过镜像下载 MoGe 2 1.2 MB/s",
@@ -108,5 +108,5 @@ class TranslationsTest(BlenderTestCase):
                           side_effect=lambda message: catalog.get(("*", message), message)):
             operator._set_status(context)
         context.workspace.status_text_set.assert_called_once_with(
-            "遮罩画笔：使用半径 25 像素的画笔涂绘；减去；右键或 Esc 取消"
+            "局部显隐画笔：使用半径 25 像素的画笔涂绘；减去；右键或 Esc 取消"
         )

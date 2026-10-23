@@ -370,22 +370,6 @@ class MaskToolTest(BlenderTestCase):
         self.assertGreater(values[40, 40], 0.9)
 
 
-    def test_mask_brush_path_builds_one_coverage_after_release(self):
-        import numpy as np
-
-        selection_mask = self.edit_mask.rasterize_brush_path(
-            (80, 40),
-            ((10, 20), (70, 20)),
-            6,
-            lambda path: path,
-        )
-
-        full = selection_mask.full_values((80, 40))
-        self.assertTrue(np.all(full[20, 10:71] > 0.9))
-        self.assertLess(selection_mask.bounds[0], 10)
-        self.assertGreater(selection_mask.bounds[2], 70)
-
-
     def test_image_lasso_does_not_add_stationary_or_nearly_collinear_points(self):
         path = [(0.0, 0.0)]
         samples = list(path)

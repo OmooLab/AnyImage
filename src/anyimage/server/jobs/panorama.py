@@ -52,7 +52,7 @@ def run(context, parameters):
             masks.append((prediction["mask"] > 0.5) & visible)
             normals.append(prediction["normal"])
             del prediction
-        context.progress(0.75, "Merging panoramic distance")
+        context.progress(0.75, "Merging panorama depth maps")
         distance, valid = merge_distances(distances, masks, bases, width, height,
                                          cancel_check=context.check_cancelled)
         alpha = np.asarray(source.getchannel("A"),
@@ -69,7 +69,7 @@ def run(context, parameters):
         outputs[1].write_text(json.dumps({
             "projection": "equirectangular", "image_size": [width, height],
         }, separators=(",", ":")), encoding="utf-8")
-        context.progress(0.9, "Merging panoramic normals")
+        context.progress(0.9, "Merging panorama normal maps")
         normal = merge_normals(normals, masks, bases, width, height,
                                cancel_check=context.check_cancelled)
         # Panorama geometry mirrors projection X. O Image Layer rotates +90 degrees

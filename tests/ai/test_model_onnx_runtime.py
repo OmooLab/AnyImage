@@ -164,15 +164,6 @@ class OnnxRuntimeTest(unittest.TestCase):
         self.assertIsNone(directml.calls[0][2])
         self.assertEqual(result, ["prediction"])
 
-    def test_installed_runtime_accepts_memory_arena_shrinkage_option(self):
-        import onnxruntime
-
-        run_options = onnxruntime.RunOptions()
-        run_options.add_run_config_entry(
-            "memory.enable_memory_arena_shrinkage",
-            "gpu:0",
-        )
-
     def test_session_creation_reports_resource_failure(self):
         runtime, _calls = self.create_runtime(["CPUExecutionProvider"])
         runtime.InferenceSession = lambda *_args, **_kwargs: (_ for _ in ()).throw(

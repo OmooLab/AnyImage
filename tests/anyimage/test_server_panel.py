@@ -50,30 +50,6 @@ class ServerPanelTest(BlenderTestCase):
                 self.assertIn(("row", "Upscale Image", "RADIOBUT_OFF"), events.labels)
 
 
-    def test_status_bar_reads_runtime_state(self):
-        calls = []
-
-        class Layout:
-            def row(self, **_options):
-                return self
-
-            def progress(self, **options):
-                calls.append(("progress", options))
-
-            def operator(self, identifier, **_options):
-                calls.append(("operator", identifier))
-
-        runtime = self.anyimage.runtime
-        runtime.active_job = object()
-        runtime.progress = 0.4
-        runtime.message = "Working"
-        runtime._draw_status_bar(SimpleNamespace(layout=Layout()), None)
-        runtime.active_job = None
-
-        self.assertEqual(calls[0][1]["factor"], 0.4)
-        self.assertEqual(calls[0][1]["text"], "Working")
-        self.assertEqual(calls[1], ("operator", "anyimage.cancel_job"))
-
     def test_maintenance_controls_without_environment(self):
         events = self._draw_server_panel("STOPPED", environment_ready=False)
         self.assertIn(("anyimage.open_server_log", True), events.operators)

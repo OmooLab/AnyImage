@@ -1,4 +1,4 @@
-# Color Match
+# 色彩匹配
 
 `operators/color_match.py` 实现 `MatchColorReference`，读取当前 Scene 参考并处理 Image Empty、AnyImage 图片 Mesh 或活动 Image Texture。参考画廊和色板由 `properties.py` 同步，参考数据由 `common/color_reference.py` 准备。
 

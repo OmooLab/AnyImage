@@ -1,12 +1,12 @@
 # 烘焙网格
 
-**Bake Mesh** 将 AnyImage 的程序化图片对象固化为带贴图的普通 Mesh，方便继续编辑网格或用于后续制作。
+**烘焙网格** 将 AnyImage 的程序化图片对象固化为带贴图的普通 Mesh，方便继续编辑网格或用于后续制作。
 
 ## 使用方法
 
-完成形状和材质调整后，在 Object Mode 中选中对象，右键选择 **AnyImage > Bake Mesh**。
+完成形状和材质调整后，在 Object Mode 中选中对象，右键选择 **任意图！ > 烘焙网格**。
 
-支持 Plane、Depth Plane、Relief Plane、Panorama 和受支持的 Cutout 节点栈。工具会固化当前几何与 UV，整理 Color 贴图，并在需要时烘焙 Tangent Normal。
+支持**平面**、**深度平面**、**浮雕平面**、**全景**和受支持的**立体裁切**节点栈。工具会固化当前几何与 UV，整理 Color 贴图，并在需要时烘焙 Tangent Normal。
 
 ## 烘焙结果
 

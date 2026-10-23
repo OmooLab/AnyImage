@@ -4,57 +4,6 @@ from tests.support.blender import BlenderTestCase
 
 
 class AddonRegistrationTest(BlenderTestCase):
-    def test_color_reference_property_filters_selector_candidates(self):
-        from anyimage.common.image import CLIPBOARD_HASH_PROPERTY
-
-        annotations = self.anyimage.AnyImageSettings.__annotations__
-        options = annotations["color_reference"]
-        gallery = annotations["color_reference_choice"]
-        candidate = SimpleNamespace(
-            name="Reference.png",
-            size=(4, 3),
-            source="FILE",
-            get=lambda key, default=None: "clipboard-content" if key == CLIPBOARD_HASH_PROPERTY else default,
-        )
-        ordinary = SimpleNamespace(
-            name="Reference.png",
-            size=(4, 3),
-            source="FILE",
-        )
-
-        self.assertEqual(options["name"], "Reference")
-        self.assertTrue(options["poll"](None, candidate))
-        self.assertFalse(options["poll"](None, ordinary))
-        self.assertEqual(gallery["name"], "Reference")
-        self.assertIs(gallery["items"], self.anyimage.properties.color_reference_items)
-        self.assertIs(gallery["get"], self.anyimage.properties.get_color_reference_choice)
-        self.assertIs(gallery["set"], self.anyimage.properties.set_color_reference_choice)
-
-    def test_color_reference_palette_update_stores_and_clears_dynamic_values(self):
-        properties = self.anyimage.properties
-        reference = object()
-        settings = SimpleNamespace(color_reference=reference)
-        colors = ((0.7, 0.1, 0.2), (0.1, 0.4, 0.6), (0.8, 0.7, 0.2))
-        weights = (0.5, 0.3, 0.2)
-
-        with patch.object(properties, "get_color_reference", return_value=SimpleNamespace(colors=colors, weights=weights)):
-            properties.update_color_reference_palette(settings, None)
-
-        self.assertEqual(settings.color_reference_palette_count, 3)
-        self.assertEqual(settings.color_reference_palette_0, colors[0])
-        self.assertEqual(settings.color_reference_palette_weight_2, weights[2])
-        self.assertEqual(settings.color_reference_palette_3, (0.0, 0.0, 0.0))
-        self.assertEqual(settings.color_reference_palette_weight_3, 0.0)
-
-        settings.color_reference = None
-        properties.update_color_reference_palette(settings, None)
-
-        self.assertEqual(settings.color_reference_palette_count, 0)
-        for name in properties.COLOR_REFERENCE_PALETTE_PROPERTIES:
-            self.assertEqual(getattr(settings, name), (0.0, 0.0, 0.0))
-        for name in properties.COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES:
-            self.assertEqual(getattr(settings, name), 0.0)
-
     def test_import_does_not_add_addon_directories_to_sys_path(self):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
 

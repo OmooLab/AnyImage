@@ -188,7 +188,7 @@ def test_controls_and_material_slot_inheritance():
     assert inputs["Boundary Smooth"].parent.name == "Options"
     assert "Smooth Weight" not in inputs
     assert inputs["Depth Mask"].parent == inputs["Subdivide"].parent
-    assert inputs["Depth Mask"].default_value
+    assert inputs["Depth Mask"].default_value is False
     obj.data.from_pydata([(0, 0, 0)], [], [])
     material = bpy.data.materials.new("Slot Material")
     obj.data.materials.append(material)

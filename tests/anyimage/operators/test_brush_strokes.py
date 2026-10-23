@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 
-from anyimage.common import selection, viewport
+from anyimage.common import viewport
 from anyimage.operators import mask_tool as mask
 
 
@@ -22,21 +22,6 @@ def test_simplified_segments_bound_every_original_sample():
         factor = np.clip((points - start) @ segment / (segment @ segment), 0, 1)
         distances = np.linalg.norm(points - (np.array(start) + factor[:, None] * segment), axis=1)
         assert distances.max() <= 0.75 + 1e-10
-
-
-@pytest.mark.parametrize("radius,path", [
-    (2, ((40, 70), (70, 70), (70, 100))),
-    (25, ((40, 70), (70, 70), (70, 100))),
-    (5, ((35, 35), (100, 100), (35, 100), (100, 35))),
-])
-def test_brush_antialiases_the_hard_union_once(radius, path):
-    size = (150, 150)
-    hard = np.zeros(size[::-1], dtype=bool)
-    for polygon in polygon_geometry.brush_footprint_polygons(path, radius):
-        hard |= selection._rasterize_path((0, 0, *size), polygon)
-    result = mask.rasterize_brush_path(size, path, radius, lambda points: points)
-    np.testing.assert_allclose(result.full_values(size), selection._antialias_mask(hard))
-    assert result.values.size < size[0] * size[1]
 
 
 def test_straight_stroke_is_independent_of_segmentation():

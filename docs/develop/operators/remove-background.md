@@ -1,4 +1,4 @@
-# Remove Background
+# 移除背景
 
 `operators/remove_background/operators.py` 从 Image Empty、AnyImage 图片 Mesh 或当前 Shader Image Texture 准备输入。`RemoveImageBackground` 协调设置与输入，`RunBackgroundRemoval` 提交 Job 并应用结果。
 

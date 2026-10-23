@@ -12,11 +12,11 @@ uv run pytest
 | 测试范围 | 文件 |
 | --- | --- |
 | 扩展注册、设置、安装和 Job 交互 | `test_addon_registration.py`、`test_preferences.py`、`test_ai_setup.py`、`test_job_operator.py` |
-| Frame、Mask、Rectify、Plane、Cutout | 对应 `test_*_tool.py`、`test_*_operators.py` 与对象、投影、网格测试 |
+| **重设画框**、**局部显隐**、**透视校正**、**平面**、**立体裁切** | 对应 `test_*_tool.py`、`test_*_operators.py` 与对象、投影、网格测试 |
 | 图像身份、Alpha、材质与 Undo | 图像编辑集成、共享替换、材质适配与 Undo 测试 |
 | Server | `test_job_server.py`、`test_server_jobs.py`、`test_input_validation.py`、`test_geometry_artifacts.py` |
 | 模型 | `test_model_manager.py`、下载、推理与各 ONNX 模型测试 |
-| 节点资产 | 布局与接口等价、几何求值、Cutout 与临时属性清理 |
+| 节点资产 | 布局与接口等价、几何求值、**立体裁切**与临时属性清理 |
 | 工具与包协议 | 扩展 Manifest、打包、模型同步与节点构建流程 |
 
 Blender Stub 共用 `tests/support/blender.py`；Server 和实际 Blender 几何 fixture 按使用范围存放在对应 support 模块。测试命名描述功能、触发条件与可观察结果。

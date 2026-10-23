@@ -1,6 +1,6 @@
-# Upscale
+# 2倍高清
 
-`operators/upscale.py` 从 Image Empty 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于 Maximum AI Input Size。
+`operators/upscale.py` 从 Image Empty 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于**AI 输入尺寸上限**。
 
 ```mermaid
 flowchart TD

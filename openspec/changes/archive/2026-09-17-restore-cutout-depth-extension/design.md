@@ -2,7 +2,7 @@
 
 共享 MoGe 产物入口当前直接输出预测 XYZ。本变更在 Cutout 深度产物写入前加入边缘延伸，生成的贴图由现有几何节点直接消费。
 
-独立实验位于 `C:/Users/icrdr/.codex/visualizations/2026/09/13/cutout-depth-4px/`，`report.md`、脚本、预测、对照图及 Blender 文件记录完整过程。使用 v26 节点组、BiRefNet Lite、MoGe-2 ViT-S Level 5，同一 Alpha 和预测，剪裁阈值 0.9，世界边长 0.015，Depth Split=0.1。蜘蛛/头骨补边约 35/26 ms，拖尾明显减少，细腿仍有断裂与折点。该节点版本仅是已有实验条件；实施验收使用现有节点和固定参数，仅替换深度产物。
+独立实验位于 `C:/Users/icrdr/.codex/visualizations/2026/09/13/cutout-depth-4px/`，`report.md`、脚本、预测、对照图及 Blender 文件记录完整过程。使用 v26 节点组、BiRefNet Lite、MoGe-2 ViT-S Level 5，同一 Alpha 和预测，立体裁切阈值 0.9，世界边长 0.015，Depth Split=0.1。蜘蛛/头骨补边约 35/26 ms，拖尾明显减少，细腿仍有断裂与折点。该节点版本仅是已有实验条件；实施验收使用现有节点和固定参数，仅替换深度产物。
 
 ## Goals
 
@@ -12,7 +12,7 @@
 
 ### 沿用实测的固定来源规则
 
-恢复 `31074bd^:src/anyimage/server/geometry/edge_depth.py` 的算法语义。剪裁阈值用于可见域及其 8 连通分量；可靠候选在该分量内满足 Alpha ≥ 0.95、Validity > 0.5、深度有限且为正。0.95 是固定来源条件，不新增随剪裁阈值变化的参数逻辑。低剪裁阈值可以保留毛发，但低 Alpha 像素仍从可靠来源取得深度。
+恢复 `31074bd^:src/anyimage/server/geometry/edge_depth.py` 的算法语义。立体裁切阈值用于可见域及其 8 连通分量；可靠候选在该分量内满足 Alpha ≥ 0.95、Validity > 0.5、深度有限且为正。0.95 是固定来源条件，不新增随立体裁切阈值变化的参数逻辑。低立体裁切阈值可以保留毛发，但低 Alpha 像素仍从可靠来源取得深度。
 
 不透明候选域按图片边缘延续计算距离，距离域外大于 2 个深度图像素的可靠候选作为供体。没有核心时回退到本分量未内缩的可靠候选；仍无候选则保留原预测。保持旧算法对内部区域的保护：模型 validity 孔洞只影响来源资格。
 

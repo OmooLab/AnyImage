@@ -15,6 +15,13 @@ from server.geometry.depth_texture import write_float_exr
 from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
 
 
+@pytest.fixture(autouse=True)
+def bake_probe(monkeypatch):
+    bake = Mock()
+    monkeypatch.setattr(conversion, "bake_panorama_light_probe", bake)
+    return bake
+
+
 @pytest.fixture
 def source():
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -120,6 +127,11 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     obj = conversion.create_panorama_from_result(bpy.context, result, operator)
     assert obj["o_image_object"] is True
     assert obj.visible_shadow is False
+    assert len(obj.children) == 1
+    assert obj.children[0].type == "LIGHT_PROBE"
+    assert obj.children[0].name == f"{operator.source_object_name}_LightProbe"
+    assert obj.children[0].hide_select is True
+    assert not obj.children[0].data.capture_indirect
     assert "anyimage_mesh_shape" not in obj
     assert obj.modifiers[0].node_group == saved
     assert saved.name == "O Image Depth Panorama"
@@ -128,6 +140,8 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     np.testing.assert_allclose(obj.scale, matrix.to_scale(), atol=1e-6)
     np.testing.assert_array_equal(obj.rotation_euler, (0, 0, 0))
     material = obj.data.materials[0]
+    assert material.use_backface_culling is True
+    assert material.use_backface_culling_shadow is True
     nodes = material.node_tree.nodes
     assert not any(n.bl_idname == "ShaderNodeUVMap" for n in nodes)
     layer = next(n for n in nodes if n.type == "GROUP")
@@ -188,16 +202,18 @@ def test_panorama_preserves_hdr_pixels_color_space_and_alpha(source, artifacts, 
     np.testing.assert_allclose(restored.pixels[:], rgba.ravel(), atol=1e-6)
 
 
-@pytest.mark.parametrize("failure", ["modifier", "normal_size", "depth_size", "stale", "replaced_image", "finalize"])
+@pytest.mark.parametrize("failure", ["modifier", "normal_size", "depth_size", "stale", "replaced_image", "finalize", "bake"])
 def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, monkeypatch, failure):
     result, operator = artifacts
-    before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials")}
+    before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials", "lightprobes")}
     if failure == "normal_size":
         Image.new("RGB", (4, 4)).save(result.file("object_normal"))
     elif failure == "modifier":
         monkeypatch.setattr(conversion, "set_modifier_input", Mock(side_effect=RuntimeError("Failed modifier")))
     elif failure == "finalize":
         monkeypatch.setattr(conversion, "finalize_object_result", Mock(side_effect=RuntimeError("Failed finalize")))
+    elif failure == "bake":
+        monkeypatch.setattr(conversion, "bake_panorama_light_probe", Mock(side_effect=RuntimeError("Failed bake")))
     elif failure == "stale":
         operator.source_identity = "replaced"
     elif failure == "replaced_image":
@@ -227,9 +243,65 @@ def test_panorama_conversion_undo_restores_empty(source, artifacts):
             assert bpy.data.objects[name].type == "MESH"
             assert bpy.ops.ed.undo() == {"FINISHED"}
             assert bpy.data.objects[name].type == "EMPTY"
+            assert not list(bpy.data.lightprobes)
             assert (bpy.data.images[image_name].colorspace_settings.name,
                     bpy.data.images[image_name].alpha_mode) == (original_space, original_alpha)
             assert bpy.ops.ed.redo() == {"FINISHED"}
             assert bpy.data.objects[name].type == "MESH"
+            assert len(bpy.data.objects[name].children) == 1
         finally:
             bpy.utils.unregister_class(operators.GeneratePanorama)
+
+
+def test_disabled_light_probe_skips_creation_and_bake(source, artifacts, monkeypatch, bake_probe):
+    monkeypatch.setattr(conversion, "configured_panorama_light_probe", lambda _: (False, 20))
+    monkeypatch.setattr(conversion, "bpy", SimpleNamespace(
+        data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **kw: {"FINISHED"})) ))
+    obj = conversion.create_panorama_from_result(bpy.context, *artifacts)
+    assert not obj.children and not list(bpy.data.lightprobes)
+    bake_probe.assert_not_called()
+
+
+def test_depth_mask_default_preserved_for_probe_bounds_and_bake(source, artifacts, monkeypatch, bake_probe):
+    from anyimage.common.object import get_modifier_input, modifier_input_identifier
+
+    create_probe = conversion.create_panorama_light_probe
+    rgba = np.ones((16, 32, 4), np.float32)
+    rgba[..., :3] = 3
+    rgba[:8, :, 3] = 0
+    write_float_exr(rgba, artifacts[0].file("depth"))
+
+    def maximum_radius(context, obj):
+        evaluated = obj.evaluated_get(context.evaluated_depsgraph_get())
+        mesh = evaluated.to_mesh()
+        try:
+            positions = np.empty(len(mesh.vertices) * 3)
+            mesh.vertices.foreach_get("co", positions)
+            return np.linalg.norm(positions.reshape(-1, 3), axis=1).max()
+        finally:
+            evaluated.to_mesh_clear()
+
+    def depth_mask(obj):
+        modifier = obj.modifiers[0]
+        identifier = modifier_input_identifier(modifier.node_group, "Depth Mask")
+        return get_modifier_input(modifier, identifier)
+
+    def create(context, obj, distance):
+        assert depth_mask(obj) is False
+        assert maximum_radius(context, obj) > 49
+        return create_probe(context, obj, distance)
+
+    def bake(context, obj, probe):
+        assert depth_mask(obj) is False
+        assert maximum_radius(context, obj) > 49
+
+    monkeypatch.setattr(conversion, "create_panorama_light_probe", create)
+    bake_probe.side_effect = bake
+    monkeypatch.setattr(conversion, "bpy", SimpleNamespace(
+        data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **kw: {"FINISHED"})) ))
+    obj = conversion.create_panorama_from_result(bpy.context, *artifacts)
+    assert depth_mask(obj) is False
+    socket = next(item for item in obj.modifiers[0].node_group.interface.items_tree
+                  if item.item_type == "SOCKET" and item.in_out == "INPUT" and item.name == "Depth Mask")
+    assert socket.default_value is False
+    bake_probe.assert_called_once()

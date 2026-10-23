@@ -1,6 +1,6 @@
-# Bake Mesh
+# 烘焙网格
 
-`operators/bake_mesh/operators.py` 实现 `BakeMesh`，同步固化 Plane、Depth Plane、Relief Plane、Panorama 及受支持 Cutout 节点栈。`materialization.py` 管理求值网格、UV、Normal 烘焙和原位图片事务，`textures.py` 根据来源区域拼接 Color。
+`operators/bake_mesh/operators.py` 实现 `BakeMesh`，同步固化**平面**、**深度平面**、**浮雕平面**、**全景**及受支持**立体裁切**节点栈。`materialization.py` 管理求值网格、UV、Normal 烘焙和原位图片事务，`textures.py` 根据来源区域拼接 Color。
 
 单区无 Normal 路径固化几何，保留 Color 图片与采样设置。多区 Color 路径按来源区域缩放和平移 UV、复制及翻转整张图片；Normal 路径用单位 Normal Scale 烘焙最终 UV 的 Tangent Normal。校验根据实际读写和采样依赖执行。
 

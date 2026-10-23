@@ -1,4 +1,4 @@
-# Panorama 转换
+# 转为立体全景
 
 `operators/convert_to_panorama/` 将静态等距柱状 Image Empty 转换为径向深度表面，提交前裁剪出最大居中 2:1 区域。`operators.py` 提交任务，`object.py` 导入对象，`__init__.py` 汇总导出与注册清单。
 

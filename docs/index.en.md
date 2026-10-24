@@ -1,19 +1,35 @@
-# 🖼️ AnyImage
+# 🚪 AnyImage
 
 ## IMAGE IS ALL YOU NEED
 
-![cover](assets/cover.png)
+AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
 
-AnyImage is an image toolkit for Blender by OmooLab. It turns images into more than references: paste an image, select what you need, and transform it into a scene element with materials, contours, and depth.
+<iframe class="anyimage-video" src="https://player.bilibili.com/player.html?bvid=BV1dsaP6WEqA&amp;page=1&amp;autoplay=0" title="AnyImage: cut images into 3D shapes offline" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
 
-## Start directly from an image
+## Skip the download. Just paste!
 
-Press **Ctrl+Shift+V** in the 3D View or Node Editor (**Cmd+Shift+V** on macOS) to paste an image from the clipboard directly into the current workspace. There is no need to save the image first or interrupt your workflow.
+Press **Ctrl+Shift+V** in Blender (**Cmd+Shift+V** on macOS) to bring an image from your clipboard straight into the scene. In Sculpt or Texture Paint mode, pasting turns it into a brush texture. In a node editor, it creates an image node for you.
 
-You can also continue working with existing images. Select an Image Empty, right-click to open the **AnyImage** menu, and access the most common actions from there.
+## From reference image to 3D!
 
-## One image, multiple spatial forms
+Use **Cutout** to outline part of an image, give it thickness, and drop it into your scene to try it out. You can also turn images into terrain, reliefs, and panoramic scenes!
 
-- **Plane / Depth Plane**: Turn an image into a flat or dimensional plane.
-- **Cutout**: Select a subject and create a Surface, Balloon, or Depth Shape.
-- **Image tools**: Reframe images, edit transparent areas, correct perspective, remove backgrounds, and upscale.
+![Cut a 3D shape out of an image](assets/demos/depth-cutout.gif)
+
+## Crop, combine, and match colors, too!
+
+✂️ **Frame**: Crop to the area you want, or combine several arranged images into one from the current view.
+
+🖌️ **Mask**: Hide unwanted parts with a lasso, brush, or polyline, and restore them whenever you need.
+
+📐 **Rectify**: Pick four corners to straighten a photographed surface for use as a texture.
+
+🎨 **Color Match**: Pick a reference image to match its colors and brightness. Image textures in materials work too.
+
+## Fast AI tools that run offline!
+
+Remove backgrounds and upscale images by 2× right on your computer, with no per-image fees. You can process image textures already used in materials, too!
+
+## Installation
+
+[Install AnyImage](installation.md)

@@ -119,3 +119,11 @@
   color: #0099ff;
   text-decoration: underline;
 }
+
+.anyimage-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  margin: 1em 0;
+}

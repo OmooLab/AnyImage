@@ -1,7 +1,7 @@
 site_name: AnyImage Docs
 site_url: https://docs.omoolab.xyz/anyimage/
 site_author: OmooLab
-site_description: Fast image-guided structure building tools for Blender
+site_description: Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.
 
 repo_name: OmooLab/AnyImage
 repo_url: https://github.com/OmooLab/AnyImage
@@ -13,12 +13,12 @@ nav:
   - 开始使用:
       - index.md
       - 安装: installation.md
-      - 立体裁切: cutout.md
-      - 图片处理: ai-image-tools.md
-      - 空间转化: convert-to.md
       - 图片工具: image-tools.md
       - 色彩匹配: color-match.md
+      - 立体裁切: cutout.md
+      - 空间转化: convert-to.md
       - 烘焙网格: bake-mesh.md
+      - AI 图片处理: ai-image-tools.md
   - 开发文档:
       - 总览: develop/index.md
       - 程序架构: develop/architecture.md
@@ -112,6 +112,7 @@ plugins:
           name: English
           nav_translations:
             快捷键: Keymap
+            AI 图片处理: AI image tools
 
 markdown_extensions:
   - mkdocs-click

@@ -33,7 +33,7 @@
     
     
       
-        <title>Bake Mesh - AnyImage Docs</title>
+        <title>烘焙网格 - AnyImage Docs</title>
       
     
     
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#bake-mesh" class="md-skip">
+        <a href="#_1" class="md-skip">
           跳转至
         </a>
       
@@ -127,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Bake Mesh
+              烘焙网格
             
           </span>
         </div>
@@ -481,7 +481,7 @@
   <span class="md-ellipsis">
     
   
-    剪出工具
+    立体裁切
   
 
     
@@ -593,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    颜色匹配
+    色彩匹配
   
 
     
@@ -1045,7 +1045,7 @@
   <span class="md-ellipsis">
     
   
-    Clipboard Image
+    粘贴剪贴板图像
   
 
     
@@ -1073,7 +1073,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Plane
+    转为平面
   
 
     
@@ -1101,7 +1101,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Panorama
+    转为立体全景
   
 
     
@@ -1129,7 +1129,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1157,7 +1157,7 @@
   <span class="md-ellipsis">
     
   
-    Frame
+    重设画框
   
 
     
@@ -1185,7 +1185,7 @@
   <span class="md-ellipsis">
     
   
-    Mask
+    局部显隐
   
 
     
@@ -1213,7 +1213,7 @@
   <span class="md-ellipsis">
     
   
-    Rectify
+    透视校正
   
 
     
@@ -1241,7 +1241,7 @@
   <span class="md-ellipsis">
     
   
-    Color Match
+    色彩匹配
   
 
     
@@ -1278,7 +1278,7 @@
   <span class="md-ellipsis">
     
   
-    Bake Mesh
+    烘焙网格
   
 
     
@@ -1335,7 +1335,7 @@
   <span class="md-ellipsis">
     
   
-    Remove Background
+    移除背景
   
 
     
@@ -1363,7 +1363,7 @@
   <span class="md-ellipsis">
     
   
-    Upscale
+    2倍高清
   
 
     
@@ -1555,8 +1555,8 @@
   
 
 
-<h1 id="bake-mesh">Bake Mesh</h1>
-<p><code>operators/bake_mesh/operators.py</code> 实现 <code>BakeMesh</code>，同步固化 Plane、Depth Plane、Relief Plane、Panorama 及受支持 Cutout 节点栈。<code>materialization.py</code> 管理求值网格、UV、Normal 烘焙和原位图片事务，<code>textures.py</code> 根据来源区域拼接 Color。</p>
+<h1 id="_1">烘焙网格</h1>
+<p><code>operators/bake_mesh/operators.py</code> 实现 <code>BakeMesh</code>，同步固化<strong>平面</strong>、<strong>深度平面</strong>、<strong>浮雕平面</strong>、<strong>全景</strong>及受支持<strong>立体裁切</strong>节点栈。<code>materialization.py</code> 管理求值网格、UV、Normal 烘焙和原位图片事务，<code>textures.py</code> 根据来源区域拼接 Color。</p>
 <p>单区无 Normal 路径固化几何，保留 Color 图片与采样设置。多区 Color 路径按来源区域缩放和平移 UV、复制及翻转整张图片；Normal 路径用单位 Normal Scale 烘焙最终 UV 的 Tangent Normal。校验根据实际读写和采样依赖执行。</p>
 <p>成功保留对象、材质与图片身份、图片名称和路径及用户属性，清理被消费的协议属性、修改器和 <code>o_image_object</code>。结果以普通 Mesh 使用，Shader Editor 节点入口按活动贴图逻辑继续提供图片操作。共享图片与材质沿用原位更新行为。</p>
 <p>失败恢复图片与材质输入并清理本次资源；Undo/Redo 恢复或固化网格、贴图和对象能力。零引用 Depth 图片在成功后释放。</p>
@@ -1589,7 +1589,7 @@
       <nav class="md-footer__inner md-grid" aria-label="页脚" >
         
           
-          <a href="../color-match/" class="md-footer__link md-footer__link--prev" aria-label="上一页: Color Match">
+          <a href="../color-match/" class="md-footer__link md-footer__link--prev" aria-label="上一页: 色彩匹配">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1599,7 +1599,7 @@
                 上一页
               </span>
               <div class="md-ellipsis">
-                Color Match
+                色彩匹配
               </div>
             </div>
           </a>

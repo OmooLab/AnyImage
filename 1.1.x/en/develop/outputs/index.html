@@ -483,7 +483,7 @@
   <span class="md-ellipsis">
     
   
-    剪出工具
+    立体裁切
   
 
     
@@ -595,7 +595,7 @@
   <span class="md-ellipsis">
     
   
-    颜色匹配
+    色彩匹配
   
 
     
@@ -1116,7 +1116,7 @@
   <span class="md-ellipsis">
     
   
-    Clipboard Image
+    粘贴剪贴板图像
   
 
     
@@ -1144,7 +1144,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Plane
+    转为平面
   
 
     
@@ -1172,7 +1172,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Panorama
+    转为立体全景
   
 
     
@@ -1200,7 +1200,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1228,7 +1228,7 @@
   <span class="md-ellipsis">
     
   
-    Frame
+    重设画框
   
 
     
@@ -1256,7 +1256,7 @@
   <span class="md-ellipsis">
     
   
-    Mask
+    局部显隐
   
 
     
@@ -1284,7 +1284,7 @@
   <span class="md-ellipsis">
     
   
-    Rectify
+    透视校正
   
 
     
@@ -1312,7 +1312,7 @@
   <span class="md-ellipsis">
     
   
-    Color Match
+    色彩匹配
   
 
     
@@ -1340,7 +1340,7 @@
   <span class="md-ellipsis">
     
   
-    Bake Mesh
+    烘焙网格
   
 
     
@@ -1396,7 +1396,7 @@
   <span class="md-ellipsis">
     
   
-    Remove Background
+    移除背景
   
 
     
@@ -1424,7 +1424,7 @@
   <span class="md-ellipsis">
     
   
-    Upscale
+    2倍高清
   
 
     
@@ -1670,17 +1670,17 @@
 <tr>
 <td><code>generate-depth-plane-geometry</code></td>
 <td><code>depth.exr</code>、<code>depth.json</code> 和法线</td>
-<td>Depth / Relief Plane</td>
+<td>Depth / <strong>浮雕平面</strong></td>
 </tr>
 <tr>
 <td><code>generate-cutout-artifacts</code></td>
 <td>按请求提供深度、元数据和法线</td>
-<td>Cutout</td>
+<td><strong>立体裁切</strong></td>
 </tr>
 <tr>
 <td><code>generate-panorama-geometry</code></td>
 <td><code>depth.exr</code>、<code>depth.json</code></td>
-<td>Panorama</td>
+<td><strong>全景</strong></td>
 </tr>
 </tbody>
 </table>
@@ -1718,10 +1718,10 @@
     A --&gt; E[源 Alpha 写入有效通道]
     E --&gt; D
     D --&gt; F[Blender 加载并 Pack]</code></pre>
-<p>参考深度由 <code>common/geometry_image.py</code> 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。Depth Plane 使用对象空间法线，Relief Plane 使用切线空间法线。</p>
-<p>Panorama 的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 <code>projection: equirectangular</code> 和 <code>image_size</code>。</p>
+<p>参考深度由 <code>common/geometry_image.py</code> 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。<strong>深度平面</strong>使用对象空间法线，<strong>浮雕平面</strong>使用切线空间法线。</p>
+<p><strong>全景</strong>的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 <code>projection: equirectangular</code> 和 <code>image_size</code>。</p>
 <h2 id="_2">颜色与图像编辑</h2>
-<p><code>common/color_image.py</code> 为 Plane、Panorama 和 Cutout 准备独立的材质颜色与 AI 分析输入。Cutout 使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。</p>
+<p><code>common/color_image.py</code> 为<strong>平面</strong>、<strong>全景</strong>和<strong>立体裁切</strong>准备独立的材质颜色与 AI 分析输入。<strong>立体裁切</strong>使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。</p>
 <p><code>ImageEditTarget</code> 统一 Image Empty 和 Shader Image Texture 的编辑目标及共享引用。HDR 去背景通过 <code>HdrBackgroundInput</code> 保留 Blender 浮点 RGB，并应用 Server 返回的连续 Alpha。</p>
 
 

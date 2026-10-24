@@ -33,7 +33,7 @@
     
     
       
-        <title>Frame - AnyImage Docs</title>
+        <title>重设画框 - AnyImage Docs</title>
       
     
     
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#frame" class="md-skip">
+        <a href="#_1" class="md-skip">
           跳转至
         </a>
       
@@ -127,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Frame
+              重设画框
             
           </span>
         </div>
@@ -481,7 +481,7 @@
   <span class="md-ellipsis">
     
   
-    剪出工具
+    立体裁切
   
 
     
@@ -593,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    颜色匹配
+    色彩匹配
   
 
     
@@ -1045,7 +1045,7 @@
   <span class="md-ellipsis">
     
   
-    Clipboard Image
+    粘贴剪贴板图像
   
 
     
@@ -1073,7 +1073,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Plane
+    转为平面
   
 
     
@@ -1101,7 +1101,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Panorama
+    转为立体全景
   
 
     
@@ -1129,7 +1129,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1166,7 +1166,7 @@
   <span class="md-ellipsis">
     
   
-    Frame
+    重设画框
   
 
     
@@ -1195,7 +1195,7 @@
   <span class="md-ellipsis">
     
   
-    Mask
+    局部显隐
   
 
     
@@ -1223,7 +1223,7 @@
   <span class="md-ellipsis">
     
   
-    Rectify
+    透视校正
   
 
     
@@ -1251,7 +1251,7 @@
   <span class="md-ellipsis">
     
   
-    Color Match
+    色彩匹配
   
 
     
@@ -1279,7 +1279,7 @@
   <span class="md-ellipsis">
     
   
-    Bake Mesh
+    烘焙网格
   
 
     
@@ -1335,7 +1335,7 @@
   <span class="md-ellipsis">
     
   
-    Remove Background
+    移除背景
   
 
     
@@ -1363,7 +1363,7 @@
   <span class="md-ellipsis">
     
   
-    Upscale
+    2倍高清
   
 
     
@@ -1555,20 +1555,20 @@
   
 
 
-<h1 id="frame">Frame 多图合成</h1>
-<p><code>operators/frame_tool/operators.py</code> 定义 <code>FrameImages</code>。<code>projection.py</code> 负责视图投影、交叠和结果平面定位，<code>compositing.py</code> 负责像素深度排序与边界覆盖采样，<code>__init__.py</code> 导出 Operator 及注册清单。<code>tools.py</code> 定义对应的 <code>FrameTool</code>。Frame 将选中的静态 Image Empty 按当前视图合成为一张图片。</p>
+<h1 id="_1">重设画框</h1>
+<p><code>operators/frame_tool/operators.py</code> 定义 <code>FrameImages</code>。<code>projection.py</code> 负责视图投影、交叠和结果平面定位，<code>compositing.py</code> 负责像素深度排序与边界覆盖采样，<code>__init__.py</code> 导出 Operator 及注册清单。<code>tools.py</code> 定义对应的 <code>FrameTool</code>。<strong>重设画框</strong>将选中的静态 Image Empty 按当前视图合成为一张图片。</p>
 <pre class="mermaid"><code>flowchart TD
     A[拖出屏幕矩形] --&gt; B[冻结视图矩阵并收集选中静态图片]
     B --&gt; C[检查矩形与 active 图片的有效投射交集]
-    C --&gt; D[按 Region 与 Maximum Frame Resolution 计算输出尺寸]
+    C --&gt; D[按 Region 与重设画框分辨率上限计算输出尺寸]
     D --&gt; E[观察射线投影到各图片平面]
     E --&gt; F[按样本深度从远到近合成，等深度 active 优先]
     F --&gt; G[边界覆盖采样与独立 Alpha]
     G --&gt; H[创建 Packed Image 并复用 active Object]
     H --&gt; I[删除其他参与图片对象并提交 Undo]</code></pre>
 <p>正交视图接受有限深度，透视视图采样观察方向前方的交点。交叠检查采用连续投影范围；输出尺寸受 Region、最长边上限和总像素上限约束。</p>
-<p>RGB 与 Alpha 分别累计，保留被 Mask 隐藏的有效颜色。边界使用覆盖采样，内部复用直接采样，避免黑边和不必要的模糊。结果平面朝向观察者，位置由 active 图片的有效深度确定。</p>
-<p>Frame 保留 active 对象身份、名称和 Collection；图像替换复用 <a href="../../common/">Common</a> 的共享数据与失败恢复逻辑。</p>
+<p>RGB 与 Alpha 分别累计，保留被<strong>局部显隐</strong>隐藏的有效颜色。边界使用覆盖采样，内部复用直接采样，避免黑边和不必要的模糊。结果平面朝向观察者，位置由 active 图片的有效深度确定。</p>
+<p><strong>重设画框</strong>保留 active 对象身份、名称和 Collection；图像替换复用 <a href="../../common/">Common</a> 的共享数据与失败恢复逻辑。</p>
 
 
 
@@ -1598,7 +1598,7 @@
       <nav class="md-footer__inner md-grid" aria-label="页脚" >
         
           
-          <a href="../cutout-tool/" class="md-footer__link md-footer__link--prev" aria-label="上一页: Cutout Tool">
+          <a href="../cutout-tool/" class="md-footer__link md-footer__link--prev" aria-label="上一页: 立体裁切">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1608,20 +1608,20 @@
                 上一页
               </span>
               <div class="md-ellipsis">
-                Cutout Tool
+                立体裁切
               </div>
             </div>
           </a>
         
         
           
-          <a href="../mask/" class="md-footer__link md-footer__link--next" aria-label="下一页: Mask">
+          <a href="../mask/" class="md-footer__link md-footer__link--next" aria-label="下一页: 局部显隐">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 下一页
               </span>
               <div class="md-ellipsis">
-                Mask
+                局部显隐
               </div>
             </div>
             <div class="md-footer__button md-icon">

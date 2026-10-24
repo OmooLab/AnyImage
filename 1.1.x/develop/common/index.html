@@ -481,7 +481,7 @@
   <span class="md-ellipsis">
     
   
-    剪出工具
+    立体裁切
   
 
     
@@ -593,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    颜色匹配
+    色彩匹配
   
 
     
@@ -1134,7 +1134,7 @@
   <span class="md-ellipsis">
     
   
-    Clipboard Image
+    粘贴剪贴板图像
   
 
     
@@ -1162,7 +1162,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Plane
+    转为平面
   
 
     
@@ -1190,7 +1190,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Panorama
+    转为立体全景
   
 
     
@@ -1218,7 +1218,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1246,7 +1246,7 @@
   <span class="md-ellipsis">
     
   
-    Frame
+    重设画框
   
 
     
@@ -1274,7 +1274,7 @@
   <span class="md-ellipsis">
     
   
-    Mask
+    局部显隐
   
 
     
@@ -1302,7 +1302,7 @@
   <span class="md-ellipsis">
     
   
-    Rectify
+    透视校正
   
 
     
@@ -1330,7 +1330,7 @@
   <span class="md-ellipsis">
     
   
-    Color Match
+    色彩匹配
   
 
     
@@ -1358,7 +1358,7 @@
   <span class="md-ellipsis">
     
   
-    Bake Mesh
+    烘焙网格
   
 
     
@@ -1414,7 +1414,7 @@
   <span class="md-ellipsis">
     
   
-    Remove Background
+    移除背景
   
 
     
@@ -1442,7 +1442,7 @@
   <span class="md-ellipsis">
     
   
-    Upscale
+    2倍高清
   
 
     
@@ -1722,7 +1722,7 @@
 </tr>
 <tr>
 <td><code>viewport.py</code></td>
-<td>原生点选、屏幕投影、<code>ImageGesture</code>、Lasso / Brush / Polyline 与 Overlay</td>
+<td>原生点选、屏幕投影、<code>ImageGesture</code>、<strong>套索</strong> / <strong>画笔</strong> / <strong>折线</strong>与 Overlay</td>
 </tr>
 <tr>
 <td><code>geometry_image.py</code></td>
@@ -1746,11 +1746,11 @@
 </tr>
 <tr>
 <td><code>polygon.py</code></td>
-<td>屏幕多边形、Brush 轮廓、扫描线区间和预览网格</td>
+<td>屏幕多边形、<strong>画笔</strong>轮廓、扫描线区间和预览网格</td>
 </tr>
 <tr>
 <td><code>material.py</code></td>
-<td>Image Layer、Normal、Alpha、Shadeless 与 Depth 材质</td>
+<td>Image Layer、Normal、Alpha、<strong>无光照</strong>与 Depth 材质</td>
 </tr>
 <tr>
 <td><code>object.py</code></td>
@@ -1764,7 +1764,7 @@
 </table>
 <h2 id="_1">图像生命周期</h2>
 <p>业务像素采用 Top-down RGBA，<code>image_pixels()</code> 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。<code>ImageEditTarget</code> 校验目标身份后经 <code>replace_empty_image()</code> 或 <code>replace_texture_image()</code> 提交：未共享的 Image 原地替换内容，共享时改用新的 Image 数据块，失败时回滚源数据。</p>
-<p><code>prepare_image_input()</code> 返回路径及临时标记；<code>cleanup_image_input()</code> 与创建方配对。<code>color_image.py</code> 的 <code>prepare_material_color_input()</code> 准备材质颜色，<code>material_analysis_input()</code> 提供分析输入；Cutout 按几何 bounds 裁切。</p>
+<p><code>prepare_image_input()</code> 返回路径及临时标记；<code>cleanup_image_input()</code> 与创建方配对。<code>color_image.py</code> 的 <code>prepare_material_color_input()</code> 准备材质颜色，<code>material_analysis_input()</code> 提供分析输入；<strong>立体裁切</strong>按几何 bounds 裁切。</p>
 <h2 id="_2">颜色参考生命周期</h2>
 <p><code>properties.py</code> 管理各 Scene 的参考选择、画廊与色板同步，并注册 load、Undo、Redo 回调和 <code>image_content_handlers</code> 的编辑通知。公共参考模块准备签名、色板与缩略图，使用逐行像素摘要检查内容身份。长期缓存保留紧凑派生数据，完整像素只在准备及匹配交互期间使用。</p>
 <p>Scene 清空或替换参考时，按其他 Scene 与活动交互的引用释放资源。匹配确认、取消和失败会结束交互引用；扩展注销清理自身 handler 与预览资源。</p>
@@ -1776,10 +1776,10 @@
     D --&gt; E[SelectionPath]
     E --&gt; F[局部 non-zero winding 栅格化]
     F --&gt; G[SelectionMask values 与 bounds]
-    G --&gt; H[Mask Alpha 运算或 Cutout 内容轮廓]</code></pre>
-<p>Brush 的圆形印记和连接条由 <code>brush_footprint_polygons()</code> 生成，供预览与提交共用。拖动时维护屏幕路径与局部 Overlay，提交时生成覆盖值。Mask、Rectify 与 Cutout 的空命中保留 active Image Empty；点中另一对象时完成原生选择。</p>
+    G --&gt; H[局部显隐 Alpha 运算或立体裁切内容轮廓]</code></pre>
+<p><strong>画笔</strong>的圆形印记和连接条由 <code>brush_footprint_polygons()</code> 生成，供预览与提交共用。拖动时维护屏幕路径与局部 Overlay，提交时生成覆盖值。<strong>局部显隐</strong>、<strong>透视校正</strong>与<strong>立体裁切</strong>的空命中保留 active Image Empty；点中另一对象时完成原生选择。</p>
 <h2 id="_3">材质、节点与对象</h2>
-<p><code>create_image_material()</code> 按 Shadeless、Normal 和 Depth 组合节点、连接颜色与 Alpha；材质显示适配读取当前 Preferences。<code>set_modifier_input()</code> 按实际 RNA 输入形式设置值，<code>finalize_object_result()</code> 完成结果对象激活和源对象处理。Image 替换路径保留 Empty 的矩阵、显示尺寸、偏移和 Image User 帧设置。</p>
+<p><code>create_image_material()</code> 按<strong>无光照</strong>、Normal 和 Depth 组合节点、连接颜色与 Alpha；材质显示适配读取当前 Preferences。<code>set_modifier_input()</code> 按实际 RNA 输入形式设置值，<code>finalize_object_result()</code> 完成结果对象激活和源对象处理。Image 替换路径保留 Empty 的矩阵、显示尺寸、偏移和 Image User 帧设置。</p>
 <p>Geometry Nodes 从 <code>src/anyimage/assets/O_AnyImage.blend</code> 按公开名称加载。构建与布局职责见<a href="../node-assets/">节点资产</a>，深度字段见<a href="../outputs/">Job 产物</a>。</p>
 
 

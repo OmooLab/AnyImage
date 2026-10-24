@@ -33,7 +33,7 @@
     
     
       
-        <title>Cutout Tool - AnyImage Docs</title>
+        <title>立体裁切 - AnyImage Docs</title>
       
     
     
@@ -88,7 +88,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cutout" class="md-skip">
+        <a href="#_1" class="md-skip">
           跳转至
         </a>
       
@@ -127,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Cutout Tool
+              立体裁切
             
           </span>
         </div>
@@ -481,7 +481,7 @@
   <span class="md-ellipsis">
     
   
-    剪出工具
+    立体裁切
   
 
     
@@ -593,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    颜色匹配
+    色彩匹配
   
 
     
@@ -1045,7 +1045,7 @@
   <span class="md-ellipsis">
     
   
-    Clipboard Image
+    粘贴剪贴板图像
   
 
     
@@ -1073,7 +1073,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Plane
+    转为平面
   
 
     
@@ -1101,7 +1101,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Panorama
+    转为立体全景
   
 
     
@@ -1138,7 +1138,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1156,7 +1156,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1182,7 +1182,7 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_1" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         轮廓与网格
@@ -1226,7 +1226,7 @@
   <span class="md-ellipsis">
     
   
-    Frame
+    重设画框
   
 
     
@@ -1254,7 +1254,7 @@
   <span class="md-ellipsis">
     
   
-    Mask
+    局部显隐
   
 
     
@@ -1282,7 +1282,7 @@
   <span class="md-ellipsis">
     
   
-    Rectify
+    透视校正
   
 
     
@@ -1310,7 +1310,7 @@
   <span class="md-ellipsis">
     
   
-    Color Match
+    色彩匹配
   
 
     
@@ -1338,7 +1338,7 @@
   <span class="md-ellipsis">
     
   
-    Bake Mesh
+    烘焙网格
   
 
     
@@ -1394,7 +1394,7 @@
   <span class="md-ellipsis">
     
   
-    Remove Background
+    移除背景
   
 
     
@@ -1422,7 +1422,7 @@
   <span class="md-ellipsis">
     
   
-    Upscale
+    2倍高清
   
 
     
@@ -1603,7 +1603,7 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_1" class="md-nav__link">
+  <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
         轮廓与网格
@@ -1644,10 +1644,10 @@
   
 
 
-<h1 id="cutout">Cutout</h1>
-<p>Cutout 在静态 Image Empty 上圈定 Selection，按轮廓创建 Flat、Solid、Depth Symmetry 或 Depth Solid。Operator 入口位于 <code>operators/cutout_tool/operators.py</code>，WorkspaceTool 声明位于 <code>tools.py</code>，Shape 菜单位于 <code>interaction.py</code>，预设标识与节点组对应关系位于 <code>shape.py</code>。</p>
+<h1 id="_1">立体裁切</h1>
+<p><strong>立体裁切</strong>在静态 Image Empty 上圈定 Selection，按轮廓创建<strong>平面</strong>、<strong>实体</strong>、<strong>深度对称</strong>或<strong>深度实体</strong>。Operator 入口位于 <code>operators/cutout_tool/operators.py</code>，WorkspaceTool 声明位于 <code>tools.py</code>，Shape 菜单位于 <code>interaction.py</code>，预设标识与节点组对应关系位于 <code>shape.py</code>。</p>
 <pre class="mermaid"><code>flowchart TD
-    A[Lasso 或 Polyline 提交 SelectionPath] --&gt; B[选择 Shape]
+    A[套索或折线提交 SelectionPath] --&gt; B[选择 Shape]
     B --&gt; C[栅格化 SelectionMask 并读取源 RGBA]
     C --&gt; D{需要 Depth 或 Normal？}
     D -- 是 --&gt; E[准备 bounds 矩形 RGBA]
@@ -1668,35 +1668,35 @@
 </thead>
 <tbody>
 <tr>
-<td>Flat</td>
+<td><strong>平面</strong></td>
 <td><code>O Image Cutout</code>，Thickness 0</td>
 <td>可选切线空间法线</td>
 </tr>
 <tr>
-<td>Solid</td>
+<td><strong>实体</strong></td>
 <td><code>O Image Cutout</code>，Thickness 1</td>
 <td>可选切线空间法线</td>
 </tr>
 <tr>
-<td>Depth Symmetry</td>
+<td><strong>深度对称</strong></td>
 <td><code>O Image Depth Cutout</code> 与 <code>O Image Cutout Symmetry</code></td>
 <td>深度与对象空间法线</td>
 </tr>
 <tr>
-<td>Depth Solid</td>
+<td><strong>深度实体</strong></td>
 <td><code>O Image Depth Cutout</code></td>
 <td>深度与对象空间法线</td>
 </tr>
 </tbody>
 </table>
-<p>Flat 与 Solid 可以不带 AI 产物生成；Depth 预设和 Normal Map 需要就绪的几何模型，Shape 菜单按该状态提供选项。</p>
-<h2 id="_1">轮廓与网格</h2>
-<p><code>geometry.py</code> 从内容 Alpha 提取连通轮廓与孔洞，按 Edge Length 生成 <code>BaseShape</code>。Edge Length 是世界空间的网格目标边长，Minimum Relative Edge Length 会按内容范围提高其下界。</p>
-<p><code>mesh.py</code> 负责轮廓分离、孔洞处理、质量三角化和边界支撑，<code>polygon.py</code> 提供轮廓简化，<code>tangle.py</code> 是随包分发的 Delaunay 三角化核心。Fine Outline 展开时保留小孔与细节轮廓，关闭时填洞并简化。</p>
-<p><code>balloon.py</code> 负责 Balloon Profile，按 Preferences 选择 Poisson 或 Teddy，生成所有预设共用的 POINT 属性 <code>o_balloon</code>。<code>boundary_padding.py</code> 按 Boundary Padding 沿结构内法线重采样轮廓附近的颜色与深度。</p>
+<p><strong>平面</strong>与<strong>实体</strong>可以不带 AI 产物生成；Depth 预设和<strong>法线贴图</strong>需要就绪的几何模型，Shape 菜单按该状态提供选项。</p>
+<h2 id="_2">轮廓与网格</h2>
+<p><code>geometry.py</code> 从内容 Alpha 提取连通轮廓与孔洞，按<strong>边长</strong>生成 <code>BaseShape</code>。<strong>边长</strong>是世界空间的网格目标边长，<strong>最小相对边长</strong>会按内容范围提高其下界。</p>
+<p><code>mesh.py</code> 负责轮廓分离、孔洞处理、质量三角化和边界支撑，<code>polygon.py</code> 提供轮廓简化，<code>tangle.py</code> 是随包分发的 Delaunay 三角化核心。<strong>精细轮廓</strong>展开时保留小孔与细节轮廓，关闭时填洞并简化。</p>
+<p><code>balloon.py</code> 负责 <strong>鼓起形状</strong>，按 Preferences 选择 Poisson 或 Teddy，生成所有预设共用的 POINT 属性 <code>o_balloon</code>。<code>boundary_padding.py</code> 按<strong>边界扩展</strong>沿结构内法线重采样轮廓附近的颜色与深度。</p>
 <h2 id="ai">AI 与对象创建</h2>
-<p>Server 接收 Selection bounds 内保留源 Alpha 的 RGBA，一次 MoGe 推理按 <code>generate_depth</code> 与 <code>normal_mode</code> 返回产物。深度参考区域使用所选 Alpha Threshold，Normal 使用原预测；Maximum AI Input Size 只影响分析分辨率。</p>
-<p><code>object.py</code> 的 <code>create_shape_object()</code> 消费 BaseShape、Color、Depth 和 Normal，加载对应节点组。基础网格位于局部 XZ 平面，厚度沿 Y 展开；对象矩阵把网格放入 Image Empty 的图片平面，Depth Symmetry 额外叠加对称节点组与方向参数。Object Normal 随方向同步转换。</p>
+<p>Server 接收 Selection bounds 内保留源 Alpha 的 RGBA，一次 MoGe 推理按 <code>generate_depth</code> 与 <code>normal_mode</code> 返回产物。深度参考区域使用所选<strong>透明度阈值</strong>，Normal 使用原预测；<strong>AI 输入尺寸上限</strong>只影响分析分辨率。</p>
+<p><code>object.py</code> 的 <code>create_shape_object()</code> 消费 BaseShape、Color、Depth 和 Normal，加载对应节点组。基础网格位于局部 XZ 平面，厚度沿 Y 展开；对象矩阵把网格放入 Image Empty 的图片平面，<strong>深度对称</strong>额外叠加对称节点组与方向参数。Object Normal 随方向同步转换。</p>
 <p>材质使用 IOR 1.2，颜色与法线接入 Image Layer，法线按切线或对象空间解释。节点计算见<a href="../../node-assets/">节点资产</a>。</p>
 
 
@@ -1727,7 +1727,7 @@
       <nav class="md-footer__inner md-grid" aria-label="页脚" >
         
           
-          <a href="../convert-to-panorama/" class="md-footer__link md-footer__link--prev" aria-label="上一页: Convert to Panorama">
+          <a href="../convert-to-panorama/" class="md-footer__link md-footer__link--prev" aria-label="上一页: 转为立体全景">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1737,20 +1737,20 @@
                 上一页
               </span>
               <div class="md-ellipsis">
-                Convert to Panorama
+                转为立体全景
               </div>
             </div>
           </a>
         
         
           
-          <a href="../frame/" class="md-footer__link md-footer__link--next" aria-label="下一页: Frame">
+          <a href="../frame/" class="md-footer__link md-footer__link--next" aria-label="下一页: 重设画框">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 下一页
               </span>
               <div class="md-ellipsis">
-                Frame
+                重设画框
               </div>
             </div>
             <div class="md-footer__button md-icon">

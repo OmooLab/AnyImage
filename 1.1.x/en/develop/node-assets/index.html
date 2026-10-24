@@ -481,7 +481,7 @@
   <span class="md-ellipsis">
     
   
-    剪出工具
+    立体裁切
   
 
     
@@ -593,7 +593,7 @@
   <span class="md-ellipsis">
     
   
-    颜色匹配
+    色彩匹配
   
 
     
@@ -1043,7 +1043,7 @@
   <span class="md-ellipsis">
     
   
-    Clipboard Image
+    粘贴剪贴板图像
   
 
     
@@ -1071,7 +1071,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Plane
+    转为平面
   
 
     
@@ -1099,7 +1099,7 @@
   <span class="md-ellipsis">
     
   
-    Convert to Panorama
+    转为立体全景
   
 
     
@@ -1127,7 +1127,7 @@
   <span class="md-ellipsis">
     
   
-    Cutout Tool
+    立体裁切
   
 
     
@@ -1155,7 +1155,7 @@
   <span class="md-ellipsis">
     
   
-    Frame
+    重设画框
   
 
     
@@ -1183,7 +1183,7 @@
   <span class="md-ellipsis">
     
   
-    Mask
+    局部显隐
   
 
     
@@ -1211,7 +1211,7 @@
   <span class="md-ellipsis">
     
   
-    Rectify
+    透视校正
   
 
     
@@ -1239,7 +1239,7 @@
   <span class="md-ellipsis">
     
   
-    Color Match
+    色彩匹配
   
 
     
@@ -1267,7 +1267,7 @@
   <span class="md-ellipsis">
     
   
-    Bake Mesh
+    烘焙网格
   
 
     
@@ -1323,7 +1323,7 @@
   <span class="md-ellipsis">
     
   
-    Remove Background
+    移除背景
   
 
     
@@ -1351,7 +1351,7 @@
   <span class="md-ellipsis">
     
   
-    Upscale
+    2倍高清
   
 
     
@@ -1790,7 +1790,7 @@
 <li>域转换使用 Evaluate on Domain 或明确域的采样节点表达；跨几何变化优先调整消费顺序或在源几何上采样，明确索引对应关系。</li>
 <li>Store Named Attribute 仅用于实际命名协议或跨几何变化必需的最少数据，明确名称、类型、域、Selection、写入阶段及消费者。内部临时属性使用 <code>_o_</code> 前缀，在最后消费者之后用 Remove Named Attribute 的 Wildcard 模式清理 <code>_o_*</code>，保留 UV、用户属性和外部协议属性。</li>
 <li>通过区域内输入、字段排列和必要的 Reroute 保持连线可读；存储须有数据生命周期依据，构建阶段通过明确的节点或 socket 引用接线。</li>
-<li>保留节点默认 <code>name</code> 和标题，不用 <code>label</code> 覆盖，不用 String 节点注解；Frame 仅用于确有包裹语义的区域。</li>
+<li>保留节点默认 <code>name</code> 和标题，不用 <code>label</code> 覆盖，不用 String 节点注解；Frame 节点仅用于确有包裹语义的区域。</li>
 <li>全接线的简单数学运算可折叠；需要阅读的常数、运算域和模式保持可见。</li>
 <li>几何树比较使用 Compare，布尔运算使用 Boolean Math；材质树使用 Math。</li>
 <li>修改器 Geometry Nodes 的输入 socket 默认使用 <code>SINGLE</code>；socket <code>subtype</code> 按语义设置，长度用 <code>DISTANCE</code>，比例用 <code>FACTOR</code>，百分比用 <code>PERCENTAGE</code>。</li>

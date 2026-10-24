@@ -1,8 +1,4 @@
-import platform
-import sys
-
 import bpy
-
 from .common.color_reference import (
     clear_color_references,
     color_reference_preview_icon,
@@ -11,18 +7,6 @@ from .common.color_reference import (
     release_unused_color_references,
 )
 from .common.image import image_content_handlers, is_color_reference_candidate
-from .common.server_location import model_files_installed
-from .runtime import runtime
-from .server import model_catalog as shared_model_catalog
-
-
-
-DEVICE_LABELS = {
-    "cuda": ("CUDA", "NVIDIA CUDA"),
-    "directml": ("DirectML", "Windows GPU (DirectML)"),
-    "coreml": ("CoreML", "Apple CoreML"),
-    "cpu": ("CPU", "CPU"),
-}
 
 _COLOR_REFERENCE_ITEMS = []
 _COLOR_REFERENCE_ITEMS_KEY = None
@@ -31,17 +15,12 @@ COLOR_REFERENCE_PALETTE_PROPERTIES = tuple(
     f"color_reference_palette_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
 )
 COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES = tuple(
-    f"color_reference_palette_weight_{index}"
-    for index in range(COLOR_REFERENCE_PALETTE_SIZE)
+    f"color_reference_palette_weight_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
 )
 
 
 def color_reference_candidates():
-    return [
-        image
-        for image in bpy.data.images
-        if is_color_reference_candidate(image)
-    ]
+    return [image for image in bpy.data.images if is_color_reference_candidate(image)]
 
 
 def invalidate_color_reference_items():
@@ -77,7 +56,9 @@ def color_reference_items(_settings, _context):
             (
                 str(image.as_pointer()),
                 image.name,
-                bpy.app.translations.pgettext_tip("Use {name} as the color reference").format(name=image.name),
+                bpy.app.translations.pgettext_tip("Use {name} as the color reference").format(
+                    name=image.name
+                ),
                 icon,
                 index,
             )
@@ -97,11 +78,7 @@ def get_color_reference_choice(settings):
 
 def set_color_reference_choice(settings, value):
     candidates = color_reference_candidates()
-    reference = (
-        candidates[value - 1]
-        if 0 < value <= len(candidates)
-        else None
-    )
+    reference = candidates[value - 1] if 0 < value <= len(candidates) else None
     if settings.color_reference != reference:
         settings.color_reference = reference
 
@@ -152,7 +129,11 @@ def restore_color_references(*_args):
 
 def register_color_references():
     restore_color_references._bpy_persistent = True
-    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+    for handlers in (
+        bpy.app.handlers.load_post,
+        bpy.app.handlers.undo_post,
+        bpy.app.handlers.redo_post,
+    ):
         if restore_color_references not in handlers:
             handlers.append(restore_color_references)
     if refresh_edited_color_reference not in image_content_handlers:
@@ -160,7 +141,11 @@ def register_color_references():
 
 
 def unregister_color_references():
-    for handlers in (bpy.app.handlers.load_post, bpy.app.handlers.undo_post, bpy.app.handlers.redo_post):
+    for handlers in (
+        bpy.app.handlers.load_post,
+        bpy.app.handlers.undo_post,
+        bpy.app.handlers.redo_post,
+    ):
         if restore_color_references in handlers:
             handlers.remove(restore_color_references)
     if refresh_edited_color_reference in image_content_handlers:
@@ -185,114 +170,6 @@ def color_reference_palette_weight_property():
         max=1.0,
         default=0.0,
     )
-
-
-def supports_coreml():
-    return sys.platform == "darwin" and platform.machine().lower() in {
-        "arm64",
-        "aarch64",
-    }
-
-
-def supported_devices():
-    if sys.platform == "win32":
-        return ["directml", "cpu"]
-    return ["cpu", "coreml"] if supports_coreml() else ["cpu"]
-
-
-def device_enum_items(_owner, _context):
-    return [
-        (name.upper(), *DEVICE_LABELS[name], index)
-        for index, name in enumerate(supported_devices())
-    ]
-
-
-def models_status():
-    status = runtime.server_status().get("resources", {}).get("model_manager", {})
-    errors = status.get("validation_errors", {})
-    return {
-        "catalog": tuple(
-            {**shared_model_catalog.model_record(model, model_files_installed(runtime.storage_root(), model)),
-             "validation_error": errors.get(model.key, "")}
-            for model in shared_model_catalog.DOWNLOADABLE_MODELS.values()
-        ),
-        "loaded": status.get("loaded", {}),
-    }
-
-
-def model_ready(model_key):
-    return any(
-        model.get("key") == model_key and model.get("installed") and not model.get("validation_error")
-        for model in models_status().get("catalog", ())
-    )
-
-
-def ai_status():
-    environment_ready = runtime.environment_ready()
-    ready_models = {model["key"] for model in model_catalog() if model.get("installed") and not model.get("validation_error")}
-    missing_models = tuple(
-        model_key for model_key in shared_model_catalog.DEFAULT_MODEL_KEYS if model_key not in ready_models
-    )
-    return {
-        "environment_ready": environment_ready,
-        "missing_models": missing_models,
-        "ready": environment_ready and not missing_models,
-    }
-
-
-def ai_ready():
-    return ai_status()["ready"]
-
-
-def ai_setup_label(status=None):
-    if status is None:
-        status = ai_status()
-    return (
-        "Download Required Models…"
-        if status["environment_ready"]
-        else "Set Up AI Server…"
-    )
-
-
-def model_download_size(model_key):
-    model = shared_model_catalog.get_downloadable_model(model_key)
-    return sum(size for _path, size, _checksum in model.files)
-
-
-def model_catalog():
-    return models_status().get("catalog", ())
-
-
-def model_record(model_key):
-    return next(
-        (model for model in model_catalog() if model.get("key") == model_key),
-        None,
-    )
-
-
-def _model_items(models):
-    return [
-        (
-            model["key"],
-            f"{model['tier']} | {model['label']}",
-            bpy.app.translations.pgettext_tip("{description}; license: {license}").format(
-                description=bpy.app.translations.pgettext_tip(model["description"]),
-                license=model["license"],
-            ),
-            model["enum_value"],
-        )
-        for model in models
-    ]
-
-
-def geometry_model_enum_items(_owner, _context):
-    models = [model for model in model_catalog() if model.get("family") == "moge"]
-    return _model_items(models)
-
-
-def upscale_model_label(model_key):
-    model = shared_model_catalog.UPSCALE_MODELS.get(model_key)
-    return model.label if model is not None else model_key
 
 
 def cutout_gesture_property():
@@ -359,17 +236,6 @@ def mask_radius_property():
         min=1,
         soft_max=500,
         subtype="PIXEL",
-    )
-
-
-def cutout_generate_normal_property():
-    return bpy.props.BoolProperty(
-        name="Normal Map",
-        description=(
-            "Generate a normal map to add surface detail under lighting for Flat and Solid shapes. "
-            "Depth Solid and Depth Symmetry always generate normal maps."
-        ),
-        default=False,
     )
 
 
@@ -458,7 +324,6 @@ class AnyImageSettings(bpy.types.PropertyGroup):
     cutout_alpha_threshold: cutout_alpha_threshold_property()
     cutout_edge_length: cutout_edge_length_property(store_meters=True)
     cutout_fine_outline: cutout_fine_outline_property()
-    cutout_generate_normal: cutout_generate_normal_property()
     mask_gesture: mask_gesture_property()
     mask_mode: mask_mode_property()
     mask_radius: mask_radius_property()

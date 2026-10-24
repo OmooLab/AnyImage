@@ -1,1 +1,1 @@
-"""Shared Blender-side AI, image, selection, viewport, and result helpers."""
+"""Shared Blender image, selection, viewport, and result helpers."""

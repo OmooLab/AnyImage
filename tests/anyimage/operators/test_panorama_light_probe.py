@@ -8,7 +8,7 @@ import pytest
 from mathutils import Vector
 
 from anyimage.operators.convert_to_panorama import light_probe
-from anyimage import preferences
+from anyimage import ai_preferences as preferences
 
 
 @pytest.fixture

@@ -11,8 +11,8 @@ class PlaneOperatorsTest(BlenderTestCase):
             for duration in (1, 24):
                 source = SimpleNamespace(data=SimpleNamespace(source=kind, frame_duration=duration))
                 operator = SimpleNamespace(report=Mock())
-                with patch.object(self.convert_to_plane, "material_color_image") as prepare:
-                    result = self.convert_to_plane.ConvertToPlane.execute(
+                with patch.object(self.plane_local, "material_color_image") as prepare:
+                    result = self.plane_local.ConvertToPlane.execute(
                         operator, SimpleNamespace(object=source))
                 self.assertEqual(result, {"CANCELLED"})
                 prepare.assert_not_called()

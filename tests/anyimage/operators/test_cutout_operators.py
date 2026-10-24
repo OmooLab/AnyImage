@@ -21,10 +21,10 @@ class CutoutOperatorsTest(BlenderTestCase):
 
         with (
             patch.object(
-                self.cutout_main, "effective_cutout_edge_length", return_value=0.1,
+                self.cutout_construction, "effective_cutout_edge_length", return_value=0.1,
             ),
             patch.object(
-                self.cutout_main, "build_base_shape", return_value=base_shape,
+                self.cutout_construction, "build_base_shape", return_value=base_shape,
             ),
             patch.object(self.cutout_main, "pad_cutout_images", side_effect=pad),
             patch.object(
@@ -87,7 +87,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             for gesture in ("LASSO", "POLYLINE"):
                 with self.subTest(gesture=gesture):
                     context.scene.anyimage_settings.cutout_gesture = gesture
-                    operator = self.cutout_main.SelectCutoutSelection()
+                    operator = self.cutout_operators.SelectCutoutSelection()
                     operator.report = Mock()
                     self.assertEqual(operator.invoke(context, event), {"RUNNING_MODAL"})
                     self.assertEqual(operator._path, [(12.0, 18.0)])
@@ -108,90 +108,28 @@ class CutoutOperatorsTest(BlenderTestCase):
     def test_flat_and_solid_without_ai_build_locally(self):
         import numpy as np
 
-        source = SimpleNamespace(
-            data=SimpleNamespace(size=(10, 10)), select_set=lambda _value: None
-        )
-        context = SimpleNamespace(
-            view_layer=SimpleNamespace(objects=SimpleNamespace(active=None))
-        )
-        selection_mask = self.image_selection.SelectionMask(
-            np.ones((8, 8), dtype=np.float32), (1, 1, 9, 9)
-        )
-        source_rgba = np.ones((10, 10, 4), dtype=np.float32)
+        source = SimpleNamespace(data=SimpleNamespace(size=(10, 10)), select_set=Mock())
+        context = SimpleNamespace(view_layer=SimpleNamespace(objects=SimpleNamespace(active=None)))
+        selection = self.image_selection.SelectionMask(np.ones((8, 8)), (1, 1, 9, 9))
+        module = self.cutout_operators
         for shape in ("FLAT", "SOLID"):
-            with self.subTest(shape=shape):
-                operator = SimpleNamespace(
-                    source_object_name="Source",
-                    selection_path_json=json.dumps(
-                        {"points": [[1, 1], [9, 1], [9, 9], [1, 9]]}
-                    ),
-                    shape=shape,
-                    gesture="POLYLINE",
-                    edge_length=0.1,
-                    alpha_threshold=0.25,
-                    fine_outline=False,
-                    generate_normal=False,
-                    report=lambda *_args: None,
-                    _needs_generation=lambda: False,
-                )
-                with (
-                    patch.object(
-                        self.cutout_main,
-                        "require_image_empty",
-                        return_value=source,
-                    ),
-                    patch.object(
-                        self.cutout_main, "is_animated_image", return_value=False
-                    ),
-                    patch.object(
-                        self.cutout_main, "image_rgba", return_value=source_rgba
-                    ) as read_rgba,
-                    patch.object(
-                        self.cutout_main,
-                        "rasterize_selection_path",
-                        return_value=selection_mask,
-                    ) as rasterize,
-                    patch.object(
-                        self.cutout_main,
-                        "configured_max_ai_input_size",
-                        return_value=2048,
-                    ),
-                    patch.object(
-                        self.cutout_main,
-                        "_cutout_content_values",
-                        return_value=selection_mask.values,
-                    ),
-                    patch.object(
-                        self.cutout_main,
-                        "material_color_image",
-                        return_value=nullcontext("Color"),
-                    ),
-                    patch.object(
-                        self.cutout_main, "create_cutout_shape"
-                    ) as convert,
-                ):
-                    result = self.cutout_main.CutoutSelectionToShape.execute(
-                        operator, context
-                    )
-
-                self.assertEqual(result, {"FINISHED"})
-                read_rgba.assert_called_once_with(source.data)
-                rasterize.assert_called_once()
-                convert.assert_called_once_with(
-                    context,
-                    source,
-                    shape,
-                    0.1,
-                    selection_mask.values,
-                    selection_mask.bounds,
-                    alpha_threshold=0.25,
-                    fine_outline=False,
-                    color_image="Color",
-                    boundary_padding=2.0,
-                    gesture="POLYLINE",
-                    report=operator.report,
-                )
-
+            operator = SimpleNamespace(source_object_name="Source", selection_path_json=json.dumps({"points": [[1, 1], [9, 1], [9, 9]]}), shape=shape, gesture="POLYLINE", edge_length=0.1, alpha_threshold=0.25, fine_outline=False, report=Mock())
+            mesh = SimpleNamespace(mask="Mask")
+            with (
+                patch.object(module, "require_image_empty", return_value=source),
+                patch.object(module, "is_animated_image", return_value=False),
+                patch.object(module, "image_rgba", return_value=np.ones((10, 10, 4))),
+                patch.object(module, "rasterize_selection_path", return_value=selection),
+                patch.object(module, "material_color_image", return_value=nullcontext("Color")),
+                patch.object(module, "build_cutout_shape", return_value=mesh),
+                patch.object(module, "pad_cutout_images") as pad,
+                patch.object(module, "push_cutout_undo") as undo,
+                patch.object(module, "create_shape_object") as create,
+            ):
+                self.assertEqual(module.CreateCutoutShape.execute(operator, context), {"FINISHED"})
+            create.assert_called_once_with(context, source, shape, selection.bounds, mesh, color_image="Color", gesture="POLYLINE")
+            pad.assert_called_once_with("Color", None, None, "Mask", 0.5, 2.0)
+            undo.assert_called_once_with(shape)
 
     def test_ai_cutout_writes_the_selection_bounds_image(self):
         import numpy as np
@@ -340,7 +278,7 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.color_path = __file__
         operator.source_object_name = "Source"
         operator.shape = "DEPTH_SOLID"
-        operator.model = self.anyimage.preferences.DEFAULT_GEOMETRY_MODEL_KEY
+        operator.model = self.anyimage.ai_preferences.DEFAULT_GEOMETRY_MODEL_KEY
         operator.resolution_level = 5
         operator.max_ai_input_size = 2048
         operator.generate_normal = True
@@ -403,7 +341,7 @@ class CutoutOperatorsTest(BlenderTestCase):
         }
         setup = ("operator", "anyimage.setup_ai_server", True)
         with patch.object(self.ai, "ai_status", return_value=missing):
-            cutout_tool = importlib.import_module("anyimage.tools").CutoutTool
+            cutout_tool = importlib.import_module("anyimage.ai_tools").CutoutTool
             layout = Layout()
             cutout_tool.draw_settings(context, layout, None)
             self.assertEqual(

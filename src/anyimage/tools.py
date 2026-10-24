@@ -1,6 +1,5 @@
 import bpy
 
-from .common.ai import draw_ai_property, draw_ai_setup
 from .common.viewport import image_edit_drag_keymap, image_edit_point_keymap
 from .operators.cutout_tool import SelectCutoutSelection
 from .operators.frame_tool import FrameImages
@@ -15,7 +14,9 @@ class FrameTool(bpy.types.WorkSpaceTool):
     bl_context_mode = "OBJECT"
     bl_idname = FRAME_TOOL_ID
     bl_label = "Frame"
-    bl_description = "Draw a rectangle to combine selected images into one image from the current view."
+    bl_description = (
+        "Draw a rectangle to combine selected images into one image from the current view."
+    )
     bl_icon = "ops.sculpt.border_mask"
     bl_operator = FrameImages.bl_idname
     bl_keymap = image_edit_drag_keymap(FrameImages.bl_idname)
@@ -45,7 +46,9 @@ class RectifyTool(bpy.types.WorkSpaceTool):
     bl_context_mode = "OBJECT"
     bl_idname = RECTIFY_TOOL_ID
     bl_label = "Rectify"
-    bl_description = "Select four corners of an image area to correct its perspective into a rectangle."
+    bl_description = (
+        "Select four corners of an image area to correct its perspective into a rectangle."
+    )
     bl_icon = "ops.sculpt.line_project"
     bl_operator = RectifyImagePerspective.bl_idname
     bl_keymap = image_edit_point_keymap(RectifyImagePerspective.bl_idname)
@@ -67,23 +70,15 @@ class CutoutTool(bpy.types.WorkSpaceTool):
         layout.prop(settings, "cutout_edge_length")
         layout.prop(settings, "cutout_fine_outline")
         layout.prop(settings, "cutout_alpha_threshold")
-        status = draw_ai_setup(layout)
-        draw_ai_property(layout, settings, "cutout_generate_normal", status)
 
 
-TOOLS = (
-    (CutoutTool, {"separator": True, "group": True}),
-    (FrameTool, {"after": {CutoutTool.bl_idname}, "separator": False}),
-    (MaskTool, {"after": {FrameTool.bl_idname}, "separator": False}),
-    (RectifyTool, {"after": {MaskTool.bl_idname}, "separator": False}),
-)
+def tool_definitions(cutout_tool=CutoutTool):
+    return (
+        (cutout_tool, {"separator": True, "group": True}),
+        (FrameTool, {"after": {cutout_tool.bl_idname}, "separator": False}),
+        (MaskTool, {"after": {FrameTool.bl_idname}, "separator": False}),
+        (RectifyTool, {"after": {MaskTool.bl_idname}, "separator": False}),
+    )
 
 
-def register():
-    for tool, options in TOOLS:
-        bpy.utils.register_tool(tool, **options)
-
-
-def unregister():
-    for tool, _options in reversed(TOOLS):
-        bpy.utils.unregister_tool(tool)
+TOOLS = tool_definitions()

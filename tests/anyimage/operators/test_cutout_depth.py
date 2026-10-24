@@ -1,8 +1,8 @@
 import bpy
 import numpy as np
 import pytest
-from anyimage.operators.cutout_tool.object import load_cutout_node_group
-from anyimage.operators.cutout_tool.operators import normal_mode_for_shape
+from anyimage.operators.cutout_tool.ai_object import load_cutout_node_group
+from anyimage.operators.cutout_tool.ai_operators import normal_mode_for_shape
 from anyimage.operators.cutout_tool.mesh import build_mesh
 from anyimage.operators.cutout_tool.balloon import poisson_balloon_profile
 

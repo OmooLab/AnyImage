@@ -123,7 +123,7 @@ class AiSetupTest(BlenderTestCase):
 
 
     def test_ai_status_checks_environment_and_required_model_files(self):
-        properties = self.anyimage.properties
+        properties = self.anyimage.ai_properties
         with (
             patch.object(self.anyimage.runtime, "environment_ready", return_value=True),
             patch.object(
@@ -169,12 +169,12 @@ class AiSetupTest(BlenderTestCase):
             operator.location = directory
             operator.use_mirror = True
             self.fake_bpy.context.preferences.addons["anyimage"].preferences.storage_root = str(Path(directory) / "current")
-            original = self.anyimage.preferences.storage_root()
+            original = self.anyimage.ai_preferences.storage_root()
             setup = Mock(return_value={"RUNNING_MODAL"})
             with patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(setup_server=setup)), create=True):
                 self.assertEqual(operator.execute(None), {"FINISHED"})
             setup.assert_called_once_with(directory=str(Path(directory) / ".anyimage"), use_mirror=True)
-            self.assertEqual(self.anyimage.preferences.storage_root(), original)
+            self.assertEqual(self.anyimage.ai_preferences.storage_root(), original)
 
 
     def test_ai_environment_ui_types_are_registered(self):
@@ -207,7 +207,7 @@ class AiSetupTest(BlenderTestCase):
 
 
     def test_ui_reads_required_model_files_without_starting_server(self):
-        properties = importlib.import_module("anyimage.properties")
+        properties = importlib.import_module("anyimage.ai_properties")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             from dataclasses import replace

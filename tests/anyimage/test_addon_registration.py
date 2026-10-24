@@ -18,7 +18,7 @@ class AddonRegistrationTest(BlenderTestCase):
 
         self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
         self.assertIn(GeneratePanorama, self.anyimage.CLASSES)
-        for operator in (ConvertToPanorama, GeneratePanorama, self.convert_to_plane.ConvertToPlane,
+        for operator in (ConvertToPanorama, GeneratePanorama, self.plane_local.ConvertToPlane,
                          self.convert_to_plane.ConvertToDepthPlane, self.convert_to_plane.ConvertToReliefPlane,
                          self.convert_to_plane.GenerateDepthPlane):
             self.assertNotIn("mesh_detail", getattr(operator, "__annotations__", {}))
@@ -28,7 +28,7 @@ class AddonRegistrationTest(BlenderTestCase):
                 self.assertIn(name, generator.__annotations__)
                 self.assertIn("HIDDEN", generator.__annotations__[name]["options"])
         self.assertLess(self.anyimage.CLASSES.index(GeneratePanorama), self.anyimage.CLASSES.index(ConvertToPanorama))
-        operator = self.convert_to_plane.ConvertToPlane
+        operator = self.plane_local.ConvertToPlane
         self.assertIn(operator, self.anyimage.CLASSES)
         self.assertIn(self.convert_to_plane.ConvertToDepthPlane, self.anyimage.CLASSES)
         self.assertIn(self.convert_to_plane.ConvertToReliefPlane, self.anyimage.CLASSES)
@@ -122,7 +122,7 @@ class AddonRegistrationTest(BlenderTestCase):
         self.anyimage.register()
         self.assertIs(
             self.registered_translations[self.anyimage.__package__],
-            self.anyimage.translations.TRANSLATIONS,
+            self.anyimage.TRANSLATIONS,
         )
         cache = self.anyimage.properties
         self.assertIn(cache.restore_color_references, self.fake_bpy.app.handlers.load_post)
@@ -133,7 +133,7 @@ class AddonRegistrationTest(BlenderTestCase):
             self.registered_tools,
             [
                 (
-                    self.tools.CutoutTool,
+                    self.anyimage.CutoutTool,
                     {
                         "group": True,
                         "separator": True,
@@ -167,22 +167,22 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertEqual(
             self.context_menu_draws[:2],
             [
-                self.anyimage.draw_image_object_context_menu,
-                self.anyimage.draw_image_context_menu,
+                self.anyimage.base.draw_image_object_context_menu,
+                self.anyimage.base.draw_image_context_menu,
             ],
         )
         self.assertEqual(
             self.outliner_menu_draws[:2],
             [
-                self.anyimage.draw_image_object_context_menu,
-                self.anyimage.draw_image_context_menu,
+                self.anyimage.base.draw_image_object_context_menu,
+                self.anyimage.base.draw_image_context_menu,
             ],
         )
 
-        self.assertEqual(self.node_menu_draws, [self.anyimage.draw_texture_node_context_menu, existing_node_draw])
+        self.assertEqual(self.node_menu_draws, [self.anyimage.base.draw_texture_node_context_menu, existing_node_draw])
         self.assertIn(self.anyimage.AnyImageTextureNodeMenu, self.registered)
         self.assertIn(self.anyimage.AnyImageObjectMenu, self.registered)
-        self.assertIn(self.anyimage.ColorMatchPanel, self.registered)
+        self.assertIn(self.anyimage.base.ColorMatchPanel, self.registered)
 
         unregister_order = []
         original_unregister = self.fake_bpy.utils.unregister_class
@@ -206,6 +206,6 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertEqual(self.outliner_menu_draws, [existing_outliner_draw])
         self.assertEqual(self.node_menu_draws, [existing_node_draw])
         self.anyimage.register()
-        self.assertEqual(self.node_menu_draws, [self.anyimage.draw_texture_node_context_menu, existing_node_draw])
+        self.assertEqual(self.node_menu_draws, [self.anyimage.base.draw_texture_node_context_menu, existing_node_draw])
         self.anyimage.unregister()
         self.assertEqual(self.node_menu_draws, [existing_node_draw])

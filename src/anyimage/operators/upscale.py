@@ -1,8 +1,9 @@
+from ..common.job_image import prepare_target_input, apply_image_result
 import bpy
 
-from ..preferences import configured_max_ai_input_size
-from ..preferences import configured_upscale_model
-from ..properties import upscale_model_label
+from ..ai_preferences import configured_max_ai_input_size
+from ..ai_preferences import configured_upscale_model
+from ..ai_properties import upscale_model_label
 from ..server.media.resolution import (
     DEFAULT_MAX_AI_INPUT_SIZE,
     MAX_MAX_AI_INPUT_SIZE,
@@ -101,7 +102,7 @@ class UpscaleImage(JobOperatorBase, bpy.types.Operator):
             )
             return {"CANCELLED"}
         try:
-            source_path, delete_input = self._image_target.prepare(context)
+            source_path, delete_input = prepare_target_input(self._image_target, context)
         except (OSError, RuntimeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
@@ -124,7 +125,7 @@ class UpscaleImage(JobOperatorBase, bpy.types.Operator):
         }
 
     def response(self, _context, result):
-        self._image_target.apply(result.file("upscale"))
+        apply_image_result(self._image_target, result.file("upscale"))
         model_label = upscale_model_label(self.model)
         return f"Image is upscaled with {model_label}"
 

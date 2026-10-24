@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change release-model-inference-memory. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: Cached model sessions survive inference cleanup
 
 系统 SHALL 在清理一次推理使用的临时内存后保留对应模型的已加载 Session，使相同模型、Device 与 Runtime 的下一次请求复用该 Session。
@@ -47,15 +48,42 @@ TBD - created by archiving change release-model-inference-memory. Update Purpose
 
 ### Requirement: Inference results and failure contracts remain stable
 
-临时内存释放 SHALL 不改变模型输入、模型输出、Job 产物、取消检查或既有资源错误处理。
+临时内存释放 SHALL 不改变模型输入、模型输出、Job 产物或取消检查；所有 ONNX 模型的 Session 创建与推理资源错误 SHALL 由共享 Runtime 边界提供一致、可读的错误。
 
 #### Scenario: Cleanup-enabled inference returns the same model result
 
 - **WHEN** 对相同输入与模型分别执行启用和未启用临时内存释放的推理
 - **THEN** 两次推理返回相同结构、尺寸、dtype 与数值语义的模型结果
 
-#### Scenario: Upscale provider resource failure
+#### Scenario: ONNX provider resource failure
 
-- **WHEN** Upscale 的 Execution Provider 因 GPU 或系统内存不足而失败
-- **THEN** 系统继续释放失效的 Upscale Session，并返回既有的可读资源错误
+- **WHEN** 任一 ONNX 模型的 Execution Provider 因 GPU 或系统内存不足而无法创建 Session 或完成推理
+- **THEN** 系统返回共享的可读资源错误，且既有 Session 缓存与临时内存释放语义保持不变
 
+### Requirement: Resource failures recover model cache safely
+
+系统 SHALL 只在共享 ONNX Runtime 明确标记资源失败时清空三个模型 Session 槽位，并 SHALL 根据失败阶段采用有限且可预测的恢复行为。
+
+#### Scenario: First session load exhausts resources
+- **WHEN** 任一模型 Session 首次创建因 ONNX Provider 资源不足而失败
+- **THEN** 系统清空 background、geometry 和 upscale Session，并重新创建当前 Session 一次
+
+#### Scenario: Retried session load succeeds
+- **WHEN** 清空缓存后的唯一一次 Session 创建重试成功
+- **THEN** 当前操作继续执行，只有当前模型重新进入对应缓存槽位
+
+#### Scenario: Retried session load still exhausts resources
+- **WHEN** 清空缓存后的 Session 创建重试仍因资源不足而失败
+- **THEN** 系统停止重试、保持全部槽位为空并返回资源错误
+
+#### Scenario: Inference exhausts resources
+- **WHEN** 已加载模型在推理期间因 ONNX Provider 资源不足而失败
+- **THEN** 系统清空全部模型 Session、返回原资源错误且不自动重试推理
+
+#### Scenario: Inference fails for another reason
+- **WHEN** 模型操作因普通 Runtime 错误、无效输入或任务取消而失败
+- **THEN** 系统保留现有缓存 Session，不执行 OOM 恢复
+
+#### Scenario: Inference succeeds
+- **WHEN** 模型加载与推理成功完成
+- **THEN** background、geometry 和 upscale 继续按现有三个槽位复用 Session

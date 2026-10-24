@@ -11,7 +11,7 @@ from ...common.color_image import material_color_image
 from ...common.material import create_image_material
 from ...common.node import load_node_group
 from ...common.object import finalize_object_result, modifier_input_identifier, set_modifier_input
-from ...preferences import configured_panorama_light_probe
+from ...ai_preferences import configured_panorama_light_probe
 from .light_probe import create_panorama_light_probe, bake_panorama_light_probe
 
 

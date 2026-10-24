@@ -16,7 +16,7 @@ class ImageMenuTest(BlenderTestCase):
 
         marked = ImageObject(o_image_object=True)
         context = SimpleNamespace(object=marked)
-        self.anyimage.draw_image_object_context_menu(
+        self.anyimage.base.draw_image_object_context_menu(
             SimpleNamespace(layout=layout),
             context,
         )
@@ -29,7 +29,7 @@ class ImageMenuTest(BlenderTestCase):
         )
 
         calls.clear()
-        self.anyimage.draw_image_object_context_menu(
+        self.anyimage.base.draw_image_object_context_menu(
             SimpleNamespace(layout=layout),
             SimpleNamespace(object=ImageObject()),
         )
@@ -118,7 +118,7 @@ class ImageMenuTest(BlenderTestCase):
 
         menu = self.anyimage.AnyImageImageMenu()
         menu.layout = Layout()
-        with patch("anyimage.properties.ai_status", return_value=status):
+        with patch("anyimage.ai_properties.ai_status", return_value=status):
             menu.draw(
                 SimpleNamespace(
                     area=SimpleNamespace(type=area_type),

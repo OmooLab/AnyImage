@@ -52,16 +52,16 @@ jobs:
         run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not BLENDER_EEVEE_NEXT"
 
       - name: Check extension archives
-        run: |
-          for platform in windows-x64 macos-arm64 linux-x64; do
-            archive="dist/AnyImage.v${{ needs.check_version.outputs.version }}.${platform}.zip"
-            if [ ! -f "$archive" ]; then
-              echo "Missing archive: $archive" >&2
-              exit 1
-            fi
-          done
+        run: uv run --group blender python -m tools.validate_extensions
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --draft --verify-tag --generate-notes
+        run: |
+          archives=()
+          for platform in windows-x64 macos-arm64 linux-x64; do
+            for name in "AnyImage" "AnyImage_Base"; do
+              archives+=("dist/${name}.v${{ needs.check_version.outputs.version }}.${platform}.zip")
+            done
+          done
+          gh release create "$GITHUB_REF_NAME" "${archives[@]}" --draft --verify-tag --generate-notes

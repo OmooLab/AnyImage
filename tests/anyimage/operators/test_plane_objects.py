@@ -1,3 +1,4 @@
+from anyimage.operators.convert_to_plane import image_plane
 from unittest.mock import patch
 import bpy
 import numpy as np
@@ -25,7 +26,7 @@ def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
     bpy.context.collection.objects.link(source)
     material = bpy.data.materials.new("Source.material")
 
-    result = plane_object.create_plane_object(
+    result = image_plane.create_plane_object(
         bpy.context,
         source,
         2,
@@ -119,7 +120,7 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
     plane_bounds = image_data.image_empty_bounds(plane_source)
     plane_matrix = plane_source.matrix_world.copy()
     plane_material = bpy.data.materials.new("Centered Plane Material")
-    plane = plane_object.create_plane_object(
+    plane = image_plane.create_plane_object(
         bpy.context,
         plane_source,
         0,

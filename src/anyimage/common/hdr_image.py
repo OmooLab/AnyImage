@@ -1,24 +1,9 @@
-"""Encode HDR images and prepare recognition previews."""
+"""Encode and pack HDR images."""
 
 import bpy
 import numpy as np
 
 from .image import image_rgba
-
-
-def recognition_rgba(rgba, *, associated=True):
-    """Tone-map scene-linear pixels for sRGB recognition without changing the source."""
-    alpha = rgba[..., 3:4]
-    rgb = rgba[..., :3].astype(np.float64)
-    if associated:
-        rgb = np.divide(rgb, alpha, out=np.zeros_like(rgb), where=alpha > 0)
-    rgb = np.maximum(rgb, 0)
-    luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
-    rgb /= 1 + luminance[..., None]
-    encoded = np.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * rgb ** (1 / 2.4) - 0.055)
-    preview = np.ones(rgba.shape, dtype=np.float32)
-    preview[..., :3] = np.clip(encoded, 0, 1) * alpha
-    return preview
 
 
 def save_hdr_result(rgba, path):

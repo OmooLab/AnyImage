@@ -12,8 +12,4 @@ CUTOUT_NODE_GROUP_NAMES = {
 CUTOUT_SHAPE_LABELS = {
     "FLAT": "Flat",
     "SOLID": "Solid",
-    "DEPTH_SYMMETRY": "Depth Symmetry",
-    "DEPTH_SOLID": "Depth Solid",
 }
-CUTOUT_SHAPES = frozenset(CUTOUT_NODE_GROUP_NAMES)
-DEPTH_CUTOUT_SHAPES = frozenset({"DEPTH_SYMMETRY", "DEPTH_SOLID"})

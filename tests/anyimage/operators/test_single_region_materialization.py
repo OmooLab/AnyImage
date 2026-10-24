@@ -261,7 +261,8 @@ def test_geometry_only_bake_preserves_animated_color_sampling(image_object):
 
 @pytest.mark.parametrize("image_object", ["PLANE"], indirect=True)
 def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
-    from anyimage import menu
+    from anyimage import image_menu
+    from anyimage import ai_menu as menu
     from anyimage.common.image_target import active_texture_node, image_edit_owner
     from anyimage.operators.color_match import MatchColorReference
     from anyimage.operators.remove_background import RemoveImageBackground
@@ -274,7 +275,7 @@ def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
     context = SimpleNamespace(object=obj, space_data=SimpleNamespace(type="VIEW_3D"), scene=bpy.context.scene)
     assert image_edit_owner(context) is None
     layout = Mock()
-    menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
+    image_menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_not_called()
     with patch.object(runtime, "server_busy", return_value=False):
         assert not RemoveImageBackground.poll(context)
@@ -286,5 +287,5 @@ def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
     context.space_data = SimpleNamespace(type="NODE_EDITOR", tree_type="ShaderNodeTree", shader_type="OBJECT", id=material, edit_tree=material.node_tree)
     assert active_texture_node(context) == node
     with patch.object(menu, "draw_image_actions") as actions:
-        menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+        image_menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname)

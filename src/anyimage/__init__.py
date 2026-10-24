@@ -1,64 +1,60 @@
-import bpy
-
-from . import keymaps, tools, translations
-from .operators.clipboard_image import CLASSES as CLIPBOARD_CLASSES
-from .menu import (
-    AnyImageImageMenu,
-    AnyImageObjectMenu,
-    AnyImageTextureNodeMenu,
-    draw_image_context_menu,
-    draw_image_object_context_menu,
-    draw_texture_node_context_menu,
+from . import __init_base__ as base
+from .__init_base__ import unregister
+from .tools import tool_definitions
+from .ai_menu import AnyImageImageMenu, AnyImageObjectMenu, AnyImageTextureNodeMenu
+from .operators.ai_setup import CLASSES as AI_SETUP_CLASSES
+from .operators.convert_to_panorama import CLASSES as PANORAMA_CLASSES
+from .operators.convert_to_plane.operators import (
+    GenerateDepthPlane,
+    ConvertToDepthPlane,
+    ConvertToReliefPlane,
 )
-from .operators import CLASSES as OPERATOR_CLASSES
-from .panel import ColorMatchPanel, DangerZonePanel, ServerPanel
-from .preferences import AnyImagePreferences
-from .properties import AnyImageSettings, register_color_references, unregister_color_references
+from .operators.cutout_tool.ai_interaction import SelectCutoutSelection
+from .operators.cutout_tool.operators import SelectCutoutSelection as SharedSelection
+from .operators.cutout_tool.ai_operators import CutoutSelectionToShape
+from .operators.remove_background import CLASSES as BACKGROUND_CLASSES
+from .operators.upscale import UpscaleImage
+from .panel import DangerZonePanel, ServerPanel
+from .ai_preferences import AnyImagePreferences
+from .ai_properties import AnyImageSettings
 from .runtime import runtime
+from .ai_tools import CutoutTool
+from .ai_translations import TRANSLATIONS
 
-
+_FULL_TYPES = {
+    base.AnyImagePreferences: AnyImagePreferences,
+    base.AnyImageSettings: AnyImageSettings,
+    base.AnyImageImageMenu: AnyImageImageMenu,
+    base.AnyImageObjectMenu: AnyImageObjectMenu,
+    base.AnyImageTextureNodeMenu: AnyImageTextureNodeMenu,
+    SharedSelection: SelectCutoutSelection,
+}
 CLASSES = (
-    AnyImagePreferences,
-    AnyImageSettings,
-    *CLIPBOARD_CLASSES,
-    *OPERATOR_CLASSES,
-    AnyImageImageMenu,
-    AnyImageObjectMenu,
-    AnyImageTextureNodeMenu,
-    ColorMatchPanel,
+    *(_FULL_TYPES.get(cls, cls) for cls in base.CLASSES),
+    GenerateDepthPlane,
+    ConvertToDepthPlane,
+    ConvertToReliefPlane,
+    CutoutSelectionToShape,
+    *PANORAMA_CLASSES,
+    *AI_SETUP_CLASSES,
+    *BACKGROUND_CLASSES,
+    UpscaleImage,
     ServerPanel,
     DangerZonePanel,
 )
 
 
 def register():
-    bpy.app.translations.register(__package__, translations.TRANSLATIONS)
-    for class_type in CLASSES:
-        bpy.utils.register_class(class_type)
-    tools.register()
-    bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=AnyImageSettings)
-    bpy.types.VIEW3D_MT_object_context_menu.prepend(draw_image_context_menu)
-    bpy.types.VIEW3D_MT_object_context_menu.prepend(draw_image_object_context_menu)
-    bpy.types.OUTLINER_MT_object.prepend(draw_image_context_menu)
-    bpy.types.OUTLINER_MT_object.prepend(draw_image_object_context_menu)
-    bpy.types.NODE_MT_context_menu.prepend(draw_texture_node_context_menu)
-    keymaps.register()
-    runtime.register()
-    register_color_references()
-
-
-def unregister():
-    unregister_color_references()
-    runtime.unregister()
-    keymaps.unregister()
-    tools.unregister()
-    bpy.types.NODE_MT_context_menu.remove(draw_texture_node_context_menu)
-    bpy.types.OUTLINER_MT_object.remove(draw_image_object_context_menu)
-    bpy.types.OUTLINER_MT_object.remove(draw_image_context_menu)
-    bpy.types.VIEW3D_MT_object_context_menu.remove(draw_image_object_context_menu)
-    bpy.types.VIEW3D_MT_object_context_menu.remove(draw_image_context_menu)
-    if hasattr(bpy.types.Scene, "anyimage_settings"):
-        del bpy.types.Scene.anyimage_settings
-    for class_type in reversed(CLASSES):
-        bpy.utils.unregister_class(class_type)
-    bpy.app.translations.unregister(__package__)
+    base.register(
+        CLASSES,
+        settings=AnyImageSettings,
+        toolset=tool_definitions(CutoutTool),
+        catalog=TRANSLATIONS,
+    )
+    try:
+        runtime.register()
+        base._cleanup.append(runtime.unregister)
+    except Exception:
+        runtime.unregister()
+        base.unregister()
+        raise

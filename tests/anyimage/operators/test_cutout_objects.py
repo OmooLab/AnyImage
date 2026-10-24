@@ -13,7 +13,7 @@ from anyimage.common import material as material_data
 from anyimage.common import object as object_data
 from anyimage.common.selection import ImageEditWarning, SelectionPath, rasterize_selection_path
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import operators as cutout_main
+from anyimage.operators.cutout_tool import ai_operators as cutout_main
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from anyimage.operators.cutout_tool.boundary_padding import (
     image_rgba_buffer,

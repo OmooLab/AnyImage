@@ -1,0 +1,250 @@
+"""Native Blender UI translations, keyed by English source messages."""
+
+import re
+from string import Formatter
+
+import bpy
+
+from .translations import _ZH_HANS as SHARED_MESSAGES
+
+
+# BlendJob transports formatted strings. Match only known progress templates,
+# retaining model names, speeds and counts verbatim at the Blender UI boundary.
+_PROGRESS_TEMPLATES = (
+    "Generating panorama view {index}/{total}",
+    "Starting {model} download",
+    "Downloading packages (mirror) {count}",
+    "Downloading packages {count}",
+    "Downloading {item} (mirror) {rate}",
+    "Downloading {item} (mirror)",
+    "Downloading {item}",
+    "Loading {model}",
+    "{model} ready",
+    "Background removed in {inference} ms (model load {load} ms, total {total} ms)",
+    "Image is upscaled with {model}",
+)
+_PROGRESS_PATTERNS = tuple(
+    (
+        re.compile(
+            "".join(
+                re.escape(literal) + (f"(?P<{field}>.+)" if field else "")
+                for literal, field, _spec, _conversion in Formatter().parse(template)
+            )
+        ),
+        template,
+    )
+    for template in _PROGRESS_TEMPLATES
+)
+
+
+def translate_progress(message):
+    """Translate known status messages without changing the server protocol."""
+    translated = bpy.app.translations.pgettext_iface(message)
+    if translated != message:
+        return translated
+    phase = re.fullmatch(r"(\d+/\d+) (.+)", message)
+    if phase:
+        return f"{phase[1]} {translate_progress(phase[2])}"
+    for pattern, template in _PROGRESS_PATTERNS:
+        match = pattern.fullmatch(message)
+        if match:
+            return bpy.app.translations.pgettext_iface(template).format(**match.groupdict())
+    return message
+
+
+_ZH_HANS = {
+    **SHARED_MESSAGES,
+    "Server": "服务器",
+    "Panorama Light Probe": "全景光照探针",
+    "Maximum Distance per Direction (m)": "单向最大距离（m）",
+    "Create and bake a light probe volume from the panorama": "从全景创建并烘焙体积光照探针",
+    "Maximum distance from the panorama origin in each direction, in meters": "从全景原点向各方向延伸的最大距离，单位为米",
+    "Panorama has no valid light probe region": "全景没有有效的光照探针区域",
+    "Panorama light probe bake cancelled": "全景光照探针烘焙已取消",
+    "Task queued": "任务已排队",
+    "Cancelling task": "正在取消任务",
+    "Panorama is ready": "全景已就绪",
+    "Depth Plane is ready": "深度平面已就绪",
+    "Relief Plane is ready": "浮雕平面已就绪",
+    "Flat is ready": "平面已就绪",
+    "Solid is ready": "实体已就绪",
+    "Depth Symmetry is ready": "深度对称形状已就绪",
+    "Depth Solid is ready": "深度实体已就绪",
+    "Image background is removed": "图像背景已移除",
+    "Panorama input cropped from {width} x {height} to {crop_width} x {crop_height}": "全景输入已从 {width} x {height} 裁剪为 {crop_width} x {crop_height}",
+    "Image long edge must be smaller than Maximum AI Input Size ({size} px)": "图像最长边必须小于 AI 输入尺寸上限（{size} 像素）",
+    "Ready": "就绪",
+    "Starting task": "正在启动任务",
+    "Task complete": "任务已完成",
+    "Task cancelled": "任务已取消",
+    "Task failed": "任务失败",
+    "Preparing Server": "正在准备服务器",
+    "Migrating Server": "正在迁移服务器",
+    "Stopping Server": "正在停止服务器",
+    "Saving Server location": "正在保存服务器位置",
+    "Server is ready": "服务器已就绪",
+    "Server migration completed": "服务器迁移已完成",
+    "Migrating Server files": "正在迁移服务器文件",
+    "Removing the old Server folder": "正在移除旧服务器文件夹",
+    "Installing environment": "正在安装运行环境",
+    "Starting installation ...": "正在开始安装…",
+    "Starting uv download ...": "正在开始下载 uv…",
+    "Installing uv ...": "正在安装 uv…",
+    "Checking Python ...": "正在检查 Python…",
+    "Installing Python ...": "正在安装 Python…",
+    "Resolving packages ...": "正在解析依赖包…",
+    "Resolving packages (mirror) ...": "正在通过镜像解析依赖包…",
+    "Installing packages ...": "正在安装依赖包…",
+    "Verifying installation ...": "正在验证安装…",
+    "Environment installation failed": "运行环境安装失败",
+    "Downloading packages {count}": "正在下载依赖包 {count}",
+    "Downloading packages (mirror) {count}": "正在通过镜像下载依赖包 {count}",
+    "Starting required model downloads": "正在开始下载所需模型",
+    "Required models are ready": "所需模型已就绪",
+    "Preparing depth conversion": "正在准备深度转换",
+    "Generating depth texture": "正在生成深度纹理",
+    "Generating surface normal": "正在生成表面法线",
+    "Depth conversion data is ready": "深度转换数据已就绪",
+    "Preparing panorama conversion": "正在准备全景转换",
+    "Generating panorama view {index}/{total}": "正在生成全景视角 {index}/{total}",
+    "Merging panorama depth maps": "正在合并全景深度图",
+    "Merging panorama normal maps": "正在合并全景法线图",
+    "Panorama conversion data is ready": "全景转换数据已就绪",
+    "Starting image upscale": "正在启动2倍高清",
+    "Preparing upscale input": "正在准备2倍高清输入图像",
+    "Upscaling image": "正在生成2倍高清图像",
+    "Image upscale complete": "2倍高清已完成",
+    "Image is upscaled with {model}": "已使用 {model} 生成2倍高清图像",
+    "Starting image background removal": "正在启动背景移除",
+    "Starting Environment": "正在启动运行环境",
+    "Removing background": "正在移除背景",
+    "Writing transparent PNG": "正在写入透明 PNG",
+    "Preparing Cutout Selection": "正在准备立体裁切选区",
+    "Generating Cutout artifacts": "正在生成立体裁切数据",
+    "Cutout artifacts are ready": "立体裁切数据已就绪",
+    "Starting {model} download": "正在开始下载 {model}",
+    "Downloading {item} (mirror) {rate}": "正在通过镜像下载 {item} {rate}",
+    "Downloading {item} (mirror)": "正在通过镜像下载 {item}",
+    "Downloading {item}": "正在下载 {item}",
+    "Loading {model}": "正在加载 {model}",
+    "{model} ready": "{model} 已就绪",
+    "Background removed in {inference} ms (model load {load} ms, total {total} ms)": "背景移除耗时 {inference} 毫秒（模型加载 {load} 毫秒，总计 {total} 毫秒）",
+    "Delete Files": "删除文件",
+    "Permanently delete job outputs and logs.": "永久删除任务输出和日志。",
+    "No unused job files to clear": "没有可清理的闲置任务文件",
+    "Choose a Server Location": "请选择服务器位置",
+    "Choose a location with a regular .anyimage directory": "请选择包含普通 .anyimage 目录的位置",
+    "Install the AnyImage Environment first": "请先安装「任意图！」运行环境",
+    "Online Access is disabled in Blender Preferences": "Blender 偏好设置中已禁用网络访问",
+    "Panorama conversion requires a static image": "全景转换需要静态图像",
+    "Not enough memory to prepare the HDR image": "内存不足，无法准备 HDR 图像",
+    "Set Up Server": "设置服务器",
+    "Migrate Server": "迁移服务器",
+    "Clear Job Files": "清理任务文件",
+    "Cancel Job": "取消任务",
+    "Start Server": "启动服务器",
+    "Stop Server": "停止服务器",
+    "Restart Server": "重启服务器",
+    "Open Server Log": "打开服务器日志",
+    "Remove backgrounds at 1024 px processing resolution while preserving soft, semi-transparent edges.": "以 1024 像素处理分辨率移除背景，保留柔和的半透明边缘。",
+    "Remove backgrounds from general images while preserving foreground transparency.": "移除普通图像的背景，保留前景透明度。",
+    "Enlarge images to twice their width and height with fast, restrained detail enhancement.": "将图像的宽高放大至两倍，快速、适度地增强细节。",
+    "Enlarge images to twice their width and height with stronger detail enhancement.": "将图像的宽高放大至两倍，更明显地增强细节。",
+    "Enlarge images to twice their width and height with detailed texture enhancement. Requires more processing time.": "将图像的宽高放大至两倍，增强纹理细节。需要更长的处理时间。",
+    "Generate depth and surface normals with the fastest MoGe-2 option.": "使用速度最快的 MoGe-2 模型生成深度和表面法线。",
+    "Generate depth and surface normals with a balance of processing speed and detail.": "兼顾处理速度和细节，生成深度和表面法线。",
+    "Generate depth and surface normals with MoGe-3, refining the prediction in three steps.": "使用 MoGe-3 生成深度和表面法线，通过三个步骤细化预测结果。",
+    "Remove backgrounds at 2048 px processing resolution while preserving soft, semi-transparent edges. Runs on CPU and requires more time and memory.": "以 2048 像素处理分辨率移除背景，保留柔和的半透明边缘。在 CPU 上运行，需要更多时间和内存。",
+    "click points; click start, double-click, or Enter to finish; Backspace removes": "点击添加顶点；点击起点、双击或按 Enter 完成；Backspace 删除顶点",
+    "Frame: drag a rectangle to merge selected Image Empties; RMB or Esc cancels": "重设画框：拖出矩形以合并选中的图像空物体；右键或 Esc 取消",
+    "Rectify: click {remaining} more corner; click order does not matter; Backspace removes, RMB or Esc cancels": "透视校正：再点击 {remaining} 个角点，顺序不限；Backspace 删除顶点，右键或 Esc 取消",
+    "Rectify: click {remaining} more corners; click order does not matter; Backspace removes, RMB or Esc cancels": "透视校正：再点击 {remaining} 个角点，顺序不限；Backspace 删除顶点，右键或 Esc 取消",
+    "Rectify Aspect {ratio:.3f}: move mouse horizontally, LMB confirms, Backspace returns, RMB or Esc cancels": "校正宽高比 {ratio:.3f}：水平移动鼠标，左键确认，Backspace 返回，右键或 Esc 取消",
+    "Job Server": "任务服务器",
+    "Danger Zone": "危险操作",
+    "Models Loaded": "已加载模型",
+    "Environment is not installed": "尚未安装运行环境",
+    "Set Up AI Server…": "设置 AI 服务器…",
+    "Download Required Models…": "下载所需模型…",
+    "Unload": "卸载",
+    "Running": "运行中",
+    "Running (Busy)": "运行中（忙碌）",
+    "Starting": "启动中",
+    "Stopped": "已停止",
+    "Compensate for the scene's view transform when creating materials to keep colors close to the source image. To view materials, switch the viewport to Material Preview or Rendered mode.": "创建材质时补偿场景的视图变换，使色彩接近原图。请切换到材质预览或渲染模式查看材质。",
+    "Server Root Folder": "服务器根目录",
+    "Choose where AnyImage stores its AI environment, downloaded models, and task files.": "选择「任意图！」存放 AI 环境、已下载模型和任务文件的位置。",
+    "AI Processing Device": "AI 运算设备",
+    "Choose the CPU or GPU used to run AI models.": "选择运行 AI 模型的 CPU 或 GPU。",
+    "Upscale Image Model": "2倍高清模型",
+    "Model used to upscale images": "用于生成2倍高清图像的模型",
+    "Maximum AI Input Size": "AI 输入尺寸上限",
+    "Limit the longest image edge used for depth, normal, and selection refinement. Upscale requires a source image smaller than this limit.": "限制深度、法线生成和选区优化时的图像最长边。2倍高清功能要求原图尺寸小于此上限。",
+    "Remove Background Model": "背景移除模型",
+    "Model used to remove image backgrounds": "用于移除图像背景的模型",
+    "Depth & Normal Model": "深度与法线模型",
+    "Choose the AI model used to generate depth and surface normals.": "选择用于生成深度和表面法线的 AI 模型。",
+    "MoGe Resolution Level": "MoGe 分辨率级别",
+    "Set the processing resolution for depth and normal generation. Higher levels can capture finer details but take more time and memory.": "设置生成深度和法线的处理分辨率。级别越高，细节越丰富，但耗时和内存占用也越多。",
+    "Depth & Normal": "深度与法线",
+    "Installed": "已安装",
+    "Validation failed": "校验失败",
+    "Download Again": "重新下载",
+    "Download": "下载",
+    "AI Generate Depth Map": "AI 生成深度图",
+    "AI Remove Background": "AI 移除背景",
+    "AI Upscale Image": "AI 2倍高清",
+    "Generate Depth Map": "生成深度图",
+    "Upscale Image": "2倍高清",
+    "Normal Map": "法线贴图",
+    "Generate a normal map to add surface detail under lighting for Flat and Solid shapes. Depth Solid and Depth Symmetry always generate normal maps.": "为平面和实体形状生成法线贴图，增加光照下的表面细节。深度实体和深度对称形状始终生成法线贴图。",
+    "Exclude areas below this opacity from the Cutout outline. Higher values exclude more semi-transparent edges.": "从立体裁切轮廓中排除不透明度低于此值的区域。值越高，排除的半透明边缘越多。",
+    "Set Up AI Server": "设置 AI 服务器",
+    "Install the environment and required AI models": "安装运行环境和所需的 AI 模型",
+    "Open the AnyImage add-on preferences": "打开「任意图！」插件偏好设置",
+    "Download Model": "下载模型",
+    "Download Required Models": "下载所需模型",
+    "Unload Models": "卸载模型",
+    "Free memory used by AI models to keep viewport and rendering responsive": "释放 AI 模型占用的内存，保持视口和渲染流畅",
+    "Server Location": "服务器位置",
+    "Choose .anyimage, a folder inside it, or a parent folder for a new installation": "选择 .anyimage 文件夹、其内部文件夹，或用于新安装的父文件夹",
+    "Use China Mirror": "使用中国镜像",
+    "Download Python and packages from China mirrors": "从中国镜像下载 Python 和依赖包",
+    "Continue": "继续",
+    "AI environment installed.": "AI 环境已安装。",
+    "Set up AI features for depth, background removal and upscaling.": "设置深度生成、背景移除和2倍高清等 AI 功能。",
+    "Use existing AI Server installation.": "使用现有的 AI 服务器安装。",
+    "Upscale": "2倍高清",
+    "Upscale the image by 2x with an AI model": "使用 AI 模型生成2倍高清图像",
+    "Max AI Input Size": "AI 输入尺寸上限",
+    "Maximum input long edge used for AI upscale analysis": "用于 AI 2倍高清分析的输入图像最长边上限",
+    "Generate Panorama": "生成全景",
+    "Convert to Panorama": "转为立体全景",
+    "Turn a still panoramic image into a surrounding 3D surface using AI-estimated depth.": "使用 AI 估计的深度，将静态全景图像转换为环绕的三维表面。",
+    "Generate Depth Plane": "生成深度平面",
+    "Convert to Depth Plane": "转为深度平面",
+    "Use AI-estimated depth to turn the image into a 3D surface that follows the source image's perspective.": "使用 AI 估计的深度，将图像转换为符合原图透视的三维表面。",
+    "Convert to Relief Plane": "转为浮雕平面",
+    "Use AI-estimated depth to create a raised relief on a flat base.": "使用 AI 估计的深度，在平坦底面上创建凸起的浮雕。",
+    "Depth Symmetry": "深度对称",
+    "Depth Solid": "深度实体",
+    "Build the image selection as a Cutout shape": "将图像选区构建为立体裁切形状",
+    "Remove Background": "移除背景",
+    "Remove the image background with the selected AI model": "使用所选 AI 模型移除图像背景",
+    "Run Background Removal": "执行背景移除",
+    "Upscale ({width} × {height})": "2倍高清（{width} × {height}）",
+    "{task}  [ {tier} ]": "{task}  [ {tier} ]",
+    "{label} (Installed)": "{label}（已安装）",
+    "Downloads the runtime and required models ({size} for models).": "下载运行环境和所需模型（模型共 {size}）。",
+    "Download: {models}": "下载：{models}",
+    "{size} · Usually 2–10 minutes.": "{size} · 通常需要 2–10 分钟。",
+    "{description}; license: {license}": "{description}；许可证：{license}",
+}
+
+TRANSLATIONS = {
+    "zh_HANS": {
+        (context, message): translation
+        for message, translation in _ZH_HANS.items()
+        for context in ("*", "Operator")
+    },
+}

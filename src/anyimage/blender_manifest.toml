@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "anyimage"
-version = "1.1.5"
+version = "1.1.6"
 name = "AnyImage"
 tagline = "Build spatial structures from images, fast"
 maintainer = "OmooLab"
@@ -13,7 +13,7 @@ wheels = ["./wheels/blendjob-0.1.24-py3-none-any.whl", "./wheels/materialyoucolo
 license = ["SPDX:GPL-3.0-or-later"]
 
 [permissions]
-network = "Access the local Job Server and download environment dependencies and model weights"
+network = "Connect to the AI Server and download dependencies and models"
 files = "Read source and clipboard images, and store environment data"
 
 [build]

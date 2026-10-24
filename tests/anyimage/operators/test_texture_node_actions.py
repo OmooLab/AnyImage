@@ -1,3 +1,4 @@
+from anyimage.common.job_image import apply_image_result
 from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
@@ -7,7 +8,8 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage import menu
+from anyimage import image_menu
+from anyimage import ai_menu as menu
 from anyimage.common import image as images
 from anyimage.common.image_target import ImageEditTarget, active_texture_node
 from anyimage.operators import upscale
@@ -52,7 +54,7 @@ def test_shader_editor_pin_and_shared_group_target(shader_editor, tmp_path):
     source = nested.image
     target = ImageEditTarget.capture(context)
     write_result(tmp_path)
-    target.apply(tmp_path / "foreground.png")
+    apply_image_result(target, tmp_path / "foreground.png")
     assert nested.image == source
     assert tuple(source.size) == (8, 6)
     assert second_instance.node_tree.nodes[nested.name].image == source
@@ -75,7 +77,7 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
     context = texture_context(texture)
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
     with patch(
-        "anyimage.properties.ai_status",
+        "anyimage.ai_properties.ai_status",
         return_value={"environment_ready": True, "ready": True},
     ):
         menu.AnyImageTextureNodeMenu.draw(SimpleNamespace(layout=layout), context)
@@ -87,11 +89,11 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
         "anyimage.open_ai_environment_settings",
     ]
     assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
-    menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+    image_menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname)
     texture.image = None
     layout.menu.reset_mock()
-    menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+    image_menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_not_called()
 
 

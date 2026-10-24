@@ -1,3 +1,4 @@
+import importlib
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,5 +27,5 @@ class InputPreparationTest(BlenderTestCase):
             with self.subTest(source=source), patch.object(self.image_data, "save_packed_image") as export:
                 image = SimpleNamespace(source=source, packed_file=object())
                 with self.assertRaisesRegex(RuntimeError, "Only still images"):
-                    self.image_data.prepare_image_input(image, None)
+                    importlib.import_module("anyimage.common.job_image").prepare_image_input(image, None)
                 export.assert_not_called()

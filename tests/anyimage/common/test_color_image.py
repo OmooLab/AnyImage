@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import bpy
 import numpy as np
 import pytest
+from anyimage.common.analysis_image import material_analysis_input
 from PIL import Image
 
 from anyimage.common import color_image as colors, image as images, material
@@ -112,7 +113,7 @@ def test_failed_color_preparation_releases_owned_resources(source, tmp_path, mon
 
 
 def test_ai_color_uses_submitted_crop_after_source_changes(source):
-    from anyimage.operators.cutout_tool.operators import _generated_color_result
+    from anyimage.operators.cutout_tool.ai_operators import _generated_color_result
     bounds = (1, 0, 3, 2)
     expected = images.image_rgba(source)[:, 1:3].copy()
     with colors.material_color_image(source, bounds=bounds) as direct:
@@ -120,7 +121,7 @@ def test_ai_color_uses_submitted_crop_after_source_changes(source):
             source, bounds,
         )
         try:
-            analysis = colors.material_analysis_input(path)
+            analysis = material_analysis_input(path)
             assert analysis == path
             with Image.open(analysis) as image:
                 assert image.size == (2, 2)
@@ -161,7 +162,7 @@ def test_hdr_analysis_preview_is_separate_from_full_precision_color(source):
     source.pixels.foreach_set(np.array([4, 2, .5, .25, 8, 3, 1, 0], np.float32))
     path = colors.prepare_material_color_input(source)
     try:
-        preview = colors.material_analysis_input(path)
+        preview = material_analysis_input(path)
         assert preview != path and preview.suffix == ".png" and path.suffix == ".exr"
         with Image.open(preview) as image:
             assert image.size == tuple(source.size)

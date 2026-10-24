@@ -5,7 +5,7 @@ import bpy
 from ..server.media.input import validate_input_path
 
 from ..preferences import addon_preferences
-from ..properties import (
+from ..ai_properties import (
     ai_ready,
     ai_setup_label,
     ai_status,

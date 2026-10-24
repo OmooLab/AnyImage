@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from anyimage import menu
+from anyimage import ai_menu as menu
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh.materialization import mesh_bake_modifiers
 

@@ -10,7 +10,7 @@ from tests.support.blender import BlenderTestCase
 class TranslationsTest(BlenderTestCase):
     def test_status_bar_translates_on_each_draw_without_changing_job_data(self):
         runtime = self.runtime.runtime
-        catalog = self.anyimage.translations.TRANSLATIONS["zh_HANS"]
+        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
         layout = Mock()
         layout.row.return_value = layout
         owner = SimpleNamespace(layout=layout)
@@ -31,7 +31,7 @@ class TranslationsTest(BlenderTestCase):
         layout.operator.assert_called_with("anyimage.cancel_job", text="", icon="X")
 
     def test_progress_translates_installation_downloads_and_keeps_unknown_messages(self):
-        module = self.anyimage.translations
+        module = self.anyimage.ai_translations
         catalog = module.TRANSLATIONS["zh_HANS"]
         cases = {
             "Upscaling image": "正在生成2倍高清图像",
@@ -62,15 +62,15 @@ class TranslationsTest(BlenderTestCase):
             return sorted((name, spec, conversion) for _, name, spec, conversion in Formatter().parse(message)
                           if name is not None)
 
-        for (_, source), translated in self.anyimage.translations.TRANSLATIONS["zh_HANS"].items():
+        for (_, source), translated in self.anyimage.TRANSLATIONS["zh_HANS"].items():
             self.assertTrue(translated)
             self.assertEqual(fields(source), fields(translated), source)
 
     def test_dynamic_menu_uses_current_blender_translation(self):
-        menu = self.anyimage.menu
+        menu = self.anyimage.ai_menu
         translate = self.fake_bpy.app.translations
         source = "Upscale ({width} × {height})"
-        chinese = self.anyimage.translations.TRANSLATIONS["zh_HANS"][("*", source)]
+        chinese = self.anyimage.TRANSLATIONS["zh_HANS"][("*", source)]
         with patch.object(menu, "image_edit_owner", return_value=object()), \
              patch.object(menu, "owner_image", return_value=SimpleNamespace(size=(640, 480))):
             self.assertEqual(menu.upscale_menu_label(None), "Upscale (1280 × 960)")
@@ -100,7 +100,7 @@ class TranslationsTest(BlenderTestCase):
         properties.invalidate_color_reference_items()
 
     def test_mask_status_translates_template_and_keeps_radius(self):
-        catalog = self.anyimage.translations.TRANSLATIONS["zh_HANS"]
+        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
         context = SimpleNamespace(workspace=SimpleNamespace(status_text_set=Mock()))
         operator = self.edit_mask.EditImageAlpha()
         operator.gesture, operator.mode, operator.radius = "BRUSH", "SUBTRACT", 25

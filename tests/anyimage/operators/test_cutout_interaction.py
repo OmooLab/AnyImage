@@ -8,7 +8,7 @@ import pytest
 
 from anyimage.common.selection import SelectionPath
 from anyimage.common import viewport
-from anyimage.operators.cutout_tool import interaction
+from anyimage.operators.cutout_tool import ai_interaction as interaction
 from anyimage.operators.cutout_tool import operators as cutout_main
 
 
@@ -93,10 +93,10 @@ def test_cutout_pie_uses_two_local_shapes_without_ai(monkeypatch):
         "Solid",
     ]
     assert all(
-        call[0] == "anyimage.cutout_selection_to_shape"
+        call[0] == "anyimage.create_cutout_shape"
         for call in window_manager.pie.calls
     )
-    assert not any(call[2].generate_normal for call in window_manager.pie.calls)
+    assert not any(hasattr(call[2], "generate_normal") for call in window_manager.pie.calls)
     assert all(call[2].edge_length == 0.1 for call in window_manager.pie.calls)
 
 
@@ -160,7 +160,8 @@ def test_cutout_lasso_submission_passes_only_the_selected_path(monkeypatch):
     monkeypatch.setattr(cutout_main, "require_image_empty", lambda _name: source)
     monkeypatch.setattr(interaction, "ai_ready", lambda: False)
     path = SelectionPath(points=((0, 0), (10, 0), (0, 10)))
-    operator = SimpleNamespace(source_object_name=source.name, _pie_event=object(), gesture="LASSO")
+    operator = SimpleNamespace(source_object_name=source.name, _pie_event=object(), gesture="LASSO",
+                               show_shape_menu=interaction.open_shape_pie)
     result = cutout_main.SelectCutoutSelection._submit_selection_path(operator, context, path)
     assert result == {"FINISHED"}
     assert SelectionPath.from_json(window_manager.pie.calls[0][2].selection_path_json) == path
@@ -230,6 +231,7 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
         active_tool_id="anyimage.cutout_lasso", _path=[(0, 0)],
         _polyline_confirm_type=None,
         _finish=Mock(),
+        show_shape_menu=interaction.open_shape_pie,
     )
     for name in ("_modal_polyline", "_confirm_polyline", "_complete", "_submit_selection_path"):
         setattr(operator, name, MethodType(getattr(cutout_main.SelectCutoutSelection, name), operator))

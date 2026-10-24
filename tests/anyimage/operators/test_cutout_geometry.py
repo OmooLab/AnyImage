@@ -5,7 +5,7 @@ import numpy as np
 
 
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import object as cutout_object
+from anyimage.operators.cutout_tool import ai_object as cutout_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from anyimage.operators.cutout_tool.geometry import SelectionContours, extract_selection_contours
 

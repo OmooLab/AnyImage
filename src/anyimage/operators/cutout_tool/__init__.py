@@ -1,9 +1,3 @@
-from .operators import CutoutSelectionToShape, SelectCutoutSelection
+from .operators import CreateCutoutShape, SelectCutoutSelection
 
-CLASSES = (CutoutSelectionToShape, SelectCutoutSelection)
-
-__all__ = (
-    "CLASSES",
-    "CutoutSelectionToShape",
-    "SelectCutoutSelection",
-)
+CLASSES = (CreateCutoutShape, SelectCutoutSelection)

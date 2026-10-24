@@ -5,7 +5,7 @@ import numpy as np
 from anyimage.common import image as image_data
 from anyimage.common.selection import SelectionMask
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import object as cutout_object
+from anyimage.operators.cutout_tool import ai_object as cutout_object
 from tests.support.color_image import color_image as prepared_color_image
 
 

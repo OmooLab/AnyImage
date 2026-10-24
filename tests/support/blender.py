@@ -138,7 +138,7 @@ class BlenderTestCase(unittest.TestCase):
             "anyimage.operators.convert_to_plane.object"
         )
         cls.cutout_main = importlib.import_module(
-            "anyimage.operators.cutout_tool.operators"
+            "anyimage.operators.cutout_tool.ai_operators"
         )
         cls.remove_background = importlib.import_module(
             "anyimage.operators.remove_background.operators"
@@ -157,6 +157,9 @@ class BlenderTestCase(unittest.TestCase):
         )
         cls.rectify_geometry = importlib.import_module("anyimage.operators.rectify_tool.geometry")
         cls.rectify_preview = importlib.import_module("anyimage.operators.rectify_tool.preview")
+        cls.cutout_operators = importlib.import_module("anyimage.operators.cutout_tool.operators")
+        cls.cutout_construction = importlib.import_module("anyimage.operators.cutout_tool.construction")
+        cls.plane_local = importlib.import_module("anyimage.operators.convert_to_plane.plane")
         cls.cutout_geometry = importlib.import_module(
             "anyimage.operators.cutout_tool.geometry"
         )

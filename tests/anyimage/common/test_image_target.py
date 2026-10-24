@@ -1,3 +1,5 @@
+from anyimage.common.job_image import apply_image_result
+from anyimage.common.job_image import load_image_edit_result
 from unittest.mock import patch
 
 import bpy
@@ -18,7 +20,7 @@ def test_target_uses_edit_tree_and_survives_renaming(texture, tmp_path):
     texture.id_data.nodes.active = other
     context.space_data.edit_tree = None
     write_result(tmp_path)
-    target.apply(tmp_path / "foreground.png")
+    apply_image_result(target, tmp_path / "foreground.png")
     assert tuple(texture.image.size) == (8, 6)
     assert other.image is None
 
@@ -40,7 +42,7 @@ def test_image_actions_preserve_source_color_space_and_alpha(texture, tmp_path, 
         other.image = original
     target = targets.ImageEditTarget.capture(texture_context(texture))
     write_result(tmp_path, filename)
-    target.apply(tmp_path / filename)
+    apply_image_result(target, tmp_path / filename)
     result = texture.image
     assert result.colorspace_settings.name == color_space
     assert result.alpha_mode == alpha_mode
@@ -100,7 +102,7 @@ def test_target_rejects_changed_identity_before_loading_result(texture, tmp_path
         bpy.data.images.remove(texture.image)
     count = len(bpy.data.images)
     with pytest.raises(RuntimeError, match="no longer available"):
-        target.apply(tmp_path / "foreground.png")
+        apply_image_result(target, tmp_path / "foreground.png")
     assert len(bpy.data.images) == count
 
 
@@ -135,7 +137,7 @@ def test_texture_commit_preserves_structure_and_isolates_users(texture, tmp_path
     shared = reference in {"same_tree", "other_material", "empty", "brush"}
     links = [(link.from_socket, link.to_socket) for link in texture.id_data.links]
     write_result(tmp_path)
-    target.apply(tmp_path / "foreground.png")
+    apply_image_result(target, tmp_path / "foreground.png")
     assert (texture.image == original) == (not shared)
     assert tuple(texture.image.size) == (8, 6)
     assert texture.image.colorspace_settings.name == "Non-Color"
@@ -174,7 +176,7 @@ def test_failed_texture_assignment_restores_source(texture, tmp_path, shared):
     original.pixels.foreach_set(np.tile([0.1, 0.3, 0.7, 0.5], 12).astype(np.float32))
     packed = bytes(original.packed_file.data)
     pixels = images.image_pixels(original)
-    result = images.load_image_edit_result(original, write_result(tmp_path))
+    result = load_image_edit_result(original, write_result(tmp_path))
     count = len(bpy.data.images) - 1
 
     class FailingTarget:

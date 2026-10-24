@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from tools.editions import EDITIONS, edition_sources
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = PROJECT_ROOT / "src" / "anyimage"
@@ -44,17 +46,19 @@ def require_node_asset():
         )
 
 
-def project_dependencies():
+def project_dependencies(edition="full"):
     """Return Extension wheel requirements declared by the project."""
-    project = tomllib.loads(
+    config = tomllib.loads(
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    )["project"]
-    return project.get("dependencies", [])
+    )
+    dependencies = config["project"].get("dependencies", [])
+    excluded = config.get("tool", {}).get("anyimage", {}).get("full-only-dependencies", []) if edition == "base" else []
+    return [item for item in dependencies if re.split(r"[\s\[<>=!~;@]", item, maxsplit=1)[0] not in excluded]
 
 
-def download_wheels(platform, destination):
+def download_wheels(platform, destination, edition="full"):
     """Download default dependencies as wheels for one target platform."""
-    dependencies = project_dependencies()
+    dependencies = project_dependencies(edition)
     if not dependencies:
         return []
     config = PLATFORM_CONFIGS[platform]
@@ -154,10 +158,17 @@ def prepare_local_dependencies(platform):
     return sorted(destination.glob("*.whl"))
 
 
-def manifest_for_platform(platform, wheels):
+def manifest_for_platform(platform, wheels, edition="full"):
     """Return manifest text for one platform and its downloaded wheels."""
     wheels = extension_wheels(wheels)
     text = (SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8")
+    version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+    text = re.sub(r'^version = .*$', f'version = "{version}"', text, flags=re.MULTILINE)
+    if edition == "base":
+        text = text.replace('id = "anyimage"', 'id = "anyimage_base"')
+        text = text.replace('name = "AnyImage"', 'name = "AnyImage Base"')
+        text = re.sub(r'^network = .*\n', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^files = .*$', 'files = "Read source and clipboard images, and save image edits"', text, flags=re.MULTILINE)
     lines = text.splitlines()
     table_start = next(
         (i for i, line in enumerate(lines) if line.startswith("[")),
@@ -184,31 +195,17 @@ def manifest_for_platform(platform, wheels):
     return "\n".join(head + tail) + "\n"
 
 
-def _build_extension(platform, wheels):
+def _build_extension(platform, wheels, edition="full"):
     require_node_asset()
     wheels = extension_wheels(wheels)
-    manifest_text = manifest_for_platform(platform, wheels)
+    manifest_text = manifest_for_platform(platform, wheels, edition)
     manifest = tomllib.loads(manifest_text)
     output_path = DIST_DIR / (
-        f"{manifest['name']}.v{manifest['version']}.{platform}.zip"
+        f"{manifest['name'].replace(' ', '_')}.v{manifest['version']}.{platform}.zip"
     )
     DIST_DIR.mkdir(exist_ok=True)
     with ZipFile(output_path, "w", ZIP_DEFLATED) as archive:
-        for source_path in sorted(SOURCE_DIR.rglob("*")):
-            if not source_path.is_file():
-                continue
-            if "__pycache__" in source_path.parts:
-                continue
-            if (
-                source_path.suffix.startswith(".blend")
-                and source_path.suffix != ".blend"
-            ):
-                continue
-            relative_path = source_path.relative_to(SOURCE_DIR)
-            if relative_path.parts[0] == "wheels":
-                continue
-            if source_path.name == "blender_manifest.toml":
-                continue
+        for relative_path, source_path in sorted(edition_sources(SOURCE_DIR, edition).items()):
             archive.write(source_path, relative_path)
         archive.writestr("blender_manifest.toml", manifest_text)
         for wheel in wheels:
@@ -216,16 +213,16 @@ def _build_extension(platform, wheels):
     return output_path
 
 
-def build_extension(platform):
+def build_extension(platform, edition="full"):
     if platform not in PLATFORMS:
         raise ValueError(f"Unsupported platform: {platform}")
     with tempfile.TemporaryDirectory() as directory:
-        wheels = download_wheels(platform, Path(directory))
-        return _build_extension(platform, wheels)
+        wheels = download_wheels(platform, Path(directory), edition)
+        return _build_extension(platform, wheels, edition)
 
 
-def build_all():
-    return [build_extension(platform) for platform in PLATFORMS]
+def build_all(editions=EDITIONS, platforms=PLATFORMS):
+    return [build_extension(platform, edition) for platform in platforms for edition in editions]
 
 
 def main(argv=None):
@@ -244,7 +241,10 @@ def main(argv=None):
         choices=PLATFORMS,
         help="Build one platform; --local defaults to this computer",
     )
+    parser.add_argument("--edition", choices=EDITIONS, help="Build only one edition; defaults to both")
     args = parser.parse_args(argv)
+    if args.local and args.edition == "base":
+        parser.error("--local supports full only; install the assembled Base archive for testing")
     if args.local:
         platform = args.platform or current_platform()
         wheels = prepare_local_dependencies(platform)
@@ -257,7 +257,10 @@ def main(argv=None):
         ["uv", "run", "--group", "blender", "build-assets"],
         cwd=PROJECT_ROOT, check=True,
     )
-    extension_paths = [build_extension(args.platform)] if args.platform else build_all()
+    extension_paths = build_all(
+        (args.edition,) if args.edition else EDITIONS,
+        (args.platform,) if args.platform else PLATFORMS,
+    )
     for extension_path in extension_paths:
         size_mib = extension_path.stat().st_size / (1024 * 1024)
         print(f"Built {extension_path} ({size_mib:.2f} MiB)")

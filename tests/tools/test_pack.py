@@ -77,7 +77,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             pack.DIST_DIR = directory_path / "dist"
             try:
                 with (
-                    patch.object(pack, "download_wheels", return_value=[wheel_path]),
+                    patch.object(pack, "download_wheels", side_effect=lambda platform, destination, edition: [wheel_path] if edition == "full" else []),
                     patch.object(pack, "ZipFile", side_effect=lambda path, *args: ArchiveContents(path, records)),
                 ):
                     output_paths = pack.build_all()
@@ -89,7 +89,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             )["version"]
             self.assertEqual(
                 {path.name for path in output_paths},
-                {f"AnyImage.v{version}.{platform}.zip" for platform in pack.PLATFORMS},
+                {f"{name}.v{version}.{platform}.zip" for platform in pack.PLATFORMS for name in ("AnyImage", "AnyImage_Base")},
             )
             for output_path in output_paths:
                 platform = output_path.stem.split(".")[-1]
@@ -101,9 +101,9 @@ class ExtensionPackagingTest(unittest.TestCase):
                 self.assertIn("blender_manifest.toml", names)
                 self.assertIn("assets/O_AnyImage.blend", names)
                 self.assertNotIn("assets/O_AnyImage.blend1", names)
-                self.assertIn(
-                    "wheels/blendjob-0.1.24-py3-none-any.whl",
-                    names,
+                self.assertEqual(
+                    "wheels/blendjob-0.1.24-py3-none-any.whl" in names,
+                    not output_path.name.startswith("AnyImage_Base"),
                 )
                 self.assertNotIn("anyimage/__init__.py", names)
                 self.assertIn(f'platforms = ["{platform}"]', manifest)
@@ -311,16 +311,14 @@ class ExtensionPackagingTest(unittest.TestCase):
             extension.write_bytes(b"extension")
             with (
                 patch.object(pack.subprocess, "run") as assets,
-                patch.object(pack, "build_extension", return_value=extension) as build,
-                patch.object(pack, "build_all") as build_all,
+                patch.object(pack, "build_all", return_value=[extension]) as build_all,
             ):
                 pack.main(["-p", "linux-x64"])
             assets.assert_called_once_with(
                 ["uv", "run", "--group", "blender", "build-assets"],
                 cwd=pack.PROJECT_ROOT, check=True,
             )
-            build.assert_called_once_with("linux-x64")
-            build_all.assert_not_called()
+            build_all.assert_called_once_with(pack.EDITIONS, ("linux-x64",))
 
     def test_default_command_builds_all_platforms(self):
         pack = load_pack()
@@ -337,7 +335,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                 ["uv", "run", "--group", "blender", "build-assets"],
                 cwd=pack.PROJECT_ROOT, check=True,
             )
-            build_all.assert_called_once_with()
+            build_all.assert_called_once_with(pack.EDITIONS, pack.PLATFORMS)
             build_extension.assert_not_called()
 
     def test_detects_supported_hosts(self):

@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change unify-depth-plane-and-artifact. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: Depth has one file contract
 
 系统 SHALL 将所有深度图片写为 `depth.exr`，通过结果键 `depth` 返回。文件 MUST 使用 RGBA float32，RGB 为相机 XYZ，Alpha 为有效性，并沿用相机坐标、像素方向和非有限值处理约定。内部标量深度和 `depth.json` SHALL 保留。
@@ -39,4 +40,3 @@ TBD - created by archiving change unify-depth-plane-and-artifact. Update Purpose
 #### Scenario: Projected geometry keeps camera coordinates
 - **WHEN** 统一深度纹理用于 Camera 或 Depth Cutout
 - **THEN** 投影位置、有效性和尺度与更名前的 XYZ 输入一致
-

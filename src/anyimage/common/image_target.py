@@ -1,4 +1,4 @@
-"""Resolve and commit AI image edits for image owners."""
+"""Resolve and commit image edits for image owners."""
 
 from dataclasses import dataclass
 from uuid import uuid4
@@ -10,8 +10,6 @@ from .image import (
     image_user_settings,
     is_animated_image,
     is_image_empty,
-    load_image_edit_result,
-    prepare_image_input,
     replace_empty_image,
     restore_image_content,
 )
@@ -206,15 +204,6 @@ class ImageEditTarget:
         except ReferenceError:
             pass
         raise RuntimeError("The source image target is no longer available or has changed")
-
-    def prepare(self, context):
-        self.validate()
-        return prepare_image_input(self.image, context.scene)
-
-    def apply(self, output_path):
-        self.validate()
-        result_image = load_image_edit_result(self.image, output_path)
-        return self.commit(result_image)
 
     def commit(self, result_image, *, isolate_shared=False):
         """Commit an owned, fully prepared image through the target transaction."""

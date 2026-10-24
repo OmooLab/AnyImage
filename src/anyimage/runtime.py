@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from blendjob import JobRuntime
-from .preferences import storage_root
+from .ai_preferences import storage_root
 from .server.model_catalog import DEFAULT_MODEL_KEYS
-from .translations import translate_progress
+from .ai_translations import translate_progress
 
 
 ENVIRONMENT = {

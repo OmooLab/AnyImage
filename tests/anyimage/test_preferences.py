@@ -42,7 +42,7 @@ class RecordingLayout:
 
 class PreferencesTest(BlenderTestCase):
     def test_device_choices_follow_anyimage_platform_support(self):
-        properties = self.anyimage.properties
+        properties = self.anyimage.ai_properties
         for system, architecture, expected in (
             ("darwin", "arm64", ["cpu", "coreml"]),
             ("darwin", "aarch64", ["cpu", "coreml"]),
@@ -58,12 +58,11 @@ class PreferencesTest(BlenderTestCase):
                 self.assertEqual(properties.supported_devices(), expected)
 
     def test_model_preferences_keep_valid_choices_and_reset_unknown_keys(self):
-        module = self.anyimage.preferences
         stored = self.fake_bpy.context.preferences.addons["anyimage"].preferences
         for attribute, reader, valid, default in (
-            ("geometry_model", module.configured_geometry_model, "MOGE3_VITL", "MOGE2_VITS_NORMAL"),
-            ("background_model", module.configured_background_model, "BEN2_BASE", "BIREFNET_LITE"),
-            ("upscale_model", module.configured_upscale_model, "REALESRGAN_X4PLUS", "REALESRGAN_GENERAL_WDN_X4V3"),
+            ("geometry_model", self.anyimage.ai_preferences.configured_geometry_model, "MOGE3_VITL", "MOGE2_VITS_NORMAL"),
+            ("background_model", self.anyimage.ai_preferences.configured_background_model, "BEN2_BASE", "BIREFNET_LITE"),
+            ("upscale_model", self.anyimage.ai_preferences.configured_upscale_model, "REALESRGAN_X4PLUS", "REALESRGAN_GENERAL_WDN_X4V3"),
         ):
             setattr(stored, attribute, valid)
             self.assertEqual(reader(), valid)
@@ -76,7 +75,7 @@ class PreferencesTest(BlenderTestCase):
         module = self.anyimage.preferences
         preferences = self.fake_bpy.context.preferences.addons["anyimage"].preferences
         cases = (
-            (module.configured_max_ai_input_size, "max_ai_input_size", (10000, 1), (8192, 256)),
+            (self.anyimage.ai_preferences.configured_max_ai_input_size, "max_ai_input_size", (10000, 1), (8192, 256)),
             (module.configured_max_frame_resolution, "max_frame_resolution", (10000, 1), (8192, 64)),
             (module.configured_cutout_boundary_padding, "cutout_boundary_padding", (3.5, 100, -1), (3.5, 4, 1)),
             (
@@ -138,7 +137,7 @@ class PreferencesTest(BlenderTestCase):
         from dataclasses import replace
         from unittest.mock import Mock
 
-        properties = self.anyimage.properties
+        properties = self.anyimage.ai_properties
         spec = replace(properties.shared_model_catalog.BEN2_MODEL, files=(("model.onnx", 4, "checksum"),))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -159,21 +158,21 @@ class PreferencesTest(BlenderTestCase):
                 self.assertEqual(record["validation_error"], "Checksum mismatch")
                 layout = Mock()
                 operator = layout.row.return_value.row.return_value.operator.return_value
-                self.anyimage.preferences.AnyImagePreferences._draw_model_status(layout, record, "AI Remove Background")
+                self.anyimage.AnyImagePreferences._draw_model_status(layout, record, "AI Remove Background")
                 self.assertEqual(operator.model, spec.key)
                 self.assertEqual(layout.row.return_value.row.return_value.operator.call_args.kwargs["text"], "Download Again")
 
 
     def draw_preferences(self, status, catalog):
         operators = []
-        preferences = self.anyimage.preferences.AnyImagePreferences()
+        preferences = self.anyimage.AnyImagePreferences()
         preferences.layout = RecordingLayout(operators)
         preferences.geometry_model = "MOGE2_VITS_NORMAL"
         preferences.background_model = "BEN2_BASE"
         preferences.upscale_model = "HAT_GAN_X4_SHARPER"
         with (
-            patch.object(self.anyimage.properties, "ai_status", return_value=status),
-            patch.object(self.anyimage.properties, "model_catalog", return_value=catalog),
+            patch.object(self.anyimage.ai_properties, "ai_status", return_value=status),
+            patch.object(self.anyimage.ai_properties, "model_catalog", return_value=catalog),
             patch.object(self.anyimage.runtime, "server_busy", return_value=False),
         ):
             preferences.draw(None)
@@ -186,7 +185,7 @@ class PreferencesTest(BlenderTestCase):
         operator.input_path = __file__
         operator.analysis_input_path = __file__
         operator.source_object_name = "Source"
-        operator.model = self.anyimage.preferences.DEFAULT_GEOMETRY_MODEL_KEY
+        operator.model = self.anyimage.ai_preferences.DEFAULT_GEOMETRY_MODEL_KEY
         operator.resolution_level = 5
         operator.max_input_size = 1536
         context = SimpleNamespace(
@@ -232,8 +231,8 @@ class PreferencesTest(BlenderTestCase):
                 return_value=1024,
             ),
             patch.object(
-                self.upscale.ImageEditTarget,
-                "prepare",
+                self.upscale,
+                "prepare_target_input",
                 return_value=(Path("input.png"), False),
             ),
             patch.object(

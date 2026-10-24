@@ -1,6 +1,7 @@
+from ...common.job_image import prepare_target_input, apply_image_result
 import bpy
 
-from ...preferences import configured_background_model
+from ...ai_preferences import configured_background_model
 from ...runtime import JobOperatorBase
 from ...common.ai import (
     require_input_path,
@@ -65,7 +66,7 @@ class RunBackgroundRemoval(JobOperatorBase, bpy.types.Operator):
                 self._hdr_input = HdrBackgroundInput.prepare(self._image_target.image)
                 source_path, self.delete_input = self._hdr_input.path, True
             else:
-                source_path, self.delete_input = self._image_target.prepare(context)
+                source_path, self.delete_input = prepare_target_input(self._image_target, context)
         except (OSError, RuntimeError, ValueError, MemoryError) as error:
             self._hdr_input = None
             self._image_target = None
@@ -99,7 +100,7 @@ class RunBackgroundRemoval(JobOperatorBase, bpy.types.Operator):
         if getattr(self, "_hdr_input", None) is not None:
             self._hdr_input.apply(self._image_target, result.file("alpha"), prepare_undo=True)
         else:
-            self._image_target.apply(result.file("foreground"))
+            apply_image_result(self._image_target, result.file("foreground"))
         if "FINISHED" not in bpy.ops.ed.undo_push(message="Remove Background"):
             raise RuntimeError("Unable to create the Remove Background Undo step")
         return "Image background is removed"

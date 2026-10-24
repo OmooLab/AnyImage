@@ -47,12 +47,12 @@ class ServerLocationTest(BlenderTestCase):
         ops = SimpleNamespace(wm=SimpleNamespace(save_userpref=Mock(return_value={"CANCELLED"})))
         with patch.object(self.fake_bpy, "ops", ops, create=True):
             with self.assertRaisesRegex(RuntimeError, "save"):
-                self.anyimage.preferences.storage_root(self.target)
+                self.anyimage.ai_preferences.storage_root(self.target)
         self.assertEqual(preferences.storage_root, previous)
 
     def test_save_persists_new_location(self):
         ops = SimpleNamespace(wm=SimpleNamespace(save_userpref=Mock(return_value={"FINISHED"})))
         with patch.object(self.fake_bpy, "ops", ops, create=True):
-            self.assertEqual(self.anyimage.preferences.storage_root(self.target), self.target)
-        self.assertEqual(self.anyimage.preferences.storage_root(), self.target)
+            self.assertEqual(self.anyimage.ai_preferences.storage_root(self.target), self.target)
+        self.assertEqual(self.anyimage.ai_preferences.storage_root(), self.target)
         ops.wm.save_userpref.assert_called_once_with()

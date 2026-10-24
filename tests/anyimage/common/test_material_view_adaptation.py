@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 
 
-from anyimage import preferences
+from anyimage import preferences as preferences
 from anyimage.common import image as images
 from anyimage.common import material
 from tests.support.color_image import color_image

@@ -80,26 +80,6 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
         raise
 
 
-def material_analysis_input(color_path):
-    """Return the byte color file or an HDR recognition preview in the same directory."""
-    from .hdr_image import recognition_rgba
-
-    path = Path(color_path)
-    if path.suffix == ".png":
-        return path
-    image = load_material_color_image(path)
-    try:
-        rgba = image_rgba(image)
-        if image.alpha_mode == "NONE":
-            rgba[..., 3] = 1
-        preview = recognition_rgba(rgba, associated=image.alpha_mode not in {"CHANNEL_PACKED", "NONE"})
-        output = path.parent / "analysis.png"
-        _save_byte_color(preview, output, "sRGB")
-        return output
-    finally:
-        bpy.data.images.remove(image)
-
-
 def cleanup_material_color_input(path):
     """Release the directory owned by a prepared material color input."""
     if path:

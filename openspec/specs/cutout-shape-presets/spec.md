@@ -3,6 +3,7 @@
 ## Purpose
 TBD - created by archiving change reorganize-cutout-shapes. Update Purpose after archive.
 ## Requirements
+
 ### Requirement: 四个创建入口映射三个节点组
 系统 SHALL 提供 Flat、Solid、Depth Solid、Depth Balloon 四个入口，并默认使用 Solid。Flat 与 Solid SHALL 共用 O Image Cutout；Depth Solid SHALL 使用 O Image Depth Cutout；Depth Balloon SHALL 使用 O Image Depth Balloon。
 
@@ -57,4 +58,3 @@ O Image Depth Balloon SHALL 保留原 Depth Balloon 的参考平面塑形行为�
 #### Scenario: 小岛清理
 - **WHEN** 输入包含总面积低于 Cleanup 阈值的独立平面岛
 - **THEN** 三个节点组均在塑形前删除该岛，保留大于阈值的岛
-

@@ -1,3 +1,4 @@
+from anyimage.common.job_image import load_image_edit_result
 from unittest.mock import patch
 import bpy
 import numpy as np
@@ -48,7 +49,7 @@ def test_image_edit_replacement_preserves_alpha_mode(source, tmp_path, alpha_mod
         result = edit_result(source)
     else:
         Image.new("RGBA", (4, 3), (100, 150, 200, 128)).save(tmp_path / entry)
-        result = images.load_image_edit_result(original, tmp_path / entry)
+        result = load_image_edit_result(original, tmp_path / entry)
     assert result.alpha_mode == alpha_mode
     images.replace_empty_image(source, result)
     assert source.data.alpha_mode == alpha_mode

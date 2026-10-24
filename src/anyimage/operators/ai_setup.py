@@ -1,9 +1,10 @@
 import bpy
 
-from ..preferences import ADDON_PACKAGE, storage_root
+from ..preferences import ADDON_PACKAGE
+from ..ai_preferences import storage_root
 from ..runtime import JobOperatorBase, runtime
 from ..server.model_catalog import DEFAULT_MODEL_KEYS, get_downloadable_model
-from ..properties import (
+from ..ai_properties import (
     model_download_size,
     model_record,
 )

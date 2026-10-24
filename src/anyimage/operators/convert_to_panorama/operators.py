@@ -1,12 +1,14 @@
+from ...common.analysis_image import material_analysis_input
 """Submit the current static panorama through the managed geometry Job."""
 
 import bpy
 
 from ...common.ai import invoke_ai_setup_if_needed, production_device, report_ai_error, require_environment, require_input_path, require_model
 from ...common.image import is_image_empty, is_animated_image, panorama_crop_bounds
-from ...common.color_image import prepare_material_color_input, material_analysis_input, cleanup_material_color_input
-from ...preferences import addon_preferences, configured_max_ai_input_size
-from ...preferences import configured_geometry_model
+from ...common.color_image import prepare_material_color_input, cleanup_material_color_input
+from ...preferences import addon_preferences
+from ...ai_preferences import configured_max_ai_input_size
+from ...ai_preferences import configured_geometry_model
 from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
 from ...runtime import JobOperatorBase
 from ...server.media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, MAX_MAX_AI_INPUT_SIZE, MIN_MAX_AI_INPUT_SIZE

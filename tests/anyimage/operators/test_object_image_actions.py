@@ -5,7 +5,8 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage import menu
+from anyimage import image_menu
+from anyimage import ai_menu as menu
 from anyimage.common import material as material_data
 from anyimage.common.image_target import (
     ImageEditTarget,
@@ -251,17 +252,17 @@ def test_object_menu_and_operator_polls_use_marked_object():
     context = _context(obj)
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
 
-    menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
+    image_menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_called_once_with(menu.AnyImageObjectMenu.bl_idname)
     layout.menu.reset_mock()
     obj["o_image_object"] = False
-    menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
+    image_menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_not_called()
     obj["o_image_object"] = True
 
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
     with patch(
-        "anyimage.properties.ai_status",
+        "anyimage.ai_properties.ai_status",
         return_value={"environment_ready": True, "ready": True},
     ):
         menu.AnyImageObjectMenu.draw(SimpleNamespace(layout=layout), context)

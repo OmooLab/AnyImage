@@ -20,11 +20,11 @@ class AiInputFailuresTest(BlenderTestCase):
                 operator = operator_type()
                 operator.report = Mock()
                 target = Mock(image=SimpleNamespace(size=(16, 16)))
-                target.prepare.return_value = (path, False)
                 context = SimpleNamespace(scene=SimpleNamespace(
                     anyimage_settings=SimpleNamespace()))
                 with ExitStack() as stack:
                     stack.enter_context(patch.object(module.ImageEditTarget, "capture", return_value=target))
+                    stack.enter_context(patch.object(module, "prepare_target_input", return_value=(path, False)))
                     stack.enter_context(patch.object(module, "require_environment"))
                     stack.enter_context(patch.object(module, "require_model"))
                     stack.enter_context(patch.object(self.runtime.runtime, "active_job", None))

@@ -4,6 +4,8 @@ import bpy
 
 from ...common.object import blender_frame_rotation, modifier_input_identifier, set_modifier_input
 from ...common.node import load_node_group
+from ...common.image import image_empty_bounds
+from ...common.object import finalize_object_result
 
 
 IMAGE_PLANE_NODE_GROUP_NAME = "O Image Plane"
@@ -100,3 +102,26 @@ def create_image_plane_object(
             bpy.data.meshes.remove(mesh)
         raise
     return plane
+
+
+def create_plane_object(context, source_object, subdivisions, material):
+    source_name = source_object.name
+    plane = create_image_plane_object(
+        context,
+        source_name,
+        image_empty_bounds(source_object),
+        material,
+        matrix_world=source_object.matrix_world,
+        subdivisions=subdivisions,
+    )
+    try:
+        for polygon in plane.data.polygons:
+            polygon.use_smooth = True
+        plane["o_image_object"] = True
+        return finalize_object_result(context, source_object, plane)
+    except Exception:
+        mesh = plane.data
+        bpy.data.objects.remove(plane, do_unlink=True)
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+        raise

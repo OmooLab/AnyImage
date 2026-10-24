@@ -7,7 +7,8 @@ import pytest
 from PIL import Image
 
 from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.hdr_image import recognition_rgba, save_hdr_result
+from anyimage.common.hdr_image import save_hdr_result
+from anyimage.common.analysis_image import recognition_rgba
 from anyimage.common.image import cleanup_image_input, image_content_state, image_rgba, restore_image_content
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.common import image_target as targets

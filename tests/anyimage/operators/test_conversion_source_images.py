@@ -9,7 +9,7 @@ from PIL import Image
 
 from anyimage.common import image as images, material
 from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
-from anyimage.operators.convert_to_plane import operators, object as conversion, image_plane
+from anyimage.operators.convert_to_plane import plane as operators, object as conversion, image_plane
 
 
 @pytest.fixture
@@ -115,7 +115,7 @@ def test_conversion_failure_restores_image_and_releases_resources(source, monkey
     if failure == "material":
         monkeypatch.setattr(material, "material_node_group", fail)
     elif failure == "finalize":
-        monkeypatch.setattr(conversion, "finalize_object_result", fail)
+        monkeypatch.setattr(image_plane, "finalize_object_result", fail)
     elif entry == "PLANE":
         monkeypatch.setattr(image_plane, "add_image_plane_processing", fail)
     else:

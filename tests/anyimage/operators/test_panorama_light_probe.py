@@ -103,7 +103,8 @@ def test_bake_restores_scene(panorama, monkeypatch, outcome):
     assert bpy.context.scene.render.engine == "CYCLES"
 
 
-def test_real_bake_ignores_external_objects(panorama, tmp_path):
+@pytest.mark.parametrize("engine", ["BLENDER_EEVEE_NEXT"])
+def test_real_bake_ignores_external_objects(panorama, tmp_path, engine):
     panorama.scale = (2, 2, 2)
     material = bpy.data.materials.new("Panorama emission")
     material.use_nodes = True
@@ -118,7 +119,7 @@ def test_real_bake_ignores_external_objects(panorama, tmp_path):
     probe.data.surfel_density = 4
     probe.data.validity_threshold = 0
     scene = bpy.context.scene
-    scene.render.engine = "BLENDER_EEVEE_NEXT"
+    scene.render.engine = engine
     scene.world = None
     bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, radius=.3)
     bpy.ops.object.camera_add(location=(0, 0, 1))

@@ -4,6 +4,8 @@
 
 任意图！ 让「图」成为 Blender 创作的入口。以图建模、快速贴图、拼搭场景，从参考图开始创作！
 
+![cover](assets/cover.png)
+
 <iframe class="anyimage-video" src="https://player.bilibili.com/player.html?bvid=BV1dsaP6WEqA&amp;page=1&amp;autoplay=0" title="Blender 任意图片1秒剪出3D模型「离线」" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
 
 ## 图不必下载，拿来就用！
@@ -14,9 +16,9 @@
 
 用 **立体裁切** 工具圈出一部分，瞬间做出带厚度的模型，摆进场景先看看！还能整图转化为地形、浮雕、立体全景哦！
 
-![圈出立体模型](assets/demos/depth-cutout.gif)
-
-![将桌子照片转为凹凸面](assets/demos/convert-depth-plane-table.gif)
+| ![圈出立体模型](assets/demos/depth-cutout.gif) | ![将桌子照片转为凹凸面](assets/demos/convert-depth-plane-table.gif) |
+| :--------------------------------------------: | :-----------------------------------------------------------------: |
+|                    立体裁切                    |                             转为凹凸面                              |
 
 ## 还有裁图、拼图、调色！
 

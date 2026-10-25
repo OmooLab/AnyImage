@@ -4,6 +4,8 @@
 
 AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
 
+![cover](assets/cover.png)
+
 <iframe class="anyimage-video" src="https://player.bilibili.com/player.html?bvid=BV1dsaP6WEqA&amp;page=1&amp;autoplay=0" title="AnyImage: cut images into 3D shapes offline" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
 
 ## Skip the download. Just paste!
@@ -14,9 +16,9 @@ Press **Ctrl+Shift+V** in Blender (**Cmd+Shift+V** on macOS) to bring an image f
 
 Use **Cutout** to outline part of an image, give it thickness, and drop it into your scene to try it out. You can also turn images into terrain, reliefs, and panoramic scenes!
 
-![Cut a 3D shape out of an image](assets/demos/depth-cutout.gif)
-
-![Convert a table photo into a 3D surface with Convert to Depth Plane](assets/demos/convert-depth-plane-table.gif)
+| ![Cut a 3D shape out of an image](assets/demos/depth-cutout.gif) | ![Convert a table photo into a 3D surface with Convert to Depth Plane](assets/demos/convert-depth-plane-table.gif) |
+| :--------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------: |
+|                        Cut out a 3D shape                        |                                               Convert to Depth Plane                                               |
 
 ## Crop, combine, and match colors, too!
 

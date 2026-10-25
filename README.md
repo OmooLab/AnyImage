@@ -6,6 +6,8 @@
 
 AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
 
+![cover](docs/assets/cover.png)
+
 ## Skip the download. Just paste!
 
 Press **Ctrl+Shift+V** in Blender (**Cmd+Shift+V** on macOS) to bring an image from your clipboard straight into the scene. In Sculpt or Texture Paint mode, pasting turns it into a brush texture. In a node editor, it creates an image node for you.
@@ -14,9 +16,9 @@ Press **Ctrl+Shift+V** in Blender (**Cmd+Shift+V** on macOS) to bring an image f
 
 Use **Cutout** to outline part of an image, give it thickness, and drop it into your scene to try it out. You can also turn images into terrain, reliefs, and panoramic scenes!
 
-![Cut a 3D shape out of an image](docs/assets/demos/depth-cutout.gif)
-
-![Convert a table photo into a 3D surface with Convert to Depth Plane](docs/assets/demos/convert-depth-plane-table.gif)
+| ![Cut a 3D shape out of an image](docs/assets/demos/depth-cutout.gif) | ![Convert a table photo into a 3D surface with Convert to Depth Plane](docs/assets/demos/convert-depth-plane-table.gif) |
+| :-------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------: |
+|                           Cutout a 3D shape                           |                                                 Convert to Depth Plane                                                  |
 
 ## Crop, combine, and match colors, too!
 

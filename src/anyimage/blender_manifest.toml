@@ -3,9 +3,10 @@ schema_version = "1.0.0"
 id = "anyimage"
 version = "1.1.7"
 name = "AnyImage"
-tagline = "Build spatial structures from images, fast"
-maintainer = "OmooLab"
+tagline = "AnyImage makes images a starting point for creating in Blender"
+maintainer = "Nan <manan@omoolab.xyz>"
 type = "add-on"
+website = "https://docs.omoolab.xyz/anyimage/latest/"
 
 blender_version_min = "4.5.0"
 platforms = ["windows-x64"]

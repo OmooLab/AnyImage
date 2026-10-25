@@ -182,7 +182,7 @@ class AnyImagePreferences(SharedPreferences):
         status = ai_status()
         models = {model["key"]: model for model in model_catalog()}
 
-        server = self._draw_box(layout, "Server")
+        server = self._draw_box(layout, "AI Server")
         location_row = server.row(align=True)
         location_row.label(text=str(storage_root()), icon="FILE_FOLDER")
         if not status["environment_ready"]:
@@ -203,6 +203,7 @@ class AnyImagePreferences(SharedPreferences):
             ai = self._draw_box(layout, "AI")
             ai.prop(self, "device")
             ai.prop(self, "max_ai_input_size")
+            ai.prop(self, "geometry_resolution_level")
             ai.separator(type="LINE")
             self._draw_model_property(
                 ai,
@@ -232,7 +233,6 @@ class AnyImagePreferences(SharedPreferences):
         probe = panorama.row()
         probe.enabled = getattr(self, "panorama_light_probe_enabled", True)
         probe.prop(self, "panorama_light_probe_max_distance")
-        panorama.prop(self, "geometry_resolution_level")
 
     def _draw_model_property(
         self,

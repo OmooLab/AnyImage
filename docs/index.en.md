@@ -16,11 +16,13 @@ Use **Cutout** to outline part of an image, give it thickness, and drop it into 
 
 ![Cut a 3D shape out of an image](assets/demos/depth-cutout.gif)
 
+![Convert a table photo into a 3D surface with Convert to Depth Plane](assets/demos/convert-depth-plane-table.gif)
+
 ## Crop, combine, and match colors, too!
 
-✂️ **Frame**: Crop to the area you want, or combine several arranged images into one from the current view.
+✂️ **Frame Images**: Crop to the area you want, or combine several arranged images into one from the current view.
 
-🖌️ **Mask**: Hide unwanted parts with a lasso, brush, or polyline, and restore them whenever you need.
+🖌️ **Image Visibility**: Hide unwanted parts with a lasso, brush, or polyline, and restore them whenever you need.
 
 📐 **Rectify**: Pick four corners to straighten a photographed surface for use as a texture.
 

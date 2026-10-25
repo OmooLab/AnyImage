@@ -125,6 +125,6 @@ def create_depth_plane_from_result(context, result, operator):
             if image is not None and image.users == 0:
                 bpy.data.images.remove(image, do_unlink=True)
         raise
-    label = f"Convert to {operator.plane_type.title()} Plane"
+    label = "Convert to Relief" if operator.plane_type == "RELIEF" else "Convert to Depth Plane"
     if "FINISHED" not in bpy.ops.ed.undo_push(message=label):
         raise RuntimeError(f"Unable to create the {label} Undo step")

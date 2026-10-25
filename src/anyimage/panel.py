@@ -8,7 +8,7 @@ from .server.model_catalog import DOWNLOADABLE_MODELS
 
 
 class ServerPanel(bpy.types.Panel):
-    bl_label = "Job Server"
+    bl_label = "AI Server"
     bl_idname = "ANYIMAGE_PT_server"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"

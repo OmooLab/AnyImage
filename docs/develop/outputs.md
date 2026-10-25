@@ -6,9 +6,9 @@ Server 将结果写入 Job 目录，返回以相对文件名为值的字典。Bl
 | --- | --- | --- |
 | `remove-background` | `foreground.png` 或 `alpha.npy` | ImageEditTarget 或 HDR Alpha 编辑 |
 | `upscale-image` | `upscale.png` | 图像替换 |
-| `generate-depth-plane-geometry` | `depth.exr`、`depth.json` 和法线 | Depth / **浮雕平面** |
+| `generate-depth-plane-geometry` | `depth.exr`、`depth.json` 和法线 | Depth / **浮雕** |
 | `generate-cutout-artifacts` | 按请求提供深度、元数据和法线 | **立体裁切** |
-| `generate-panorama-geometry` | `depth.exr`、`depth.json` | **全景** |
+| `generate-panorama-geometry` | `depth.exr`、`depth.json` | **立体全景** |
 
 ## 深度与法线协议
 
@@ -29,12 +29,12 @@ flowchart TD
     D --> F[Blender 加载并 Pack]
 ```
 
-参考深度由 `common/geometry_image.py` 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。**深度平面**使用对象空间法线，**浮雕平面**使用切线空间法线。
+参考深度由 `common/geometry_image.py` 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。**凹凸面**使用对象空间法线，**浮雕**使用切线空间法线。
 
-**全景**的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 `projection: equirectangular` 和 `image_size`。
+**立体全景**的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 `projection: equirectangular` 和 `image_size`。
 
 ## 颜色与图像编辑
 
-`common/color_image.py` 为**平面**、**全景**和**立体裁切**准备独立的材质颜色与 AI 分析输入。**立体裁切**使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。
+`common/color_image.py` 为**面片**、**立体全景**和**立体裁切**准备独立的材质颜色与 AI 分析输入。**立体裁切**使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。
 
 `ImageEditTarget` 统一 Image Empty 和 Shader Image Texture 的编辑目标及共享引用。HDR 去背景通过 `HdrBackgroundInput` 保留 Blender 浮点 RGB，并应用 Server 返回的连续 Alpha。

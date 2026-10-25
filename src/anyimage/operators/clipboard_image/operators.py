@@ -24,6 +24,7 @@ class PasteClipboardImage(bpy.types.Operator):
 
     import_as: bpy.props.EnumProperty(
         name="Import As",
+        translation_context="AnyImage",
         description="Choose the 3D View representation for the image",
         items=(
             (

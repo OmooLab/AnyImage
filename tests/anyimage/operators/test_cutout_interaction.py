@@ -92,6 +92,11 @@ def test_cutout_pie_uses_two_local_shapes_without_ai(monkeypatch):
         "Flat",
         "Solid",
     ]
+    from anyimage.translations import TRANSLATIONS
+
+    catalog = TRANSLATIONS["zh_HANS"]
+    assert [catalog[(call[1]["text_ctxt"], call[1]["text"])]
+            for call in window_manager.pie.calls] == ["面片", "体块"]
     assert all(
         call[0] == "anyimage.create_cutout_shape"
         for call in window_manager.pie.calls
@@ -137,6 +142,11 @@ def test_cutout_pie_passes_image_lasso_options_to_all_ai_shapes(monkeypatch):
         "DEPTH_SOLID",
     ]
     assert all(call[2].generate_normal for call in window_manager.pie.calls)
+    from anyimage.ai_translations import TRANSLATIONS
+
+    catalog = TRANSLATIONS["zh_HANS"]
+    assert [catalog[(call[1]["text_ctxt"], call[1]["text"])]
+            for call in window_manager.pie.calls] == ["面片", "体块", "对称凹凸", "凹凸体块"]
     assert all(call[2].alpha_threshold == 0.1 for call in window_manager.pie.calls)
     assert all(call[2].fine_outline is False for call in window_manager.pie.calls)
     assert len(serialized) == 1

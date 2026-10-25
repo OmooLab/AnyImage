@@ -8,7 +8,7 @@ CUTOUT_SHAPE_BUTTONS = (("FLAT", "MESH_GRID"), ("SOLID", "MESH_UVSPHERE"))
 def create_shape_button(pie, shape, label, icon):
     from .operators import CreateCutoutShape
 
-    return pie.operator(CreateCutoutShape.bl_idname, text=label, icon=icon)
+    return pie.operator(CreateCutoutShape.bl_idname, text=label, text_ctxt="AnyImage", icon=icon)
 
 
 def open_shape_pie(

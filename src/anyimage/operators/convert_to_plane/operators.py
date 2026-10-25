@@ -52,7 +52,7 @@ class GenerateDepthPlane(JobOperatorBase, bpy.types.Operator):
     source_identity: bpy.props.StringProperty(options=_HIDDEN)
     image_identity: bpy.props.StringProperty(options=_HIDDEN)
     plane_type: bpy.props.EnumProperty(
-        items=(("DEPTH", "Depth Plane", ""), ("RELIEF", "Relief Plane", "")),
+        items=(("DEPTH", "Depth Plane", ""), ("RELIEF", "Relief", "")),
         default="DEPTH",
         options=_HIDDEN,
     )
@@ -86,7 +86,7 @@ class GenerateDepthPlane(JobOperatorBase, bpy.types.Operator):
 
     def response(self, context, result):
         create_depth_plane_from_result(context, result, self)
-        return f"{self.plane_type.title()} Plane is ready"
+        return "Relief is ready" if self.plane_type == "RELIEF" else "Depth Plane is ready"
 
     def cleanup(self):
         cleanup_material_color_input(self.color_path)
@@ -148,7 +148,7 @@ class ConvertToDepthPlane(bpy.types.Operator):
 
 class ConvertToReliefPlane(bpy.types.Operator):
     bl_idname = "anyimage.convert_to_relief_plane"
-    bl_label = "Convert to Relief Plane"
+    bl_label = "Convert to Relief"
     bl_description = "Use AI-estimated depth to create a raised relief on a flat base."
     bl_options = {"REGISTER", "UNDO"}
 

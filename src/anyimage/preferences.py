@@ -110,7 +110,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
     @staticmethod
     def _draw_box(layout, label):
         box = layout.box()
-        box.label(text=label)
+        box.label(text=label, text_ctxt="AnyImage")
         return box
 
     def draw(self, _context):
@@ -118,10 +118,10 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
         shading = self._draw_box(layout, "Shading")
         shading.prop(self, "adapt_material_to_view_transform")
         tools = self._draw_box(layout, "Tools")
-        tools.label(text="Frame Tool")
+        tools.label(text="Frame Images", text_ctxt="AnyImage")
         tools.prop(self, "max_frame_resolution")
         tools.separator(type="LINE")
-        tools.label(text="Cutout Tool")
+        tools.label(text="Cutout", text_ctxt="AnyImage")
         tools.prop(self, "min_cutout_relative_edge_length")
         tools.prop(self, "cutout_boundary_padding")
         tools.prop(self, "balloon_profile_algorithm")

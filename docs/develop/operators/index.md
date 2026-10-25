@@ -4,7 +4,7 @@
 | --- | --- |
 | `operators/ai_setup.py` | [AI 环境管理](ai-setup.md) |
 | `operators/clipboard_image/` | [剪贴板图片](clipboard-image.md) |
-| `operators/convert_to_plane/` | [**转为平面**、**转为深度平面**与**转为浮雕平面**](convert-to-plane.md) |
+| `operators/convert_to_plane/` | [**转为面片**、**转为凹凸面**与**转为浮雕**](convert-to-plane.md) |
 | `operators/convert_to_panorama/` | [**转为立体全景**](convert-to-panorama.md) |
 | `operators/cutout_tool/` | [**立体裁切**](cutout-tool.md) |
 | `operators/frame_tool/operators.py` | [**重设画框**](frame.md) |

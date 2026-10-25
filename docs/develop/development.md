@@ -12,7 +12,7 @@ uv run pytest
 | 测试范围 | 文件 |
 | --- | --- |
 | 扩展注册、设置、安装和 Job 交互 | `test_addon_registration.py`、`test_preferences.py`、`test_ai_setup.py`、`test_job_operator.py` |
-| **重设画框**、**局部显隐**、**透视校正**、**平面**、**立体裁切** | 对应 `test_*_tool.py`、`test_*_operators.py` 与对象、投影、网格测试 |
+| **重设画框**、**局部显隐**、**透视校正**、**面片**、**立体裁切** | 对应 `test_*_tool.py`、`test_*_operators.py` 与对象、投影、网格测试 |
 | 图像身份、Alpha、材质与 Undo | 图像编辑集成、共享替换、材质适配与 Undo 测试 |
 | Server | `test_job_server.py`、`test_server_jobs.py`、`test_input_validation.py`、`test_geometry_artifacts.py` |
 | 模型 | `test_model_manager.py`、下载、推理与各 ONNX 模型测试 |

@@ -13,12 +13,12 @@ nav:
   - 开始使用:
       - index.md
       - 安装: installation.md
+      - 立体裁切: cutout.md
+      - 整图转为网格: convert-to.md
+      - 烘焙网格: bake-mesh.md
       - 图片工具: image-tools.md
       - 色彩匹配: color-match.md
-      - 立体裁切: cutout.md
-      - 空间转化: convert-to.md
-      - 烘焙网格: bake-mesh.md
-      - AI 图片处理: ai-image-tools.md
+      - AI 小工具: ai-image-tools.md
   - 开发文档:
       - 总览: develop/index.md
       - 程序架构: develop/architecture.md
@@ -30,7 +30,7 @@ nav:
           - 总览: develop/operators/index.md
           - AI 环境管理: develop/operators/ai-setup.md
           - 粘贴剪贴板图像: develop/operators/clipboard-image.md
-          - 转为平面: develop/operators/convert-to-plane.md
+          - 转为面片: develop/operators/convert-to-plane.md
           - 转为立体全景: develop/operators/convert-to-panorama.md
           - 立体裁切: develop/operators/cutout-tool.md
           - 重设画框: develop/operators/frame.md
@@ -112,7 +112,7 @@ plugins:
           name: English
           nav_translations:
             快捷键: Keymap
-            AI 图片处理: AI image tools
+            AI 小工具: AI tools
 
 markdown_extensions:
   - mkdocs-click

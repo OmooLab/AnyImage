@@ -1,4 +1,4 @@
-# 转为平面、转为深度平面与转为浮雕平面
+# 转为面片、转为凹凸面与转为浮雕
 
 `operators/convert_to_plane/operators.py` 提供 `ConvertToPlane`、`ConvertToDepthPlane`、`ConvertToReliefPlane` 与 `GenerateDepthPlane`。`object.py` 导入对象和材质，`image_plane.py` 构建基础矩形网格，`__init__.py` 汇总导出与注册清单。
 
@@ -6,7 +6,7 @@
 flowchart TD
     A[Image Empty] --> B[准备材质颜色]
     B --> C{转换类型}
-    C -- 平面 --> D[四边形与 O Image Plane]
+    C -- 面片 --> D[四边形与 O Image Plane]
     C -- Depth 或 Relief --> E[静态图提交几何 Job]
     E --> F[加载深度、元数据与法线]
     F --> G[对应节点修改器与材质]

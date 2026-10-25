@@ -3,7 +3,7 @@
 | 模块 | 职责 |
 | --- | --- |
 | `__init__.py` | 注册类型、工具、菜单、快捷键与 Runtime |
-| `menu.py`、`panel.py` | Image Empty 与 Shader Image Texture 上下文菜单与 Job Server 面板 |
+| `menu.py`、`panel.py` | Image Empty 与 Shader Image Texture 上下文菜单与 AI 服务器面板 |
 | `preferences.py` | 扩展设置及读取入口 |
 | `properties.py` | Scene 手势与参考状态、参考生命周期、模型安装查询、枚举与 Operator 属性构造 |
 | `tools.py` | 3D View WorkspaceTool 声明、顺序与注册 |
@@ -16,7 +16,7 @@
 
 顶层入口注册类型后，通过 `tools.py` 统一注册 WorkspaceTool，通过 `keymaps.py` 统一注册快捷键。注销按相反生命周期关闭 Runtime、快捷键与工具，再移除菜单和 Scene 属性，按 `CLASSES` 逆序注销类型。设备、存储目录、模型、材质显示适配和功能上限统一通过 `preferences.py` 读取。
 
-**AI 输入尺寸上限** 限制模型分析输入和**2倍高清**可提交源图的长边；**重设画框分辨率上限** 限制**重设画框**输出长边；**最小相对边长** 与 **边界扩展** 控制**立体裁切**的网格密度和轮廓边界采样。
+**处理分辨率上限** 限制模型分析输入和**2倍高清**可提交源图的长边；**画框分辨率上限** 限制**重设画框**输出长边；**最小相对边长** 与 **边界扩展** 控制**立体裁切**的网格密度和轮廓边界采样。
 
 ## 执行边界
 
@@ -31,7 +31,7 @@ flowchart TD
     G --> H[清理临时输入]
 ```
 
-**平面**、**重设画框**、**局部显隐**、**透视校正**、**色彩匹配**、**烘焙网格**和无需 AI 的**立体裁切**在 Blender 内执行。Server 的 `jobs/` 编排任务，`models/` 负责模型适配，`geometry/` 处理深度与法线产物。Server 模块通过内部相对导入共享能力，Blender 侧通过 `common/` 复用。
+**面片**、**重设画框**、**局部显隐**、**透视校正**、**色彩匹配**、**烘焙网格**和无需 AI 的**立体裁切**在 Blender 内执行。Server 的 `jobs/` 编排任务，`models/` 负责模型适配，`geometry/` 处理深度与法线产物。Server 模块通过内部相对导入共享能力，Blender 侧通过 `common/` 复用。
 
 MoGe-2 与 MoGe-3 输出统一为 `GeometryFrame`：包含 Depth、Validity、Intrinsics，以及按需提供的 Normal 和 Points。产物写入器消费同一个 `GeometryFrame`，保持深度、法线和相机数据一致。参见 [Runtime](runtime.md) 与 [产物协议](outputs.md)。
 

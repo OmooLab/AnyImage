@@ -107,7 +107,8 @@ class PlaneOperatorsTest(BlenderTestCase):
                 module.create_depth_plane_from_result(context, result, operator)
 
             load_depth.assert_called_once_with(files["depth"], source, metadata)
-            ops.ed.undo_push.assert_called_once_with(message=f"Convert to {plane_type.title()} Plane")
+            undo_label = "Convert to Relief" if plane_type == "RELIEF" else "Convert to Depth Plane"
+            ops.ed.undo_push.assert_called_once_with(message=undo_label)
             load_normal.assert_called_once_with(files[normal_key], source)
             create_material.assert_called_once_with(
                 source.data,

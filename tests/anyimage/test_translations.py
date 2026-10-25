@@ -8,6 +8,20 @@ from tests.support.blender import BlenderTestCase
 
 
 class TranslationsTest(BlenderTestCase):
+    def test_tool_labels_do_not_use_builtin_mask_and_frame_translations(self):
+        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
+        builtin = {("Operator", "Mask"): "遮罩", ("Operator", "Frame"): "帧"}
+        for tool, expected in ((self.tools.MaskTool, "局部显隐"),
+                               (self.tools.FrameTool, "重设画框")):
+            key = ("Operator", tool.bl_label)
+            self.assertEqual(builtin.get(key, catalog.get(key)), expected)
+
+    def test_paste_plane_uses_addon_translation_context(self):
+        prop = self.anyimage.keymaps.PasteClipboardImage.__annotations__["import_as"]
+        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
+        self.assertNotIn(prop["translation_context"], ("*", "Operator"))
+        self.assertEqual(catalog[(prop["translation_context"], prop["items"][0][1])], "面片")
+
     def test_status_bar_translates_on_each_draw_without_changing_job_data(self):
         runtime = self.runtime.runtime
         catalog = self.anyimage.TRANSLATIONS["zh_HANS"]

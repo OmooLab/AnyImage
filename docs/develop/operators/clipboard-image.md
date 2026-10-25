@@ -36,6 +36,6 @@ Windows 快捷键优先处理 Blender 自己的 Copy/Paste，系统剪贴板出�
 
 ### 放到当前编辑器
 
-落点仍在 `actions.py` 中完成：3D View 创建 Reference 或**平面**，Node Editor 创建与当前节点树匹配的 Image 节点，绘制模式把 Image 配置为当前画笔的 Texture。鼠标位置和视图位置也在这里换算。
+落点仍在 `actions.py` 中完成：3D View 创建 Reference 或**面片**，Node Editor 创建与当前节点树匹配的 Image 节点，绘制模式把 Image 配置为当前画笔的 Texture。鼠标位置和视图位置也在这里换算。
 
-**平面**路径调用 `convert_to_plane/image_plane.py` 创建中心原点基础网格，并从节点资产加载 `O Image Plane`。`actions.py` 创建图像材质并放入 Mesh 第 `0` 个材质槽，节点组只生成几何。
+**面片**路径调用 `convert_to_plane/image_plane.py` 创建中心原点基础网格，并从节点资产加载 `O Image Plane`。`actions.py` 创建图像材质并放入 Mesh 第 `0` 个材质槽，节点组只生成几何。

@@ -21,7 +21,7 @@ def open_shape_pie(context, event, source_object, selection_path, *, gesture="LA
             return interaction.create_shape_button(pie, shape, label, icon)
         from .ai_operators import CutoutSelectionToShape
 
-        operator = pie.operator(CutoutSelectionToShape.bl_idname, text=label, icon=icon)
+        operator = pie.operator(CutoutSelectionToShape.bl_idname, text=label, text_ctxt="AnyImage", icon=icon)
         operator.generate_normal = generate_normal
         return operator
 

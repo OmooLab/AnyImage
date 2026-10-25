@@ -13,7 +13,7 @@ class FrameTool(bpy.types.WorkSpaceTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
     bl_idname = FRAME_TOOL_ID
-    bl_label = "Frame"
+    bl_label = "Frame Images"
     bl_description = (
         "Draw a rectangle to combine selected images into one image from the current view."
     )
@@ -26,7 +26,7 @@ class MaskTool(bpy.types.WorkSpaceTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
     bl_idname = MASK_TOOL_ID
-    bl_label = "Mask"
+    bl_label = "Image Visibility"
     bl_description = "Hide or reveal image areas with a lasso, brush, or polyline."
     bl_icon = "ops.sculpt.lasso_mask"
     bl_operator = EditImageAlpha.bl_idname

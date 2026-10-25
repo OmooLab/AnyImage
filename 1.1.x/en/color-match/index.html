@@ -33,7 +33,7 @@
     
     
       
-        <title>色彩匹配 - AnyImage Docs</title>
+        <title>Color Match - AnyImage Docs</title>
       
     
     
@@ -90,7 +90,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#_1" class="md-skip">
+        <a href="#color-match" class="md-skip">
           Skip to content
         </a>
       
@@ -129,7 +129,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              色彩匹配
+              Color Match
             
           </span>
         </div>
@@ -280,7 +280,7 @@
   
     
   
-  开始使用
+  Getting Started
 
         </a>
       </li>
@@ -416,7 +416,7 @@
   <span class="md-ellipsis">
     
   
-    开始使用
+    Getting Started
   
 
     
@@ -438,7 +438,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    开始使用
+    Getting Started
   
 
           </label>
@@ -460,7 +460,7 @@
   <span class="md-ellipsis">
     
   
-    安装
+    Installation
   
 
     
@@ -488,7 +488,7 @@
   <span class="md-ellipsis">
     
   
-    立体裁切
+    Cutout
   
 
     
@@ -516,7 +516,7 @@
   <span class="md-ellipsis">
     
   
-    整图转为网格
+    Convert Images to Meshes
   
 
     
@@ -544,7 +544,7 @@
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    Bake Mesh
   
 
     
@@ -572,7 +572,7 @@
   <span class="md-ellipsis">
     
   
-    图片工具
+    Image Tools
   
 
     
@@ -609,7 +609,7 @@
   <span class="md-ellipsis">
     
   
-    色彩匹配
+    Color Match
   
 
     
@@ -627,7 +627,7 @@
   <span class="md-ellipsis">
     
   
-    色彩匹配
+    Color Match
   
 
     
@@ -653,10 +653,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#choose-a-reference-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        选择参考图片
+        Choose a reference image
       
     </span>
   </a>
@@ -664,10 +664,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#match-a-target-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        匹配目标图片
+        Match a target image
       
     </span>
   </a>
@@ -1192,7 +1192,7 @@
   <span class="md-ellipsis">
     
   
-    立体裁切
+    Cutout
   
 
     
@@ -1304,7 +1304,7 @@
   <span class="md-ellipsis">
     
   
-    色彩匹配
+    Color Match
   
 
     
@@ -1332,7 +1332,7 @@
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    Bake Mesh
   
 
     
@@ -1594,10 +1594,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#choose-a-reference-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        选择参考图片
+        Choose a reference image
       
     </span>
   </a>
@@ -1605,10 +1605,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#match-a-target-image" class="md-nav__link">
     <span class="md-ellipsis">
       
-        匹配目标图片
+        Match a target image
       
     </span>
   </a>
@@ -1635,48 +1635,48 @@
   
 
 
-<h1 id="_1">色彩匹配</h1>
-<p>拼进场景的几张图，颜色各不相同？挑一张作为参考，让其他图片靠近它的色彩和亮度，画面就更容易统一。材质里的图片贴图也能用。</p>
-<h2 id="_2">选择参考图片</h2>
-<p>在 3D 视图按 <strong>N</strong> 打开侧栏，进入 <strong>任意图！ &gt; 色彩匹配</strong>。从图片画廊中选一张参考图，下方色板会显示它的主要颜色。</p>
-<!-- 待补：横版截图，参考图与色板。 -->
+<h1 id="color-match">Color Match</h1>
+<p>Images in your scene have different colors? Pick one as a reference and bring the others closer to its colors and brightness for a more consistent look. Image textures in materials work too.</p>
+<h2 id="choose-a-reference-image">Choose a reference image</h2>
+<p>Press <strong>N</strong> in the 3D View to open the sidebar, then go to <strong>AnyImage &gt; Color Match</strong>. Select a reference from the image gallery. The palette below shows its main colors.</p>
+<!-- TODO: Landscape screenshot showing the reference image and palette. -->
 
-<h2 id="_3">匹配目标图片</h2>
-<p>选中要调色的参考图片，或任意图！创建的图片模型，右键选择 <strong>任意图！ &gt; 匹配参考图色彩</strong>。处理材质贴图时，在着色器编辑器选中带图片的 <strong>图像纹理（Image Texture）</strong> 节点，再从右键菜单执行。</p>
-<p>参考与目标需要是不同的静态图片。预览出现后：</p>
+<h2 id="match-a-target-image">Match a target image</h2>
+<p>Select the reference image object or AnyImage image model you want to adjust, then right-click and choose <strong>AnyImage &gt; Match Color Reference</strong>. For a material texture, select an <strong>Image Texture</strong> node with an image in the Shader Editor, then run the tool from the context menu.</p>
+<p>The reference and target must be different still images. Once the preview appears:</p>
 <table>
 <thead>
 <tr>
-<th>操作</th>
-<th>调整</th>
+<th>Action</th>
+<th>Adjustment</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>左右移动鼠标</td>
-<td>色彩匹配强度</td>
+<td>Move the mouse horizontally</td>
+<td>Color matching strength</td>
 </tr>
 <tr>
-<td>上下移动鼠标</td>
-<td>亮度匹配强度</td>
+<td>Move the mouse vertically</td>
+<td>Brightness matching strength</td>
 </tr>
 <tr>
-<td>按住 <strong>Shift</strong></td>
-<td>精细调整</td>
+<td>Hold <strong>Shift</strong></td>
+<td>Fine adjustment</td>
 </tr>
 <tr>
-<td>单击或 <strong>Enter</strong></td>
-<td>确认</td>
+<td>Click or press <strong>Enter</strong></td>
+<td>Confirm</td>
 </tr>
 <tr>
-<td>右键或 <strong>Esc</strong></td>
-<td>取消</td>
+<td>Right-click or press <strong>Esc</strong></td>
+<td>Cancel</td>
 </tr>
 </tbody>
 </table>
-<!-- 待补：横版对比图，匹配前后与参考图。 -->
+<!-- TODO: Landscape comparison showing the reference and the target before and after matching. -->
 
-<p>确认后，图片的透明区域会保留。想再试一次，可以撤销后重新调整。</p>
+<p>Transparent areas are preserved when you confirm. To try another adjustment, undo and run the tool again.</p>
 
 
 
@@ -1706,7 +1706,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../image-tools/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 图片工具">
+          <a href="../image-tools/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Image Tools">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1716,7 +1716,7 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                图片工具
+                Image Tools
               </div>
             </div>
           </a>

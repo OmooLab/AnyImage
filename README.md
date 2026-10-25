@@ -2,9 +2,7 @@
 
 # 🚪 AnyImage
 
-## IMAGE IS ALL YOU NEED
-
-AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
+**IMAGE IS ALL YOU NEED**. AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
 
 ![cover](docs/assets/cover.png)
 

@@ -111,6 +111,13 @@ plugins:
         - locale: en
           name: English
           nav_translations:
+            开始使用: Getting Started
+            安装: Installation
+            立体裁切: Cutout
+            整图转为网格: Convert Images to Meshes
+            烘焙网格: Bake Mesh
+            图片工具: Image Tools
+            色彩匹配: Color Match
             快捷键: Keymap
             AI 小工具: AI tools
 

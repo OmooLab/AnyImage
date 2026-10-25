@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -15,10 +15,10 @@
         <link rel="canonical" href="https://docs.omoolab.xyz/anyimage/1.1.x/en/convert-to/">
       
       
-        <link rel="prev" href="../ai-image-tools/">
+        <link rel="prev" href="../cutout/">
       
       
-        <link rel="next" href="../image-tools/">
+        <link rel="next" href="../bake-mesh/">
       
       
         
@@ -33,7 +33,7 @@
     
     
       
-        <title>空间转化 - AnyImage Docs</title>
+        <title>整图转为网格 - AnyImage Docs</title>
       
     
     
@@ -129,7 +129,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              空间转化
+              整图转为网格
             
           </span>
         </div>
@@ -506,34 +506,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../ai-image-tools/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    图片处理
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -553,7 +525,7 @@
   <span class="md-ellipsis">
     
   
-    空间转化
+    整图转为网格
   
 
     
@@ -571,7 +543,7 @@
   <span class="md-ellipsis">
     
   
-    空间转化
+    整图转为网格
   
 
     
@@ -597,43 +569,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#convert-to-plane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为面片（Convert to Plane）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-depth-plane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为凹凸面（Convert to Depth Plane）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-relief" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为浮雕（Convert to Relief）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-panorama" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为立体全景（Convert to Panorama）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        转为平面
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        转为深度平面
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        转为浮雕平面
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        转为立体全景
+        转换后继续做
       
     </span>
   </a>
@@ -644,6 +627,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bake-mesh/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    烘焙网格
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -712,14 +723,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../bake-mesh/" class="md-nav__link">
+      <a href="../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI tools
   
 
     
@@ -1158,7 +1169,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1616,43 +1627,54 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#convert-to-plane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为面片（Convert to Plane）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-depth-plane" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为凹凸面（Convert to Depth Plane）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-relief" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为浮雕（Convert to Relief）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-panorama" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        转为立体全景（Convert to Panorama）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        转为平面
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        转为深度平面
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        转为浮雕平面
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_5" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        转为立体全景
+        转换后继续做
       
     </span>
   </a>
@@ -1679,19 +1701,29 @@
   
 
 
-<h1 id="_1">空间转换</h1>
-<p>四个转换工具会把 Image Empty 转换为可以继续编辑和渲染的场景对象。</p>
-<p>选中一张静态图片，右键打开 <strong>任意图！</strong>，选择需要的转换方式。</p>
-<h2 id="_2">转为平面</h2>
-<p><strong>转为平面</strong> 创建一个带图片材质的平面，适合贴图、背景和简单合成。</p>
-<h2 id="_3">转为深度平面</h2>
-<p><strong>转为深度平面</strong> 根据图片内容生成有空间深度的表面。</p>
-<h2 id="_4">转为浮雕平面</h2>
-<p><strong>转为浮雕平面</strong> 生成起伏更集中的浮雕表面。</p>
-<p><img alt="同一张图片转为平面、深度平面和浮雕平面的对比" src="" /></p>
-<h2 id="_5">转为立体全景</h2>
-<p><strong>转为立体全景</strong> 将 2:1 的等距柱状全景图转换为径向深度表面。</p>
-<p><img alt="全景图片与转换结果" src="" /></p>
+<h1 id="_1">整图转为网格</h1>
+<p>把整张参考图变成带贴图的网格：面片、凹凸面、浮雕或立体全景，按场景需要来选。</p>
+<p>选中一张静态参考图（Image Empty），右键打开 <strong>任意图！</strong>，选择下面的转换方式。转换后，可以在修改器里继续调形状。</p>
+<h2 id="convert-to-plane">转为面片（Convert to Plane）</h2>
+<p>把整张图变成带材质的矩形平面，拿来做背景、贴片，或先拼出场景。需要厚度时，调整修改器里的 <strong>Thickness</strong>。</p>
+<!-- 待补：整张参考图转为贴图平面的横版演示。 -->
+
+<h2 id="convert-to-depth-plane">转为凹凸面（Convert to Depth Plane）</h2>
+<p>让照片里的近处凸出来，远处退下去。AI 会估计深度，按原图的透视生成表面，适合把风景、房间等图片放进场景，试试新的视角。</p>
+<p><img alt="右键选择 Convert to Depth Plane，将山峰照片转为凹凸面" src="../../assets/demos/convert-depth-plane.gif" /></p>
+<p><strong>Depth Scale</strong> 控制空间起伏，调到 <strong>0</strong> 会回到平面；<strong>Thickness</strong> 可以为表面加上厚度。</p>
+<h2 id="convert-to-relief">转为浮雕（Convert to Relief）</h2>
+<p>把图里的形状做成平面上的起伏，适合浮雕、装饰板等有平整底面的物件。用 <strong>Depth Scale</strong> 调浮雕的高低，<strong>Thickness</strong> 调底板厚度。</p>
+<!-- 待补：参考图转为浮雕的横版演示。 -->
+
+<h2 id="convert-to-panorama">转为立体全景（Convert to Panorama）</h2>
+<p>准备一张 <strong>2:1 等距柱状全景图</strong>，把它变成环绕四周、带有远近层次的场景。转换后把视角放到里面，就可以四处看看。</p>
+<!-- 待补：全景图转为立体全景的横版演示。 -->
+
+<p><strong>Depth Scale</strong> 调空间起伏；调到 <strong>0</strong> 时是球形全景，球的大小由 <strong>Dome Radius</strong> 控制。输入比例不是 2:1 时，会先居中裁切。</p>
+<h2 id="_2">转换后继续做</h2>
+<p>凹凸面、浮雕和立体全景需要完整版的 AI 功能，第一次使用时按提示完成环境和模型设置。</p>
+<p>调整好形状，想直接编辑网格时，再用<a href="../bake-mesh/">烘焙网格</a>。只想取图里的一部分，可以用<a href="../cutout/">立体裁切</a>。</p>
 
 
 
@@ -1721,7 +1753,7 @@
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../ai-image-tools/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 图片处理">
+          <a href="../cutout/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 立体裁切">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -1731,20 +1763,20 @@
                 Previous
               </span>
               <div class="md-ellipsis">
-                图片处理
+                立体裁切
               </div>
             </div>
           </a>
         
         
           
-          <a href="../image-tools/" class="md-footer__link md-footer__link--next" aria-label="Next: 图片工具">
+          <a href="../bake-mesh/" class="md-footer__link md-footer__link--next" aria-label="Next: 烘焙网格">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                图片工具
+                烘焙网格
               </div>
             </div>
             <div class="md-footer__button md-icon">

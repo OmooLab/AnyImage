@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -33,7 +33,7 @@
     
     
       
-        <title>转为平面 - AnyImage Docs</title>
+        <title>转为面片 - AnyImage Docs</title>
       
     
     
@@ -129,7 +129,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              转为平面
+              转为面片
             
           </span>
         </div>
@@ -504,14 +504,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../ai-image-tools/" class="md-nav__link">
+      <a href="../../../convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -532,14 +532,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../convert-to/" class="md-nav__link">
+      <a href="../../../bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -616,14 +616,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../bake-mesh/" class="md-nav__link">
+      <a href="../../../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI tools
   
 
     
@@ -1084,7 +1084,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1557,12 +1557,12 @@
   
 
 
-<h1 id="_1">转为平面、转为深度平面与转为浮雕平面</h1>
+<h1 id="_1">转为面片、转为凹凸面与转为浮雕</h1>
 <p><code>operators/convert_to_plane/operators.py</code> 提供 <code>ConvertToPlane</code>、<code>ConvertToDepthPlane</code>、<code>ConvertToReliefPlane</code> 与 <code>GenerateDepthPlane</code>。<code>object.py</code> 导入对象和材质，<code>image_plane.py</code> 构建基础矩形网格，<code>__init__.py</code> 汇总导出与注册清单。</p>
 <pre class="mermaid"><code>flowchart TD
     A[Image Empty] --&gt; B[准备材质颜色]
     B --&gt; C{转换类型}
-    C -- 平面 --&gt; D[四边形与 O Image Plane]
+    C -- 面片 --&gt; D[四边形与 O Image Plane]
     C -- Depth 或 Relief --&gt; E[静态图提交几何 Job]
     E --&gt; F[加载深度、元数据与法线]
     F --&gt; G[对应节点修改器与材质]

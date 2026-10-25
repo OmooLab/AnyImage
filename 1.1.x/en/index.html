@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -31,7 +31,7 @@
     
     
       
-        <title>🖼️ AnyImage - AnyImage Docs</title>
+        <title>🚪 AnyImage - AnyImage Docs</title>
       
     
     
@@ -127,7 +127,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              🖼️ AnyImage
+              🚪 AnyImage
             
           </span>
         </div>
@@ -507,14 +507,14 @@
   
   
     <li class="md-nav__item">
-      <a href="ai-image-tools/" class="md-nav__link">
+      <a href="convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -535,14 +535,14 @@
   
   
     <li class="md-nav__item">
-      <a href="convert-to/" class="md-nav__link">
+      <a href="bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -619,14 +619,14 @@
   
   
     <li class="md-nav__item">
-      <a href="bake-mesh/" class="md-nav__link">
+      <a href="ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI tools
   
 
     
@@ -1065,7 +1065,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1534,10 +1534,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#start-directly-from-an-image" class="md-nav__link">
+  <a href="#skip-the-download-just-paste" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Start directly from an image
+        Skip the download. Just paste!
       
     </span>
   </a>
@@ -1545,10 +1545,43 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#one-image-multiple-spatial-forms" class="md-nav__link">
+  <a href="#from-reference-image-to-3d" class="md-nav__link">
     <span class="md-ellipsis">
       
-        One image, multiple spatial forms
+        From reference image to 3D!
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#crop-combine-and-match-colors-too" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crop, combine, and match colors, too!
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fast-ai-tools-that-run-offline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fast AI tools that run offline!
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
       
     </span>
   </a>
@@ -1575,19 +1608,39 @@
   
 
 
-<h1 id="anyimage">🖼️ AnyImage</h1>
+<h1 id="anyimage">🚪 AnyImage</h1>
 <h2 id="image-is-all-you-need">IMAGE IS ALL YOU NEED</h2>
 <p><img alt="cover" src="../assets/cover.png" /></p>
-<p>AnyImage is an image toolkit for Blender by OmooLab. It turns images into more than references: paste an image, select what you need, and transform it into a scene element with materials, contours, and depth.</p>
-<h2 id="start-directly-from-an-image">Start directly from an image</h2>
-<p>Press <strong>Ctrl+Shift+V</strong> in the 3D View or Node Editor (<strong>Cmd+Shift+V</strong> on macOS) to paste an image from the clipboard directly into the current workspace. There is no need to save the image first or interrupt your workflow.</p>
-<p>You can also continue working with existing images. Select an Image Empty, right-click to open the <strong>AnyImage</strong> menu, and access the most common actions from there.</p>
-<h2 id="one-image-multiple-spatial-forms">One image, multiple spatial forms</h2>
-<ul>
-<li><strong>Plane / Depth Plane</strong>: Turn an image into a flat or dimensional plane.</li>
-<li><strong>Cutout</strong>: Select a subject and create a Surface, Balloon, or Depth Shape.</li>
-<li><strong>Image tools</strong>: Reframe images, edit transparent areas, correct perspective, remove backgrounds, and upscale.</li>
-</ul>
+<p>AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.</p>
+<iframe class="anyimage-video" src="https://player.bilibili.com/player.html?bvid=BV1dsaP6WEqA&amp;page=1&amp;autoplay=0" title="AnyImage: cut images into 3D shapes offline" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+
+<h2 id="skip-the-download-just-paste">Skip the download. Just paste!</h2>
+<p>Press <strong>Ctrl+Shift+V</strong> in Blender (<strong>Cmd+Shift+V</strong> on macOS) to bring an image from your clipboard straight into the scene. In Sculpt or Texture Paint mode, pasting turns it into a brush texture. In a node editor, it creates an image node for you.</p>
+<h2 id="from-reference-image-to-3d">From reference image to 3D!</h2>
+<p>Use <strong>Cutout</strong> to outline part of an image, give it thickness, and drop it into your scene to try it out. You can also turn images into terrain, reliefs, and panoramic scenes!</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;"><img alt="Cut a 3D shape out of an image" src="../assets/demos/depth-cutout.gif" /></th>
+<th style="text-align: center;"><img alt="Convert a table photo into a 3D surface with Convert to Depth Plane" src="../assets/demos/convert-depth-plane-table.gif" /></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">Cut out a 3D shape</td>
+<td style="text-align: center;">Convert to Depth Plane</td>
+</tr>
+</tbody>
+</table>
+<h2 id="crop-combine-and-match-colors-too">Crop, combine, and match colors, too!</h2>
+<p>✂️ <strong>Frame Images</strong>: Crop to the area you want, or combine several arranged images into one from the current view.</p>
+<p>🖌️ <strong>Image Visibility</strong>: Hide unwanted parts with a lasso, brush, or polyline, and restore them whenever you need.</p>
+<p>📐 <strong>Rectify</strong>: Pick four corners to straighten a photographed surface for use as a texture.</p>
+<p>🎨 <strong>Color Match</strong>: Pick a reference image to match its colors and brightness. Image textures in materials work too.</p>
+<h2 id="fast-ai-tools-that-run-offline">Fast AI tools that run offline!</h2>
+<p>Remove backgrounds and upscale images by 2× right on your computer, with no per-image fees. You can process image textures already used in materials, too!</p>
+<h2 id="installation">Installation</h2>
+<p><a href="installation/">Install AnyImage</a></p>
 
 
 

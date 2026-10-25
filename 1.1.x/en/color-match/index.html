@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -18,7 +18,7 @@
         <link rel="prev" href="../image-tools/">
       
       
-        <link rel="next" href="../bake-mesh/">
+        <link rel="next" href="../ai-image-tools/">
       
       
         
@@ -509,14 +509,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../ai-image-tools/" class="md-nav__link">
+      <a href="../convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -537,14 +537,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../convert-to/" class="md-nav__link">
+      <a href="../bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -690,14 +690,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../bake-mesh/" class="md-nav__link">
+      <a href="../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI tools
   
 
     
@@ -1136,7 +1136,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1636,19 +1636,47 @@
 
 
 <h1 id="_1">色彩匹配</h1>
-<p><strong>匹配参考图色彩</strong> 根据参考图片调整目标图片的色彩与亮度，适合统一场景中多张图片的视觉风格。</p>
+<p>拼进场景的几张图，颜色各不相同？挑一张作为参考，让其他图片靠近它的色彩和亮度，画面就更容易统一。材质里的图片贴图也能用。</p>
 <h2 id="_2">选择参考图片</h2>
-<p>在 3D View 中按 <strong>N</strong> 打开侧栏，进入 <strong>任意图！ &gt; 色彩匹配</strong>。从图片画廊中选择参考图片，下方色板会显示它的主要颜色。参考图片随当前 Scene 保存。</p>
+<p>在 3D 视图按 <strong>N</strong> 打开侧栏，进入 <strong>任意图！ &gt; 色彩匹配</strong>。从图片画廊中选一张参考图，下方色板会显示它的主要颜色。</p>
+<!-- 待补：横版截图，参考图与色板。 -->
+
 <h2 id="_3">匹配目标图片</h2>
-<p>选中 Image Empty 或 AnyImage 创建的图片 Mesh，右键选择 <strong>任意图！ &gt; 匹配参考图色彩</strong>。也可以在 Shader Editor 中选中带图片的 Image Texture 节点，从右键菜单执行。</p>
+<p>选中要调色的参考图片，或任意图！创建的图片模型，右键选择 <strong>任意图！ &gt; 匹配参考图色彩</strong>。处理材质贴图时，在着色器编辑器选中带图片的 <strong>图像纹理（Image Texture）</strong> 节点，再从右键菜单执行。</p>
 <p>参考与目标需要是不同的静态图片。预览出现后：</p>
-<ul>
-<li>左右移动鼠标调整色彩匹配强度。</li>
-<li>上下移动鼠标调整亮度匹配强度。</li>
-<li>按住 <strong>Shift</strong> 精细调整。</li>
-<li>单击或按 <strong>Enter</strong> 确认；右键或 <strong>Esc</strong> 取消。</li>
-</ul>
-<p>确认后更新目标图片，保留透明度；可使用 Blender 的 Undo 撤销。</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>调整</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>左右移动鼠标</td>
+<td>色彩匹配强度</td>
+</tr>
+<tr>
+<td>上下移动鼠标</td>
+<td>亮度匹配强度</td>
+</tr>
+<tr>
+<td>按住 <strong>Shift</strong></td>
+<td>精细调整</td>
+</tr>
+<tr>
+<td>单击或 <strong>Enter</strong></td>
+<td>确认</td>
+</tr>
+<tr>
+<td>右键或 <strong>Esc</strong></td>
+<td>取消</td>
+</tr>
+</tbody>
+</table>
+<!-- 待补：横版对比图，匹配前后与参考图。 -->
+
+<p>确认后，图片的透明区域会保留。想再试一次，可以撤销后重新调整。</p>
 
 
 
@@ -1695,13 +1723,13 @@
         
         
           
-          <a href="../bake-mesh/" class="md-footer__link md-footer__link--next" aria-label="Next: 烘焙网格">
+          <a href="../ai-image-tools/" class="md-footer__link md-footer__link--next" aria-label="Next: AI tools">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                烘焙网格
+                AI tools
               </div>
             </div>
             <div class="md-footer__button md-icon">

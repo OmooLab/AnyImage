@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -502,14 +502,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ai-image-tools/" class="md-nav__link">
+      <a href="../../convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -530,14 +530,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../convert-to/" class="md-nav__link">
+      <a href="../../bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -614,14 +614,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../bake-mesh/" class="md-nav__link">
+      <a href="../../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI 小工具
   
 
     
@@ -1142,7 +1142,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1668,7 +1668,7 @@
 <tr>
 <td><code>generate-depth-plane-geometry</code></td>
 <td><code>depth.exr</code>、<code>depth.json</code> 和法线</td>
-<td>Depth / <strong>浮雕平面</strong></td>
+<td>Depth / <strong>浮雕</strong></td>
 </tr>
 <tr>
 <td><code>generate-cutout-artifacts</code></td>
@@ -1678,7 +1678,7 @@
 <tr>
 <td><code>generate-panorama-geometry</code></td>
 <td><code>depth.exr</code>、<code>depth.json</code></td>
-<td><strong>全景</strong></td>
+<td><strong>立体全景</strong></td>
 </tr>
 </tbody>
 </table>
@@ -1716,10 +1716,10 @@
     A --&gt; E[源 Alpha 写入有效通道]
     E --&gt; D
     D --&gt; F[Blender 加载并 Pack]</code></pre>
-<p>参考深度由 <code>common/geometry_image.py</code> 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。<strong>深度平面</strong>使用对象空间法线，<strong>浮雕平面</strong>使用切线空间法线。</p>
-<p><strong>全景</strong>的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 <code>projection: equirectangular</code> 和 <code>image_size</code>。</p>
+<p>参考深度由 <code>common/geometry_image.py</code> 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。<strong>凹凸面</strong>使用对象空间法线，<strong>浮雕</strong>使用切线空间法线。</p>
+<p><strong>立体全景</strong>的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 <code>projection: equirectangular</code> 和 <code>image_size</code>。</p>
 <h2 id="_2">颜色与图像编辑</h2>
-<p><code>common/color_image.py</code> 为<strong>平面</strong>、<strong>全景</strong>和<strong>立体裁切</strong>准备独立的材质颜色与 AI 分析输入。<strong>立体裁切</strong>使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。</p>
+<p><code>common/color_image.py</code> 为<strong>面片</strong>、<strong>立体全景</strong>和<strong>立体裁切</strong>准备独立的材质颜色与 AI 分析输入。<strong>立体裁切</strong>使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。</p>
 <p><code>ImageEditTarget</code> 统一 Image Empty 和 Shader Image Texture 的编辑目标及共享引用。HDR 去背景通过 <code>HdrBackgroundInput</code> 保留 Blender 浮点 RGB，并应用 Server 返回的连续 Alpha。</p>
 
 

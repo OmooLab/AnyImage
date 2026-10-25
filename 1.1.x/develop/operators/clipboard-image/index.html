@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -502,14 +502,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../ai-image-tools/" class="md-nav__link">
+      <a href="../../../convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -530,14 +530,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../convert-to/" class="md-nav__link">
+      <a href="../../../bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -614,14 +614,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../bake-mesh/" class="md-nav__link">
+      <a href="../../../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI 小工具
   
 
     
@@ -1192,7 +1192,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1766,8 +1766,8 @@
 <h3 id="packed-image">创建或复用 Packed Image</h3>
 <p><code>actions.py</code> 对图片内容计算 SHA-256。相同内容已经粘贴过时会复用现有 Packed Image，否则创建新 Image 并 Pack 到当前 <code>.blend</code>，避免依赖临时剪贴板文件。</p>
 <h3 id="_5">放到当前编辑器</h3>
-<p>落点仍在 <code>actions.py</code> 中完成：3D View 创建 Reference 或<strong>平面</strong>，Node Editor 创建与当前节点树匹配的 Image 节点，绘制模式把 Image 配置为当前画笔的 Texture。鼠标位置和视图位置也在这里换算。</p>
-<p><strong>平面</strong>路径调用 <code>convert_to_plane/image_plane.py</code> 创建中心原点基础网格，并从节点资产加载 <code>O Image Plane</code>。<code>actions.py</code> 创建图像材质并放入 Mesh 第 <code>0</code> 个材质槽，节点组只生成几何。</p>
+<p>落点仍在 <code>actions.py</code> 中完成：3D View 创建 Reference 或<strong>面片</strong>，Node Editor 创建与当前节点树匹配的 Image 节点，绘制模式把 Image 配置为当前画笔的 Texture。鼠标位置和视图位置也在这里换算。</p>
+<p><strong>面片</strong>路径调用 <code>convert_to_plane/image_plane.py</code> 创建中心原点基础网格，并从节点资产加载 <code>O Image Plane</code>。<code>actions.py</code> 创建图像材质并放入 Mesh 第 <code>0</code> 个材质槽，节点组只生成几何。</p>
 
 
 
@@ -1814,13 +1814,13 @@
         
         
           
-          <a href="../convert-to-plane/" class="md-footer__link md-footer__link--next" aria-label="下一页: 转为平面">
+          <a href="../convert-to-plane/" class="md-footer__link md-footer__link--next" aria-label="下一页: 转为面片">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 下一页
               </span>
               <div class="md-ellipsis">
-                转为平面
+                转为面片
               </div>
             </div>
             <div class="md-footer__button md-icon">

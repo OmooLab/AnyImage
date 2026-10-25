@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -502,14 +502,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../ai-image-tools/" class="md-nav__link">
+      <a href="../../../convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -530,14 +530,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../convert-to/" class="md-nav__link">
+      <a href="../../../bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -614,14 +614,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../bake-mesh/" class="md-nav__link">
+      <a href="../../../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI 小工具
   
 
     
@@ -1073,7 +1073,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1556,7 +1556,7 @@
 
 
 <h1 id="2">2倍高清</h1>
-<p><code>operators/upscale.py</code> 从 Image Empty 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于<strong>AI 输入尺寸上限</strong>。</p>
+<p><code>operators/upscale.py</code> 从 Image Empty 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于<strong>处理分辨率上限</strong>。</p>
 <pre class="mermaid"><code>flowchart TD
     A[检查源图尺寸并冻结模型设置] --&gt; B[准备图片输入]
     B --&gt; C[upscale-image 单张处理]

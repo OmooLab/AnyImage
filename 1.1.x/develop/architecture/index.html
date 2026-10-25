@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Fast image-guided structure building tools for Blender">
+        <meta name="description" content="Image editing tools for Blender — paste, crop, combine, match colors, and use AI when you need it.">
       
       
         <meta name="author" content="OmooLab">
@@ -502,14 +502,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ai-image-tools/" class="md-nav__link">
+      <a href="../../convert-to/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    图片处理
+    整图转为网格
   
 
     
@@ -530,14 +530,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../convert-to/" class="md-nav__link">
+      <a href="../../bake-mesh/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    空间转化
+    烘焙网格
   
 
     
@@ -614,14 +614,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../bake-mesh/" class="md-nav__link">
+      <a href="../../ai-image-tools/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    烘焙网格
+    AI 小工具
   
 
     
@@ -1151,7 +1151,7 @@
   <span class="md-ellipsis">
     
   
-    转为平面
+    转为面片
   
 
     
@@ -1679,7 +1679,7 @@
 </tr>
 <tr>
 <td><code>menu.py</code>、<code>panel.py</code></td>
-<td>Image Empty 与 Shader Image Texture 上下文菜单与 Job Server 面板</td>
+<td>Image Empty 与 Shader Image Texture 上下文菜单与 AI 服务器面板</td>
 </tr>
 <tr>
 <td><code>preferences.py</code></td>
@@ -1713,7 +1713,7 @@
 </table>
 <h2 id="_2">注册与配置</h2>
 <p>顶层入口注册类型后，通过 <code>tools.py</code> 统一注册 WorkspaceTool，通过 <code>keymaps.py</code> 统一注册快捷键。注销按相反生命周期关闭 Runtime、快捷键与工具，再移除菜单和 Scene 属性，按 <code>CLASSES</code> 逆序注销类型。设备、存储目录、模型、材质显示适配和功能上限统一通过 <code>preferences.py</code> 读取。</p>
-<p><strong>AI 输入尺寸上限</strong> 限制模型分析输入和<strong>2倍高清</strong>可提交源图的长边；<strong>重设画框分辨率上限</strong> 限制<strong>重设画框</strong>输出长边；<strong>最小相对边长</strong> 与 <strong>边界扩展</strong> 控制<strong>立体裁切</strong>的网格密度和轮廓边界采样。</p>
+<p><strong>处理分辨率上限</strong> 限制模型分析输入和<strong>2倍高清</strong>可提交源图的长边；<strong>画框分辨率上限</strong> 限制<strong>重设画框</strong>输出长边；<strong>最小相对边长</strong> 与 <strong>边界扩展</strong> 控制<strong>立体裁切</strong>的网格密度和轮廓边界采样。</p>
 <h2 id="_3">执行边界</h2>
 <pre class="mermaid"><code>flowchart TD
     A[Operator 在主线程读取 Blender 数据] --&gt; B[准备输入文件]
@@ -1723,7 +1723,7 @@
     E --&gt; F[主线程 response 加载结果]
     F --&gt; G[提交 Image 或 Object 修改及 Undo]
     G --&gt; H[清理临时输入]</code></pre>
-<p><strong>平面</strong>、<strong>重设画框</strong>、<strong>局部显隐</strong>、<strong>透视校正</strong>、<strong>色彩匹配</strong>、<strong>烘焙网格</strong>和无需 AI 的<strong>立体裁切</strong>在 Blender 内执行。Server 的 <code>jobs/</code> 编排任务，<code>models/</code> 负责模型适配，<code>geometry/</code> 处理深度与法线产物。Server 模块通过内部相对导入共享能力，Blender 侧通过 <code>common/</code> 复用。</p>
+<p><strong>面片</strong>、<strong>重设画框</strong>、<strong>局部显隐</strong>、<strong>透视校正</strong>、<strong>色彩匹配</strong>、<strong>烘焙网格</strong>和无需 AI 的<strong>立体裁切</strong>在 Blender 内执行。Server 的 <code>jobs/</code> 编排任务，<code>models/</code> 负责模型适配，<code>geometry/</code> 处理深度与法线产物。Server 模块通过内部相对导入共享能力，Blender 侧通过 <code>common/</code> 复用。</p>
 <p>MoGe-2 与 MoGe-3 输出统一为 <code>GeometryFrame</code>：包含 Depth、Validity、Intrinsics，以及按需提供的 Normal 和 Points。产物写入器消费同一个 <code>GeometryFrame</code>，保持深度、法线和相机数据一致。参见 <a href="../runtime/">Runtime</a> 与 <a href="../outputs/">产物协议</a>。</p>
 <h2 id="_4">对象与模型状态</h2>
 <p>AnyImage 创建的图片 Mesh 通过 <code>o_image_object</code> 提供对象图片操作。Bake 成功后固化网格并移除该标记，结果成为普通 Mesh；Undo 恢复原节点栈和能力。Shader Editor 的贴图节点继续按活动编辑树解析目标。</p>

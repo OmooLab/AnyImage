@@ -165,8 +165,6 @@ def manifest_for_platform(platform, wheels, edition="full"):
     version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     text = re.sub(r'^version = .*$', f'version = "{version}"', text, flags=re.MULTILINE)
     if edition == "base":
-        text = text.replace('id = "anyimage"', 'id = "anyimage_base"')
-        text = text.replace('name = "AnyImage"', 'name = "AnyImage Base"')
         text = re.sub(r'^network = .*\n', '', text, flags=re.MULTILINE)
         text = re.sub(r'^files = .*$', 'files = "Read source and clipboard images, and save image edits"', text, flags=re.MULTILINE)
     lines = text.splitlines()
@@ -200,8 +198,9 @@ def _build_extension(platform, wheels, edition="full"):
     wheels = extension_wheels(wheels)
     manifest_text = manifest_for_platform(platform, wheels, edition)
     manifest = tomllib.loads(manifest_text)
+    name = manifest['name'].replace(' ', '_') + ('_Base' if edition == 'base' else '')
     output_path = DIST_DIR / (
-        f"{manifest['name'].replace(' ', '_')}.v{manifest['version']}.{platform}.zip"
+        f"{name}.v{manifest['version']}.{platform}.zip"
     )
     DIST_DIR.mkdir(exist_ok=True)
     with ZipFile(output_path, "w", ZIP_DEFLATED) as archive:

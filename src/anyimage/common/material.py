@@ -3,7 +3,10 @@
 import bpy
 
 from ..preferences import configured_material_view_adaptation
-from .image import image_base_name, image_pixels
+from .image import (
+    COLOR_NORMALIZED_PROPERTY, image_base_name, image_content_state, image_pixels,
+    restore_image_content,
+)
 from .node import load_node_group
 
 
@@ -39,13 +42,12 @@ def configure_material_color_image(image, scene=None):
     """Configure the selected Color image in place using the shading preference."""
     if getattr(image, "is_float", False):
         return image
+    if image.get(COLOR_NORMALIZED_PROPERTY):
+        return image
     if scene is None:
         scene = getattr(bpy.context, "scene", None)
-    preferred = (
-        material_color_space_name(scene)
-        if configured_material_view_adaptation()
-        else "sRGB"
-    )
+    preferred = material_color_space_name(scene)
+    normalize = not configured_material_view_adaptation() and preferred != "sRGB"
     pixels = (
         image_pixels(image)
         if getattr(image, "source", None) == "GENERATED"
@@ -55,6 +57,7 @@ def configure_material_color_image(image, scene=None):
     settings = image.colorspace_settings
     original_space = settings.name
     original_alpha = image.alpha_mode
+    original_content = image_content_state(image) if normalize else None
     try:
         for color_space in dict.fromkeys((preferred, "sRGB")):
             try:
@@ -65,11 +68,29 @@ def configure_material_color_image(image, scene=None):
                 break
         else:
             raise RuntimeError("Unable to configure the material color space")
+        if normalize and settings.name != "sRGB":
+            import numpy as np
+            from .color_image import decode_color_image
+            from .color_space import normalize_color_rgba
+
+            if pixels is not None:
+                image.pixels.foreach_set(pixels)
+            rgba = normalize_color_rgba(decode_color_image(image, settings.name))
+            settings.name = "sRGB"
+            image.alpha_mode = "PREMUL"
+            image.pixels.foreach_set(np.flipud(rgba).ravel())
+            image.update()
+            image.pack()
+            image[COLOR_NORMALIZED_PROPERTY] = True
+            return image
         image.alpha_mode = color_alpha_mode(settings.name)
         if pixels is not None:
             image.pixels.foreach_set(pixels)
             image.update()
     except Exception:
+        if original_content is not None:
+            restore_image_content(image, original_content)
+            raise
         settings.name = original_space
         image.alpha_mode = original_alpha
         if pixels is not None:

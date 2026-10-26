@@ -57,14 +57,16 @@ def test_color_space_and_alpha_follow_preference(color_data, enabled, view, spac
     assert result.colorspace_settings.name == selected
     assert result.alpha_mode == ("PREMUL" if selected == "sRGB" else "STRAIGHT")
     assert settings.adapt_material_to_view_transform == enabled
-    np.testing.assert_allclose(images.image_pixels(result), expected, atol=1 / 255)
+    if not enabled and space != "sRGB":
+        assert result[images.COLOR_NORMALIZED_PROPERTY]
+        assert not np.allclose(images.image_pixels(result), expected, atol=1 / 255)
+        np.testing.assert_allclose(images.image_pixels(result)[3::4], expected[3::4], atol=1 / 255)
+    else:
+        np.testing.assert_allclose(images.image_pixels(result), expected, atol=1 / 255)
 
 
-@pytest.mark.parametrize("enabled,kind", [
-    (True, "byte"), (True, "packed"), (False, "file"),
-    (True, "dirty"), (True, "float"),
-])
-def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, enabled, kind):
+@pytest.mark.parametrize("kind", ["byte", "file", "packed", "dirty", "float"])
+def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, kind):
     expected = np.array([[[51, 102, 204, 64], [153, 76, 25, 0]]], dtype=np.uint8)
     if kind in {"file", "dirty"}:
         path = tmp_path / "source.png"
@@ -83,11 +85,11 @@ def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, e
     owner = bpy.data.objects.new("Color source owner", None)
     owner.empty_display_type = "IMAGE"
     owner.data = source
-    with patch.object(material, "configured_material_view_adaptation", return_value=enabled):
+    with patch.object(material, "configured_material_view_adaptation", return_value=True):
         result = material.configure_material_color_image(source, view_scene("AgX"))
     assert result == source
-    np.testing.assert_allclose(images.image_pixels(source), before, atol=1 / 255)
     np.testing.assert_allclose(images.image_pixels(result), before, atol=1 / 255)
+    expected = images.image_pixels(result)
     if result.packed_file is None or result.is_dirty:
         result.pack()
     selected = (result.colorspace_settings.name, result.alpha_mode)
@@ -97,10 +99,10 @@ def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, e
         loaded.images = available.images
     restored = loaded.images[0]
     assert (restored.colorspace_settings.name, restored.alpha_mode) == selected
-    np.testing.assert_allclose(images.image_pixels(restored), before, atol=1 / 255)
+    np.testing.assert_allclose(images.image_pixels(restored), expected, atol=1 / 255)
     edited = images.create_image_edit_result(restored, images.image_pixels(restored), (2, 1))
     assert edited.alpha_mode == selected[1]
-    np.testing.assert_allclose(images.image_pixels(edited), before, atol=1 / 255)
+    np.testing.assert_allclose(images.image_pixels(edited), expected, atol=1 / 255)
 
 
 @pytest.mark.parametrize("entry,shadeless", [
@@ -125,7 +127,7 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         for key, image in data_textures.items()
     }
     with patch.object(preferences, "addon_preferences", return_value=settings):
-        color = color_image(source, (0, 0, 2, 2), images.image_rgba(source)) if entry == "cutout" else source
+        color = color_image(source, (0, 0, 2, 2), images.image_rgba(source))
         first = material.create_image_material(source, color, 0, shadeless=shadeless, scene=scene, **data_textures)
         original_color = color_texture(first)
         assert original_color.colorspace_settings.name == "AgX Base sRGB"
@@ -142,9 +144,10 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         assert not settings.adapt_material_to_view_transform
     assert owner.data == source
     assert source.colorspace_settings.name == "sRGB"
-    assert source.alpha_mode == ("STRAIGHT" if entry == "cutout" else "PREMUL")
-    for image in (source, original_color, new_color):
-        np.testing.assert_allclose(images.image_pixels(image), before, atol=1 / 255)
+    assert source.alpha_mode == "STRAIGHT"
+    np.testing.assert_allclose(images.image_pixels(source), before, atol=1 / 255)
+    assert new_color[images.COLOR_NORMALIZED_PROPERTY]
+    np.testing.assert_allclose(images.image_pixels(new_color)[3::4], before[3::4], atol=1 / 255)
     for key, image in data_textures.items():
         space, alpha, pixels = data_states[key]
         assert image.colorspace_settings.name == space

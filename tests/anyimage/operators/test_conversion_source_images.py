@@ -90,7 +90,8 @@ def test_conversion_selects_source_by_empty_identity(source, monkeypatch, entry,
     assert color.colorspace_settings.name == "sRGB" and color.alpha_mode == "PREMUL"
     assert original.alpha_mode == "STRAIGHT"
     np.testing.assert_array_equal(images.image_pixels(original), before)
-    np.testing.assert_allclose(images.image_pixels(color), before, atol=1 / 255)
+    assert color[images.COLOR_NORMALIZED_PROPERTY]
+    np.testing.assert_allclose(images.image_pixels(color)[3::4], before[3::4], atol=1 / 255)
     if sharing == "material":
         existing = bpy.data.materials["Existing"]
         assert next(n.image for n in existing.node_tree.nodes if n.type == "TEX_IMAGE") == original

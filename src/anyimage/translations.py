@@ -58,6 +58,7 @@ _ZH_HANS = {
     "Start": "启动",
     "Error": "错误",
     "Compensate Image Colors": "补偿图像色彩",
+    "Keep material and brush colors closer to the original image": "让材质和笔刷颜色更接近原图",
     "Minimum Relative Edge Length": "最小相对边长",
     "Minimum target edge length as a percentage of the Cutout bounds' longest side": "最小目标边长占立体裁切区域包围框最长边的百分比",
     "Boundary Padding": "边界扩展",

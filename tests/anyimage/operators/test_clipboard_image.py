@@ -370,16 +370,14 @@ class ClipboardImageTest(BlenderTestCase):
             name="Clipboard Image", size=(1920, 1080),
             colorspace_settings=SimpleNamespace(name="sRGB"), alpha_mode="STRAIGHT",
         )
-        material = importlib.import_module("anyimage.common.material")
         try:
-            with patch.object(material, "configured_material_view_adaptation", return_value=True):
+            with (
+                patch.object(self.actions, "image_content_state", return_value={}),
+                patch.object(self.actions, "configure_material_color_image") as configure,
+            ):
                 first_texture = self.actions.set_tool_texture(context, image)
-            self.assertEqual(image.colorspace_settings.name, "AgX Base sRGB")
-            self.assertEqual(image.alpha_mode, "STRAIGHT")
-            with patch.object(material, "configured_material_view_adaptation", return_value=False):
+                configure.assert_called_once_with(image, context.scene)
                 second_texture = self.actions.set_tool_texture(context, image)
-            self.assertEqual(image.colorspace_settings.name, "sRGB")
-            self.assertEqual(image.alpha_mode, "PREMUL")
         finally:
             self.actions.bpy.data = original_data
 

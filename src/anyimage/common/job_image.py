@@ -2,7 +2,10 @@
 
 from pathlib import Path
 import bpy
-from .image import is_animated_image, image_is_packed, save_packed_image, image_path
+from .image import (
+    COLOR_NORMALIZED_PROPERTY, is_animated_image, image_is_packed, save_packed_image,
+    image_path,
+)
 
 
 def prepare_image_input(image, scene):
@@ -27,6 +30,8 @@ def load_image_edit_result(source_image, output_path):
         result_image = bpy.data.images.load(str(output_path), check_existing=False)
         result_image.colorspace_settings.name = source_image.colorspace_settings.name
         result_image.alpha_mode = source_image.alpha_mode
+        if source_image.get(COLOR_NORMALIZED_PROPERTY):
+            result_image[COLOR_NORMALIZED_PROPERTY] = True
         result_image.pack()
         result_image.name = source_image.name
     except (OSError, RuntimeError, TypeError, ValueError) as error:

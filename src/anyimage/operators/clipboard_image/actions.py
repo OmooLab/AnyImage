@@ -6,7 +6,10 @@ import bpy
 
 from ...common.material import configure_material_color_image, create_image_material
 from ...common.color_image import material_color_image
-from ...common.image import CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_pixels, save_packed_image
+from ...common.image import (
+    CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_content_state, image_pixels,
+    restore_image_content, save_packed_image,
+)
 
 CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 CLIPBOARD_TEXTURE_PROPERTY = "anyimage_clipboard_texture"
@@ -354,9 +357,15 @@ def set_tool_texture(context, image):
         raise PasteTargetError("The active tool does not provide an editable brush")
     brush = _ensure_editable_brush(context, brush)
 
-    configure_material_color_image(image, context.scene)
-    texture, is_new = _find_or_create_image_texture(image)
+    content = image_content_state(image)
+    previous = (
+        brush.texture, brush.texture_slot.texture,
+        brush.texture_slot.map_mode, tuple(brush.stencil_dimension),
+    )
+    texture, is_new = None, False
     try:
+        configure_material_color_image(image, context.scene)
+        texture, is_new = _find_or_create_image_texture(image)
         brush.texture = texture
         brush.texture_slot.texture = texture
         brush.texture_slot.map_mode = "STENCIL"
@@ -368,9 +377,14 @@ def set_tool_texture(context, image):
             raise PasteTargetError("Blender did not bind the texture to the active brush")
         _set_unbiased_paint_color(context, brush)
         brush.update_tag()
-    except (AttributeError, TypeError, RuntimeError) as error:
+    except (AttributeError, TypeError, RuntimeError, ValueError) as error:
+        (
+            brush.texture, brush.texture_slot.texture,
+            brush.texture_slot.map_mode, brush.stencil_dimension,
+        ) = previous
         if is_new:
             bpy.data.textures.remove(texture)
+        restore_image_content(image, content)
         raise PasteTargetError(
             f"The active brush could not use the image texture: {error}"
         ) from error

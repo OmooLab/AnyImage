@@ -18,21 +18,24 @@ def validate_archives(paths):
     version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]["version"]
+    source_manifest = tomllib.loads((SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))
+    name = source_manifest["name"].replace(" ", "_")
     validator = Path(bpy.utils.system_resource("SCRIPTS")) / "addons_core/bl_pkg/cli/blender_ext.py"
     asset_digest = None
     for path in paths:
         with ZipFile(path) as archive:
             manifest = tomllib.loads(archive.read("blender_manifest.toml").decode())
-            edition = {"anyimage": "full", "anyimage_base": "base"}[manifest["id"]]
-            name = "AnyImage Base" if edition == "base" else "AnyImage"
+            edition = "base" if path.name.startswith(f"{name}_Base.v") else "full"
+            archive_name = name + ("_Base" if edition == "base" else "")
             (platform,) = manifest["platforms"]
             if (
-                manifest["name"] != name
+                manifest["id"] != source_manifest["id"]
+                or manifest["name"] != source_manifest["name"]
                 or manifest["version"] != version
                 or platform not in PLATFORMS
             ):
                 raise ValueError(f"Unexpected manifest: {path}")
-            if path.name != f"{name.replace(' ', '_')}.v{version}.{platform}.zip":
+            if path.name != f"{archive_name}.v{version}.{platform}.zip":
                 raise ValueError(f"Unexpected archive name: {path}")
             sources = edition_sources(SOURCE_DIR, edition)
             expected = (
@@ -65,9 +68,10 @@ def main():
     version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]["version"]
+    name = tomllib.loads((SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))["name"].replace(" ", "_")
     paths = args.archives or [
         DIST_DIR
-        / f"{'AnyImage_Base' if edition == 'base' else 'AnyImage'}.v{version}.{platform}.zip"
+        / f"{name}{'_Base' if edition == 'base' else ''}.v{version}.{platform}.zip"
         for platform in PLATFORMS
         for edition in EDITIONS
     ]

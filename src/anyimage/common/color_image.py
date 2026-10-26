@@ -8,9 +8,44 @@ from pathlib import Path
 import bpy
 
 from .image import (
-    cleanup_image_input, image_base_name, image_is_packed, image_rgba,
+    COLOR_NORMALIZED_PROPERTY, cleanup_image_input, image_base_name, image_is_packed, image_rgba,
     is_animated_image,
 )
+
+
+def decode_color_image(image, color_space):
+    """Evaluate byte RGB through Blender color management, preserving business alpha."""
+    import numpy as np
+
+    rgba = image_rgba(image)
+    if not np.isfinite(rgba).all():
+        raise ValueError("Color normalization requires finite RGBA values")
+    height, width = rgba.shape[:2]
+    reader = bpy.data.images.new("Color Decode", width=width, height=height, alpha=True)
+    scene = decoded = None
+    try:
+        reader.colorspace_settings.name = color_space
+        reader.alpha_mode = "STRAIGHT"
+        opaque = rgba.copy()
+        opaque[..., 3] = 1
+        reader.pixels.foreach_set(np.flipud(opaque).ravel())
+        scene = bpy.data.scenes.new("Color Decode")
+        settings = scene.render.image_settings
+        settings.file_format = "OPEN_EXR"
+        settings.color_mode = "RGB"
+        settings.color_depth = "32"
+        with tempfile.TemporaryDirectory(prefix="anyimage-color-") as directory:
+            path = Path(directory) / "linear.exr"
+            reader.save_render(str(path), scene=scene)
+            decoded = bpy.data.images.load(str(path), check_existing=False)
+            rgba[..., :3] = image_rgba(decoded)[..., :3]
+        return rgba
+    finally:
+        if decoded is not None:
+            bpy.data.images.remove(decoded)
+        if scene is not None:
+            bpy.data.scenes.remove(scene)
+        bpy.data.images.remove(reader)
 
 
 def require_static_color_image(image):
@@ -72,6 +107,7 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
             "name": f"{image_base_name(source)}_color{suffix}",
             "color_space": "Linear Rec.709" if source.is_float else source.colorspace_settings.name,
             "alpha_mode": "PREMUL" if source.is_float and source.alpha_mode == "STRAIGHT" else source.alpha_mode,
+            "color_normalized": bool(source.get(COLOR_NORMALIZED_PROPERTY)),
         }
         path.with_suffix(".json").write_text(json.dumps(metadata), encoding="utf-8")
         return path
@@ -95,6 +131,8 @@ def load_material_color_image(path):
         image.name = metadata["name"]
         image.colorspace_settings.name = metadata["color_space"]
         image.alpha_mode = metadata["alpha_mode"]
+        if metadata["color_normalized"]:
+            image[COLOR_NORMALIZED_PROPERTY] = True
         image.pack()
         return image
     except Exception:

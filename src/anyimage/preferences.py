@@ -26,7 +26,7 @@ def addon_preferences(context=None):
 
 
 def configured_material_view_adaptation(context=None):
-    return bool(getattr(addon_preferences(context), "adapt_material_to_view_transform", True))
+    return bool(getattr(addon_preferences(context), "adapt_material_to_view_transform", False))
 
 
 def configured_min_cutout_relative_edge_length(context=None):
@@ -62,12 +62,8 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
 
     adapt_material_to_view_transform: bpy.props.BoolProperty(
         name="Compensate Image Colors",
-        description=(
-            "Compensate for the scene's view transform when creating materials "
-            "to keep colors close to the source image. "
-            "To view materials, switch the viewport to Material Preview or Rendered mode."
-        ),
-        default=True,
+        description="Keep material and brush colors closer to the original image",
+        default=False,
     )
 
     min_cutout_relative_edge_length: bpy.props.FloatProperty(

@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 id = "anyimage"
 version = "1.1.7"
-name = "AnyImage"
+name = "Any Image"
 tagline = "AnyImage makes images a starting point for creating in Blender"
 maintainer = "Nan <manan@omoolab.xyz>"
 type = "add-on"

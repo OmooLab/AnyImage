@@ -41,6 +41,19 @@ class RecordingLayout:
 
 
 class PreferencesTest(BlenderTestCase):
+    def test_color_compensation_defaults_off_and_preserves_saved_choices(self):
+        module = self.anyimage.preferences
+        prop = module.AnyImagePreferences.__annotations__["adapt_material_to_view_transform"]
+        self.assertFalse(prop["default"])
+        for stored, expected in (
+            (None, False),
+            (SimpleNamespace(), False),
+            (SimpleNamespace(adapt_material_to_view_transform=True), True),
+            (SimpleNamespace(adapt_material_to_view_transform=False), False),
+        ):
+            with patch.object(module, "addon_preferences", return_value=stored):
+                self.assertEqual(module.configured_material_view_adaptation(), expected)
+
     def test_device_choices_follow_anyimage_platform_support(self):
         properties = self.anyimage.ai_properties
         for system, architecture, expected in (

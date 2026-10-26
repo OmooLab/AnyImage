@@ -10,6 +10,7 @@ image_content_handlers = []
 
 TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
 CLIPBOARD_HASH_PROPERTY = "anyimage_clipboard_sha256"
+COLOR_NORMALIZED_PROPERTY = "anyimage_color_normalized"
 
 IMAGE_NAME_SUFFIXES = (
     ".jpeg",
@@ -211,6 +212,8 @@ def create_image_edit_result(source_image, pixels, output_size):
     try:
         image.colorspace_settings.name = source_image.colorspace_settings.name
         image.alpha_mode = source_image.alpha_mode
+        if source_image.get(COLOR_NORMALIZED_PROPERTY):
+            image[COLOR_NORMALIZED_PROPERTY] = True
         image.pixels.foreach_set(pixels)
         image.pack()
         image.update()
@@ -263,6 +266,7 @@ def image_content_state(image):
                          "use_generated_float")
         },
         "generated_color": tuple(image.generated_color),
+        "color_normalized": bool(image.get(COLOR_NORMALIZED_PROPERTY)),
     }
 
 
@@ -280,6 +284,10 @@ def restore_image_content(image, state):
     image.colorspace_settings.name = state["colorspace"]
     image.alpha_mode = state["alpha_mode"]
     image.file_format = state["file_format"]
+    if state["color_normalized"]:
+        image[COLOR_NORMALIZED_PROPERTY] = True
+    elif COLOR_NORMALIZED_PROPERTY in image:
+        del image[COLOR_NORMALIZED_PROPERTY]
     if state["packed"] is not None:
         data = state["packed"]
         image.source = "FILE"

@@ -52,6 +52,16 @@ def srgb_to_linear_rgb(rgb):
     )
 
 
+def normalize_color_rgba(rgba):
+    """Encode linear RGBA as sRGB with per-channel cap 4 and gamma 0.75."""
+    result = np.asarray(rgba, dtype=np.float32).copy()
+    if not np.isfinite(result).all():
+        raise ValueError("Color normalization requires finite RGBA values")
+    normalized = np.clip(result[..., :3], 0, 4) / 4
+    result[..., :3] = linear_rgb_to_srgb(normalized ** 0.75)
+    return result
+
+
 def image_rgba_to_linear(image, rgba):
     """Decode byte business RGB as sRGB; float business RGB is linear Rec.709."""
     result = np.asarray(rgba, dtype=np.float32).copy()

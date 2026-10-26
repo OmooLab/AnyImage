@@ -10,7 +10,7 @@ from zipfile import ZipFile
 
 import pytest
 
-from tools import pack
+from tools import pack, validate_extensions
 from tools.editions import AI_PATHS, edition_sources
 
 
@@ -31,10 +31,14 @@ def test_base_contents_and_dependencies(tmp_path):
     with patch.object(pack, "DIST_DIR", tmp_path):
         full = pack._build_extension("windows-x64", [], "full")
         base = pack._build_extension("windows-x64", [], "base")
+    assert full != base
     with ZipFile(base) as archive, ZipFile(full) as other:
+        full_manifest = tomllib.loads(other.read("blender_manifest.toml").decode())
+        assert full_manifest["id"] == "anyimage"
+        assert full_manifest["name"] == "Any Image"
         manifest = tomllib.loads(archive.read("blender_manifest.toml").decode())
-        assert manifest["id"] == "anyimage_base"
-        assert manifest["name"] == "AnyImage Base"
+        assert manifest["id"] == full_manifest["id"]
+        assert manifest["name"] == full_manifest["name"]
         assert "network" not in manifest["permissions"]
         assert archive.read("assets/O_AnyImage.blend") == other.read("assets/O_AnyImage.blend")
         assert not any(name.startswith("server/") for name in archive.namelist())
@@ -51,6 +55,9 @@ def test_base_contents_and_dependencies(tmp_path):
     assert all(not item.startswith("blendjob") for item in requirements)
     assert any(item.startswith("pillow") for item in requirements)
     assert any(item.startswith("scipy") for item in requirements)
+    with patch.object(validate_extensions.subprocess, "run") as validate:
+        validate_extensions.validate_archives([full, base])
+    assert validate.call_count == 2
 
 
 @pytest.mark.parametrize("first", ["full", "base"])
@@ -62,9 +69,7 @@ def test_artifacts_register_and_switch_without_interference(tmp_path, first):
         repository_path.mkdir()
         (repository_path / "__init__.py").touch()
         with ZipFile(archive_path) as archive:
-            archive.extractall(
-                repository_path / ("anyimage_base" if edition == "base" else "anyimage")
-            )
+            archive.extractall(repository_path / "anyimage")
     script = tmp_path / "check.py"
     script.write_text(
         """
@@ -82,7 +87,7 @@ import scipy.optimize
 from materialyoucolor.quantize import QuantizeCelebi
 import bpy
 
-package_root = (Path(__file__).parent / 'second_repo' / 'anyimage_base').resolve()
+package_root = (Path(__file__).parent / 'second_repo' / 'anyimage').resolve()
 def audit_readonly_package(event, args):
     if event == 'open' and isinstance(args[0], (str, bytes, os.PathLike)):
         path = Path(os.fsdecode(args[0])).resolve()
@@ -97,7 +102,7 @@ class RejectAI(importlib.abc.MetaPathFinder):
 
 blocker = RejectAI()
 sys.meta_path.insert(0, blocker)
-base = importlib.import_module('second_repo.anyimage_base')
+base = importlib.import_module('second_repo.anyimage')
 bpy.context.preferences.system.use_online_access = False
 base.register()
 settings = bpy.context.scene.anyimage_settings
@@ -113,7 +118,7 @@ source.data = image
 bpy.context.collection.objects.link(source)
 bpy.context.view_layer.objects.active = source
 source.select_set(True)
-shape_object = importlib.import_module('second_repo.anyimage_base.operators.cutout_tool.object')
+shape_object = importlib.import_module('second_repo.anyimage.operators.cutout_tool.object')
 mesh = SimpleNamespace(vertices=np.array([[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1]]),
                        faces=[(0, 1, 2, 3)], uv=np.array([[0, 0], [1, 0], [1, 1], [0, 1]]), balloon=np.zeros(4))
 for shape in ('FLAT', 'SOLID'):

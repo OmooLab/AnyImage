@@ -13,15 +13,40 @@ from .image import (
 )
 
 
+def create_normalized_color_image(image):
+    """Build a bounded sRGB color image independently of shading preferences."""
+    import numpy as np
+    from .color_space import normalize_color_rgba
+
+    rgba = image_rgba(image)
+    if not np.isfinite(rgba).all():
+        raise ValueError("Color normalization requires finite RGBA values")
+    if not image.get(COLOR_NORMALIZED_PROPERTY) and (image.is_float or image.colorspace_settings.name != "sRGB"):
+        rgba = normalize_color_rgba(decode_color_image(image, image.colorspace_settings.name))
+    result = bpy.data.images.new(image.name, width=image.size[0], height=image.size[1], alpha=True)
+    try:
+        result.colorspace_settings.name = "sRGB"
+        result.alpha_mode = "PREMUL"
+        result.file_format = "PNG"
+        result[COLOR_NORMALIZED_PROPERTY] = True
+        result.pixels.foreach_set(np.flipud(np.clip(rgba, 0, 1)).ravel())
+        result.update()
+        result.pack()
+        return result
+    except Exception:
+        bpy.data.images.remove(result)
+        raise
+
+
 def decode_color_image(image, color_space):
-    """Evaluate byte RGB through Blender color management, preserving business alpha."""
+    """Evaluate RGB through Blender color management, preserving business alpha."""
     import numpy as np
 
     rgba = image_rgba(image)
     if not np.isfinite(rgba).all():
         raise ValueError("Color normalization requires finite RGBA values")
     height, width = rgba.shape[:2]
-    reader = bpy.data.images.new("Color Decode", width=width, height=height, alpha=True)
+    reader = bpy.data.images.new("Color Decode", width=width, height=height, alpha=True, float_buffer=image.is_float)
     scene = decoded = None
     try:
         reader.colorspace_settings.name = color_space

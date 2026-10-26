@@ -83,8 +83,8 @@ def visible_uv_coverage(obj, camera, resolution):
     return coverage
 
 
-def render_normal(obj, path, direction, *, lighting=False, with_uv_coverage=False):
-    """Render the actual material normal as linear RGB for a comparison."""
+def render_material(obj, path, direction, *, channel="Normal", lighting=False, with_uv_coverage=False):
+    """Render a material input or its lit surface as linear RGB."""
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.samples = 1
@@ -107,15 +107,18 @@ def render_normal(obj, path, direction, *, lighting=False, with_uv_coverage=Fals
     for index, copy in enumerate(copies):
         obj.data.materials[index] = copy
         nodes, links = copy.node_tree.nodes, copy.node_tree.links
-        layer = next(n for n in nodes if n.type == "GROUP")
-        encode = nodes.new("ShaderNodeVectorMath")
-        encode.operation = "MULTIPLY_ADD"
-        encode.inputs[1].default_value = (.5, .5, .5)
-        encode.inputs[2].default_value = (.5, .5, .5)
+        shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
+        source = shader.inputs[channel].links[0].from_socket
+        if channel == "Normal":
+            encode = nodes.new("ShaderNodeVectorMath")
+            encode.operation = "MULTIPLY_ADD"
+            encode.inputs[1].default_value = (.5, .5, .5)
+            encode.inputs[2].default_value = (.5, .5, .5)
+            links.new(source, encode.inputs[0])
+            source = encode.outputs[0]
         emission = nodes.new("ShaderNodeEmission")
         output = next(n for n in nodes if n.type == "OUTPUT_MATERIAL")
-        links.new(layer.outputs["Normal"], encode.inputs[0])
-        links.new(encode.outputs[0], emission.inputs["Color"])
+        links.new(source, emission.inputs["Color"])
         if not lighting:
             links.new(emission.outputs[0], output.inputs["Surface"])
     light = None

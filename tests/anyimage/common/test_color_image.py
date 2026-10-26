@@ -87,7 +87,10 @@ def test_static_input_rejects_single_frame_animation(kind):
 def test_failed_color_preparation_releases_owned_resources(source, tmp_path, monkeypatch, stage):
     directory = tmp_path / "owned-color"
     directory.mkdir()
-    monkeypatch.setattr(colors.tempfile, "mkdtemp", lambda **_: str(directory))
+    monkeypatch.setattr(colors, "tempfile", SimpleNamespace(
+        mkdtemp=lambda **_: str(directory),
+        TemporaryDirectory=colors.tempfile.TemporaryDirectory,
+    ))
     before = set(bpy.data.images)
     original = images.image_pixels(source)
     def fail(*_, **__):

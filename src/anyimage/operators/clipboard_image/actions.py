@@ -1,15 +1,17 @@
 import hashlib
 import os
 import tempfile
+from dataclasses import dataclass
 
 import bpy
 
-from ...common.material import configure_material_color_image, create_image_material
-from ...common.color_image import material_color_image
+from ...common.material import create_image_material
+from ...common.color_image import create_normalized_color_image, material_color_image
 from ...common.image import (
-    CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_content_state, image_pixels,
-    restore_image_content, save_packed_image,
+    CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_content_state, image_pixels, is_image_empty,
+    replace_image_content, restore_image_content, save_packed_image,
 )
+from ...common.image_target import has_other_image_user
 
 CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 CLIPBOARD_TEXTURE_PROPERTY = "anyimage_clipboard_texture"
@@ -22,6 +24,7 @@ NODE_TYPES = {
     "GeometryNodeTree": "GeometryNodeImageTexture",
 }
 WORLD_TEXTURE_NODE_TYPE = "ShaderNodeTexEnvironment"
+IMAGE_NODE_TYPES = {*NODE_TYPES.values(), WORLD_TEXTURE_NODE_TYPE, "GeometryNodeInputImage"}
 
 BRUSH_TEXTURE_MODES = {
     "SCULPT",
@@ -72,6 +75,132 @@ def target_for_context(context):
     if tree_type in NODE_TYPES:
         return "NODE"
     return None
+
+
+@dataclass
+class ClipboardImageTarget:
+    """Identify the existing image and optional brush receiving pasted content."""
+
+    image: object
+    owner: object
+    brush: object = None
+
+    def assign_image(self, image):
+        """Bind an image to the selected owner without changing its settings."""
+        if is_image_empty(self.owner):
+            self.owner.data = image
+        else:
+            _assign_node_image(self.owner, image)
+
+
+def replacement_for_context(context):
+    """Resolve a single image owner and validate its editable datablocks."""
+    target = target_for_context(context)
+    brush = None
+    if target == "PLANE":
+        selected = getattr(context, "selected_objects", ())
+        if len(selected) != 1 or not is_image_empty(selected[0]):
+            return None
+        owner = selected[0]
+        image, owners = owner.data, (owner,)
+    elif target == "NODE":
+        space = context.space_data
+        tree = getattr(space, "edit_tree", None) or getattr(space, "node_tree", None)
+        if tree is None:
+            return None
+        selected = [node for node in tree.nodes if node.select]
+        if len(selected) != 1 or selected[0].bl_idname not in IMAGE_NODE_TYPES:
+            return None
+        node = selected[0]
+        owner = node
+        image = getattr(node, "image", None)
+        if not hasattr(node, "image"):
+            socket = node.inputs.get("Image")
+            if socket is None or socket.is_linked:
+                return None
+            image = socket.default_value
+        owners = (tree,)
+    elif target == "TOOL_TEXTURE":
+        brush = _active_brush(context)
+        texture = getattr(brush, "texture", None)
+        if texture is None or texture.type != "IMAGE":
+            return None
+        image, owners = texture.image, (brush, texture)
+        owner = texture
+    else:
+        return None
+    if image is None:
+        return None
+    if any(not owner.is_editable or owner.library is not None for owner in (*owners, image)):
+        raise PasteTargetError("The selected image and its owner must be editable")
+    if image.source not in {"FILE", "GENERATED"}:
+        raise PasteTargetError("Clipboard replacement supports still images only")
+    return ClipboardImageTarget(image, owner, brush)
+
+
+def replace_pasted_image(context, target, image):
+    """Replace one owner's content, isolating images used by other owners."""
+    if min(image.size) <= 0:
+        raise PasteTargetError("The clipboard image has invalid dimensions")
+    normalized = None
+    source = target.image
+    destination = source
+    texture = None
+    shared_texture = target.brush is not None and (
+        target.brush.mask_texture == target.owner
+        or any(user != target.brush and not isinstance(user, bpy.types.Screen)
+               for user in bpy.data.user_map(subset={target.owner})[target.owner])
+    )
+    shared = shared_texture or has_other_image_user(target.owner)
+    content = None
+    try:
+        if target.brush is not None:
+            normalized = create_normalized_color_image(image)
+        if shared:
+            destination = source.copy()
+            destination.use_fake_user = False
+        else:
+            content = image_content_state(source)
+        try:
+            incoming = image_content_state(normalized if normalized is not None else image)
+            incoming["filepath"] = image.filepath_raw
+            # Install packed content before reloading a file-backed destination.
+            restore_image_content(destination, incoming)
+            if shared_texture:
+                texture = target.owner.copy()
+                texture.use_fake_user = False
+                texture.image = destination
+                target.brush.texture = texture
+            elif shared:
+                target.assign_image(destination)
+            if target.brush is not None:
+                target.brush.texture.update_tag()
+                target.brush.update_tag()
+        except Exception:
+            if texture is not None:
+                target.brush.texture = target.owner
+                bpy.data.textures.remove(texture)
+            elif shared:
+                target.assign_image(source)
+            if content is not None:
+                restore_image_content(source, content)
+            raise
+        for key in (CLIPBOARD_HASH_PROPERTY, CLIPBOARD_CONTENT_PROPERTY):
+            if key in destination:
+                del destination[key]
+        target.image = destination
+        if texture is not None:
+            target.owner = texture
+    finally:
+        if destination != source and destination.users == 0:
+            bpy.data.images.remove(destination)
+        if normalized is not None:
+            bpy.data.images.remove(normalized)
+    try:
+        if target.brush is not None and context.mode == "PAINT_TEXTURE":
+            _set_brush_preview(context, target.brush, target.image)
+    finally:
+        _redraw_area(context)
 
 
 def acquire_packed_image(image_data, suffix):
@@ -364,7 +493,11 @@ def set_tool_texture(context, image):
     )
     texture, is_new = None, False
     try:
-        configure_material_color_image(image, context.scene)
+        normalized = create_normalized_color_image(image)
+        try:
+            replace_image_content(image, normalized)
+        finally:
+            bpy.data.images.remove(normalized)
         texture, is_new = _find_or_create_image_texture(image)
         brush.texture = texture
         brush.texture_slot.texture = texture

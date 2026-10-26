@@ -14,7 +14,7 @@ from anyimage.operators.bake_mesh import materialization
 from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
 from tests.support.planes import create_surface
 from tests.support.panorama import panorama
-from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_normal
+from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_material
 
 
 @pytest.fixture(params=["PLANE", "DEPTH", "RELIEF", "PANORAMA"])
@@ -72,9 +72,10 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     material = obj.active_material
     images = {i.name: i.as_pointer() for i in bpy.data.images}
     color_pixels = image_pixels(color).copy()
-    color_packed = bytes(color.packed_file.data)
-    bake = Mock(wraps=materialization.bake_normal)
-    monkeypatch.setattr(materialization, "bake_normal", bake)
+    from anyimage.common.color_space import normalize_color_rgba
+    expected_color = normalize_color_rgba(color_pixels.reshape(-1, 4)).ravel()
+    bake = Mock(wraps=materialization.bake_material_output)
+    monkeypatch.setattr(materialization, "bake_material_output", bake)
     assert BakeMesh.poll(bpy.context)
     operator = SimpleNamespace(report=Mock())
     assert BakeMesh.execute(operator, bpy.context) == {"FINISHED"}
@@ -86,10 +87,12 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert "o_image_object" not in obj
     assert obj.active_material == material
     remaining = {i.name: i.as_pointer() for i in bpy.data.images}
-    assert all(images[name] == identity for name, identity in remaining.items())
+    assert all(images[name] == identity for name, identity in remaining.items() if name in images)
+    assert set(remaining) - set(images) == {"Color_roughness.png", "Color_specular.png"} | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
     assert set(images) - set(remaining) == ({"Radial Depth"} if kind == "PANORAMA" else {"Camera"} if kind != "PLANE" else set())
-    np.testing.assert_array_equal(image_pixels(color), color_pixels)
-    assert bytes(color.packed_file.data) == color_packed
+    np.testing.assert_allclose(image_pixels(color), expected_color, atol=1 / 255)
+    assert color.colorspace_settings.name == "sRGB" and not color.is_float
+    assert bytes(color.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
     np.testing.assert_array_equal([v.co[:] for v in obj.data.vertices], positions)
     np.testing.assert_array_equal([v.uv[:] for v in obj.data.uv_layers["UVMap"].data], uv)
     assert [tuple(p.vertices) for p in obj.data.polygons] == faces
@@ -99,13 +102,12 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
     assert list(obj.data.uv_layers.keys()) == ["UVMap"]
     if normal is not None:
-        bake.assert_called_once()
+        assert [call.args[-1] for call in bake.call_args_list] == ["Roughness", "Specular", "Normal"]
         assert tuple(normal.size) == (128, 64)
-        layer = next(n for n in material.node_tree.nodes if n.type == "GROUP")
-        assert layer.inputs["Object Space"].default_value is False
-        assert layer.inputs["Normal Scale"].default_value == 1
+        node = next(n for n in material.node_tree.nodes if n.type == "NORMAL_MAP")
+        assert node.space == "TANGENT" and node.inputs["Strength"].default_value == 1
     else:
-        bake.assert_not_called()
+        assert [call.args[-1] for call in bake.call_args_list] == ["Roughness", "Specular"]
     bpy.context.scene.frame_set(2)
     assert trailing[0].strength == pytest.approx(.6)
 
@@ -144,15 +146,15 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     layer = next(n for n in obj.active_material.node_tree.nodes if n.type == "GROUP")
     strength = .6 if kind == "RELIEF" else 1.0
     layer.inputs["Normal Scale"].default_value = strength
-    before = render_normal(obj, tmp_path / "before.exr", (0, -1, 0), with_uv_coverage=True)
+    before = render_material(obj, tmp_path / "before.exr", (0, -1, 0), with_uv_coverage=True)
     obj.data = materialization.materialize_mesh_and_textures(bpy.context, obj)
     obj.modifiers.clear()
-    after = render_normal(obj, tmp_path / "after.exr", (0, -1, 0), with_uv_coverage=True)
+    after = render_material(obj, tmp_path / "after.exr", (0, -1, 0), with_uv_coverage=True)
     np.testing.assert_array_equal(before[1], after[1])
     visible = binary_erosion(before[1] == 1, iterations=3)
     errors = np.linalg.norm(before[0][visible, :3] - after[0][visible, :3], axis=-1)
     assert len(errors) and np.quantile(errors, .95) < .04
-    assert layer.inputs["Normal Scale"].default_value == pytest.approx(strength)
+    assert not any(n.type == "GROUP" for n in obj.active_material.node_tree.nodes)
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
 
 
@@ -173,8 +175,14 @@ def test_four_conversions_support_undo_redo(image_object):
         bpy.ops.ed.undo_push(message="Before conversion")
         assert bpy.ops.anyimage.bake_mesh("EXEC_DEFAULT", True) == {"FINISHED"}
         assert "o_image_object" not in bpy.data.objects[name]
+        roughness_name = "Color_roughness.png"
+        roughness_pixels = image_pixels(bpy.data.images[roughness_name]).copy()
+        assert not any(n.type == "GROUP" for n in bpy.data.objects[name].active_material.node_tree.nodes)
         converted_pixels = {name: image_pixels(bpy.data.images[name]).copy() for name in image_names}
         assert bpy.ops.ed.undo() == {"FINISHED"}
+        assert roughness_name not in bpy.data.images
+        assert any(n.type == "GROUP" and n.node_tree.name == "O Image Layer"
+                   for n in bpy.data.objects[name].active_material.node_tree.nodes)
         assert len(bpy.data.objects[name].modifiers) == len(names) + 1
         assert bpy.data.objects[name]["o_image_object"] is True
         if depth_name:
@@ -182,6 +190,8 @@ def test_four_conversions_support_undo_redo(image_object):
         for image_name in image_names:
             np.testing.assert_array_equal(image_pixels(bpy.data.images[image_name]), original_pixels[image_name])
         assert bpy.ops.ed.redo() == {"FINISHED"}
+        np.testing.assert_array_equal(image_pixels(bpy.data.images[roughness_name]), roughness_pixels)
+        assert not any(n.type == "GROUP" for n in bpy.data.objects[name].active_material.node_tree.nodes)
         assert [m.name for m in bpy.data.objects[name].modifiers] == names
         assert "o_image_object" not in bpy.data.objects[name]
         if depth_name:
@@ -238,12 +248,11 @@ def test_conversion_failure_keeps_depth(image_object, monkeypatch):
 
 
 @pytest.mark.parametrize("image_object", ["PLANE", "PANORAMA"], indirect=True)
-def test_geometry_only_bake_preserves_animated_color_sampling(image_object):
+def test_geometry_only_bake_rejects_animated_color(image_object):
     obj, _kind, color, normal = image_object
-    if normal is not None:
-        nodes = obj.active_material.node_tree.nodes
-        nodes.remove(next(n for n in nodes if n.type == "TEX_IMAGE" and n.image == normal))
-        next(n for n in nodes if n.type == "GROUP").inputs["Object Space"].default_value = False
+    from nodes.O_AnyImage.O_AnyImage.shader.o_shadeless import OShadeless
+    OShadeless.create_group()
+    obj.data.materials[0] = create_image_material(color, color, shadeless=True)
     node = next(n for n in obj.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
     color.source = "SEQUENCE"
     node.interpolation = "Closest"
@@ -251,12 +260,14 @@ def test_geometry_only_bake_preserves_animated_color_sampling(image_object):
     node.projection = "BOX"
     before = tuple(color.size)
     operator = SimpleNamespace(report=Mock())
-    assert BakeMesh.execute(operator, bpy.context) == {"FINISHED"}
+    original_mesh = obj.data
+    assert BakeMesh.execute(operator, bpy.context) == {"CANCELLED"}
     assert node.image == color and tuple(color.size) == before
     assert color.source == "SEQUENCE"
     assert (node.interpolation, node.extension, node.projection) == ("Closest", "CLIP", "BOX")
-    assert "o_image_object" not in obj
-    operator.report.assert_not_called()
+    assert obj.data == original_mesh and obj["o_image_object"]
+    operator.report.assert_called_once()
+
 
 
 @pytest.mark.parametrize("image_object", ["PLANE"], indirect=True)

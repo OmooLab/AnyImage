@@ -1,4 +1,4 @@
-"""Copy complete source images into regular surface tiles."""
+"""Arrange complete images into surface tiles."""
 
 import numpy as np
 

@@ -276,6 +276,37 @@ class ClipboardImageTest(BlenderTestCase):
             shadeless=False,
         )
 
+    def test_replacement_hides_creation_options(self):
+        operator = self.clipboard_image.PasteClipboardImage()
+        operator.paste_target = "PLANE"
+        operator.import_as = "PLANE"
+        operator.is_replacement = True
+        operator.layout = Mock()
+        operator.draw(None)
+        operator.layout.prop.assert_not_called()
+        operator.is_replacement = False
+        operator.draw(None)
+        self.assertEqual(operator.layout.prop.call_count, 2)
+
+    def test_empty_clipboard_leaves_selected_target_untouched(self):
+        operator = self.clipboard_image.PasteClipboardImage()
+        operator.paste_target = "PLANE"
+        with (
+            patch.object(self.clipboard_image, "read_clipboard_image",
+                         side_effect=self.clipboard.ClipboardImageUnavailable),
+            patch.object(self.clipboard_image, "replacement_for_context") as resolve,
+            patch.object(self.clipboard_image, "acquire_packed_image") as acquire,
+        ):
+            self.assertEqual(operator.execute(self.make_context("VIEW_3D")), {"PASS_THROUGH"})
+        resolve.assert_not_called()
+        acquire.assert_not_called()
+
+    def test_replacement_operator_remains_registered_with_undo(self):
+        operator = self.clipboard_image.PasteClipboardImage
+        self.assertEqual(self.anyimage.CLASSES.count(operator), 1)
+        self.assertIn("UNDO", operator.bl_options)
+        self.assertEqual(operator.__annotations__["is_replacement"]["options"], {"HIDDEN", "SKIP_SAVE"})
+
     def test_image_plane_requires_object_mode(self):
         context = SimpleNamespace(mode="EDIT_MESH")
         image = SimpleNamespace(size=(100, 100))
@@ -351,7 +382,7 @@ class ClipboardImageTest(BlenderTestCase):
     def test_sets_and_reuses_stencil_brush_texture(self):
         textures = FakeTextures()
         original_data = self.actions.bpy.data
-        self.actions.bpy.data = SimpleNamespace(textures=textures)
+        self.actions.bpy.data = SimpleNamespace(textures=textures, images=SimpleNamespace(remove=Mock()))
         brush = SimpleNamespace(
             is_editable=True,
             texture=None,
@@ -372,11 +403,12 @@ class ClipboardImageTest(BlenderTestCase):
         )
         try:
             with (
-                patch.object(self.actions, "image_content_state", return_value={}),
-                patch.object(self.actions, "configure_material_color_image") as configure,
+                patch.object(self.actions, "image_content_state", return_value={"filepath": ""}),
+                patch.object(self.actions, "replace_image_content"),
+                patch.object(self.actions, "create_normalized_color_image") as configure,
             ):
                 first_texture = self.actions.set_tool_texture(context, image)
-                configure.assert_called_once_with(image, context.scene)
+                configure.assert_called_once_with(image)
                 second_texture = self.actions.set_tool_texture(context, image)
         finally:
             self.actions.bpy.data = original_data

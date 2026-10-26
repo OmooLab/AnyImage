@@ -2,10 +2,11 @@ import bpy
 
 from .actions import (
     BrushPreviewError,
-    PasteTargetError,
     acquire_packed_image,
     paste_image,
     paste_location,
+    replacement_for_context,
+    replace_pasted_image,
     target_for_context,
 )
 from .clipboard import (
@@ -58,6 +59,10 @@ class PasteClipboardImage(bpy.types.Operator):
         default=False,
         options={"HIDDEN", "SKIP_SAVE"},
     )
+    is_replacement: bpy.props.BoolProperty(
+        default=False,
+        options={"HIDDEN", "SKIP_SAVE"},
+    )
 
     @classmethod
     def poll(cls, context):
@@ -78,7 +83,7 @@ class PasteClipboardImage(bpy.types.Operator):
         return self._paste(context, event)
 
     def draw(self, _context):
-        if self.paste_target != "PLANE":
+        if self.is_replacement or self.paste_target != "PLANE":
             return
         self.layout.prop(self, "import_as")
         if self.import_as == "PLANE":
@@ -98,33 +103,45 @@ class PasteClipboardImage(bpy.types.Operator):
 
         image = None
         image_reused = False
+        replacement = None
+        paste_succeeded = False
         try:
+            replacement = replacement_for_context(context)
+            self.is_replacement = replacement is not None
             image, image_reused = acquire_packed_image(image_data, suffix)
-            location = None
-            if self.location_set:
-                location = self.location
-                if self.paste_target == "NODE":
-                    location = location[:2]
-            paste_image(
-                context,
-                image,
-                event,
-                location=location,
-                import_as=self.import_as,
-                shadeless=self.shadeless,
-            )
+            if replacement is not None:
+                replace_pasted_image(context, replacement, image)
+            else:
+                location = None
+                if self.location_set:
+                    location = self.location
+                    if self.paste_target == "NODE":
+                        location = location[:2]
+                paste_image(
+                    context,
+                    image,
+                    event,
+                    location=location,
+                    import_as=self.import_as,
+                    shadeless=self.shadeless,
+                )
+            paste_succeeded = True
         except BrushPreviewError as error:
             self.report({"WARNING"}, str(error))
             return {"FINISHED"}
-        except (OSError, RuntimeError, PasteTargetError) as error:
-            if image is not None and not image_reused and image.users == 0:
-                bpy.data.images.remove(image)
+        except (OSError, RuntimeError, ValueError, TypeError) as error:
             self.report({"ERROR"}, bpy.app.translations.pgettext_rpt(
                 "Unable to paste clipboard image: {error}"
             ).format(error=bpy.app.translations.pgettext_rpt(str(error))))
             return {"CANCELLED"}
+        finally:
+            if (image is not None and not image_reused and image.users == 0
+                    and (replacement is not None or not paste_succeeded)
+                    and (replacement is None or image != replacement.image)):
+                bpy.data.images.remove(image)
 
+        name = replacement.image.name if replacement is not None else image.name
         self.report({"INFO"}, bpy.app.translations.pgettext_rpt(
-            "Pasted and packed {name}"
-        ).format(name=image.name))
+            "Replaced and packed {name}" if replacement is not None else "Pasted and packed {name}"
+        ).format(name=name))
         return {"FINISHED"}

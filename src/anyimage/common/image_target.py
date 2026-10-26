@@ -81,13 +81,19 @@ def image_edit_owner(context):
 
 
 def owner_image(owner):
-    """Return the Image assigned to an image Empty or texture node."""
-    return owner.data if is_image_empty(owner) else owner.image
+    """Return the Image assigned to an Empty, texture or image node input."""
+    if is_image_empty(owner):
+        return owner.data
+    if hasattr(owner, "image"):
+        return owner.image
+    inputs = getattr(owner, "inputs", None)
+    socket = inputs.get("Image") if inputs is not None else None
+    return getattr(socket, "default_value", None)
 
 
 def has_other_image_user(owner):
     """Check actual Image references, excluding editor display and Fake User."""
-    tree = None if is_image_empty(owner) else owner.id_data
+    tree = owner.id_data if hasattr(owner, "inputs") else None
     image = owner_image(owner)
     for user in bpy.data.user_map(subset={image})[image]:
         if isinstance(user, bpy.types.Screen):
@@ -96,7 +102,7 @@ def has_other_image_user(owner):
             continue
         if tree is not None and (user == tree or getattr(user, "node_tree", None) == tree):
             if any(
-                other != owner and getattr(other, "image", None) == image
+                other != owner and owner_image(other) == image
                 for other in tree.nodes
             ):
                 return True

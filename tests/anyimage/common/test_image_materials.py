@@ -234,7 +234,7 @@ def test_shared_conversion_images_use_blender_duplicate_suffix():
 
 def test_panorama_normal_encoding_matches_image_layer_object_axes(tmp_path):
     from mathutils import Vector
-    from tests.support.mesh_bake import render_normal
+    from tests.support.mesh_bake import render_material
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     expected = np.array((0.2, -0.3, 0.9))
@@ -253,7 +253,7 @@ def test_panorama_normal_encoding_matches_image_layer_object_axes(tmp_path):
     bpy.context.collection.objects.link(obj)
     obj.rotation_euler = (0.2, 0.1, 0.4)
     bpy.context.view_layer.update()
-    pixels = render_normal(obj, tmp_path / "normal.exr", (0, 0, 1))
+    pixels = render_material(obj, tmp_path / "normal.exr", (0, 0, 1))
     actual = pixels[24:40, 24:40, :3] * 2 - 1
     rotated = np.array(obj.matrix_world.to_3x3() @ Vector(expected))
     np.testing.assert_allclose(actual, np.broadcast_to(rotated, actual.shape), atol=1e-5)

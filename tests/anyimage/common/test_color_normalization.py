@@ -1,7 +1,5 @@
 """Verify inverse evaluation, fixed color mapping, and in-place image ownership."""
 
-from types import SimpleNamespace
-
 import bpy
 import numpy as np
 import pytest
@@ -10,7 +8,6 @@ from PIL import Image
 from anyimage.common import color_image, image as images, material
 from anyimage.common.color_space import normalize_color_rgba, srgb_to_linear_rgb
 from anyimage.common.job_image import load_image_edit_result
-from anyimage.operators.clipboard_image import actions
 
 
 @pytest.fixture
@@ -205,49 +202,14 @@ def test_failed_decode_restores_content_and_releases_resources(source, monkeypat
     assert (set(bpy.data.images), set(bpy.data.scenes)) == resources
 
 
-@pytest.mark.parametrize("mode", ["SCULPT", "PAINT_TEXTURE", "PAINT_VERTEX"])
-def test_brush_normalization_invalidates_original_clipboard_cache(source, mode, monkeypatch):
-    source.pack()
-    source[actions.CLIPBOARD_HASH_PROPERTY] = "original"
-    baseline = actions._clipboard_content_hash(source)
-    source[actions.CLIPBOARD_CONTENT_PROPERTY] = baseline
-    brush = SimpleNamespace(
-        texture=None, texture_slot=SimpleNamespace(texture=None, map_mode="VIEW_PLANE"),
-        stencil_dimension=(256, 256), update_tag=lambda: None,
-    )
-    context = SimpleNamespace(mode=mode, brush=brush, scene=bpy.context.scene)
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: False)
-    monkeypatch.setattr(actions, "_set_brush_preview", lambda *args: None)
-    texture = actions.set_tool_texture(context, source)
-    assert texture.image == source
-    assert source[images.COLOR_NORMALIZED_PROPERTY]
-    assert source[actions.CLIPBOARD_CONTENT_PROPERTY] == baseline
-    assert actions._find_packed_clipboard_image("original") is None
-    before = images.image_pixels(source)
-    assert actions.set_tool_texture(context, source) == texture
-    np.testing.assert_array_equal(images.image_pixels(source), before)
-
-
-def test_brush_failure_rolls_back_normalized_image_and_binding(source, monkeypatch):
-    source.pack()
-    before = images.image_pixels(source)
-    packed = bytes(source.packed_file.data)
-
-    def fail():
-        raise RuntimeError("Brush failed")
-
-    brush = SimpleNamespace(
-        texture=None, texture_slot=SimpleNamespace(texture=None, map_mode="VIEW_PLANE"),
-        stencil_dimension=(256, 256), update_tag=fail,
-    )
-    context = SimpleNamespace(brush=brush, scene=bpy.context.scene)
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: False)
-    textures = set(bpy.data.textures)
-    with pytest.raises(actions.PasteTargetError, match="Brush failed"):
-        actions.set_tool_texture(context, source)
-    np.testing.assert_array_equal(images.image_pixels(source), before)
-    assert bytes(source.packed_file.data) == packed
-    assert not source.get(images.COLOR_NORMALIZED_PROPERTY)
-    assert brush.texture is None and brush.texture_slot.texture is None
-    assert brush.texture_slot.map_mode == "VIEW_PLANE"
-    assert set(bpy.data.textures) == textures
+def test_float_decode_preserves_hdr_values_and_matches_cycles(source):
+    image = bpy.data.images.new("HDR source", width=4, height=1, alpha=True, float_buffer=True)
+    image.colorspace_settings.name = "Linear Rec.709"
+    rgba = np.array([[[6, 2, 1, .5], [4, 4, 4, 1], [.2, .4, .8, 0], [1, 3, 5, .7]]], np.float32)
+    image.pixels.foreach_set(rgba.ravel())
+    decoded = color_image.decode_color_image(image, image.colorspace_settings.name)
+    np.testing.assert_allclose(decoded, rgba, atol=1e-6)
+    opaque = rgba.copy()
+    opaque[..., 3] = 1
+    image.pixels.foreach_set(opaque.ravel())
+    np.testing.assert_allclose(decoded[..., :3], bake_texture_colors(image), atol=1e-5)

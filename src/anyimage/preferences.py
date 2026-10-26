@@ -62,7 +62,7 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
 
     adapt_material_to_view_transform: bpy.props.BoolProperty(
         name="Compensate Image Colors",
-        description="Keep material and brush colors closer to the original image",
+        description="Keep material colors closer to the original image",
         default=False,
     )
 

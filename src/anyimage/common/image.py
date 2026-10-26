@@ -244,11 +244,12 @@ def require_conversion_source(operator):
 
 
 def image_content_state(image):
-    """Capture encoded content and unsaved pixels for an Image transaction."""
+    """Capture encoded content and pixels that must survive image reloading."""
     import numpy as np
 
     pixels = None
-    if image.is_dirty:
+    # Reloading float images can change color and alpha representation.
+    if image.is_dirty or image.is_float:
         pixels = np.empty(len(image.pixels), dtype=np.float32)
         image.pixels.foreach_get(pixels)
     return {
@@ -299,6 +300,33 @@ def restore_image_content(image, state):
             image.scale(*state["size"])
         image.pixels.foreach_set(state["pixels"])
         image.update()
+    refresh_image_content(image)
+
+
+def replace_image_content(image, result):
+    """Write packed result pixels while retaining the destination ID and path."""
+    filepath = image.filepath_raw
+    if result.is_float != image.is_float:
+        image.source = "GENERATED"
+        image.use_generated_float = result.is_float
+    image.colorspace_settings.name = result.colorspace_settings.name
+    image.alpha_mode = result.alpha_mode
+    image.file_format = result.file_format
+    image.filepath_raw = filepath
+    if result.get(COLOR_NORMALIZED_PROPERTY):
+        image[COLOR_NORMALIZED_PROPERTY] = True
+    elif COLOR_NORMALIZED_PROPERTY in image:
+        del image[COLOR_NORMALIZED_PROPERTY]
+    if tuple(image.size) != tuple(result.size):
+        image.scale(*result.size)
+    image.pixels.foreach_set(image_pixels(result))
+    image.update()
+    image.pack()
+    refresh_image_content(image)
+
+
+def refresh_image_content(image):
+    """Invalidate previews and notify consumers after image content changes."""
     preview = image.preview
     if preview is not None:
         preview.reload()

@@ -110,3 +110,50 @@ def test_failed_clipboard_plane_placement_releases_created_data(clipboard, monke
         actions.add_image_plane(bpy.context, original)
     for name, items in before.items():
         assert set(getattr(bpy.data, name)) == items
+
+
+@pytest.mark.parametrize("same_input", [False, True])
+def test_replacement_invalidates_cache_without_exchanging_target(clipboard, same_input):
+    original, _ = actions.acquire_packed_image(clipboard, ".png")
+    original_pixels = images.image_pixels(original)
+    owner = bpy.data.objects.new("Reference", None)
+    owner.empty_display_type = "IMAGE"
+    owner.data = original
+    bpy.context.collection.objects.link(owner)
+    if same_input:
+        incoming = original
+    else:
+        incoming = bpy.data.images.new("Incoming", width=1, height=3, alpha=True)
+        incoming.pixels[:] = [0, 1, 0, 1] * 3
+        incoming.pack()
+    expected = images.image_pixels(incoming)
+    target = actions.ClipboardImageTarget(original, owner)
+    actions.replace_pasted_image(SimpleNamespace(), target, incoming)
+    assert owner.data == original and original.packed_file
+    assert actions.CLIPBOARD_HASH_PROPERTY not in original
+    assert actions.CLIPBOARD_CONTENT_PROPERTY not in original
+    np.testing.assert_array_equal(images.image_pixels(original), expected)
+    pasted, reused = actions.acquire_packed_image(clipboard, ".png")
+    assert pasted != original and not reused
+    np.testing.assert_array_equal(images.image_pixels(pasted), original_pixels)
+    np.testing.assert_array_equal(images.image_pixels(original), expected)
+
+
+def test_shared_cached_target_keeps_original_cache_and_creates_independent_result(clipboard):
+    original, _ = actions.acquire_packed_image(clipboard, ".png")
+    owner = bpy.data.objects.new("Selected", None)
+    owner.empty_display_type = "IMAGE"
+    owner.data = original
+    other = owner.copy()
+    bpy.context.collection.objects.link(owner)
+    bpy.context.collection.objects.link(other)
+    pixels = images.image_pixels(original)
+    baseline = original[actions.CLIPBOARD_CONTENT_PROPERTY]
+    target = actions.ClipboardImageTarget(original, owner)
+    actions.replace_pasted_image(SimpleNamespace(), target, original)
+    assert target.image == owner.data and target.image != original
+    assert other.data == original and original[actions.CLIPBOARD_CONTENT_PROPERTY] == baseline
+    assert actions.acquire_packed_image(clipboard, ".png") == (original, True)
+    assert actions.CLIPBOARD_HASH_PROPERTY not in target.image
+    np.testing.assert_array_equal(images.image_pixels(original), pixels)
+    np.testing.assert_array_equal(images.image_pixels(target.image), pixels)

@@ -39,10 +39,10 @@ def open_image(path):
             opened.close()
 
 
-class TaskCancelled(RuntimeError):
+class JobCancelled(RuntimeError):
     pass
 
 
 def check_cancelled(cancel_check):
     if cancel_check is not None and cancel_check():
-        raise TaskCancelled("Task cancelled")
+        raise JobCancelled("Job cancelled")

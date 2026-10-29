@@ -114,7 +114,7 @@ class AnyImagePreferences(SharedPreferences):
     storage_root: bpy.props.StringProperty(
         name="Server Root Folder",
         description=(
-            "Choose where AnyImage stores its AI environment, downloaded models, and task files."
+            "Choose where AnyImage stores its AI environment, downloaded models, and job files."
         ),
         subtype="DIR_PATH",
         options={"HIDDEN"},

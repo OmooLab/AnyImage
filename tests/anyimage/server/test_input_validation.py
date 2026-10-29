@@ -66,7 +66,7 @@ def test_animated_png_is_rejected(media, tmp_path):
             pytest.fail("Animated images must not reach processing")
 
 
-def test_ai_tasks_support_cooperative_cancellation(media):
-    with pytest.raises(media.TaskCancelled):
+def test_ai_jobs_support_cooperative_cancellation(media):
+    with pytest.raises(media.JobCancelled):
         media.check_cancelled(lambda: True)
     media.check_cancelled(lambda: False)

@@ -95,7 +95,7 @@ def infer(session, image, cancel_check=None, *, release_memory=True, tile_border
         for left in range(0, width, core_size):
             core_width = min(core_size, width - left)
             if cancel_check is not None and cancel_check():
-                raise RuntimeError("Task cancelled")
+                raise RuntimeError("Job cancelled")
             tile = Image.fromarray(
                 padded[top : top + TILE_SIZE, left : left + TILE_SIZE],
                 mode="RGB",

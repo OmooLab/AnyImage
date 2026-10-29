@@ -92,14 +92,14 @@ class ServerPanel(bpy.types.Panel):
             .get("loaded", {})
         )
         slots = tuple(
-            (cached.get(family), task)
-            for family, task in (
+            (cached.get(family), job)
+            for family, job in (
                 ("geometry", "Generate Depth Map"),
                 ("background", "Remove Background"),
                 ("upscale", "Upscale Image"),
             )
         )
-        has_loaded_models = any(name for name, _task in slots)
+        has_loaded_models = any(name for name, _job in slots)
         cached_row = layout.row(align=True)
         cached_row.label(text="Models Loaded")
         if has_loaded_models:
@@ -111,14 +111,14 @@ class ServerPanel(bpy.types.Panel):
                 icon="TRASH",
             )
         cached_list = layout.column(align=True)
-        for name, task in slots:
+        for name, job in slots:
             slot = cached_list.row(align=True)
             model = DOWNLOADABLE_MODELS.get(name)
             tier = model.tier if model is not None else None
             slot.label(
-                text=bpy.app.translations.pgettext_iface("{task}  [ {tier} ]").format(
-                    task=bpy.app.translations.pgettext_iface(task), tier=tier,
-                ) if tier else bpy.app.translations.pgettext_iface(task),
+                text=bpy.app.translations.pgettext_iface("{job}  [ {tier} ]").format(
+                    job=bpy.app.translations.pgettext_iface(job), tier=tier,
+                ) if tier else bpy.app.translations.pgettext_iface(job),
                 translate=False,
                 icon="RADIOBUT_ON" if name else "RADIOBUT_OFF",
             )

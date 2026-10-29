@@ -239,7 +239,7 @@ class JobServerTest(ServerTestCase):
         self.assertEqual(events, ["clear", "close"])
 
 
-    def test_server_registers_tasks_instead_of_model_names(self):
+    def test_server_registers_jobs_instead_of_model_names(self):
         server = self.create_server()
         self.assertEqual(
             set(server.handlers),

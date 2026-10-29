@@ -1,6 +1,6 @@
 from .input import (
     IMAGE_SUFFIXES,
-    TaskCancelled,
+    JobCancelled,
     check_cancelled,
 )
 
@@ -16,7 +16,7 @@ from .resolution import (
 
 __all__ = (
     "IMAGE_SUFFIXES",
-    "TaskCancelled",
+    "JobCancelled",
     "check_cancelled",
     "DEFAULT_MAX_AI_INPUT_SIZE",
     "MAX_MAX_AI_INPUT_SIZE",

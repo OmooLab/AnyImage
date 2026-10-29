@@ -127,7 +127,7 @@ class UpscaleImage(JobOperatorBase, bpy.types.Operator):
     def response(self, _context, result):
         apply_image_result(self._image_target, result.file("upscale"))
         model_label = upscale_model_label(self.model)
-        return f"Image is upscaled with {model_label}"
+        return bpy.app.translations.pgettext_iface("Image is upscaled with {model}").format(model=model_label)
 
     def cleanup(self):
         cleanup_image_input(self.input_path, self.delete_input)

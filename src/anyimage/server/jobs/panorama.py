@@ -34,7 +34,11 @@ def run(context, parameters):
         session = None
         for index, basis in enumerate(bases):
             context.check_cancelled()
-            context.progress(0.05 + 0.65 * index / len(bases), f"Generating panorama view {index + 1}/12")
+            context.progress(
+                0.05 + 0.65 * index / len(bases),
+                "Generating panorama view {index}/{total}",
+                index=index + 1, total=len(bases),
+            )
             directions = rays @ basis
             alpha = sample_panorama(image[..., 3], directions, order=0)
             visible = alpha > 0

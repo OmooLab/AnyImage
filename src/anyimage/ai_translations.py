@@ -1,69 +1,10 @@
-"""Native Blender UI translations, keyed by English source messages."""
-
-import re
-from string import Formatter
-
-import bpy
+"""AnyImage business translations registered with Blender."""
 
 from .translations import _ZH_HANS as SHARED_MESSAGES
 
 
-# BlendJob transports formatted strings. Match only known progress templates,
-# retaining model names, speeds and counts verbatim at the Blender UI boundary.
-_PROGRESS_TEMPLATES = (
-    "Generating panorama view {index}/{total}",
-    "Starting {model} download",
-    "Downloading packages (mirror) {count}",
-    "Downloading packages {count}",
-    "Downloading {item} (mirror) {rate}",
-    "Downloading {item} (mirror)",
-    "Downloading {item}",
-    "Loading {model}",
-    "{model} ready",
-    "Background removed in {inference} ms (model load {load} ms, total {total} ms)",
-    "Image is upscaled with {model}",
-)
-_PROGRESS_PATTERNS = tuple(
-    (
-        re.compile(
-            "".join(
-                re.escape(literal) + (f"(?P<{field}>.+)" if field else "")
-                for literal, field, _spec, _conversion in Formatter().parse(template)
-            )
-        ),
-        template,
-    )
-    for template in _PROGRESS_TEMPLATES
-)
-
-
-def translate_progress(message):
-    """Translate known status messages without changing the server protocol."""
-    translated = bpy.app.translations.pgettext_iface(message)
-    if translated != message:
-        return translated
-    phase = re.fullmatch(r"(\d+/\d+) (.+)", message)
-    if phase:
-        return f"{phase[1]} {translate_progress(phase[2])}"
-    for pattern, template in _PROGRESS_PATTERNS:
-        match = pattern.fullmatch(message)
-        if match:
-            return bpy.app.translations.pgettext_iface(template).format(**match.groupdict())
-    return message
-
-
 _ZH_HANS = {
     **SHARED_MESSAGES,
-    "Server": "服务器",
-    "Panorama": "立体全景",
-    "Panorama Light Probe": "全景光照探针",
-    "Maximum Distance per Direction (m)": "单向最大距离（m）",
-    "Create and bake a light probe volume from the panorama": "从全景创建并烘焙体积光照探针",
-    "Maximum distance from the panorama origin in each direction, in meters": "从全景原点向各方向延伸的最大距离，单位为米",
-    "Panorama has no valid light probe region": "全景没有有效的光照探针区域",
-    "Panorama light probe bake cancelled": "全景光照探针烘焙已取消",
-    "Task queued": "任务已排队",
-    "Cancelling task": "正在取消任务",
     "Panorama is ready": "全景已就绪",
     "Depth Plane is ready": "凹凸面已就绪",
     "Relief is ready": "浮雕已就绪",
@@ -72,34 +13,18 @@ _ZH_HANS = {
     "Depth Symmetry is ready": "对称凹凸已就绪",
     "Depth Solid is ready": "凹凸体块已就绪",
     "Image background is removed": "图像背景已移除",
+    "Image is upscaled with {model}": "已使用 {model} 生成2倍高清图像",
+    "Models unloaded": "模型已卸载",
+    "Server": "服务器",
+    "Panorama": "立体全景",
+    "Panorama Light Probe": "全景光照探针",
+    "Maximum Distance per Direction (m)": "单向最大距离（m）",
+    "Create and bake a light probe volume from the panorama": "从全景创建并烘焙体积光照探针",
+    "Maximum distance from the panorama origin in each direction, in meters": "从全景原点向各方向延伸的最大距离，单位为米",
+    "Panorama has no valid light probe region": "全景没有有效的光照探针区域",
+    "Panorama light probe bake cancelled": "全景光照探针烘焙已取消",
     "Panorama input cropped from {width} x {height} to {crop_width} x {crop_height}": "全景输入已从 {width} x {height} 裁剪为 {crop_width} x {crop_height}",
     "Image long edge must be smaller than Maximum AI Input Size ({size} px)": "图像最长边必须小于处理分辨率上限（{size} 像素）",
-    "Ready": "就绪",
-    "Starting task": "正在启动任务",
-    "Task complete": "任务已完成",
-    "Task cancelled": "任务已取消",
-    "Task failed": "任务失败",
-    "Preparing Server": "正在准备服务器",
-    "Migrating Server": "正在迁移文件夹",
-    "Stopping Server": "正在停止服务器",
-    "Saving Server location": "正在保存服务器位置",
-    "Server is ready": "服务器已就绪",
-    "Server migration completed": "文件夹迁移已完成",
-    "Migrating Server files": "正在迁移文件夹中的文件",
-    "Removing the old Server folder": "正在移除旧服务器文件夹",
-    "Installing environment": "正在安装运行环境",
-    "Starting installation ...": "正在开始安装…",
-    "Starting uv download ...": "正在开始下载 uv…",
-    "Installing uv ...": "正在安装 uv…",
-    "Checking Python ...": "正在检查 Python…",
-    "Installing Python ...": "正在安装 Python…",
-    "Resolving packages ...": "正在解析依赖包…",
-    "Resolving packages (mirror) ...": "正在通过镜像解析依赖包…",
-    "Installing packages ...": "正在安装依赖包…",
-    "Verifying installation ...": "正在验证安装…",
-    "Environment installation failed": "运行环境安装失败",
-    "Downloading packages {count}": "正在下载依赖包 {count}",
-    "Downloading packages (mirror) {count}": "正在通过镜像下载依赖包 {count}",
     "Starting required model downloads": "正在开始下载所需模型",
     "Required models are ready": "所需模型已就绪",
     "Preparing depth conversion": "正在准备深度转换",
@@ -115,7 +40,6 @@ _ZH_HANS = {
     "Preparing upscale input": "正在准备2倍高清输入图像",
     "Upscaling image": "正在生成2倍高清图像",
     "Image upscale complete": "2倍高清已完成",
-    "Image is upscaled with {model}": "已使用 {model} 生成2倍高清图像",
     "Starting image background removal": "正在启动背景移除",
     "Starting Environment": "正在启动运行环境",
     "Removing background": "正在移除背景",
@@ -126,27 +50,17 @@ _ZH_HANS = {
     "Starting {model} download": "正在开始下载 {model}",
     "Downloading {item} (mirror) {rate}": "正在通过镜像下载 {item} {rate}",
     "Downloading {item} (mirror)": "正在通过镜像下载 {item}",
+    "Downloading {item} {rate}": "正在下载 {item} {rate}",
     "Downloading {item}": "正在下载 {item}",
     "Loading {model}": "正在加载 {model}",
     "{model} ready": "{model} 已就绪",
     "Background removed in {inference} ms (model load {load} ms, total {total} ms)": "背景移除耗时 {inference} 毫秒（模型加载 {load} 毫秒，总计 {total} 毫秒）",
-    "Delete Files": "删除文件",
-    "Permanently delete job outputs and logs.": "永久删除任务输出和日志。",
-    "No unused job files to clear": "没有可清理的闲置任务文件",
     "Choose a Server Location": "请选择服务器位置",
     "Choose a location with a regular .anyimage directory": "请选择包含普通 .anyimage 目录的位置",
     "Install the AnyImage Environment first": "请先安装「任意图！」运行环境",
     "Online Access is disabled in Blender Preferences": "Blender 偏好设置中已禁用网络访问",
     "Panorama conversion requires a static image": "全景转换需要静态图像",
     "Not enough memory to prepare the HDR image": "内存不足，无法准备 HDR 图像",
-    "Set Up Server": "设置服务器",
-    "Migrate Server": "迁移文件夹",
-    "Clear Job Files": "清理任务文件",
-    "Cancel Job": "取消任务",
-    "Start Server": "启动服务器",
-    "Stop Server": "停止服务器",
-    "Restart Server": "重启服务器",
-    "Open Server Log": "打开服务器日志",
     "Remove backgrounds at 1024 px processing resolution while preserving soft, semi-transparent edges.": "以 1024 像素处理分辨率移除背景，保留柔和的半透明边缘。",
     "Remove backgrounds from general images while preserving foreground transparency.": "移除普通图像的背景，保留前景透明度。",
     "Enlarge images to twice their width and height with fast, restrained detail enhancement.": "将图像的宽高放大至两倍，快速、适度地增强细节。",
@@ -164,14 +78,11 @@ _ZH_HANS = {
     "AI Server": "AI 服务器",
     "Danger Zone": "危险操作",
     "Models Loaded": "已加载 AI 模型",
-    "Environment is not installed": "尚未安装运行环境",
     "Set Up AI Server…": "设置 AI 服务器…",
     "Download Required Models…": "下载所需模型…",
     "Unload": "卸载",
     "Running": "运行中",
     "Running (Busy)": "运行中（忙碌）",
-    "Starting": "启动中",
-    "Stopped": "已停止",
     "Compensate for the scene's view transform when creating materials to keep colors close to the source image. To view materials, switch the viewport to Material Preview or Rendered mode.": "创建材质时补偿场景的视图变换，使色彩接近原图。请切换到材质预览或渲染模式查看材质。",
     "Server Root Folder": "服务器根目录",
     "Choose where AnyImage stores its AI environment, downloaded models, and job files.": "选择「任意图！」存放 AI 环境、已下载模型和任务文件的位置。",
@@ -207,9 +118,7 @@ _ZH_HANS = {
     "Download Required Models": "下载所需模型",
     "Unload Models": "卸载模型",
     "Free memory used by AI models to keep viewport and rendering responsive": "释放 AI 模型占用的内存，保持视口和渲染流畅",
-    "Server Location": "服务器位置",
     "Choose .anyimage, a folder inside it, or a parent folder for a new installation": "选择 .anyimage 文件夹、其内部文件夹，或用于新安装的父文件夹",
-    "Use China Mirror": "使用中国镜像",
     "Download Python and packages from China mirrors": "从中国镜像下载 Python 和依赖包",
     "Continue": "继续",
     "AI environment installed.": "AI 环境已安装。",

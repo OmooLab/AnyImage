@@ -151,7 +151,9 @@ class DownloadModel(JobOperatorBase, bpy.types.Operator):
             raise RuntimeError("Online Access is disabled in Blender Preferences")
         model = model_record(self.model)
         label = model["label"] if model else self.model
-        self.starting_message = f"Starting {label} download"
+        self.starting_message = bpy.app.translations.pgettext_iface(
+            "Starting {model} download"
+        ).format(model=label)
         return {"model": self.model}
 
 

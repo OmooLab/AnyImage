@@ -135,8 +135,8 @@ class ModelManager:
         total = len(missing)
         for index, model_key in enumerate(missing):
 
-            def report(value, message, *, offset=index):
-                context.progress((offset + value) / total, message)
+            def report(value, message, *, offset=index, **message_args):
+                context.progress((offset + value) / total, message, **message_args)
 
             self._download(context, model_key, report)
         return {"downloaded": missing}

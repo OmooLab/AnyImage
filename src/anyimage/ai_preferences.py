@@ -196,7 +196,7 @@ class AnyImagePreferences(SharedPreferences):
         else:
             migrate_row = location_row.row(align=True)
             migrate_row.enabled = not runtime.server_busy()
-            migrate_row.operator("anyimage.migrate_server", icon="FILE_FOLDER")
+            migrate_row.operator("anyimage.migrate_folder", icon="FILE_FOLDER")
             server.label(text="Installed", icon="CHECKMARK")
 
         if status["environment_ready"]:

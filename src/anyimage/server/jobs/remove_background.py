@@ -22,7 +22,7 @@ def run(context, parameters):
         raise ValueError(f"Unknown background removal output: {output_kind}")
 
     input_path = validate_input_path(parameters["input"])
-    context.progress(0.12, f"Loading {parameters['model']}")
+    context.progress(0.12, "Loading {model}", model=parameters["model"])
     if output_kind == "alpha":
         import numpy as np
 
@@ -61,5 +61,9 @@ def run(context, parameters):
         f"(model load {load_ms:.0f} ms, total {total_ms:.0f} ms)"
     )
     context.log(message)
-    context.progress(1.0, message)
+    context.progress(
+        1.0,
+        "Background removed in {inference} ms (model load {load} ms, total {total} ms)",
+        inference=f"{inference_ms:.0f}", load=f"{load_ms:.0f}", total=f"{total_ms:.0f}",
+    )
     return {"alpha": "alpha.npy"} if output_kind == "alpha" else {"foreground": "foreground.png"}

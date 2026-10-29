@@ -4,6 +4,8 @@ from string import Formatter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from blendjob.translations import TRANSLATIONS as BLENDJOB_TRANSLATIONS
+
 from tests.support.blender import BlenderTestCase
 
 
@@ -29,11 +31,12 @@ class TranslationsTest(BlenderTestCase):
         layout.row.return_value = layout
         owner = SimpleNamespace(layout=layout)
         context = SimpleNamespace()
-        message = "Generating panorama view 3/12"
+        message = "Generating panorama view {index}/{total}"
+        args = {"index": 3, "total": 12}
         with patch.object(runtime, "active_job", object()), patch.object(runtime, "redraw_ui"):
-            runtime.update_ui(context, 0.25, message)
+            runtime.update_ui(context, 0.25, message, message_args=args)
             runtime._draw_status_bar(owner, context)
-            self.assertEqual(layout.progress.call_args.kwargs["text"], message)
+            self.assertEqual(layout.progress.call_args.kwargs["text"], "Generating panorama view 3/12")
             with patch.object(self.fake_bpy.app.translations, "pgettext_iface",
                               side_effect=lambda text: catalog.get(("*", text), text)):
                 runtime._draw_status_bar(owner, context)
@@ -41,35 +44,37 @@ class TranslationsTest(BlenderTestCase):
                                  {"factor": 0.25, "type": "BAR", "text": "正在生成全景视角 3/12"})
                 self.assertEqual(runtime._progress_message, message)
             runtime._draw_status_bar(owner, context)
-            self.assertEqual(layout.progress.call_args.kwargs["text"], message)
+            self.assertEqual(layout.progress.call_args.kwargs["text"], "Generating panorama view 3/12")
         layout.operator.assert_called_with("anyimage.cancel_job", text="", icon="X")
 
-    def test_progress_translates_installation_downloads_and_keeps_unknown_messages(self):
-        module = self.anyimage.ai_translations
-        catalog = module.TRANSLATIONS["zh_HANS"]
-        cases = {
-            "Upscaling image": "正在生成2倍高清图像",
-            "Generating depth texture": "正在生成深度纹理",
-            "Removing background": "正在移除背景",
-            "Preparing Cutout Selection": "正在准备立体裁切选区",
-            "3/3 Downloading packages (mirror) 4/10": "3/3 正在通过镜像下载依赖包 4/10",
-            "2/3 Installing Python ...": "2/3 正在安装 Python…",
-            "Downloading MoGe 2 (mirror) 1.2 MB/s": "正在通过镜像下载 MoGe 2 1.2 MB/s",
-            "Downloading HAT Sharper 2.5 MB/s": "正在下载 HAT Sharper 2.5 MB/s",
-            "Loading BEN2_BASE": "正在加载 BEN2_BASE",
-            "MoGe 2 ready": "MoGe 2 已就绪",
-            "Starting HAT Sharper download": "正在开始下载 HAT Sharper",
-            "Background removed in 123 ms (model load 45 ms, total 200 ms)":
-                "背景移除耗时 123 毫秒（模型加载 45 毫秒，总计 200 毫秒）",
-            "Image is upscaled with HAT Sharper": "已使用 HAT Sharper 生成2倍高清图像",
-            "Unknown diagnostic: {path} C:/models/model.onnx": "Unknown diagnostic: {path} C:/models/model.onnx",
-        }
-        for source, expected in cases.items():
-            with self.subTest(source=source):
-                self.assertEqual(module.translate_progress(source), source)
+    def test_runtime_uses_registered_business_and_builtin_translations(self):
+        from blendjob import JobRuntime
+        runtime = self.runtime.runtime
+        self.assertIs(type(runtime), JobRuntime)
+        business = self.anyimage.TRANSLATIONS["zh_HANS"]
+        builtin = BLENDJOB_TRANSLATIONS["zh_HANS"]
+        for source in ("Installing Python ...", "Preparing Server", "Migrate Folder", "Downloading packages {count}"):
+            self.assertNotIn(("*", source), business)
+            self.assertIn(("*", source), builtin)
+        catalog = {**builtin, **business}
+        cases = (
+            ("Removing background", {}, "正在移除背景"),
+            ("Generating panorama view {index}/{total}", {"index": 3, "total": 12}, "正在生成全景视角 3/12"),
+            ("Downloading {item} (mirror) {rate}", {"item": "MoGe 2", "rate": "1.2 MB/s"}, "正在通过镜像下载 MoGe 2 1.2 MB/s"),
+            ("Loading {model}", {"model": "Model {raw}"}, "正在加载 Model {raw}"),
+            ("Unknown {model}", {"model": "MoGe"}, "Unknown MoGe"),
+            ("Unknown diagnostic: {path}", {}, "Unknown diagnostic: {path}"),
+            ("Downloading packages (mirror) {count}", {"count": "4/10"}, "正在通过镜像下载依赖包 4/10"),
+        )
+        with patch.object(runtime, "redraw_ui"):
+            for source, args, expected in cases:
+                runtime.update_ui(SimpleNamespace(), 0.5, source, message_args=args)
                 with patch.object(self.fake_bpy.app.translations, "pgettext_iface",
                                   side_effect=lambda text: catalog.get(("*", text), text)):
-                    self.assertEqual(module.translate_progress(source), expected)
+                    self.assertEqual(runtime.message, expected)
+                if args:
+                    self.assertEqual(runtime.message, source.format(**args))
+                self.assertEqual(runtime._progress_message, source)
 
     def test_translations_preserve_format_fields(self):
         def fields(message):

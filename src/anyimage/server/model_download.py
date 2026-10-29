@@ -40,9 +40,10 @@ _download_opener = build_opener(ProxyHandler(), _ShortConnectHTTPSHandler())
 
 
 class DownloadProgressReporter:
-    def __init__(self, progress_callback, label, clock=time.monotonic):
+    def __init__(self, progress_callback, label, clock=time.monotonic, *, mirror=False):
         self.progress_callback = progress_callback
         self.label = label
+        self.mirror = mirror
         self.clock = clock
         self.progress = 0.05
         self.last_write_time = 0.0
@@ -61,8 +62,12 @@ class DownloadProgressReporter:
         self.progress = progress
         self.last_write_time = now
         elapsed = now - self.started_at
-        speed = f" {format_rate(current / elapsed)}" if elapsed > 0 else ""
-        self.progress_callback(progress, f"Downloading {self.label}{speed}")
+        message = "Downloading {item} (mirror)" if self.mirror else "Downloading {item}"
+        args = {"item": self.label}
+        if elapsed > 0:
+            message += " {rate}"
+            args["rate"] = format_rate(current / elapsed)
+        self.progress_callback(progress, message, **args)
 
 
 def download_model(model, model_dir, progress, cancel_check):
@@ -74,26 +79,27 @@ def download_model(model, model_dir, progress, cancel_check):
         sources.append((
             HF_ENDPOINT,
             lambda filename: hf_file_url(model.huggingface_repository, filename),
-            model.label,
+            False,
         ))
     sources.append((
         R2_ENDPOINT,
         lambda filename: r2_file_url(model.r2_directory, filename),
-        f"{model.label} (mirror)",
+        True,
     ))
     failures = []
-    for source, url_builder, label in sources:
+    for source, url_builder, mirror in sources:
         cancel_check()
-        progress(0.05, f"Downloading {label}")
+        message = "Downloading {item} (mirror)" if mirror else "Downloading {item}"
+        progress(0.05, message, item=model.label)
         try:
             _download_declared_files(
-                model.files, model_dir, url_builder, progress, cancel_check, label,
+                model.files, model_dir, url_builder, progress, cancel_check, model.label, mirror=mirror,
             )
         except Exception as error:
             cancel_check()
             failures.append((source, error))
             continue
-        progress(0.95, f"{model.label} ready")
+        progress(0.95, "{model} ready", model=model.label)
         return
     detail = "; ".join(f"{source}: {error}" for source, error in failures)
     raise RuntimeError(f"All download sources failed: {detail}")
@@ -154,8 +160,8 @@ def hf_file_url(repository, filename):
     return f"{endpoint}/{repository}/resolve/main/{quote(filename)}"
 
 
-def _download_declared_files(files, model_dir, url_builder, progress, cancel_check, label):
-    reporter = DownloadProgressReporter(progress, label)
+def _download_declared_files(files, model_dir, url_builder, progress, cancel_check, label, *, mirror=False):
+    reporter = DownloadProgressReporter(progress, label, mirror=mirror)
     total_size = sum(size for _path, size, _checksum in files)
     downloaded = 0
 

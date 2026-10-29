@@ -36,11 +36,11 @@ class FakeJobContext:
             raise KeyError(name)
         return self.models
 
-    def progress(self, progress, message, **details):
+    def progress(self, progress, message, **message_args):
         self.status = {
             "progress": progress,
             "message": message,
-            **details,
+            "message_args": message_args,
         }
 
     def log(self, message, *, level="INFO"):

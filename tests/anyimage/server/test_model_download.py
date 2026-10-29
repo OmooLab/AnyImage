@@ -23,16 +23,18 @@ def test_https_connection_bounds_connect_and_idle_read_time():
     assert connection.timeout is None
 
 
-def test_reports_aggregated_bytes_speed_and_throttles_intermediate_updates():
+@pytest.mark.parametrize("mirror", (False, True))
+def test_reports_aggregated_bytes_speed_and_throttles_intermediate_updates(mirror):
     times = iter((0.0, 1.0, 1.1, 1.15))
     reports = []
-    reporter = download.DownloadProgressReporter(lambda *args: reports.append(args), "MoGe", clock=lambda: next(times))
+    reporter = download.DownloadProgressReporter(lambda value, message, **args: reports.append((value, message, args)), "MoGe", clock=lambda: next(times), mirror=mirror)
     reporter.report(25, 100)
     reporter.report(50, 100)
     reporter.report(100, 100)
     assert len(reports) == 2
     assert reports[0][0] == pytest.approx(0.275)
-    assert reports[0][1] == "Downloading MoGe 25 B/s"
+    template = "Downloading {item} (mirror) {rate}" if mirror else "Downloading {item} {rate}"
+    assert reports[0][1:] == (template, {"item": "MoGe", "rate": "25 B/s"})
     assert reports[-1][0] == pytest.approx(0.95)
 
 

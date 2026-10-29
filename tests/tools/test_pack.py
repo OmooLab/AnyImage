@@ -99,6 +99,10 @@ class ExtensionPackagingTest(unittest.TestCase):
 
                 self.assertIn("__init__.py", names)
                 self.assertIn("blender_manifest.toml", names)
+                permissions = tomllib.loads(manifest)["permissions"]
+                self.assertEqual(permissions["clipboard"], "Paste images from the system clipboard")
+                self.assertIn("files", permissions)
+                self.assertEqual("network" in permissions, not output_path.name.startswith("Any_Image_Base"))
                 self.assertIn("assets/O_AnyImage.blend", names)
                 self.assertNotIn("assets/O_AnyImage.blend1", names)
                 self.assertEqual(

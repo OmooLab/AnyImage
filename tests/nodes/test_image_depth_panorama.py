@@ -15,26 +15,27 @@ def free_edges(faces):
     return sum(count == 1 for count in edges.values())
 
 
-@pytest.mark.parametrize("subdivide", [0, 4])
+@pytest.mark.parametrize("subdivide", [0, 1, 4])
 def test_quad_sphere_topology_and_radial_endpoints(subdivide):
     obj, set_value = panorama(subdivide=subdivide)
     dome = 50.0
     set_value("Dome Radius", dome)
     inputs = [s for s in obj.modifiers[0].node_group.interface.items_tree if s.item_type == "SOCKET" and s.in_out == "INPUT"]
     assert [s.name for s in inputs if s.socket_type == "NodeSocketImage"] == ["Depth Image"]
+    assert next(s for s in inputs if s.name == "Subdivide").min_value == 1
     # Depth Scale blends between the dome sphere and the estimated distance.
     for scale, radius in ((0, dome), (0.5, dome + 0.5 * (3 - dome)), (1, 3)):
         set_value("Depth Scale", scale)
         points, faces, uv = evaluated(obj)
-        assert len(faces) == 6 * 4 ** subdivide
+        assert len(faces) == 6 * 4 ** max(1, subdivide)
         assert all(len(face) == 4 for face in faces)
         np.testing.assert_allclose(np.linalg.norm(points, axis=1), radius, atol=1e-5)
         edges = Counter(tuple(sorted((a, b))) for face in faces for a, b in zip(face, (*face[1:], face[0])))
         assert set(edges.values()) == {2}
         assert len(points) - len(edges) + len(faces) == 2
         assert np.isfinite(uv).all()
-        if subdivide > 0:
-            assert np.max(np.ptp(uv.reshape(-1, 4, 2)[..., 0], axis=1)) <= 0.5 + 1e-5
+        assert np.all((uv >= 0) & (uv <= 1))
+        assert np.max(np.ptp(uv.reshape(-1, 4, 2)[..., 0], axis=1)) <= 0.5 + 1e-5
 
 
 def test_depth_mask_keeps_only_the_faces_above_the_threshold():
@@ -144,11 +145,13 @@ def test_boundary_smooth_relaxes_both_masked_region_boundaries():
     depth[:, 56] = 30.0
     obj, set_value = panorama(depth, alpha, subdivide=4)
     set_value("Depth Mask", False)
-    before = evaluated(obj)[0]
+    before, _, uv = evaluated(obj)
+    assert np.all((uv >= 0) & (uv <= 1))
     low = np.isclose(np.linalg.norm(before, axis=1), 50, atol=1e-3)
     assert low.any()
     set_value("Boundary Smooth", 5)
-    after = evaluated(obj)[0]
+    after, _, uv = evaluated(obj)
+    assert np.all((uv >= 0) & (uv <= 1))
     moved = np.linalg.norm(after - before, axis=1) > 1e-6
     assert moved[low].any() and moved[~low].any()
     assert not moved[low].all()

@@ -77,16 +77,23 @@ def test_default_and_disabled_preferences(monkeypatch):
 
 
 @pytest.mark.parametrize("outcome", [{"FINISHED"}, {"CANCELLED"}, RuntimeError("Bake failed")])
-def test_bake_restores_scene(panorama, monkeypatch, outcome):
+@pytest.mark.parametrize("eevee", ["BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"])
+def test_bake_restores_scene(panorama, monkeypatch, outcome, eevee):
     probe = light_probe.create_panorama_light_probe(bpy.context, panorama, 20)
     bpy.ops.object.light_add(type="SUN")
     sun = bpy.context.object
-    bpy.context.scene.render.engine = "CYCLES"
+    render = SimpleNamespace(engine="CYCLES", bl_rna=SimpleNamespace(properties={
+        "engine": SimpleNamespace(enum_items=[SimpleNamespace(identifier=name)
+                                             for name in ("BLENDER_WORKBENCH", eevee, "CYCLES")]),
+    }))
+    context = SimpleNamespace(scene=SimpleNamespace(objects=bpy.context.scene.objects, render=render),
+                              selected_objects=bpy.context.selected_objects, view_layer=bpy.context.view_layer)
     panorama.hide_probe_volume = True
     def bake(*args, **kwargs):
         assert sun.hide_render and not panorama.hide_render
         assert not panorama.hide_probe_volume
         assert bpy.context.object == probe
+        assert render.engine == eevee
         assert args == ("EXEC_DEFAULT",) and kwargs == {"subset": "ACTIVE"}
         if isinstance(outcome, Exception):
             raise outcome
@@ -94,16 +101,17 @@ def test_bake_restores_scene(panorama, monkeypatch, outcome):
     monkeypatch.setattr(light_probe, "bpy", SimpleNamespace(ops=SimpleNamespace(
         object=SimpleNamespace(lightprobe_cache_bake=bake))))
     if outcome == {"FINISHED"}:
-        light_probe.bake_panorama_light_probe(bpy.context, panorama, probe)
+        light_probe.bake_panorama_light_probe(context, panorama, probe)
     else:
         with pytest.raises(RuntimeError):
-            light_probe.bake_panorama_light_probe(bpy.context, panorama, probe)
+            light_probe.bake_panorama_light_probe(context, panorama, probe)
     assert not sun.hide_render and panorama.hide_probe_volume
     assert bpy.context.object == sun and sun.select_get() and not probe.select_get()
-    assert bpy.context.scene.render.engine == "CYCLES"
+    assert render.engine == "CYCLES"
 
 
-@pytest.mark.parametrize("engine", ["BLENDER_EEVEE_NEXT"])
+@pytest.mark.parametrize("engine", [item.identifier for item in bpy.context.scene.render.bl_rna.properties["engine"].enum_items
+                                    if item.identifier.startswith("BLENDER_EEVEE")])
 def test_real_bake_ignores_external_objects(panorama, tmp_path, engine):
     panorama.scale = (2, 2, 2)
     material = bpy.data.materials.new("Panorama emission")

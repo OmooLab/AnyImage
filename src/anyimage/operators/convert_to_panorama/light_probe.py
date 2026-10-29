@@ -86,7 +86,8 @@ def bake_panorama_light_probe(context, panorama, probe):
             obj.select_set(False)
         probe.select_set(True)
         context.view_layer.objects.active = probe
-        scene.render.engine = "BLENDER_EEVEE_NEXT"
+        scene.render.engine = next(item.identifier for item in scene.render.bl_rna.properties["engine"].enum_items
+                                   if item.identifier.startswith("BLENDER_EEVEE"))
         context.view_layer.update()
         if bpy.ops.object.lightprobe_cache_bake("EXEC_DEFAULT", subset="ACTIVE") != {"FINISHED"}:
             raise RuntimeError("Panorama light probe bake cancelled")

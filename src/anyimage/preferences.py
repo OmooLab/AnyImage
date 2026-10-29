@@ -25,10 +25,6 @@ def addon_preferences(context=None):
     return getattr(addon, "preferences", None)
 
 
-def configured_material_view_adaptation(context=None):
-    return bool(getattr(addon_preferences(context), "adapt_material_to_view_transform", False))
-
-
 def configured_min_cutout_relative_edge_length(context=None):
     percent = float(getattr(addon_preferences(context), "min_cutout_relative_edge_length", 1.0))
     return min(max(percent, 0.001), 100.0) / 100.0
@@ -59,12 +55,6 @@ def configured_max_frame_resolution(context=None):
 
 class AnyImagePreferences(bpy.types.AddonPreferences):
     bl_idname = ADDON_PACKAGE
-
-    adapt_material_to_view_transform: bpy.props.BoolProperty(
-        name="Compensate Image Colors",
-        description="Keep material colors closer to the original image",
-        default=False,
-    )
 
     min_cutout_relative_edge_length: bpy.props.FloatProperty(
         name="Minimum Relative Edge Length",
@@ -111,8 +101,6 @@ class AnyImagePreferences(bpy.types.AddonPreferences):
 
     def draw(self, _context):
         layout = self.layout
-        shading = self._draw_box(layout, "Shading")
-        shading.prop(self, "adapt_material_to_view_transform")
         tools = self._draw_box(layout, "Tools")
         tools.label(text="Frame Images", text_ctxt="AnyImage")
         tools.prop(self, "max_frame_resolution")

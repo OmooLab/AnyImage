@@ -149,6 +149,11 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     assert layer.node_tree.name == "O Image Layer"
     assert layer.inputs["Object Space"].default_value
     assert shader.inputs["Emission Strength"].default_value == 1.0
+    assert not shader.inputs["Emission Strength"].is_linked
+    assert not any(n.type in {"TEX_COORD", "VECT_MATH", "MATH"} for n in nodes)
+    color = layer.inputs["Color"].links[0].from_node.image
+    assert color.colorspace_settings.name == "AgX Base sRGB"
+    assert color.alpha_mode == "STRAIGHT"
     normal = layer.inputs["Normal"].links[0].from_node
     assert normal.image.colorspace_settings.is_data and normal.image.packed_file
     assert all(n.extension == "REPEAT" for n in nodes if n.type == "TEX_IMAGE")

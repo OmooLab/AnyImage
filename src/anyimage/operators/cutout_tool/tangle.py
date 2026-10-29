@@ -44,7 +44,6 @@ import bisect
 from collections import deque
 from dataclasses import dataclass, field
 from decimal import Decimal, localcontext
-from threading import RLock
 from heapq import heappush, heappop
 
 # Exact-predicate fallback precision.  orient2d/in_circle fall back to Decimal
@@ -54,7 +53,6 @@ from heapq import heappush, heappop
 # mixed-scale coords -- see f0854c1, which moved C++ to float256 ~245 bits).
 # 80 digits comfortably exceeds float256's precision; it only costs in the rare
 # fallback (the double filter handles >99.9% of calls).
-_CALL_LOCK = RLock()
 
 # Base relative tolerance.  EPS is scaled to the bounding-box diagonal in
 # build_delaunay(); EPS_SCALE controls that ratio and is also used directly
@@ -2648,7 +2646,7 @@ def build_mesh(points, segments, holes, max_area, *, max_vertices=50000):
     mesh.segments = [Segment(a, b, marker) for a, b, marker in segments]
     mesh.holes = [Hole(x-shift_x, y-shift_y) for x, y in holes]
     opts = Options(pslg=True, quality=True, min_angle=10., area_limit=True, max_area=max_area, quiet=True)
-    with _CALL_LOCK, localcontext() as context:
+    with localcontext() as context:
         context.prec = 80
         previous_epsilon = EPS
         try:

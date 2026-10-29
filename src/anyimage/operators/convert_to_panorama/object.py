@@ -41,7 +41,7 @@ def create_panorama_from_result(context, result, operator):
                 raise ValueError("Normal texture dimensions do not match panorama metadata")
             material = create_image_material(
                 source.data, color, normal_image=normal, normal_space="OBJECT",
-                scene=context.scene, texture_extension="REPEAT", emission_strength=1.0)
+                scene=context.scene, texture_extension="REPEAT", emission_strength=1.0, panorama=True)
             material.use_backface_culling = True
             material.use_backface_culling_shadow = True
             mesh = bpy.data.meshes.new(source.name)

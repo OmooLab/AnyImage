@@ -40,8 +40,7 @@ def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, mo
         assert Path(color.filepath_raw) == path
         expected = before if bounds is None else before[bounds[1]:bounds[3], bounds[0]:bounds[2]]
         np.testing.assert_allclose(images.image_rgba(color), expected, atol=1e-6 if floating else 1/255)
-        monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: True)
-        result = material.create_image_material(source, color)
+        result = material.create_image_material(source, color, panorama=True)
         assert next(n.image for n in result.node_tree.nodes if n.type == "TEX_IMAGE") == color
         colors.cleanup_material_color_input(path)
         assert not path.parent.exists()

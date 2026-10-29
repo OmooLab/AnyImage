@@ -25,7 +25,8 @@ def load_node_group(group_name):
             directory=directory,
             filename=group_name,
             link=False,
-            do_reuse_local_id=False,
+            do_reuse_local_id=True,
+            clear_asset_data=True,
         )
         if "FINISHED" not in result:
             raise RuntimeError("Unable to append the node asset")

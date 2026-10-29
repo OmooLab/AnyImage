@@ -2,7 +2,7 @@
 
 ## 总则
 
-**不管是代码还是文档，遵循「少就是多」的原则，以好理解为首要要求**
+**不管是代码还是文档，遵循 KISS 原则，以好理解为首要要求**
 
 - 说明性内容以中文为主，专有名词和约定俗成的表达可使用英文
 - 修改代码、依赖或执行方式后，
@@ -25,7 +25,7 @@
 
 下列是重要文档
 
-- [总览](docs/develop/index.md)：内部实现的总揽
+- [总览](docs/develop/index.md)：内部实现的总览
 - [程序架构](docs/develop/architecture.md)：进程边界、职责与调用主链
 - [Operator 索引](docs/develop/operators/index.md)：Operator 实现功能和对应源码
 - [节点资产](docs/develop/node-assets.md)：节点组的构建与验证（节点组不在运行时新建）

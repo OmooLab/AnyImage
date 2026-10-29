@@ -127,7 +127,6 @@ def test_normalization_is_in_place_and_survives_reload(source, kind, tmp_path, m
     scene = bpy.context.scene
     scene.view_settings.view_transform = "AgX"
     scene.view_settings.exposure = 2
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: False)
     assert material.configure_material_color_image(source, scene) == source
     assert (source.as_pointer(), source.name, tuple(source.size), source.filepath_raw) == identity
     assert (set(bpy.data.images), set(bpy.data.scenes)) == resources
@@ -139,9 +138,8 @@ def test_normalization_is_in_place_and_survives_reload(source, kind, tmp_path, m
     assert source.alpha_mode == "PREMUL"
     assert source[images.COLOR_NORMALIZED_PROPERTY]
     assert not np.allclose(result[..., :3], before[..., :3])
-    # A second call and a changed preference both preserve the normalized domain.
-    for enabled in (False, True):
-        monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: enabled)
+    # Repeated calls preserve the normalized domain.
+    for _ in range(2):
         material.configure_material_color_image(source, scene)
         np.testing.assert_array_equal(images.image_rgba(source), result)
     library = tmp_path / "normalized.blend"
@@ -187,7 +185,6 @@ def test_failed_decode_restores_content_and_releases_resources(source, monkeypat
     before = images.image_pixels(source)
     packed = bytes(source.packed_file.data)
     resources = (set(bpy.data.images), set(bpy.data.scenes))
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: False)
 
     def fail(*args, **kwargs):
         raise RuntimeError("Decode failed")

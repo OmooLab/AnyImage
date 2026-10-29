@@ -4,6 +4,71 @@ from tests.support.blender import BlenderTestCase
 
 
 class AddonRegistrationTest(BlenderTestCase):
+    def test_editions_reject_conflicts_and_can_switch_after_unregister(self):
+        for first, second in (
+            (self.anyimage.base, self.anyimage),
+            (self.anyimage, self.anyimage.base),
+        ):
+            with self.subTest(first=first.__name__):
+                first.register()
+                registered = self.registered.copy()
+                settings = self.fake_bpy.types.Scene.anyimage_settings
+                with self.assertRaisesRegex(RuntimeError, "already enabled"):
+                    second.register()
+                second.unregister()
+                self.assertEqual(self.registered, registered)
+                self.assertIs(self.fake_bpy.types.Scene.anyimage_settings, settings)
+                first.unregister()
+                second.register()
+                second.unregister()
+                self.assertEqual(self.registered, [])
+                self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
+
+    def test_partial_registration_is_cleaned_up_and_can_be_retried(self):
+        for edition in (self.anyimage.base, self.anyimage):
+            for owner, name in (
+                (self.fake_bpy.utils, "register_class"),
+                (self.fake_bpy.utils, "register_tool"),
+                (self.fake_bpy.types.VIEW3D_MT_object_context_menu, "prepend"),
+            ):
+                with self.subTest(edition=edition.__name__, operation=name):
+                    original = getattr(owner, name)
+                    calls = 0
+
+                    def fail_second(*args, **kwargs):
+                        nonlocal calls
+                        calls += 1
+                        if calls == 2:
+                            raise RuntimeError("Registration failed")
+                        return original(*args, **kwargs)
+
+                    with patch.object(owner, name, side_effect=fail_second):
+                        with self.assertRaisesRegex(RuntimeError, "Registration failed"):
+                            edition.register()
+                    edition.unregister()
+                    self.assertEqual(self.registered, [])
+                    self.assertEqual(self.registered_tools, [])
+                    self.assertEqual(self.registered_translations, {})
+                    self.assertEqual(self.context_menu_draws, [])
+                    self.assertEqual(self.outliner_menu_draws, [])
+                    self.assertEqual(self.node_menu_draws, [])
+                    self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
+                    edition.register()
+                    edition.unregister()
+
+    def test_runtime_start_failure_releases_registered_ui(self):
+        with patch.object(self.anyimage.runtime, "enable", side_effect=RuntimeError("Runtime failed")):
+            with self.assertRaisesRegex(RuntimeError, "Runtime failed"):
+                self.anyimage.register()
+        self.assertEqual(self.registered, [])
+        self.assertEqual(self.registered_tools, [])
+        self.assertEqual(self.registered_translations, {})
+        self.assertEqual(self.status_bar_draws, [])
+        self.assertEqual(self.fake_bpy.app.handlers.load_post, [])
+        self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
+        self.anyimage.register()
+        self.anyimage.unregister()
+
     def test_import_does_not_add_addon_directories_to_sys_path(self):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
 

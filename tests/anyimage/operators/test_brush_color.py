@@ -6,7 +6,7 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.common import color_image, image as images, material
+from anyimage.common import color_image, image as images
 from anyimage.common.color_space import normalize_color_rgba
 from anyimage.operators.clipboard_image import actions
 
@@ -30,9 +30,8 @@ def context(monkeypatch):
     return SimpleNamespace(mode="PAINT_TEXTURE", brush=brush, scene=bpy.context.scene)
 
 
-@pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("kind", ["srgb", "inverse", "hdr", "normalized"])
-def test_brush_color_is_independent_of_preferences(source, context, enabled, kind, monkeypatch):
+def test_brush_color_preserves_hdr_and_normalizes_byte_images(source, context, kind):
     pixels = images.image_pixels(source)
     if kind == "hdr":
         source.use_generated_float = True
@@ -47,17 +46,17 @@ def test_brush_color_is_independent_of_preferences(source, context, enabled, kin
     source.pack()
     expected = (
         normalize_color_rgba(color_image.decode_color_image(source, source.colorspace_settings.name))
-        if kind in {"inverse", "hdr"} else images.image_rgba(source)
+        if kind == "inverse" else images.image_rgba(source)
     )
     identity = (source.as_pointer(), source.name, source.filepath_raw)
     resources = (set(bpy.data.images), set(bpy.data.scenes))
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: enabled)
     texture = actions.set_tool_texture(context, source)
     assert texture.image == source
-    assert not source.is_float
-    assert source.colorspace_settings.name == "sRGB"
-    assert source.alpha_mode == "PREMUL" and source.file_format == "PNG"
-    assert source[images.COLOR_NORMALIZED_PROPERTY]
+    assert source.is_float == (kind == "hdr")
+    assert source.colorspace_settings.name == ("Linear Rec.709" if kind == "hdr" else "sRGB")
+    if kind != "hdr":
+        assert source.alpha_mode == "PREMUL" and source.file_format == "PNG"
+        assert source[images.COLOR_NORMALIZED_PROPERTY]
     assert (source.as_pointer(), source.name, source.filepath_raw) == identity
     assert (set(bpy.data.images), set(bpy.data.scenes)) == resources
     np.testing.assert_allclose(images.image_rgba(source), expected, atol=1 / 255)

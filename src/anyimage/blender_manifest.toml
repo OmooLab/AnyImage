@@ -14,6 +14,7 @@ wheels = ["./wheels/blendjob-0.1.24-py3-none-any.whl", "./wheels/materialyoucolo
 license = ["SPDX:GPL-3.0-or-later"]
 
 [permissions]
+clipboard = "Paste images from the system clipboard"
 network = "Connect to the AI Server and download dependencies and models"
 files = "Read source and clipboard images, and store environment data"
 

@@ -1,5 +1,8 @@
+import bpy
+
 from . import __init_base__ as base
-from .__init_base__ import unregister
+from . import keymaps
+from .properties import register_color_references, unregister_color_references
 from .tools import tool_definitions
 from .ai_menu import AnyImageImageMenu, AnyImageObjectMenu, AnyImageTextureNodeMenu
 from .operators.ai_setup import CLASSES as AI_SETUP_CLASSES
@@ -44,17 +47,57 @@ CLASSES = (
 )
 
 
+TOOLS = tool_definitions(CutoutTool)
+_registered = False
+_registered_classes = []
+_registered_tools = []
+_registered_menus = []
+
+
 def register():
-    base.register(
-        CLASSES,
-        settings=AnyImageSettings,
-        toolset=tool_definitions(CutoutTool),
-        catalog=TRANSLATIONS,
-    )
+    global _registered
+    if hasattr(bpy.types.Scene, "anyimage_settings"):
+        raise RuntimeError(
+            "Another AnyImage edition is already enabled. Disable it before enabling this edition."
+        )
+    bpy.app.translations.register(__package__, TRANSLATIONS)
+    _registered = True
     try:
+        for cls in CLASSES:
+            bpy.utils.register_class(cls)
+            _registered_classes.append(cls)
+        for tool, options in TOOLS:
+            bpy.utils.register_tool(tool, **options)
+            _registered_tools.append(tool)
+        bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=AnyImageSettings)
+        for menu, draw in base.MENUS:
+            menu.prepend(draw)
+            _registered_menus.append((menu, draw))
+        keymaps.register()
+        register_color_references()
         runtime.register()
-        base._cleanup.append(runtime.unregister)
     except Exception:
-        runtime.unregister()
-        base.unregister()
+        unregister()
         raise
+
+
+def unregister():
+    global _registered
+    if not _registered:
+        return
+    runtime.unregister()
+    unregister_color_references()
+    keymaps.unregister()
+    for menu, draw in reversed(_registered_menus):
+        menu.remove(draw)
+    _registered_menus.clear()
+    if hasattr(bpy.types.Scene, "anyimage_settings"):
+        del bpy.types.Scene.anyimage_settings
+    for tool in reversed(_registered_tools):
+        bpy.utils.unregister_tool(tool)
+    _registered_tools.clear()
+    for cls in reversed(_registered_classes):
+        bpy.utils.unregister_class(cls)
+    _registered_classes.clear()
+    bpy.app.translations.unregister(__package__)
+    _registered = False

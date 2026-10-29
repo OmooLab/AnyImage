@@ -80,7 +80,6 @@ def test_conversion_selects_source_by_empty_identity(source, monkeypatch, entry,
     original = source.data
     before = images.image_pixels(original)
     name, path = original.name, original.filepath_raw
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: False)
     obj = run_conversion(source, entry, monkeypatch)
     color = next(n.image for n in obj.data.materials[0].node_tree.nodes if n.type == "TEX_IMAGE")
     assert color != original
@@ -112,7 +111,6 @@ def test_conversion_failure_restores_image_and_releases_resources(source, monkey
     before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials")}
     def fail(*args, **kwargs):
         raise RuntimeError("Conversion failed")
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: True)
     if failure == "material":
         monkeypatch.setattr(material, "material_node_group", fail)
     elif failure == "finalize":
@@ -144,10 +142,9 @@ def test_conversion_pixels_survive_library_reload(source, tmp_path, monkeypatch,
         source.data.reload()
     if shared:
         share_image(source, "visible")
-    expected = images.image_pixels(source.data)
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: True)
     obj = run_conversion(source, "PLANE", monkeypatch)
     color = next(n.image for n in obj.data.materials[0].node_tree.nodes if n.type == "TEX_IMAGE")
+    expected = images.image_pixels(color)
     library = tmp_path / "converted.blend"
     bpy.data.libraries.write(str(library), {color})
     with bpy.data.libraries.load(str(library)) as (saved, loaded):
@@ -172,7 +169,6 @@ def test_plane_undo_redo_restores_image_configuration(source, monkeypatch, share
         share_image(source, "visible")
     original_name = source.data.name
     expected = images.image_pixels(source.data)
-    monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: False)
     bpy.context.preferences.edit.use_global_undo = True
     bpy.utils.register_class(operators.ConvertToPlane)
     try:

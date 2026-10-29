@@ -2,7 +2,6 @@
 
 import bpy
 
-from ..preferences import configured_material_view_adaptation
 from .image import (
     COLOR_NORMALIZED_PROPERTY, image_base_name, image_content_state, image_pixels,
     restore_image_content,
@@ -38,16 +37,16 @@ def material_color_space_name(scene):
     return "sRGB"
 
 
-def configure_material_color_image(image, scene=None):
-    """Configure the selected Color image in place using the shading preference."""
+def configure_material_color_image(image, scene=None, *, panorama=False):
+    """Preserve HDR, reverse panorama colors, and normalize surface colors."""
     if getattr(image, "is_float", False):
         return image
-    if image.get(COLOR_NORMALIZED_PROPERTY):
+    if image.get(COLOR_NORMALIZED_PROPERTY) and not panorama:
         return image
     if scene is None:
         scene = getattr(bpy.context, "scene", None)
     preferred = material_color_space_name(scene)
-    normalize = not configured_material_view_adaptation() and preferred != "sRGB"
+    normalize = not panorama and preferred != "sRGB"
     pixels = (
         image_pixels(image)
         if getattr(image, "source", None) == "GENERATED"
@@ -87,6 +86,8 @@ def configure_material_color_image(image, scene=None):
         if pixels is not None:
             image.pixels.foreach_set(pixels)
             image.update()
+        if panorama and COLOR_NORMALIZED_PROPERTY in image:
+            del image[COLOR_NORMALIZED_PROPERTY]
     except Exception:
         if original_content is not None:
             restore_image_content(image, original_content)
@@ -114,11 +115,9 @@ def create_image_material(
     scene=None,
     texture_extension="EXTEND",
     emission_strength=0.0,
+    panorama=False,
 ):
-    preserve_color = color_image.is_float or (
-        shadeless and not color_image.colorspace_settings.name.endswith("sRGB")
-    )
-    material_image = color_image if preserve_color else configure_material_color_image(color_image, scene)
+    material_image = configure_material_color_image(color_image, scene, panorama=panorama)
     if material_image.source == "GENERATED" or material_image.is_dirty:
         material_image.pack()
     material = bpy.data.materials.new(image_base_name(source_image))

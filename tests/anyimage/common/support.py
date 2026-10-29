@@ -57,9 +57,7 @@ def load_common_modules():
         package.__path__ = []
 
     loaded = []
-    preferences = ModuleType("anyimage.preferences")
-    preferences.configured_material_view_adaptation = lambda: True
-    with mock_bpy_imports(fake_bpy), patch.dict(sys.modules, {"anyimage.preferences": preferences, **packages}):
+    with mock_bpy_imports(fake_bpy), patch.dict(sys.modules, packages):
         for module_name, module_path in module_paths:
             specification = importlib.util.spec_from_file_location(
                 module_name,

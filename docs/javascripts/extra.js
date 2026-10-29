@@ -14,7 +14,7 @@ function initInstallDrag() {
   const detectedPlatform = INSTALL_PLATFORMS[navigator.platform.toLowerCase().slice(0, 3)];
 
   container.querySelectorAll(".anyimage-install-item").forEach(function (item) {
-    const matches = !detectedPlatform || item.dataset.platform.startsWith(detectedPlatform);
+    const matches = Boolean(detectedPlatform) && item.dataset.platform.startsWith(detectedPlatform);
     item.classList.toggle("is-active", matches);
     item.hidden = !matches;
   });

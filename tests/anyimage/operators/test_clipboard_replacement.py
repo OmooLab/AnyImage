@@ -391,6 +391,30 @@ def test_existing_brush_replaces_content_without_changing_settings(mode, monkeyp
     assert len(previews) == (2 if mode == "PAINT_TEXTURE" else 0)
 
 
+def test_brush_replacement_preserves_linear_hdr(monkeypatch):
+    destination = owner_image()
+    texture = bpy.data.textures.new("HDR Brush Texture", type="IMAGE")
+    texture.image = destination
+    brush = bpy.data.brushes.new("HDR Brush", mode="TEXTURE_PAINT")
+    brush.texture = texture
+    source = bpy.data.images.new("HDR color", width=2, height=1, alpha=True, float_buffer=True)
+    source.colorspace_settings.name = "Linear Rec.709"
+    source.alpha_mode = "PREMUL"
+    source.file_format = "OPEN_EXR"
+    pixels = np.array([8, 2, .5, .25, 12, 3, 1, 0], np.float32)
+    source.pixels.foreach_set(pixels)
+    source.pack()
+    monkeypatch.setattr(actions, "_set_brush_preview", lambda *args: None)
+    context = view_context(mode="PAINT_TEXTURE", brush=brush)
+    actions.replace_pasted_image(context, actions.replacement_for_context(context), source)
+    assert brush.texture == texture and texture.image == destination
+    assert destination.is_float and destination.colorspace_settings.name == "Linear Rec.709"
+    assert destination.alpha_mode == "PREMUL"
+    assert not destination.get(images.COLOR_NORMALIZED_PROPERTY)
+    np.testing.assert_array_equal(images.image_pixels(destination), pixels)
+    np.testing.assert_array_equal(images.image_pixels(source), pixels)
+
+
 def test_preview_failure_keeps_committed_content_and_cleans_temporary_images(monkeypatch):
     image = owner_image()
     texture = bpy.data.textures.new("Brush Texture", type="IMAGE")

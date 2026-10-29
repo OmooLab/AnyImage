@@ -398,7 +398,7 @@ class ClipboardImageTest(BlenderTestCase):
             scene=SimpleNamespace(view_settings=SimpleNamespace(view_transform="AgX")),
         )
         image = SimpleNamespace(
-            name="Clipboard Image", size=(1920, 1080),
+            name="Clipboard Image", size=(1920, 1080), is_float=False,
             colorspace_settings=SimpleNamespace(name="sRGB"), alpha_mode="STRAIGHT",
         )
         try:

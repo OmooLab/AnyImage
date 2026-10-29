@@ -46,6 +46,22 @@ def emission_shaders(layer, color):
             and link.to_socket.name == "Emission Color"}
 
 
+def remove_unused_material_nodes(material):
+    """Keep only nodes feeding an active material output."""
+    nodes = material.node_tree.nodes
+    pending = [node for node in nodes if node.type == "OUTPUT_MATERIAL" and node.is_active_output]
+    used = set()
+    while pending:
+        node = pending.pop()
+        if node in used:
+            continue
+        used.add(node)
+        pending.extend(link.from_node for socket in node.inputs for link in socket.links)
+    for node in tuple(nodes):
+        if node not in used:
+            nodes.remove(node)
+
+
 def arrange_material_textures(material):
     """Align texture rows in the order of their Principled inputs."""
     nodes = material.node_tree.nodes
@@ -99,7 +115,7 @@ def connect_static_outputs(links, layer, sources):
 
 
 @contextmanager
-def static_material_outputs(material, layer, color, normal, scalar_images, emission_image, emission_strengths):
+def static_material_outputs(material, layer, color, normal, scalar_images, emission_images, emission_strengths):
     """Stage replacement nodes and restore original links on any failure."""
     if layer is None:
         yield
@@ -110,6 +126,7 @@ def static_material_outputs(material, layer, color, normal, scalar_images, emiss
     positions = {node: (tuple(node.location), node.width) for node in nodes}
     original_links = [(link.from_socket, link.to_socket) for link in links]
     active = nodes.active
+    original_strengths = {name: nodes[name].inputs["Emission Strength"].default_value for name in emission_strengths}
 
     def create(kind, offset):
         node = nodes.new(kind)
@@ -142,17 +159,20 @@ def static_material_outputs(material, layer, color, normal, scalar_images, emiss
             links.new(sources["Alpha"], curve.inputs["Value"])
             sources["Alpha"] = curve.outputs["Value"]
         connect_static_outputs(links, layer, sources)
-        emission_source = texture(emission_image, (-400, -1400)) if emission_image is not None else None
+        emission_sources = {image: texture(image, (-400, -1400)) for image in set(emission_images.values())}
         for name, strength in emission_strengths.items():
             socket = nodes[name].inputs["Emission Color"]
             if strength == 0:
                 for link in tuple(socket.links):
                     links.remove(link)
             elif strength > 0:
-                links.new(emission_source, socket)
+                links.new(emission_sources[emission_images[name]], socket)
+            strength_socket = nodes[name].inputs["Emission Strength"]
+            for link in tuple(strength_socket.links):
+                links.remove(link)
+            strength_socket.default_value = strength
         yield
         arrange_material_textures(material)
-        nodes.remove(layer)
     except Exception:
         for node in set(nodes) - original_nodes:
             nodes.remove(node)
@@ -163,4 +183,6 @@ def static_material_outputs(material, layer, color, normal, scalar_images, emiss
             node.location = location
             node.width = width
         nodes.active = active
+        for name, strength in original_strengths.items():
+            nodes[name].inputs["Emission Strength"].default_value = strength
         raise

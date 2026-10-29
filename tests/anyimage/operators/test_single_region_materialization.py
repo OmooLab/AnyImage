@@ -204,7 +204,7 @@ def test_four_conversions_support_undo_redo(image_object):
 
 @pytest.mark.parametrize("image_object,user", [
     ("DEPTH", "none"), ("RELIEF", "modifier"),
-    ("PANORAMA", "material"), ("DEPTH", "fake"),
+    ("PANORAMA", "material"), ("PANORAMA", "unused_material"), ("DEPTH", "fake"),
 ], indirect=["image_object"])
 def test_conversion_only_removes_unreferenced_depth(image_object, user, tmp_path):
     obj, kind, *_ = image_object
@@ -220,12 +220,17 @@ def test_conversion_only_removes_unreferenced_depth(image_object, user, tmp_path
     if user == "modifier":
         other = obj.copy()
         bpy.context.collection.objects.link(other)
-    elif user == "material":
-        obj.active_material.node_tree.nodes.new("ShaderNodeTexImage").image = depth
+    elif user in {"material", "unused_material"}:
+        tree = obj.active_material.node_tree
+        texture = tree.nodes.new("ShaderNodeTexImage")
+        texture.image = depth
+        if user == "material":
+            shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+            tree.links.new(texture.outputs["Color"], shader.inputs["Metallic"])
     elif user == "fake":
         depth.use_fake_user = True
     assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
-    assert (depth_name in bpy.data.images) == (user != "none")
+    assert (depth_name in bpy.data.images) == (user not in {"none", "unused_material"})
     assert unrelated.name in bpy.data.images
     assert path.read_bytes() == disk_content
 

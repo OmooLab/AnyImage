@@ -108,7 +108,7 @@ def render_material(obj, path, direction, *, channel="Normal", lighting=False, w
         obj.data.materials[index] = copy
         nodes, links = copy.node_tree.nodes, copy.node_tree.links
         shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
-        source = shader.inputs[channel].links[0].from_socket
+        source = shader.inputs["Emission Color" if channel == "Emission" else channel].links[0].from_socket
         if channel == "Normal":
             encode = nodes.new("ShaderNodeVectorMath")
             encode.operation = "MULTIPLY_ADD"
@@ -119,6 +119,12 @@ def render_material(obj, path, direction, *, channel="Normal", lighting=False, w
         emission = nodes.new("ShaderNodeEmission")
         output = next(n for n in nodes if n.type == "OUTPUT_MATERIAL")
         links.new(source, emission.inputs["Color"])
+        if channel == "Emission":
+            strength = shader.inputs["Emission Strength"]
+            if strength.is_linked:
+                links.new(strength.links[0].from_socket, emission.inputs["Strength"])
+            else:
+                emission.inputs["Strength"].default_value = strength.default_value
         if not lighting:
             links.new(emission.outputs[0], output.inputs["Surface"])
     light = None

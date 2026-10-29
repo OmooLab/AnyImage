@@ -713,6 +713,13 @@ def test_flattened_outputs_preserve_normalized_shader_values_and_consumers(cutou
     tree.links.new(layer.outputs["Roughness"], extra.inputs[0])
     unrelated = tree.nodes.new("ShaderNodeValue")
     tree.links.new(unrelated.outputs[0], extra.inputs[1])
+    shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    tree.links.new(extra.outputs[0], shader.inputs["Metallic"])
+    unused = tree.nodes.new("ShaderNodeMath")
+    unused_source = tree.nodes.new("ShaderNodeValue")
+    tree.links.new(unused_source.outputs[0], unused.inputs[0])
+    tree.links.new(layer.outputs["Color"], unused.inputs[1])
+    unused_names = {unused.name, unused_source.name}
     from anyimage.common.color_image import create_normalized_color_image
     texture = layer.inputs["Color"].links[0].from_node
     reference = create_normalized_color_image(color)
@@ -735,6 +742,8 @@ def test_flattened_outputs_preserve_normalized_shader_values_and_consumers(cutou
         assert len(errors) and np.quantile(errors, .95) < .02, (channel, np.quantile(errors, .95))
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
     roughness = shader.inputs["Roughness"].links[0].from_node
+    assert unused_names.isdisjoint(tree.nodes.keys())
+    assert shader.inputs["Metallic"].links[0].from_node == extra
     assert extra.inputs[0].links[0].from_node == roughness
     assert extra.inputs[1].links[0].from_node == unrelated and extra.operation == "MULTIPLY"
     assert not roughness.image.is_float and roughness.image.colorspace_settings.is_data
@@ -926,14 +935,13 @@ def test_baked_color_is_bounded_repeatable_and_preserves_source(space, is_float)
         bpy.data.images.remove(source)
 
 
-def test_bake_outputs_are_independent_of_color_preference(cutout, monkeypatch):
+def test_bake_normalizes_surface_and_panorama_colors_identically(cutout):
     from anyimage.common import material
     from anyimage.common.image import COLOR_NORMALIZED_PROPERTY
 
     bpy.context.scene.view_settings.view_transform = "AgX"
     samples = []
-    for enabled in (False, True):
-        monkeypatch.setattr(material, "configured_material_view_adaptation", lambda: enabled)
+    for panorama in (False, True):
         obj = cutout.copy()
         obj.data = cutout.data.copy()
         obj.data.materials[0] = cutout.active_material.copy()
@@ -943,13 +951,13 @@ def test_bake_outputs_are_independent_of_color_preference(cutout, monkeypatch):
         layer.inputs["Bump Scale"].default_value = 30
         shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
         shader.inputs["Emission Strength"].default_value = .5
-        image = bpy.data.images.new("Color preference", width=64, height=64, alpha=True)
+        image = bpy.data.images.new("Business color", width=64, height=64, alpha=True)
         rgba = np.ones((64, 64, 4), np.float32)
         rgba[..., 0] = np.linspace(.1, .9, 64)
         rgba[..., 1:3] = (.4, .6)
         image.pixels.foreach_set(rgba.ravel())
-        material.configure_material_color_image(image, bpy.context.scene)
-        assert image.colorspace_settings.name == ("AgX Base sRGB" if enabled else "sRGB")
+        material.configure_material_color_image(image, bpy.context.scene, panorama=panorama)
+        assert image.colorspace_settings.name == ("AgX Base sRGB" if panorama else "sRGB")
         layer.inputs["Color"].links[0].from_node.image = image
         obj.data = materialize_mesh_and_textures(bpy.context, obj)
         obj.modifiers.clear()

@@ -34,38 +34,40 @@ CLASSES = (
 )
 
 
-_cleanup = []
+MENUS = (
+    (bpy.types.VIEW3D_MT_object_context_menu, draw_image_context_menu),
+    (bpy.types.VIEW3D_MT_object_context_menu, draw_image_object_context_menu),
+    (bpy.types.OUTLINER_MT_object, draw_image_context_menu),
+    (bpy.types.OUTLINER_MT_object, draw_image_object_context_menu),
+    (bpy.types.NODE_MT_context_menu, draw_texture_node_context_menu),
+)
+
+_registered = False
+_registered_classes = []
+_registered_tools = []
+_registered_menus = []
 
 
-def register(classes=CLASSES, *, settings=AnyImageSettings, toolset=TOOLS, catalog=TRANSLATIONS):
+def register():
+    global _registered
     if hasattr(bpy.types.Scene, "anyimage_settings"):
         raise RuntimeError(
             "Another AnyImage edition is already enabled. Disable it before enabling this edition."
         )
-    menus = (
-        (bpy.types.VIEW3D_MT_object_context_menu, draw_image_context_menu),
-        (bpy.types.VIEW3D_MT_object_context_menu, draw_image_object_context_menu),
-        (bpy.types.OUTLINER_MT_object, draw_image_context_menu),
-        (bpy.types.OUTLINER_MT_object, draw_image_object_context_menu),
-        (bpy.types.NODE_MT_context_menu, draw_texture_node_context_menu),
-    )
+    bpy.app.translations.register(__package__, TRANSLATIONS)
+    _registered = True
     try:
-        bpy.app.translations.register(__package__, catalog)
-        _cleanup.append(lambda: bpy.app.translations.unregister(__package__))
-        for cls in classes:
+        for cls in CLASSES:
             bpy.utils.register_class(cls)
-            _cleanup.append(lambda cls=cls: bpy.utils.unregister_class(cls))
-        for tool, options in toolset:
+            _registered_classes.append(cls)
+        for tool, options in TOOLS:
             bpy.utils.register_tool(tool, **options)
-            _cleanup.append(lambda tool=tool: bpy.utils.unregister_tool(tool))
-        bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=settings)
-        _cleanup.append(lambda: delattr(bpy.types.Scene, "anyimage_settings"))
-        for menu, draw in menus:
+            _registered_tools.append(tool)
+        bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=AnyImageSettings)
+        for menu, draw in MENUS:
             menu.prepend(draw)
-            _cleanup.append(lambda menu=menu, draw=draw: menu.remove(draw))
-        _cleanup.append(keymaps.unregister)
+            _registered_menus.append((menu, draw))
         keymaps.register()
-        _cleanup.append(unregister_color_references)
         register_color_references()
     except Exception:
         unregister()
@@ -73,5 +75,21 @@ def register(classes=CLASSES, *, settings=AnyImageSettings, toolset=TOOLS, catal
 
 
 def unregister():
-    while _cleanup:
-        _cleanup.pop()()
+    global _registered
+    if not _registered:
+        return
+    unregister_color_references()
+    keymaps.unregister()
+    for menu, draw in reversed(_registered_menus):
+        menu.remove(draw)
+    _registered_menus.clear()
+    if hasattr(bpy.types.Scene, "anyimage_settings"):
+        del bpy.types.Scene.anyimage_settings
+    for tool in reversed(_registered_tools):
+        bpy.utils.unregister_tool(tool)
+    _registered_tools.clear()
+    for cls in reversed(_registered_classes):
+        bpy.utils.unregister_class(cls)
+    _registered_classes.clear()
+    bpy.app.translations.unregister(__package__)
+    _registered = False

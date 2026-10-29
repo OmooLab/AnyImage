@@ -1,3 +1,5 @@
+from decimal import getcontext
+
 import numpy as np
 import pytest
 from scipy.sparse import coo_matrix
@@ -7,6 +9,32 @@ from scipy.spatial import cKDTree
 from anyimage.operators.cutout_tool import geometry as g
 from anyimage.operators.cutout_tool.balloon import poisson_balloon_profile
 from anyimage.operators.cutout_tool import mesh
+from anyimage.operators.cutout_tool import tangle
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_triangulation_restores_numeric_context_and_can_be_repeated(monkeypatch, fail):
+    points = [(0, 0), (4, 0), (4, 4), (0, 4)]
+    segments = [(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 0, 1)]
+    epsilon = tangle.EPS
+    precision = getcontext().prec
+    expected = tangle.build_mesh(points, segments, [], 4)
+
+    def fail_refinement(*args):
+        assert getcontext().prec == 80
+        tangle.EPS = 1
+        raise ValueError("Refinement failed")
+
+    with monkeypatch.context() as patch:
+        if fail:
+            patch.setattr(tangle, "refine_quality", fail_refinement)
+            with pytest.raises(ValueError, match="Refinement failed"):
+                tangle.build_mesh(points, segments, [], 4)
+        else:
+            assert tangle.build_mesh(points, segments, [], 4) == expected
+    assert tangle.EPS == epsilon
+    assert getcontext().prec == precision
+    assert tangle.build_mesh(points, segments, [], 4) == expected
 
 
 def boundary_distance(points, contours):

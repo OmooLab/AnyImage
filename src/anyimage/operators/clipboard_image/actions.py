@@ -154,7 +154,7 @@ def replace_pasted_image(context, target, image):
     shared = shared_texture or has_other_image_user(target.owner)
     content = None
     try:
-        if target.brush is not None:
+        if target.brush is not None and not image.is_float:
             normalized = create_normalized_color_image(image)
         if shared:
             destination = source.copy()
@@ -493,11 +493,12 @@ def set_tool_texture(context, image):
     )
     texture, is_new = None, False
     try:
-        normalized = create_normalized_color_image(image)
-        try:
-            replace_image_content(image, normalized)
-        finally:
-            bpy.data.images.remove(normalized)
+        if not image.is_float:
+            normalized = create_normalized_color_image(image)
+            try:
+                replace_image_content(image, normalized)
+            finally:
+                bpy.data.images.remove(normalized)
         texture, is_new = _find_or_create_image_texture(image)
         brush.texture = texture
         brush.texture_slot.texture = texture

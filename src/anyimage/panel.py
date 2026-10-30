@@ -19,7 +19,7 @@ class ServerPanel(bpy.types.Panel):
         layout = self.layout
         runtime.draw_server_controls(layout, setup_operator=SetupAIServer.bl_idname)
         runtime.draw_jobs(layout)
-        if runtime.state() in {"UNAVAILABLE", "INSTALLING", "MIGRATING"}:
+        if not runtime.is_ready():
             return
 
         cached = runtime.resource("model_manager").get("loaded", {})

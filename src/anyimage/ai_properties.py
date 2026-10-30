@@ -63,7 +63,7 @@ def model_ready(model_key):
 
 
 def ai_status():
-    environment_ready = runtime.state() not in {"UNAVAILABLE", "INSTALLING", "MIGRATING"}
+    environment_ready = runtime.is_ready()
     ready_models = {
         model["key"]
         for model in model_catalog()

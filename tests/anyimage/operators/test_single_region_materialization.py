@@ -293,7 +293,7 @@ def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
     layout = Mock()
     image_menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_not_called()
-    with patch.object(runtime, "server_busy", return_value=False):
+    with patch.object(runtime, "state", return_value="IDLE"):
         assert not RemoveImageBackground.poll(context)
         assert not UpscaleImage.poll(context)
         assert not MatchColorReference.poll(context)

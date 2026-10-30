@@ -198,7 +198,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             ) as prepare_input,
             patch.object(self.cutout_main, "material_analysis_input", return_value=Path(__file__)),
             patch.object(
-                self.cutout_main.JobOperatorBase,
+                self.cutout_main.JobOperator,
                 "execute",
                 return_value={"FINISHED"},
             ),
@@ -388,6 +388,8 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.edge_length = 0.1
         operator.generate_normal = True
         operator._selection_mask = selection_mask
+        operator._source_object = source
+        operator._source_image = source.data
         operator.boundary_padding = 3.5
         result = SimpleNamespace(value={}, file=lambda _key: Path(__file__))
 

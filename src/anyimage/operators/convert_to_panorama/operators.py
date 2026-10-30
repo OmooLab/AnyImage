@@ -10,17 +10,17 @@ from ...preferences import addon_preferences
 from ...ai_preferences import configured_max_ai_input_size
 from ...ai_preferences import configured_geometry_model
 from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
-from ...runtime import JobOperatorBase
+from ...runtime import JobOperator
 from ...server.media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, MAX_MAX_AI_INPUT_SIZE, MIN_MAX_AI_INPUT_SIZE
 from .object import create_panorama_from_result
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
 
-class GeneratePanorama(JobOperatorBase, bpy.types.Operator):
+class GeneratePanorama(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.generate_panorama"
     bl_label = "Generate Panorama"
-    job_type = "generate-panorama-geometry"
+    job_type = "generate_panorama_geometry"
     starting_message = "Preparing panorama conversion"
 
     input_path: bpy.props.StringProperty(options=_HIDDEN)
@@ -61,7 +61,7 @@ class ConvertToPanorama(bpy.types.Operator):
     def poll(cls, context):
         from ...runtime import runtime
 
-        return is_image_empty(context.object) and not runtime.server_busy()
+        return is_image_empty(context.object) and runtime.can_submit()
 
     def execute(self, context):
         source = context.object

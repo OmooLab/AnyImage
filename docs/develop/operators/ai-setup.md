@@ -29,7 +29,7 @@ flowchart TD
 
 环境尚未就绪时，`SetupAIServer` 调用 Runtime 注册的安装 Operator。`use_mirror` 决定 uv、Python 和安装包的下载源，模型使用模型目录中声明的来源。
 
-安装完成后通过 `post_install()` 下载默认模型，模型依赖加载于独立 Server 环境。
+安装完成后由 `post_setup()` 在主线程启动默认模型下载任务，进度显示在侧边栏任务列表。模型依赖加载于独立 Server 环境。
 
 ### 下载模型
 

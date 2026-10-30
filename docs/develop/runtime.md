@@ -23,6 +23,23 @@ flowchart TD
 
 `geometry/prediction_artifacts.py` 缩放源 RGB 后运行一次 MoGe，将同一预测交给深度、法线和元数据写入器；源 Alpha 写入深度与法线产物的有效通道。参考深度由 Blender 侧按产物 Alpha 计算，文件协议见 [Job 产物](outputs.md)。
 
+## 界面状态
+
+AnyImage 通过 `runtime.state()` 读取统一状态，通过 `runtime.draw_server_controls(layout, setup_operator=SetupAIServer.bl_idname)` 绘制服务器状态与控制按钮。具体状态为 `UNAVAILABLE`、`INSTALLING`、`MIGRATING`、`OFFLINE`、`STARTING`、`IDLE`、`PROCESSING`、`STOPPING`、`ERROR`。Job 完成即释放处理状态。服务器启停或控制异常使用 `ERROR`，普通 Job 失败后回到空闲。
+
+业务 Operator 继承 `JobOperator`，任务按钮使用 `runtime.can_submit()`。服务器停止、启动中、空闲或处理中都可以继续提交。安装和卸载分别判断 `UNAVAILABLE` 与 `IDLE`，未安装时保留配置引导。
+
+```python
+row.enabled = runtime.can_submit()
+runtime.draw_jobs(layout)
+```
+
+BlendJob 自动在状态栏显示第一个正在运行的任务，结束后切换到下一个。`runtime.draw_jobs(layout)` 可放在任意布局，AnyImage 将完整任务列表放在服务器侧边栏，每行显示进度译文和取消按钮，任务结束后移除。排队、定向取消、停止和迁移都由 BlendJob 管理；迁移自动取消全部任务，等待清理并停止服务后搬移目录。
+
+每次调用捕获自己的目标、参数和输入快照，结果按提交顺序应用。同一图像可以连续提交，后一次结果覆盖前一次；目标删除或被用户改绑时拒绝应用。各任务独立清理临时文件。
+
+模型状态直接读取 `runtime.resource("model_manager")`，由 AnyImage 绘制已加载模型和卸载入口。
+
 ## 模型与缓存
 
 | 用途 | 模型 | Session 分类 |
@@ -33,7 +50,7 @@ flowchart TD
 
 `model_catalog.py` 声明模型 key、Fast/Base/Pro 档位、文件来源、许可、大小和 SHA-256；`model_download.py` 下载并校验。ModelManager 在 Session 创建前校验声明文件，按文件身份缓存校验结果，并按模型 key、路径和设备缓存 Session，切换模型或设备时释放对应类别。Clear Models 或关闭 Server 时释放已加载资源。
 
-首次安装通过 `post_install()` 下载默认 MoGe-2 ViT-S Normal、BiRefNet Lite 与 Real-ESRGAN General WDN x4v3。Storage Root 默认 `~/.anyimage`，保存环境、模型、Job 产物和日志。设置入口见 [AI 环境管理](operators/ai-setup.md)。
+首次安装完成后，`post_setup` 在 Blender 主线程提交模型下载 Job，下载默认 MoGe-2 ViT-S Normal、BiRefNet Lite 与 Real-ESRGAN General WDN x4v3。Storage Root 默认 `~/.anyimage`，保存环境、模型、Job 产物和日志。设置入口见 [AI 环境管理](operators/ai-setup.md)。
 
 
 UI 在本地快速检查文件存在性和大小，以 Installed 表示安装状态。加载状态与 `validation_errors` 通过 Runtime 已有资源快照传递；校验失败记录模型 key 和原因，并在 Preferences 提供 Download Again。修复开始时释放目标模型 Session，下载成功后清理其校验错误和失效缓存，其他模型继续使用已有资源。

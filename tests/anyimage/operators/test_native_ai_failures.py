@@ -9,22 +9,16 @@ from anyimage.operators.convert_to_plane import operators as plane
 
 
 def test_native_server_controls_are_disabled_during_migration():
-    from types import SimpleNamespace
-    from blendjob.maintenance import MigrateController
     from anyimage.runtime import runtime
 
-    controller = MigrateController.__new__(MigrateController)
-    controller._committed = False
     classes = runtime.operator_classes()
     for operator in classes:
         bpy.utils.register_class(operator)
     try:
-        with patch.object(runtime, "active_job", SimpleNamespace(controller=controller)):
-            for action in ("start_server", "stop_server", "restart_server", "open_server_log"):
+        with patch.object(runtime, "state", return_value="MIGRATING"):
+            for action in ("start_server", "stop_server", "restart_server"):
                 assert not getattr(bpy.ops.anyimage, action).poll()
-            assert bpy.ops.anyimage.cancel_job.poll()
-            controller._committed = True
-            assert not bpy.ops.anyimage.cancel_job.poll()
+            assert bpy.ops.anyimage.open_server_log.poll()
     finally:
         for operator in reversed(classes):
             bpy.utils.unregister_class(operator)
@@ -79,7 +73,10 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
 
 
 def test_native_setup_operator_preserves_plain_error(capfd):
-    with patch.object(ai_setup.runtime, "setup_controller", side_effect=RuntimeError("Setup unavailable")):
+    with (
+        patch.object(ai_setup.runtime, "state", return_value="UNAVAILABLE"),
+        patch.object(ai_setup.runtime, "setup", side_effect=RuntimeError("Setup unavailable")),
+    ):
         classes = (*ai_setup.runtime.operator_classes(), ai_setup.SetupAIServer)
         for cls in classes:
             bpy.utils.register_class(cls)

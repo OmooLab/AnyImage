@@ -1,6 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import bpy
 import numpy as np
@@ -10,7 +10,6 @@ from anyimage.operators.remove_background.hdr import HdrBackgroundInput
 from anyimage.common.image import cleanup_image_input, image_rgba
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators.remove_background import operators
-from anyimage.runtime import JobOperatorBase
 from tests.support.hdr_image import hdr_texture
 from tests.support.image_texture import texture, texture_context
 
@@ -76,27 +75,43 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
 def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outcome):
     target = ImageEditTarget.capture(texture_context(hdr_texture))
     paths = []
+    operation = operators.RunBackgroundRemoval
+    original_cleanup = operation.cleanup
+    original_execute = operation.execute
+    context = SimpleNamespace(window_manager=Mock(), window=None)
 
-    def submit(operator, context):
+    def execute(operator, _context):
+        result = original_execute(operator, context)
+        if result == {"RUNNING_MODAL"}:
+            runtime._tick()
+            return operator.modal(context, SimpleNamespace(type="TIMER"))
+        return result
+
+    def cleanup(operator):
         paths.append(Path(operator.input_path))
         assert paths[-1].is_file()
-        if outcome == "raise":
-            raise RuntimeError("Submission failed")
-        return {"CANCELLED"}
+        original_cleanup(operator)
 
-    # Use the registered type so super().execute follows the real Operator inheritance.
-    operation = operators.RunBackgroundRemoval
-    with patch.object(ImageEditTarget, "capture", return_value=target), patch.object(JobOperatorBase, "execute", submit):
+    from anyimage.runtime import runtime
+    with (
+        patch.object(ImageEditTarget, "capture", return_value=target),
+        patch.object(runtime, "can_submit", return_value=outcome == "raise"),
+        patch.object(runtime, "enable"),
+        patch.object(runtime.server, "poll"),
+        patch.object(runtime.server, "submit", side_effect=RuntimeError("Submission failed")),
+        patch.object(operation, "execute", execute),
+        patch.object(operation, "request", return_value={}),
+        patch.object(operation, "cleanup", cleanup),
+    ):
         bpy.utils.register_class(operation)
         try:
-            if outcome == "raise":
-                with pytest.raises(RuntimeError, match="Submission failed"):
-                    bpy.ops.anyimage.run_background_removal("EXEC_DEFAULT")
-            else:
-                assert bpy.ops.anyimage.run_background_removal("EXEC_DEFAULT") == {"CANCELLED"}
+            message = "Submission failed" if outcome == "raise" else "Cannot submit"
+            with pytest.raises(RuntimeError, match=message):
+                bpy.ops.anyimage.run_background_removal("EXEC_DEFAULT")
         finally:
             bpy.utils.unregister_class(operation)
-    assert paths and not paths[0].parent.exists()
+    assert len(paths) == 1 and not paths[0].parent.exists()
+    assert not runtime.jobs
 
 
 def test_hdr_request_uses_alpha_output_and_current_still(hdr_texture):

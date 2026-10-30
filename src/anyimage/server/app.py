@@ -31,38 +31,38 @@ def create_model_manager(job_server):
     return ModelManager(job_server.storage_root / "models")
 
 
-@server.job("download-model")
+@server.job("download_model")
 def download_model(context, parameters):
     manager = context.resource("model_manager")
     return manager.download(context, parameters["model"])
 
 
-@server.job("download-required-models")
+@server.job("download_required_models")
 def download_required_models(context, parameters):
     manager = context.resource("model_manager")
     return manager.download_missing(context, parameters["models"], online=parameters.get("online", True))
 
 
-@server.job("remove-background")
+@server.job("remove_background")
 def remove_background(context, parameters):
     return _run_model_job(_remove_background, context, parameters)
 
 
-@server.job("upscale-image")
+@server.job("upscale_image")
 def upscale_image(context, parameters):
     return _run_model_job(_upscale_image, context, parameters)
 
 
-@server.job("generate-depth-plane-geometry")
+@server.job("generate_depth_plane_geometry")
 def generate_depth_plane_geometry(context, parameters):
     return _run_model_job(_generate_depth_plane_geometry, context, parameters)
 
 
-@server.job("generate-cutout-artifacts")
+@server.job("generate_cutout_artifacts")
 def generate_cutout_artifacts(context, parameters):
     return _run_model_job(_generate_cutout_artifacts, context, parameters)
 
 
-@server.job("generate-panorama-geometry")
+@server.job("generate_panorama_geometry")
 def generate_panorama_geometry(context, parameters):
     return _run_model_job(_generate_panorama_geometry, context, parameters)

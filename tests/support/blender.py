@@ -101,6 +101,7 @@ class BlenderTestCase(unittest.TestCase):
             ),
         )
         fake_bpy.context = SimpleNamespace(
+            window_manager=SimpleNamespace(windows=[]),
             preferences=SimpleNamespace(addons={}, view=SimpleNamespace(use_translate_tooltips=True)),
         )
         fake_bpy.app = SimpleNamespace(online_access=True)
@@ -204,7 +205,7 @@ class BlenderTestCase(unittest.TestCase):
 
 
     def tearDown(self):
-        self.anyimage.runtime.close_active()
+        self.anyimage.runtime.disable()
         self.registered.clear()
         self.registered_tools.clear()
         self.status_bar_draws.clear()

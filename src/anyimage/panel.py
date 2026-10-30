@@ -17,80 +17,12 @@ class ServerPanel(bpy.types.Panel):
 
     def draw(self, _context):
         layout = self.layout
-        layout.enabled = not runtime.maintenance_busy()
-        busy = runtime.server_busy()
-        if not runtime.environment_ready():
-            layout.label(
-                text="Environment is not installed",
-                icon="ERROR",
-            )
-            layout.operator("anyimage.open_server_log", icon="TEXT")
-            setup_row = layout.row()
-            setup_row.enabled = not busy
-            setup_row.operator(
-                SetupAIServer.bl_idname,
-                text="Set Up AI Server…",
-                icon="IMPORT",
-            )
+        runtime.draw_server_controls(layout, setup_operator=SetupAIServer.bl_idname)
+        runtime.draw_jobs(layout)
+        if runtime.state() in {"UNAVAILABLE", "INSTALLING", "MIGRATING"}:
             return
 
-        status = runtime.server_status()
-        state = status.get("state", "STOPPED")
-        server_running = state in {"READY", "BUSY"}
-        icons = {
-            "READY": "RADIOBUT_ON",
-            "BUSY": "TIME",
-            "STARTING": "TIME",
-            "ERROR": "ERROR",
-            "UNAVAILABLE": "ERROR",
-            "STOPPED": "PAUSE",
-        }
-        row = layout.row(align=True)
-        if server_running:
-            row.label(
-                text=(
-                    "Running"
-                    if state == "READY"
-                    else "Running (Busy)"
-                ),
-                icon=icons[state],
-            )
-            controls = row.row(align=True)
-            controls.operator(
-                "anyimage.restart_server",
-                text="",
-                icon="FILE_REFRESH",
-            )
-            controls.operator(
-                "anyimage.stop_server",
-                text="",
-                icon="PAUSE",
-            )
-        elif state == "STOPPED":
-            row.operator(
-                "anyimage.start_server",
-                text="Start",
-                icon="PLAY",
-            )
-        else:
-            row.label(
-                text=status.get("message", state.title()),
-                icon=icons.get(state, "QUESTION"),
-            )
-            if state == "ERROR":
-                row.operator(
-                    "anyimage.start_server",
-                    text="Start",
-                    icon="PLAY",
-                )
-
-        layout.operator("anyimage.open_server_log", icon="TEXT")
-
-        cached = (
-            status.get("resources", {})
-            .get("model_manager", {})
-            .get("loaded", {})
-        )
+        cached = runtime.resource("model_manager").get("loaded", {})
         slots = tuple(
             (cached.get(family), job)
             for family, job in (
@@ -104,7 +36,7 @@ class ServerPanel(bpy.types.Panel):
         cached_row.label(text="Models Loaded")
         if has_loaded_models:
             clear = cached_row.row(align=True)
-            clear.enabled = state == "READY"
+            clear.enabled = (runtime.state() == "IDLE")
             clear.operator(
                 UnloadModels.bl_idname,
                 text="Unload",

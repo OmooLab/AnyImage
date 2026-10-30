@@ -18,7 +18,7 @@ def test_models_dispatch_keep_alpha(tmp_path, key, kind):
     source = tmp_path / "source.png"
     Image.new("RGBA", (7, 5), (60, 120, 180, 128)).save(source)
     manager = ModelManager(tmp_path / "models")
-    context = FakeJobContext(tmp_path / "job", "remove-background", manager)
+    context = FakeJobContext(tmp_path / "job", "remove_background", manager)
     adapter = background.model_adapter(key)
     parameters = {"input": str(source), "model": key, "device": "directml"}
     if kind == "alpha":

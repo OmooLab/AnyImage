@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from uuid import uuid4
+from weakref import WeakValueDictionary
 
 import bpy
 
@@ -13,6 +14,8 @@ from .image import (
     replace_empty_image,
     restore_image_content,
 )
+
+_image_targets = WeakValueDictionary()
 
 
 def active_texture_node(context):
@@ -155,6 +158,7 @@ class ImageEditTarget:
 
     @classmethod
     def capture(cls, context):
+        """Share the live binding across pending edits of the same target."""
         owner = image_edit_owner(context)
         if owner is None:
             raise RuntimeError("Select an Image Empty or a material Image Texture")
@@ -177,7 +181,14 @@ class ImageEditTarget:
             if not identity:
                 identity = uuid4().hex
                 owner["anyimage_identity"] = identity
-        return cls(owner, image, tree, identity, object_owner, material, material_slot)
+        key = (object_owner or owner).as_pointer()
+        target = _image_targets.get(key)
+        if target is None or (
+            target.owner, target.image, target.material, target.node_identity, target.material_slot,
+        ) != (owner, image, material, identity, material_slot):
+            target = cls(owner, image, tree, identity, object_owner, material, material_slot)
+            _image_targets[key] = target
+        return target
 
     def validate(self):
         """Reject a removed owner or a changed image assignment."""
@@ -220,16 +231,24 @@ class ImageEditTarget:
             raise
         if self.tree is None:
             if isolate_shared:
-                return replace_empty_image(
+                image = replace_empty_image(
                     self.owner, result_image, isolate_image=has_other_image_user(self.owner),
                 )
-            return replace_empty_image(self.owner, result_image)
-        if self.object_owner is not None and material_has_other_object_user(
+            else:
+                image = replace_empty_image(self.owner, result_image)
+        elif self.object_owner is not None and material_has_other_object_user(
             self.material,
             self.object_owner,
         ):
-            return self._commit_isolated_material(result_image)
-        return replace_texture_image(self.owner, result_image)
+            image = self._commit_isolated_material(result_image)
+            self.material = self.object_owner.material_slots[self.material_slot].material
+            self.tree = self.material.node_tree
+            self.owner = object_color_texture(self.object_owner)
+        else:
+            image = replace_texture_image(self.owner, result_image)
+        # Pending edits of the same owner follow only our successful replacements.
+        self.image = image
+        return image
 
     def _commit_isolated_material(self, result_image):
         """Copy a shared material before committing this object's Color result."""

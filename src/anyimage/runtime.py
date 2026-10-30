@@ -1,8 +1,8 @@
 from pathlib import Path
 
+import bpy
 from blendjob import JobRuntime
 from .ai_preferences import storage_root
-from .server.model_catalog import DEFAULT_MODEL_KEYS
 
 
 ENVIRONMENT = {
@@ -21,10 +21,12 @@ ENVIRONMENT = {
 }
 
 
-def prepare_models(setup):
-    setup.request(
-        "download-required-models", {"models": list(DEFAULT_MODEL_KEYS), "online": setup.online},
-    )
+def prepare_models(runtime):
+    from .server.model_catalog import DEFAULT_MODEL_KEYS
+
+    runtime.submit("download_required_models", {
+        "models": list(DEFAULT_MODEL_KEYS), "online": bpy.app.online_access,
+    })
 
 
 runtime = JobRuntime(
@@ -36,4 +38,5 @@ runtime = JobRuntime(
     namespace="anyimage",
 )
 
-JobOperatorBase = runtime.JobOperatorBase
+
+JobOperator = runtime.JobOperator

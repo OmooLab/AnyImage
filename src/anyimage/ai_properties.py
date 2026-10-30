@@ -37,7 +37,7 @@ def device_enum_items(_owner, _context):
 
 
 def models_status():
-    status = runtime.server_status().get("resources", {}).get("model_manager", {})
+    status = runtime.resource("model_manager")
     errors = status.get("validation_errors", {})
     return {
         "catalog": tuple(
@@ -63,7 +63,7 @@ def model_ready(model_key):
 
 
 def ai_status():
-    environment_ready = runtime.environment_ready()
+    environment_ready = runtime.state() not in {"UNAVAILABLE", "INSTALLING", "MIGRATING"}
     ready_models = {
         model["key"]
         for model in model_catalog()
@@ -88,7 +88,7 @@ def ai_ready():
 def ai_setup_label(status=None):
     if status is None:
         status = ai_status()
-    return "Download Required Models…" if status["environment_ready"] else "Set Up AI Server…"
+    return "Download Required Models" if status["environment_ready"] else "Set Up AI Server"
 
 
 def model_download_size(model_key):

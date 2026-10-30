@@ -97,14 +97,14 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
     layout.menu.assert_not_called()
 
 
-@pytest.mark.parametrize("busy,limit,expected", [(False, 2048, True), (True, 2048, False), (False, 4, False)])
+@pytest.mark.parametrize("busy,limit,expected", [(False, 2048, True), (True, 2048, True), (False, 4, False)])
 def test_texture_poll_applies_busy_and_size_limits(texture, busy, limit, expected):
     context = texture_context(texture)
-    with patch.object(runtime, "server_busy", return_value=busy), patch.object(
+    with patch.object(runtime, "state", return_value="PROCESSING" if busy else "IDLE"), patch.object(
         upscale, "configured_max_ai_input_size", return_value=limit,
     ):
         assert upscale.UpscaleImage.poll(context) == expected
-        assert remove_background.RemoveImageBackground.poll(context) == (not busy)
+        assert remove_background.RemoveImageBackground.poll(context) is True
 
 
 @pytest.mark.parametrize("operation,filename,shared", [
@@ -165,13 +165,14 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
 ])
 def test_texture_job_request_and_completion(texture, tmp_path, operation, module, filename, outcome):
     context = texture_context(texture)
-    context.window = object()
+    context.window = bpy.context.window
     context.window_manager = SimpleNamespace(
-        progress_begin=Mock(), progress_end=Mock(), event_timer_add=Mock(return_value=object()),
+        event_timer_add=Mock(return_value=object()),
         event_timer_remove=Mock(), modal_handler_add=Mock(),
     )
     write_result(tmp_path, filename)
-    controller = SimpleNamespace(
+    server = SimpleNamespace(
+        snapshot={"state": "IDLE"}, poll=Mock(),
         submit=Mock(return_value={"job_id": "texture-job", "directory": str(tmp_path)}),
         status=Mock(return_value={"state": "failed" if outcome == "invalid_target" else outcome,
                                   "result": {Path(filename).stem: filename}}),
@@ -185,17 +186,17 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
             for name in ("require_environment", "require_model"):
                 stack.enter_context(patch.object(module, name))
             stack.enter_context(patch.object(module, "production_device", return_value="CPU"))
-            stack.enter_context(patch.object(operation, "controller", return_value=controller))
-            stack.enter_context(patch.object(runtime, "update_ui"))
+            stack.enter_context(patch.object(runtime, "server", server))
+            stack.enter_context(patch.object(runtime, "enable"))
+            stack.enter_context(patch.object(runtime._config, "environment_ready", return_value=True))
             stack.enter_context(patch.object(runtime, "redraw_ui"))
             if operation == upscale.UpscaleImage:
                 stack.enter_context(patch.object(upscale, "configured_upscale_model", return_value="HAT_GAN_X4_SHARPER"))
                 stack.enter_context(patch.object(upscale, "configured_max_ai_input_size", return_value=2048))
             assert original_execute(operator, context) == {"RUNNING_MODAL"}
-            job = runtime.active_job
-            job.start_thread.join(timeout=5)
-            assert not job.start_thread.is_alive()
-            kind, parameters = controller.submit.call_args.args
+            job = operator._job
+            assert job.id
+            kind, parameters = server.submit.call_args.args
             assert kind == operation.job_type
             assert "start_frame" not in parameters and "video_frames" not in parameters
             assert parameters["device"] == "cpu"
@@ -207,11 +208,12 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
             texture.id_data.nodes.active = other
             if outcome == "invalid_target":
                 texture.image = None
-                controller.status.return_value = {"state": "succeeded", "result": {Path(filename).stem: filename}}
+                server.status.return_value = {"state": "succeeded", "result": {Path(filename).stem: filename}}
             bpy.ops.ed.undo_push(message="Before asynchronous texture result")
+            runtime._tick()
             result = operator.modal(context, SimpleNamespace(type="TIMER"))
             assert result == ({"FINISHED"} if outcome == "succeeded" else {"CANCELLED"})
-            assert runtime.active_job is None
+            assert not runtime.jobs
             assert operator._image_target is None
             assert not Path(input_path).exists()
             assert other.image is None
@@ -220,6 +222,7 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
             elif outcome != "invalid_target":
                 np.testing.assert_array_equal(images.image_pixels(texture.image), original_pixels)
             context.window_manager.event_timer_remove.assert_called_once()
+            server.mark_job_complete.assert_called_once_with("texture-job")
             return result
 
     with patch.object(operation, "execute", execute), patch.object(
@@ -229,11 +232,11 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
         try:
             call = getattr(bpy.ops.anyimage, operation.bl_idname.split(".")[1])
             if outcome in {"failed", "invalid_target"}:
-                message = "Server task failed" if outcome == "failed" else "no longer available"
+                message = "Server job failed" if outcome == "failed" else "no longer available"
                 with pytest.raises(RuntimeError, match=message):
                     call("EXEC_DEFAULT", True)
             else:
                 assert call("EXEC_DEFAULT", True) == ({"FINISHED"} if outcome == "succeeded" else {"CANCELLED"})
         finally:
-            runtime.close_active()
+            runtime.disable()
             bpy.utils.unregister_class(operation)

@@ -61,7 +61,7 @@ class ImageMenuTest(BlenderTestCase):
         )
         self.assertEqual(
             labels["anyimage.setup_ai_server"],
-            "Download Required Models…",
+            "Download Required Models",
         )
 
         self.assertEqual(
@@ -132,7 +132,7 @@ class ImageMenuTest(BlenderTestCase):
         return calls, labels, operators
 
 
-    def test_image_operators_stay_clickable_until_server_is_busy(self):
+    def test_image_operators_accept_jobs_while_processing(self):
         context = SimpleNamespace(
             object=SimpleNamespace(type="EMPTY", empty_display_type="IMAGE", data=SimpleNamespace()),
         )
@@ -142,13 +142,13 @@ class ImageMenuTest(BlenderTestCase):
             self.remove_background.RemoveImageBackground,
         )
 
-        for busy, expected in ((False, True), (True, False)):
+        for busy, expected in ((False, True), (True, True)):
             with (
                 self.subTest(busy=busy),
                 patch.object(
                     self.anyimage.runtime,
-                    "server_busy",
-                    return_value=busy,
+                    "state",
+                    return_value="PROCESSING" if busy else "IDLE",
                 ),
             ):
                 for operator in operators:

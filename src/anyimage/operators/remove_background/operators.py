@@ -2,7 +2,7 @@ from ...common.job_image import prepare_target_input, apply_image_result
 import bpy
 
 from ...ai_preferences import configured_background_model
-from ...runtime import JobOperatorBase
+from ...runtime import JobOperator
 from ...common.ai import (
     require_input_path,
     report_ai_error,
@@ -30,7 +30,7 @@ class RemoveImageBackground(bpy.types.Operator):
     def poll(cls, context):
         from ...runtime import runtime
 
-        return image_edit_owner(context) is not None and not runtime.server_busy()
+        return image_edit_owner(context) is not None and runtime.can_submit()
 
     def invoke(self, _context, _event):
         setup_result = invoke_ai_setup_if_needed(self)
@@ -49,10 +49,10 @@ class RemoveImageBackground(bpy.types.Operator):
         return {"CANCELLED"}
 
 
-class RunBackgroundRemoval(JobOperatorBase, bpy.types.Operator):
+class RunBackgroundRemoval(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.run_background_removal"
     bl_label = "Run Background Removal"
-    job_type = "remove-background"
+    job_type = "remove_background"
     starting_message = "Starting image background removal"
 
     input_path: bpy.props.StringProperty(options=_HIDDEN)
@@ -74,14 +74,7 @@ class RunBackgroundRemoval(JobOperatorBase, bpy.types.Operator):
             self.report({"ERROR"}, message)
             return {"CANCELLED"}
         self.input_path = str(source_path)
-        try:
-            result = super().execute(context)
-        except Exception:
-            self.cleanup()
-            raise
-        if "CANCELLED" in result:
-            self.cleanup()
-        return result
+        return super().execute(context)
 
     def request(self, context):
         require_environment()

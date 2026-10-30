@@ -1,10 +1,12 @@
 """Prepare and commit image files for server jobs."""
 
 from pathlib import Path
+import shutil
+import tempfile
 import bpy
 from .image import (
     COLOR_NORMALIZED_PROPERTY, is_animated_image, image_is_packed, save_packed_image,
-    image_path,
+    image_path, cleanup_image_input,
 )
 
 
@@ -17,7 +19,13 @@ def prepare_image_input(image, scene):
     source_path = image_path(image)
     if not source_path.is_file():
         raise RuntimeError(f"Source image file does not exist: {source_path}")
-    return source_path, False
+    snapshot = Path(tempfile.mkdtemp(prefix="anyimage-input-")) / source_path.name
+    try:
+        shutil.copyfile(source_path, snapshot)
+    except OSError:
+        cleanup_image_input(snapshot, True)
+        raise
+    return snapshot, True
 
 
 def load_image_edit_result(source_image, output_path):

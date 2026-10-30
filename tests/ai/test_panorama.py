@@ -75,7 +75,7 @@ def test_normal_fusion_rotates_views_rejects_invalid_samples_and_preserves_seam(
 @pytest.fixture
 def panorama_job(tmp_path, monkeypatch):
     source = tmp_path / "source.png"
-    context = FakeJobContext(tmp_path / "result", "generate-panorama-geometry",
+    context = FakeJobContext(tmp_path / "result", "generate_panorama_geometry",
                              SimpleNamespace(directory=lambda _: tmp_path, get_session=lambda *_: (object(), 0.0)))
     calls, pixels = [], []
 

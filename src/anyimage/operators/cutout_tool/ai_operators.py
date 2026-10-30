@@ -18,7 +18,7 @@ from ...properties import (
     cutout_fine_outline_property,
     cutout_edge_length_property,
 )
-from ...runtime import JobOperatorBase
+from ...runtime import JobOperator
 from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
 from ...server.media.resolution import (
     DEFAULT_MAX_AI_INPUT_SIZE,
@@ -145,12 +145,12 @@ def cutout_geometry_settings(context):
     )
 
 
-class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
+class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.cutout_selection_to_shape"
     bl_label = "Cutout Selection to Shape"
     bl_description = "Build the image selection as a Cutout shape"
     bl_options = {"INTERNAL"}
-    job_type = "generate-cutout-artifacts"
+    job_type = "generate_cutout_artifacts"
     starting_message = "Generating Cutout artifacts"
 
     input_path: bpy.props.StringProperty(options=_HIDDEN)
@@ -189,6 +189,8 @@ class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
     def execute(self, context):
         try:
             source_object = require_image_empty(self.source_object_name)
+            self._source_object = source_object
+            self._source_image = source_object.data
             if is_animated_image(source_object.data):
                 raise ValueError("Cutout currently supports still images")
             if self.shape not in CUTOUT_SHAPES:
@@ -229,10 +231,7 @@ class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
             cleanup_material_color_input(getattr(self, "color_path", None))
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
-        result = super().execute(context)
-        if "CANCELLED" in result:
-            cleanup_material_color_input(self.color_path)
-        return result
+        return super().execute(context)
 
     def request(self, context):
         require_environment()
@@ -264,6 +263,8 @@ class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
 
     def response(self, context, result):
         source_object = require_image_empty(self.source_object_name)
+        if source_object != self._source_object or source_object.data != self._source_image:
+            raise RuntimeError("The source image target is no longer available or has changed")
         source_bounds = tuple(json.loads(self.selection_bounds_json))
         color_image, source_alpha, color_bounds = _generated_color_result(
             self.color_path,
@@ -327,3 +328,5 @@ class CutoutSelectionToShape(JobOperatorBase, bpy.types.Operator):
 
     def cleanup(self):
         cleanup_material_color_input(self.color_path)
+        self._source_object = None
+        self._source_image = None

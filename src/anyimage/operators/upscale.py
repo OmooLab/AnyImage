@@ -9,7 +9,7 @@ from ..server.media.resolution import (
     MAX_MAX_AI_INPUT_SIZE,
     MIN_MAX_AI_INPUT_SIZE,
 )
-from ..runtime import JobOperatorBase
+from ..runtime import JobOperator
 from ..common.ai import (
     require_input_path,
     invoke_ai_setup_if_needed,
@@ -39,12 +39,12 @@ def upscale_input_size_allowed(image, max_input_size):
     return max(width, height) < int(max_input_size)
 
 
-class UpscaleImage(JobOperatorBase, bpy.types.Operator):
+class UpscaleImage(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.upscale_image"
     bl_label = "Upscale"
     bl_description = "Upscale the image by 2x with an AI model"
     bl_options = {"UNDO"}
-    job_type = "upscale-image"
+    job_type = "upscale_image"
     starting_message = "Starting image upscale"
 
     model: bpy.props.StringProperty(
@@ -75,7 +75,7 @@ class UpscaleImage(JobOperatorBase, bpy.types.Operator):
                 owner_image(owner),
                 configured_max_ai_input_size(context),
             )
-            and not runtime.server_busy()
+            and runtime.can_submit()
         )
 
     def invoke(self, context, _event):
@@ -109,10 +109,7 @@ class UpscaleImage(JobOperatorBase, bpy.types.Operator):
 
         self.input_path = str(source_path)
         self.delete_input = delete_input
-        result = super().execute(context)
-        if "CANCELLED" in result:
-            self.cleanup()
-        return result
+        return super().execute(context)
 
     def request(self, context):
         require_environment()

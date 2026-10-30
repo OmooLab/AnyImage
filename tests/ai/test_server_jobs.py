@@ -29,7 +29,7 @@ class ServerJobsTest(unittest.TestCase):
                 root = Path(directory)
                 input_path = root / "input.png"
                 input_path.touch()
-                context = FakeJobContext(root / "result", "generate-depth-plane-geometry")
+                context = FakeJobContext(root / "result", "generate_depth_plane_geometry")
                 depth_texture = context.directory / "depth.exr"
                 metadata = context.directory / "depth.json"
                 normal_texture = context.directory / f"{normal_space.lower()}-normal.png"
@@ -76,7 +76,7 @@ class ServerJobsTest(unittest.TestCase):
             root = Path(directory)
             input_path = root / "input.png"
             Image.new("RGBA", (2, 1), (255, 64, 32, 128)).save(input_path)
-            context = FakeJobContext(root / "result", "remove-background")
+            context = FakeJobContext(root / "result", "remove_background")
             with (
                 patch.object(onnx_ben2, "infer_alpha", return_value=np.full((1, 2), 128 / 255, np.float32)) as infer,
                 patch.object(Image.Image, "save", autospec=True, side_effect=Image.Image.save) as save,
@@ -148,7 +148,7 @@ class ServerJobsTest(unittest.TestCase):
             root = Path(directory)
             path = root / "input.png"
             Image.new("RGB", (2, 1)).save(path)
-            context = FakeJobContext(root / "result", "remove-background")
+            context = FakeJobContext(root / "result", "remove_background")
             with (
                 patch.object(onnx_ben2, "infer_alpha", return_value=alpha),
             ):
@@ -165,7 +165,7 @@ class ServerJobsTest(unittest.TestCase):
             root = Path(directory)
             input_path = root / "input.png"
             input_path.touch()
-            context = FakeJobContext(root / "result", "upscale-image")
+            context = FakeJobContext(root / "result", "upscale_image")
             with patch.object(
                 self.upscale_job,
                 "infer_one",
@@ -208,7 +208,7 @@ class ServerJobsTest(unittest.TestCase):
             pixels[..., :3] = (10, 20, 30)
             pixels[..., 3] = np.arange(5, dtype=np.uint8) * 60
             Image.fromarray(pixels, mode="RGBA").save(source_path)
-            context = FakeJobContext(root / "result", "upscale-image")
+            context = FakeJobContext(root / "result", "upscale_image")
             prediction = Image.new("RGB", (20, 12), (10, 20, 30))
 
             with patch.object(

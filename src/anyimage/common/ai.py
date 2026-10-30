@@ -48,7 +48,7 @@ def production_device():
 
 
 def require_environment():
-    if not runtime.environment_ready():
+    if runtime.state() in {"UNAVAILABLE", "INSTALLING", "MIGRATING"}:
         raise RuntimeError("Install the AnyImage Environment first")
 
 

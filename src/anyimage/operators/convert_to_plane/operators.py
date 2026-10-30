@@ -4,7 +4,7 @@ import bpy
 from ...preferences import addon_preferences
 from ...ai_preferences import configured_max_ai_input_size, configured_geometry_model
 from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
-from ...runtime import JobOperatorBase
+from ...runtime import JobOperator
 from ...server.media.resolution import (
     DEFAULT_MAX_AI_INPUT_SIZE,
     MAX_MAX_AI_INPUT_SIZE,
@@ -40,10 +40,10 @@ def depth_plane_settings(context):
     )
 
 
-class GenerateDepthPlane(JobOperatorBase, bpy.types.Operator):
+class GenerateDepthPlane(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.generate_depth_plane"
     bl_label = "Generate Depth Plane"
-    job_type = "generate-depth-plane-geometry"
+    job_type = "generate_depth_plane_geometry"
     starting_message = "Preparing depth conversion"
 
     input_path: bpy.props.StringProperty(options=_HIDDEN)
@@ -140,7 +140,7 @@ class ConvertToDepthPlane(bpy.types.Operator):
     def poll(cls, context):
         from ...runtime import runtime
 
-        return is_image_empty(context.object) and not runtime.server_busy()
+        return is_image_empty(context.object) and runtime.can_submit()
 
     def execute(self, context):
         return start_depth_plane_job(self, context, "DEPTH")
@@ -156,7 +156,7 @@ class ConvertToReliefPlane(bpy.types.Operator):
     def poll(cls, context):
         from ...runtime import runtime
 
-        return is_image_empty(context.object) and not runtime.server_busy()
+        return is_image_empty(context.object) and runtime.can_submit()
 
     def execute(self, context):
         return start_depth_plane_job(self, context, "RELIEF")

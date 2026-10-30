@@ -228,7 +228,6 @@ class AddonRegistrationTest(BlenderTestCase):
             ],
         )
         self.assertEqual(len(self.status_bar_draws), 1)
-        self.assertEqual(self.status_bar_draws[0]._owner, "anyimage")
         self.assertEqual(
             self.context_menu_draws[:2],
             [

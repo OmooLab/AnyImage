@@ -129,7 +129,7 @@ class PreferencesTest(BlenderTestCase):
 
         ready = {"environment_ready": True, "missing_models": (), "ready": True}
         operators = self.draw_preferences(ready, catalog)
-        self.assertIn("anyimage.migrate_server", [identifier for identifier, _operator in operators])
+        self.assertIn("anyimage.migrate_storage", [identifier for identifier, _operator in operators])
         downloads = [
             operator.model
             for identifier, operator in operators
@@ -158,9 +158,9 @@ class PreferencesTest(BlenderTestCase):
                 patch.dict(properties.shared_model_catalog.DOWNLOADABLE_MODELS, {spec.key: spec}, clear=True),
                 patch.object(properties.runtime, "storage_root", return_value=root),
                 patch.object(properties.runtime.server, "snapshot", state),
-                patch.object(properties.runtime.server, "ensure", side_effect=AssertionError("UI contacted server")),
+                patch.object(properties.runtime.server.control, "send", side_effect=AssertionError("UI contacted server")),
                 patch.object(hashlib, "file_digest", side_effect=AssertionError("UI hashed files")),
-                patch.object(properties.runtime, "server_busy", return_value=False),
+                patch.object(properties.runtime, "state", return_value="IDLE"),
             ):
                 record = properties.model_catalog()[0]
                 self.assertTrue(record["installed"])
@@ -182,7 +182,7 @@ class PreferencesTest(BlenderTestCase):
         with (
             patch.object(self.anyimage.ai_properties, "ai_status", return_value=status),
             patch.object(self.anyimage.ai_properties, "model_catalog", return_value=catalog),
-            patch.object(self.anyimage.runtime, "server_busy", return_value=False),
+            patch.object(self.anyimage.runtime, "state", return_value="IDLE"),
         ):
             preferences.draw(None)
         return operators
@@ -218,6 +218,7 @@ class PreferencesTest(BlenderTestCase):
         )
         source_object = SimpleNamespace(
             name="Source",
+            as_pointer=lambda: 100,
             type="EMPTY",
             empty_display_type="IMAGE",
             data=source_image,
@@ -245,7 +246,7 @@ class PreferencesTest(BlenderTestCase):
                 return_value=(Path("input.png"), False),
             ),
             patch.object(
-                self.runtime.JobOperatorBase,
+                self.runtime.JobOperator,
                 "execute",
                 return_value={"RUNNING_MODAL"},
             ),

@@ -2,13 +2,13 @@ import bpy
 
 from ..preferences import ADDON_PACKAGE
 from ..ai_preferences import storage_root
-from ..runtime import JobOperatorBase, runtime
+from ..runtime import JobOperator, runtime
 from ..server.model_catalog import DEFAULT_MODEL_KEYS, get_downloadable_model
 from ..ai_properties import (
     model_download_size,
     model_record,
 )
-from ..common.ai import require_environment, report_ai_error
+from ..common.ai import require_environment
 from ..common.server_location import inspect_installation, server_root
 
 
@@ -20,6 +20,14 @@ class SetupAIServer(bpy.types.Operator):
     bl_idname = "anyimage.setup_ai_server"
     bl_label = "Set Up AI Server"
     bl_description = "Install the environment and required AI models"
+
+    def execute(self, context):
+        try:
+            runtime.setup(**self.request(context))
+        except (OSError, RuntimeError, ValueError) as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        return {"FINISHED"}
 
     location: bpy.props.StringProperty(
         name="Server Location",
@@ -35,7 +43,7 @@ class SetupAIServer(bpy.types.Operator):
 
     @classmethod
     def poll(cls, _context):
-        return not runtime.server_busy()
+        return (runtime.state() == "UNAVAILABLE")
 
     def invoke(self, context, _event):
         self._location_preview = None
@@ -59,17 +67,12 @@ class SetupAIServer(bpy.types.Operator):
         self._inspect_location()
         return True
 
-    def execute(self, _context):
+    def request(self, _context):
         _, target, _, error = self._inspect_location()
         if error:
-            self.report({"ERROR"}, error)
-            return {"CANCELLED"}
-        try:
-            result = bpy.ops.anyimage.setup_server(directory=str(target), use_mirror=self.use_mirror)
-        except RuntimeError as error:
-            report_ai_error(self, error)
-            return {"CANCELLED"}
-        return {"CANCELLED"} if "CANCELLED" in result else {"FINISHED"}
+            raise ValueError(error)
+        return {"target": str(target), "mirror": self.use_mirror,
+                "online": bpy.app.online_access}
 
     def draw(self, _context):
         layout = self.layout
@@ -138,10 +141,10 @@ class OpenAIEnvironmentSettings(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class DownloadModel(JobOperatorBase, bpy.types.Operator):
+class DownloadModel(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.download_model"
     bl_label = "Download Model"
-    job_type = "download-model"
+    job_type = "download_model"
 
     model: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
 
@@ -157,17 +160,15 @@ class DownloadModel(JobOperatorBase, bpy.types.Operator):
         return {"model": self.model}
 
 
-class DownloadRequiredModels(JobOperatorBase, bpy.types.Operator):
+class DownloadRequiredModels(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.download_required_models"
     bl_label = "Download Required Models"
-    job_type = "download-required-models"
+    job_type = "download_required_models"
     starting_message = "Starting required model downloads"
 
     def request(self, _context):
         require_environment()
-        if not bpy.app.online_access:
-            raise RuntimeError("Online Access is disabled in Blender Preferences")
-        return {"models": list(DEFAULT_MODEL_KEYS)}
+        return {"models": list(DEFAULT_MODEL_KEYS), "online": bpy.app.online_access}
 
 
 class UnloadModels(bpy.types.Operator):
@@ -177,14 +178,10 @@ class UnloadModels(bpy.types.Operator):
 
     @classmethod
     def poll(cls, _context):
-        return not runtime.maintenance_busy() and runtime.server_status().get("state") == "READY"
+        return (runtime.state() == "IDLE")
 
     def execute(self, _context):
-        try:
-            runtime.clear_resource("model_manager")
-        except RuntimeError as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
+        runtime.clear_resource("model_manager")
         return {"FINISHED"}
 
 

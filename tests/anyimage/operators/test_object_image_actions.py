@@ -48,6 +48,23 @@ def _material(kind="PLAIN", image=None):
     return material_data.create_image_material(source, color), color
 
 
+def test_pending_edits_follow_shared_material_replacement(tmp_path):
+    from anyimage.common.job_image import apply_image_result
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    material, image = _material()
+    first_owner = _image_object(material, "First")
+    second_owner = _image_object(material, "Second")
+    first = ImageEditTarget.capture(_context(first_owner))
+    second = ImageEditTarget.capture(_context(first_owner))
+    write_result(tmp_path)
+    apply_image_result(first, tmp_path / "foreground.png")
+    apply_image_result(second, tmp_path / "foreground.png")
+    assert first_owner.active_material != material
+    assert second_owner.active_material == material
+    assert object_color_texture(second_owner).image == image
+    assert tuple(object_color_texture(first_owner).image.size) == (8, 6)
+
+
 @pytest.mark.parametrize("kind", ["PLAIN", "PANORAMA", "SHADELESS"])
 def test_marked_object_resolves_generated_material_color(kind):
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -100,7 +117,7 @@ def test_object_color_target_survives_shader_edits(edit):
         tree.nodes.remove(shader)
     assert object_color_texture(obj).image == color
     target.validate()
-    with patch.object(runtime, "server_busy", return_value=False):
+    with patch.object(runtime, "state", return_value="IDLE"):
         assert remove_background.RemoveImageBackground.poll(_context(obj))
 
 
@@ -276,7 +293,7 @@ def test_object_menu_and_operator_polls_use_marked_object():
     ], identifiers
     assert layout.operator.call_args_list[2].kwargs["text"] == "Upscale (8 × 6)"
 
-    with patch.object(runtime, "server_busy", return_value=False), patch.object(
+    with patch.object(runtime, "state", return_value="IDLE"), patch.object(
         upscale,
         "configured_max_ai_input_size",
         return_value=2048,

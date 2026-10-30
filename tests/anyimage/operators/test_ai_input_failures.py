@@ -27,8 +27,8 @@ class AiInputFailuresTest(BlenderTestCase):
                     stack.enter_context(patch.object(module, "prepare_target_input", return_value=(path, False)))
                     stack.enter_context(patch.object(module, "require_environment"))
                     stack.enter_context(patch.object(module, "require_model"))
-                    stack.enter_context(patch.object(self.runtime.runtime, "active_job", None))
-                    submit = stack.enter_context(patch.object(self.runtime.runtime, "begin_job"))
+                    stack.enter_context(patch.object(self.runtime.runtime, "can_submit", return_value=True))
+                    submit = stack.enter_context(patch.object(self.runtime.runtime.server, "submit"))
                     if module == self.upscale:
                         stack.enter_context(patch.object(module, "configured_upscale_model", return_value="HAT_GAN_X4_SHARPER"))
                         stack.enter_context(patch.object(module, "configured_max_ai_input_size", return_value=2048))

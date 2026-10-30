@@ -13,7 +13,7 @@ from tests.anyimage.server.support import FakeJobContext
 def test_alpha_job_failure_does_not_write_result(tmp_path, failure):
     source = tmp_path / "input.png"
     Image.new("RGB", (2, 2)).save(source)
-    context = FakeJobContext(tmp_path / "job", "remove-background")
+    context = FakeJobContext(tmp_path / "job", "remove_background")
     parameters = {"input": str(source), "model": "BEN2_BASE", "device": "cpu", "output_kind": "alpha"}
     if failure == "sequence":
         frames = tmp_path / "frames"

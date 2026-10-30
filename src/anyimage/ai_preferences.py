@@ -187,7 +187,7 @@ class AnyImagePreferences(SharedPreferences):
         location_row.label(text=str(storage_root()), icon="FILE_FOLDER")
         if not status["environment_ready"]:
             setup_row = server.row(align=True)
-            setup_row.enabled = not runtime.server_busy()
+            setup_row.enabled = (runtime.state() == "UNAVAILABLE")
             setup_row.operator(
                 SetupAIServer.bl_idname,
                 text=ai_setup_label(status),
@@ -195,8 +195,7 @@ class AnyImagePreferences(SharedPreferences):
             )
         else:
             migrate_row = location_row.row(align=True)
-            migrate_row.enabled = not runtime.server_busy()
-            migrate_row.operator("anyimage.migrate_folder", icon="FILE_FOLDER")
+            migrate_row.operator("anyimage.migrate_storage", icon="FILE_FOLDER")
             server.label(text="Installed", icon="CHECKMARK")
 
         if status["environment_ready"]:
@@ -281,7 +280,7 @@ class AnyImagePreferences(SharedPreferences):
             )
             return
         download_row = row.row(align=True)
-        download_row.enabled = not runtime.server_busy()
+        download_row.enabled = runtime.can_submit()
         operator = download_row.operator(
             DownloadModel.bl_idname,
             text="Download Again" if error else "Download",

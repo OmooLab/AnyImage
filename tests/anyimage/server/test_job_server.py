@@ -244,12 +244,12 @@ class JobServerTest(ServerTestCase):
         self.assertEqual(
             set(server.handlers),
             {
-                "download-model",
-                "download-required-models",
-                "remove-background",
-                "upscale-image",
-                "generate-depth-plane-geometry",
-                "generate-panorama-geometry",
-                "generate-cutout-artifacts",
+                "download_model",
+                "download_required_models",
+                "remove_background",
+                "upscale_image",
+                "generate_depth_plane_geometry",
+                "generate_panorama_geometry",
+                "generate_cutout_artifacts",
             },
         )

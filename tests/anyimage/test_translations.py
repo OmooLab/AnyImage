@@ -4,6 +4,7 @@ from string import Formatter
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from blendjob.jobs import Job
 from blendjob.translations import TRANSLATIONS as BLENDJOB_TRANSLATIONS
 
 from tests.support.blender import BlenderTestCase
@@ -24,7 +25,7 @@ class TranslationsTest(BlenderTestCase):
         self.assertNotIn(prop["translation_context"], ("*", "Operator"))
         self.assertEqual(catalog[(prop["translation_context"], prop["items"][0][1])], "面片")
 
-    def test_status_bar_translates_on_each_draw_without_changing_job_data(self):
+    def test_sidebar_translates_on_each_draw_without_changing_job_data(self):
         runtime = self.runtime.runtime
         catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
         layout = Mock()
@@ -33,17 +34,17 @@ class TranslationsTest(BlenderTestCase):
         context = SimpleNamespace()
         message = "Generating panorama view {index}/{total}"
         args = {"index": 3, "total": 12}
-        with patch.object(runtime, "active_job", object()), patch.object(runtime, "redraw_ui"):
-            runtime.update_ui(context, 0.25, message, message_args=args)
-            runtime._draw_status_bar(owner, context)
+        job = Job(runtime, "work", {}, progress=0.25, message=message, message_args=args)
+        with patch.object(runtime, "jobs", [job]), patch.object(runtime, "redraw_ui"):
+            runtime.draw_jobs(layout)
             self.assertEqual(layout.progress.call_args.kwargs["text"], "Generating panorama view 3/12")
             with patch.object(self.fake_bpy.app.translations, "pgettext_iface",
                               side_effect=lambda text: catalog.get(("*", text), text)):
-                runtime._draw_status_bar(owner, context)
+                runtime.draw_jobs(layout)
                 self.assertEqual(layout.progress.call_args.kwargs,
-                                 {"factor": 0.25, "type": "BAR", "text": "正在生成全景视角 3/12"})
-                self.assertEqual(runtime._progress_message, message)
-            runtime._draw_status_bar(owner, context)
+                                 {"factor": 0.25, "type": "BAR", "text": "全景视角生成中 3/12"})
+                self.assertEqual(job.message, message)
+            runtime.draw_jobs(layout)
             self.assertEqual(layout.progress.call_args.kwargs["text"], "Generating panorama view 3/12")
         layout.operator.assert_called_with("anyimage.cancel_job", text="", icon="X")
 
@@ -53,28 +54,28 @@ class TranslationsTest(BlenderTestCase):
         self.assertIs(type(runtime), JobRuntime)
         business = self.anyimage.TRANSLATIONS["zh_HANS"]
         builtin = BLENDJOB_TRANSLATIONS["zh_HANS"]
-        for source in ("Installing Python ...", "Preparing Server", "Migrate Folder", "Downloading packages {count}"):
+        for source in ("Installing Python", "Preparing Server", "Migrate Storage", "Downloading packages {count}"):
             self.assertNotIn(("*", source), business)
             self.assertIn(("*", source), builtin)
         catalog = {**builtin, **business}
         cases = (
-            ("Removing background", {}, "正在移除背景"),
-            ("Generating panorama view {index}/{total}", {"index": 3, "total": 12}, "正在生成全景视角 3/12"),
-            ("Downloading {item} (mirror) {rate}", {"item": "MoGe 2", "rate": "1.2 MB/s"}, "正在通过镜像下载 MoGe 2 1.2 MB/s"),
-            ("Loading {model}", {"model": "Model {raw}"}, "正在加载 Model {raw}"),
+            ("Removing background", {}, "背景移除中"),
+            ("Generating panorama view {index}/{total}", {"index": 3, "total": 12}, "全景视角生成中 3/12"),
+            ("Downloading {item} (mirror) {rate}", {"item": "MoGe 2", "rate": "1.2 MB/s"}, "MoGe 2 下载中（镜像） 1.2 MB/s"),
+            ("Loading {model}", {"model": "Model {raw}"}, "Model {raw} 加载中"),
             ("Unknown {model}", {"model": "MoGe"}, "Unknown MoGe"),
             ("Unknown diagnostic: {path}", {}, "Unknown diagnostic: {path}"),
-            ("Downloading packages (mirror) {count}", {"count": "4/10"}, "正在通过镜像下载依赖包 4/10"),
+            ("Downloading packages (mirror) {count}", {"count": "4/10"}, "依赖包下载中（镜像） 4/10"),
         )
         with patch.object(runtime, "redraw_ui"):
             for source, args, expected in cases:
-                runtime.update_ui(SimpleNamespace(), 0.5, source, message_args=args)
+                job = Job(runtime, "work", {}, message=source, message_args=args)
                 with patch.object(self.fake_bpy.app.translations, "pgettext_iface",
                                   side_effect=lambda text: catalog.get(("*", text), text)):
-                    self.assertEqual(runtime.message, expected)
+                    self.assertEqual(job.text, expected)
                 if args:
-                    self.assertEqual(runtime.message, source.format(**args))
-                self.assertEqual(runtime._progress_message, source)
+                    self.assertEqual(job.text, source.format(**args))
+                self.assertEqual(job.message, source)
 
     def test_translations_preserve_format_fields(self):
         def fields(message):

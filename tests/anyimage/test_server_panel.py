@@ -6,21 +6,16 @@ from tests.support.blender import BlenderTestCase
 
 class ServerPanelTest(BlenderTestCase):
 
-    def test_server_panel_disables_all_controls_during_migration(self):
-        for state, installed in (("STOPPED", True), ("ERROR", True), ("READY", True), ("STOPPED", False)):
-            with self.subTest(state=state, installed=installed):
-                events = self._draw_server_panel(
-                    state, environment_ready=installed, migrating=True,
-                    cached_names=("BIREFNET_LITE",),
-                )
-                self.assertTrue(events.operators)
-                self.assertTrue(all(not enabled for _identifier, enabled in events.operators))
-
+    def test_server_panel_shows_maintenance_without_model_controls(self):
+        for state in ("INSTALLING", "MIGRATING"):
+            events = self._draw_server_panel(state, cached_names=("BIREFNET_LITE",))
+            self.assertEqual(events.operators, [("anyimage.open_server_log", True)])
+            self.assertNotIn("Models Loaded", events.sequence)
 
     def test_server_panel_shows_controls_for_every_running_state(self):
         for state, label, icon in (
-            ("READY", "Running", "RADIOBUT_ON"),
-            ("BUSY", "Running (Busy)", "TIME"),
+            ("IDLE", "Idle", "RADIOBUT_ON"),
+            ("PROCESSING", "Processing", "TIME"),
         ):
             with self.subTest(state=state):
                 events = self._draw_server_panel(state)
@@ -38,12 +33,17 @@ class ServerPanelTest(BlenderTestCase):
                 self.assertLess(events.sequence.index("anyimage.open_server_log"),
                                 events.sequence.index("Models Loaded"))
 
-        for state in ("STOPPED", "STARTING", "ERROR"):
+        for state in ("OFFLINE", "STARTING", "STOPPING", "ERROR"):
             with self.subTest(state=state):
                 events = self._draw_server_panel(state)
                 operators = [identifier for identifier, _enabled in events.operators]
-                self.assertNotIn("anyimage.restart_server", operators)
-                self.assertNotIn("anyimage.stop_server", operators)
+                if state != "ERROR":
+                    self.assertNotIn("anyimage.restart_server", operators)
+                if state != "STARTING" and state != "ERROR":
+                    self.assertNotIn("anyimage.stop_server", operators)
+                if state == "STOPPING":
+                    self.assertNotIn("anyimage.start_server", operators)
+                    self.assertIn(("row", "Stopping", "TIME"), events.labels)
                 self.assertIn(("row", "Models Loaded", None), events.labels)
                 self.assertIn(("row", "Generate Depth Map", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Remove Background", "RADIOBUT_OFF"), events.labels)
@@ -51,10 +51,10 @@ class ServerPanelTest(BlenderTestCase):
 
 
     def test_maintenance_controls_without_environment(self):
-        events = self._draw_server_panel("STOPPED", environment_ready=False)
-        self.assertIn(("anyimage.open_server_log", True), events.operators)
+        events = self._draw_server_panel("UNAVAILABLE")
+        self.assertNotIn("anyimage.open_server_log", events.options)
         self.assertNotIn("anyimage.clear_job_files", events.options)
-        self.assertEqual(events.sequence[:2], ["Environment is not installed", "anyimage.open_server_log"])
+        self.assertEqual(events.sequence[:2], ["Environment is not installed", "anyimage.setup_ai_server"])
 
     def test_danger_zone_is_last_collapsed_and_contains_only_cleanup(self):
         panel_module = importlib.import_module("anyimage.panel")
@@ -62,11 +62,11 @@ class ServerPanelTest(BlenderTestCase):
         self.assertIn(panel_type, self.anyimage.CLASSES)
         self.assertEqual(panel_type.bl_options, {"DEFAULT_CLOSED"})
         self.assertGreater(panel_type.bl_order, panel_module.ServerPanel.bl_order)
-        events = self._draw_server_panel("READY", panel_type=panel_type)
+        events = self._draw_server_panel("IDLE", panel_type=panel_type)
         self.assertEqual(events.operators, [("anyimage.clear_job_files", True)])
         self.assertEqual(events.parents["anyimage.clear_job_files"].operator_context, "INVOKE_DEFAULT")
 
-    def _draw_server_panel(self, state, cached_names=(), environment_ready=True, panel_type=None, migrating=False):
+    def _draw_server_panel(self, state, cached_names=(), panel_type=None):
         events = SimpleNamespace(labels=[], operators=[], options={}, sequence=[], parents={})
 
         class Layout:
@@ -110,28 +110,8 @@ class ServerPanelTest(BlenderTestCase):
             zip(("geometry", "background", "upscale"), cached_names)
         )
         with (
-            patch.object(
-                panel_module.runtime,
-                "environment_ready",
-                return_value=environment_ready,
-            ),
-            patch.object(
-                panel_module.runtime,
-                "server_busy",
-                return_value=state == "BUSY" or migrating,
-            ),
-            patch.object(panel_module.runtime, "maintenance_busy", return_value=migrating),
-            patch.object(
-                panel_module.runtime,
-                "server_status",
-                return_value={
-                    "state": state,
-                    "message": state.title(),
-                    "resources": {
-                        "model_manager": {"loaded": loaded},
-                    },
-                },
-            ),
+            patch.object(panel_module.runtime, "state", return_value=state),
+            patch.object(panel_module.runtime, "resource", return_value={"loaded": loaded}),
         ):
             panel.draw(None)
         return events

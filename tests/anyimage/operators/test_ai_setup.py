@@ -16,9 +16,8 @@ class AiSetupTest(BlenderTestCase):
             self.assertTrue(operator.check(None))
             operator.location = str(root / "second")
             inspect.side_effect = ValueError("Invalid location")
-            with patch.object(self.ai_setup.JobOperatorBase, "execute") as execute:
-                self.assertEqual(operator.execute(None), {"CANCELLED"})
-                execute.assert_not_called()
+            with self.assertRaisesRegex(ValueError, "Invalid location"):
+                operator.request(None)
             inspect.assert_called_with(root / "second/.anyimage")
 
     def test_setup_preview_checks_each_selected_location_only_once(self):
@@ -49,11 +48,9 @@ class AiSetupTest(BlenderTestCase):
             target = Path(directory) / ".anyimage"
             target.mkdir()
             (target / "unrelated.txt").write_text("unrelated", encoding="utf-8")
-            setup = Mock(side_effect=RuntimeError("The target is not a BlendJob installation"))
-            operator.report = Mock()
-            with patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(setup_server=setup)), create=True):
-                self.assertEqual(operator.execute(None), {"CANCELLED"})
-                setup.assert_called_once_with(directory=str(target), use_mirror=False)
+            parameters = operator.request(None)
+            with self.assertRaisesRegex(ValueError, "not a BlendJob installation"):
+                self.anyimage.runtime.setup(**parameters)
 
     def test_post_setup_downloads_only_missing_or_corrupt_models(self):
         import hashlib
@@ -84,26 +81,20 @@ class AiSetupTest(BlenderTestCase):
                     path.write_bytes(b"damaged!")
                 context = SimpleNamespace(resource=lambda _: manager, progress=Mock())
 
-                def request(job_type, parameters):
-                    self.assertEqual(job_type, "download-required-models")
-                    return app.download_required_models(context, parameters)
+                def submit(name, parameters):
+                    self.assertEqual(name, "download_required_models")
+                    app.download_required_models(context, parameters)
 
+                owner = SimpleNamespace(submit=submit)
                 with (
                     patch.dict(model_catalog.DOWNLOADABLE_MODELS, specs),
                     patch.object(manager, "_download") as download,
                 ):
-                    self.runtime.prepare_models(SimpleNamespace(request=request, online=True))
+                    self.runtime.prepare_models(owner)
                 self.assertEqual(
                     [call.args[1] for call in download.call_args_list],
                     [] if state == "ready" else [affected],
                 )
-
-    def test_post_setup_propagates_model_preparation_failure(self):
-        request = Mock(side_effect=RuntimeError("network unavailable"))
-        with self.assertRaisesRegex(RuntimeError, "network unavailable"):
-            self.runtime.prepare_models(SimpleNamespace(request=request, online=True))
-        request.assert_called_once()
-
 
     def test_required_model_operator_requests_all_default_models(self):
         operator = self.ai_setup.DownloadRequiredModels()
@@ -117,7 +108,8 @@ class AiSetupTest(BlenderTestCase):
                     "MOGE2_VITS_NORMAL",
                     "BIREFNET_LITE",
                     "REALESRGAN_GENERAL_WDN_X4V3",
-                ]
+                ],
+                "online": True,
             },
         )
 
@@ -125,7 +117,7 @@ class AiSetupTest(BlenderTestCase):
     def test_ai_status_checks_environment_and_required_model_files(self):
         properties = self.anyimage.ai_properties
         with (
-            patch.object(self.anyimage.runtime, "environment_ready", return_value=True),
+            patch.object(self.anyimage.runtime, "state", return_value="IDLE"),
             patch.object(
                 properties,
                 "model_catalog",
@@ -143,10 +135,10 @@ class AiSetupTest(BlenderTestCase):
         self.assertTrue(status["environment_ready"])
         self.assertEqual(status["missing_models"], ("BIREFNET_LITE",))
         self.assertFalse(status["ready"])
-        self.assertEqual(properties.ai_setup_label(status), "Download Required Models…")
+        self.assertEqual(properties.ai_setup_label(status), "Download Required Models")
 
         with (
-            patch.object(self.anyimage.runtime, "environment_ready", return_value=False),
+            patch.object(self.anyimage.runtime, "state", return_value="UNAVAILABLE"),
             patch.object(
                 properties,
                 "model_catalog",
@@ -159,7 +151,7 @@ class AiSetupTest(BlenderTestCase):
             status = properties.ai_status()
             self.assertFalse(status["ready"])
             self.assertEqual(
-                properties.ai_setup_label(status), "Set Up AI Server…"
+                properties.ai_setup_label(status), "Set Up AI Server"
             )
 
 
@@ -170,10 +162,10 @@ class AiSetupTest(BlenderTestCase):
             operator.use_mirror = True
             self.fake_bpy.context.preferences.addons["anyimage"].preferences.storage_root = str(Path(directory) / "current")
             original = self.anyimage.ai_preferences.storage_root()
-            setup = Mock(return_value={"RUNNING_MODAL"})
-            with patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(setup_server=setup)), create=True):
-                self.assertEqual(operator.execute(None), {"FINISHED"})
-            setup.assert_called_once_with(directory=str(Path(directory) / ".anyimage"), use_mirror=True)
+            self.assertEqual(operator.request(None), {
+                "target": str(Path(directory) / ".anyimage"),
+                "mirror": True, "online": True,
+            })
             self.assertEqual(self.anyimage.ai_preferences.storage_root(), original)
 
 
@@ -185,22 +177,28 @@ class AiSetupTest(BlenderTestCase):
         )
 
     def test_model_preparation_passes_offline_policy_to_server(self):
-        request = Mock()
-        self.runtime.prepare_models(SimpleNamespace(request=request, online=False))
-        self.assertFalse(request.call_args.args[1]["online"])
+        with patch.object(self.fake_bpy.app, "online_access", False), patch.object(self.ai_setup, "require_environment"):
+            parameters = self.ai_setup.DownloadRequiredModels().request(None)
+        self.assertFalse(parameters["online"])
+
+    def test_post_setup_reports_download_dispatch_failure(self):
+        owner = SimpleNamespace(submit=Mock(side_effect=RuntimeError("Unable to start")))
+        with self.assertRaisesRegex(RuntimeError, "Unable to start"):
+            self.runtime.prepare_models(owner)
+        self.assertEqual(owner.submit.call_args.args[0], "download_required_models")
 
     def test_unload_models_is_only_available_while_server_is_ready(self):
         for state, expected in (
-            ("READY", True),
-            ("BUSY", False),
-            ("STOPPED", False),
+            ("IDLE", True),
+            ("PROCESSING", False),
+            ("OFFLINE", False),
         ):
             with (
                 self.subTest(state=state),
                 patch.object(
                     self.anyimage.runtime,
-                    "server_status",
-                    return_value={"state": state},
+                    "state",
+                    return_value=state,
                 ),
             ):
                 self.assertEqual(self.ai_setup.UnloadModels.poll(None), expected)
@@ -233,9 +231,9 @@ class AiSetupTest(BlenderTestCase):
                     return_value=root,
                 ),
                 patch.object(
-                    self.anyimage.runtime,
-                    "resource",
-                    side_effect=AssertionError("UI must not start the Server"),
+                    self.anyimage.runtime.server.control,
+                    "send",
+                    side_effect=AssertionError("UI must not send Server commands"),
                 ),
             ):
                 self.assertEqual(properties.ai_status()["missing_models"], ())

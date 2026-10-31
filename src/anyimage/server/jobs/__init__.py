@@ -1,1 +1,1 @@
-"""Job implementations registered by :mod:`anyimage.server.app`."""
+"""Job implementations registered by :mod:`anyimage.server`."""

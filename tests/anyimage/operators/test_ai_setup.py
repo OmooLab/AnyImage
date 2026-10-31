@@ -55,7 +55,8 @@ class AiSetupTest(BlenderTestCase):
     def test_post_setup_downloads_only_missing_or_corrupt_models(self):
         import hashlib
         from dataclasses import replace
-        from server import app, model_catalog
+        import server
+        from server import model_catalog
         from server.model_manager import ModelManager
 
         content = b"verified"
@@ -83,7 +84,7 @@ class AiSetupTest(BlenderTestCase):
 
                 def submit(name, parameters):
                     self.assertEqual(name, "download_required_models")
-                    app.download_required_models(context, parameters)
+                    server.download_required_models(context, parameters)
 
                 owner = SimpleNamespace(submit=submit)
                 with (

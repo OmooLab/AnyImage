@@ -1,9 +1,21 @@
 from types import SimpleNamespace
+from pathlib import Path
+import sys
 from unittest.mock import patch
 from tests.support.blender import BlenderTestCase
 
 
 class AddonRegistrationTest(BlenderTestCase):
+    def test_runtime_defaults_preserve_lightweight_backend_boundary(self):
+        runtime = self.anyimage.runtime
+        entrypoint = Path(self.anyimage.__file__).parent / "server" / "__init__.py"
+        self.assertEqual(runtime._config.server_entrypoint, f"{entrypoint.resolve()}:server")
+        self.assertIs(runtime.storage_root_setting, self.runtime.storage_root)
+        self.assertIs(runtime.post_setup, self.runtime.prepare_models)
+        self.assertIn("anyimage.server.model_catalog", sys.modules)
+        self.assertNotIn("anyimage.server.model_manager", sys.modules)
+        self.assertFalse(any(name.startswith("anyimage.server.jobs.") for name in sys.modules))
+
     def test_editions_reject_conflicts_and_can_switch_after_unregister(self):
         for first, second in (
             (self.anyimage.base, self.anyimage),

@@ -9,22 +9,34 @@ from tests.anyimage.server.runtime_support import ServerTestCase
 from tests.support.paths import PROJECT_ROOT
 
 
-def test_model_download_handler_loads_without_scipy():
+def test_server_registration_and_metadata_do_not_load_backend_dependencies():
     script = textwrap.dedent("""
         import sys
         from types import SimpleNamespace
 
-        class BlockScipy:
-            def find_spec(self, fullname, path=None, target=None):
-                if fullname == "scipy" or fullname.startswith("scipy."):
-                    raise ImportError("SciPy native library cannot load")
+        blocked = ('server.jobs', 'server.model_manager', 'server.models',
+                   'numpy', 'scipy', 'PIL', 'onnxruntime', 'fastapi', 'uvicorn')
 
-        sys.meta_path.insert(0, BlockScipy())
-        from server import app
+        class BlockBackend:
+            def find_spec(self, fullname, path=None, target=None):
+                if any(fullname == name or fullname.startswith(name + '.') for name in blocked):
+                    raise ImportError('Backend dependency loaded early: ' + fullname)
+
+        sys.meta_path.insert(0, BlockBackend())
+        import server
+        from server import model_catalog
+
+        assert set(server.server.handlers) == {
+            'download_model', 'download_required_models', 'remove_background',
+            'upscale_image', 'generate_depth_plane_geometry',
+            'generate_cutout_artifacts', 'generate_panorama_geometry',
+        }
+        assert set(server.server.resource_factories) == {'model_manager'}
+        assert server.server.resources == {}
 
         manager = SimpleNamespace(download=lambda context, model: {"model": model})
         context = SimpleNamespace(resource=lambda name: manager)
-        assert app.download_model(context, {"model": "test"}) == {"model": "test"}
+        assert server.download_model(context, {"model": "test"}) == {"model": "test"}
         assert not any(name == "scipy" or name.startswith("scipy.") for name in sys.modules)
     """)
     result = subprocess.run(
@@ -42,7 +54,7 @@ class JobServerTest(ServerTestCase):
         handler = Mock(side_effect=error)
 
         with self.assertRaises(self.onnx_runtime.OnnxResourceError) as raised:
-            self.app_module._run_model_job(handler, context, {"value": 1})
+            self.server_module._run_model_job(handler, context, {"value": 1})
 
         self.assertIs(raised.exception, error)
         handler.assert_called_once_with(context, {"value": 1})
@@ -54,11 +66,11 @@ class JobServerTest(ServerTestCase):
         success = Mock(return_value={"value": 1})
 
         self.assertEqual(
-            self.app_module._run_model_job(success, context, {}),
+            self.server_module._run_model_job(success, context, {}),
             {"value": 1},
         )
         with self.assertRaisesRegex(RuntimeError, "invalid input"):
-            self.app_module._run_model_job(
+            self.server_module._run_model_job(
                 Mock(side_effect=RuntimeError("invalid input")),
                 context,
                 {},
@@ -70,15 +82,15 @@ class JobServerTest(ServerTestCase):
         context = object()
         parameters = {"value": 1}
         jobs = (
-            self.app_module.remove_background,
-            self.app_module.upscale_image,
-            self.app_module.generate_depth_plane_geometry,
-            self.app_module.generate_cutout_artifacts,
-            self.app_module.generate_panorama_geometry,
+            self.server_module.remove_background,
+            self.server_module.upscale_image,
+            self.server_module.generate_depth_plane_geometry,
+            self.server_module.generate_cutout_artifacts,
+            self.server_module.generate_panorama_geometry,
         )
 
         with patch.object(
-            self.app_module,
+            self.server_module,
             "_run_model_job",
             return_value={"result": True},
         ) as run:
@@ -148,7 +160,7 @@ class JobServerTest(ServerTestCase):
             clear=lambda: None,
             close=lambda: None,
         )
-        with patch.object(self.app_module, "ModelManager", return_value=fake_models):
+        with patch("server.model_manager.ModelManager", return_value=fake_models):
             server = self.create_server()
         started = threading.Event()
 

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import bpy
 from blendjob import JobRuntime
 from .ai_preferences import storage_root
@@ -30,12 +28,10 @@ def prepare_models(runtime):
 
 
 runtime = JobRuntime(
-    "server:server",
-    entrypoint_root=Path(__file__).parent,
+    "anyimage",
     storage_root=storage_root,
     environment=ENVIRONMENT,
     post_setup=prepare_models,
-    namespace="anyimage",
 )
 
 

@@ -19,7 +19,6 @@ class ServerTestCase(unittest.TestCase):
 
         cls.ModelManager, cls.ModelSessionCache = ModelManager, ModelSessionCache
         cls.onnx_runtime = onnx_runtime
-        cls.app_module = importlib.import_module("server.app")
 
 
     def setUp(self):

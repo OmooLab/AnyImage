@@ -64,7 +64,7 @@ def test_upscale_models_resize_prediction_then_restore_alpha(tmp_path, key):
 
 def test_upscale_output_allocation_failure_clears_cache_at_job_boundary(tmp_path):
     from unittest.mock import Mock
-    from server import app
+    import server
     from server.models import onnx_upscale
 
     image_path = tmp_path / "input.png"
@@ -75,7 +75,7 @@ def test_upscale_output_allocation_failure_clears_cache_at_job_boundary(tmp_path
     padded = np.zeros((256, 256, 3), dtype=np.uint8)
     with patch.object(onnx_upscale, "_pad_source", return_value=padded), patch.object(np, "empty", side_effect=MemoryError):
         with pytest.raises(RuntimeError, match="exceeded available system memory"):
-            app._run_model_job(lambda ctx, args: upscale.infer_one(manager, args, image_path), context, parameters)
+            server._run_model_job(lambda ctx, args: upscale.infer_one(manager, args, image_path), context, parameters)
     manager.clear.assert_called_once_with()
 
 

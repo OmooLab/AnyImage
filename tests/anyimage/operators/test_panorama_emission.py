@@ -13,16 +13,16 @@ from anyimage.common.image import COLOR_NORMALIZED_PROPERTY, image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.operators.bake_mesh import BakeMesh, materialization, materials
 from anyimage.operators.bake_mesh.textures import create_emission_color_image
-from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
+from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
 from tests.support.mesh_bake import render_material
 from tests.support.panorama import panorama
 
 
 @pytest.fixture
 def image_object():
-    obj, _ = panorama(depth=np.linspace(.8, 1.3, 128)[None, :], subdivide=3)
+    obj, _ = panorama(depth=np.linspace(.8, 1.3, 128)[None, :], subdivide=2)
     obj.data.from_pydata([(0, 0, 0)], [], [])
-    OImageLayer.create_group()
+    OTextureToLayer.create_group()
     image = bpy.data.images.new("Panorama color", width=128, height=64, alpha=True)
     image.colorspace_settings.name = "sRGB"
     image[COLOR_NORMALIZED_PROPERTY] = True
@@ -31,9 +31,11 @@ def image_object():
     pixels[..., 2] = (.2 + .3 * (np.arange(64) + .5) / 64)[:, None]
     image.pixels.foreach_set(pixels.ravel())
     material = create_image_material(image, image, texture_extension="REPEAT", emission_strength=1)
-    # A user-authored strength graph remains bakeable even though panoramas default to one.
+    # A user-authored strength graph remains bakeable alongside geometry attributes.
     nodes, links = material.node_tree.nodes, material.node_tree.links
     shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
+    layer = next(n for n in nodes if n.type == "GROUP")
+    links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     strength = nodes.new("ShaderNodeMath")
     strength.operation = "ADD"
     strength.inputs[1].default_value = 1
@@ -50,7 +52,7 @@ def image_object():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     layer = next(node for node in material.node_tree.nodes if node.type == "GROUP")
-    for name in ("Roughness", "Specular", "Normal"):
+    for name in ("Roughness", "Alpha", "Normal"):
         for link in tuple(layer.outputs[name].links):
             material.node_tree.links.remove(link)
     obj.update_tag(refresh={"DATA"})
@@ -145,3 +147,34 @@ def test_emission_encoding_preserves_hdr_ratios(image_object):
     assert strength == 100
     restored = srgb_to_linear_rgb(image_pixels(result).reshape(-1, 4)[:, :3]) * strength
     np.testing.assert_allclose(restored, pixels[:, :3], rtol=.025, atol=.01)
+
+
+def test_inverse_mask_emission_survives_baking(image_object, tmp_path):
+    from anyimage.common.object import modifier_input_identifier, set_modifier_input
+    from scipy.ndimage import binary_erosion
+
+    obj = image_object
+    modifier = obj.modifiers[0]
+    set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Depth Mask"), False)
+    depth = bpy.data.images["Radial Depth"]
+    pixels = image_pixels(depth).reshape(64, 128, 4)
+    pixels[..., 3] = np.linspace(0, 1, 128)[None, :]
+    depth.pixels.foreach_set(pixels.ravel())
+    tree = obj.active_material.node_tree
+    layer = next(n for n in tree.nodes if n.type == "GROUP")
+    layer.inputs["Emission Threshold"].default_value = .1
+    shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    for link in tuple(shader.inputs["Emission Strength"].links):
+        tree.links.remove(link)
+    shader.inputs["Emission Strength"].default_value = 1
+    tree.links.new(layer.outputs["Emission"], shader.inputs["Emission Color"])
+    obj.update_tag(refresh={"DATA"})
+    bpy.context.view_layer.update()
+    before = render_material(obj, tmp_path / "mask-before.exr", (0, -1, 0), channel="Emission")
+    assert np.ptp(before[..., 0]) > .1
+    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
+    assert "o_emission" not in obj.data.attributes
+    after = render_material(obj, tmp_path / "mask-after.exr", (0, -1, 0), channel="Emission")
+    visible = binary_erosion(before[..., 0] > .05, iterations=3)
+    assert visible.any()
+    np.testing.assert_allclose(after[visible, :3], before[visible, :3], atol=.025)

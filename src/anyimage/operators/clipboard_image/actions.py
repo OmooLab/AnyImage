@@ -5,13 +5,12 @@ from dataclasses import dataclass
 
 import bpy
 
-from ...common.material import create_image_material
-from ...common.color_image import create_normalized_color_image, material_color_image
+from ...common.color_image import create_normalized_color_image
 from ...common.image import (
-    CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_content_state, image_pixels, is_image_empty,
-    replace_image_content, restore_image_content, save_packed_image,
+    CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_content_state, image_pixels, image_is_packed, is_image_empty,
+    replace_image_content, restore_image_content, save_image_input, mark_image_empty_reference,
+    has_other_image_user,
 )
-from ...common.image_target import has_other_image_user
 
 CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 CLIPBOARD_TEXTURE_PROPERTY = "anyimage_clipboard_texture"
@@ -66,7 +65,7 @@ def target_for_context(context):
         if mode in BRUSH_TEXTURE_MODES:
             return "TOOL_TEXTURE"
         if mode == "OBJECT":
-            return "PLANE"
+            return "IMAGE_EMPTY"
         return None
     if area_type != "NODE_EDITOR":
         return None
@@ -97,7 +96,7 @@ def replacement_for_context(context):
     """Resolve a single image owner and validate its editable datablocks."""
     target = target_for_context(context)
     brush = None
-    if target == "PLANE":
+    if target == "IMAGE_EMPTY":
         selected = getattr(context, "selected_objects", ())
         if len(selected) != 1 or not is_image_empty(selected[0]):
             return None
@@ -189,6 +188,8 @@ def replace_pasted_image(context, target, image):
             if key in destination:
                 del destination[key]
         target.image = destination
+        if destination != source and is_image_empty(target.owner):
+            mark_image_empty_reference(source)
         if texture is not None:
             target.owner = texture
     finally:
@@ -238,7 +239,7 @@ def _find_packed_clipboard_image(image_hash):
     for image in bpy.data.images:
         if image.get(CLIPBOARD_HASH_PROPERTY) != image_hash:
             continue
-        if not _is_image_packed(image):
+        if not image_is_packed(image):
             continue
         baseline = image.get(CLIPBOARD_CONTENT_PROPERTY)
         if not baseline:
@@ -259,74 +260,17 @@ def _clipboard_content_hash(image):
     return digest.hexdigest()
 
 
-def _is_image_packed(image):
-    if getattr(image, "packed_file", None) is not None:
-        return True
-    return bool(getattr(image, "packed_files", ()))
-
-
-def paste_image(
-    context,
-    image,
-    event=None,
-    import_as="REFERENCE",
-    shadeless=False,
-    location=None,
-):
+def paste_image(context, image, event=None, location=None):
     target = target_for_context(context)
-    if target == "PLANE":
+    if target == "IMAGE_EMPTY":
         if location is None:
             location = paste_location(context, event)
-        if import_as == "REFERENCE":
-            return add_reference_image(context, image, location=location)
-        return add_image_plane(
-            context,
-            image,
-            location=location,
-            shadeless=shadeless,
-        )
+        return add_reference_image(context, image, location=location)
     if target == "NODE":
         return add_image_node(context, image, event, location=location)
     if target == "TOOL_TEXTURE":
         return set_tool_texture(context, image)
     raise PasteTargetError("Paste images from a 3D View or Node Editor")
-
-
-def add_image_plane(
-    context,
-    image,
-    shadeless=False,
-    location=None,
-):
-    if getattr(context, "mode", "OBJECT") != "OBJECT":
-        raise PasteTargetError("Switch to Object Mode before pasting an image plane")
-
-    width, height = image.size
-    if width <= 0 or height <= 0:
-        raise PasteTargetError("The clipboard image has invalid dimensions")
-
-    from ..convert_to_plane.image_plane import create_image_plane_object
-
-    half_width, half_height = _plane_half_dimensions(width, height)
-    material = plane = None
-    try:
-        with material_color_image(image) as color:
-            material = create_image_material(image, color, shadeless=shadeless, scene=context.scene)
-            plane = create_image_plane_object(
-                context, image.name, (-half_width, half_width, -half_height, half_height), material,
-            )
-            _place_in_view(context, plane, location)
-            _select_only(context, plane)
-    except Exception:
-        if plane is not None:
-            mesh = plane.data
-            bpy.data.objects.remove(plane, do_unlink=True)
-            if mesh.users == 0:
-                bpy.data.meshes.remove(mesh)
-        if material is not None and material.users == 0:
-            bpy.data.materials.remove(material)
-        raise
-    return plane
 
 
 def add_reference_image(context, image, location=None):
@@ -344,9 +288,13 @@ def add_reference_image(context, image, location=None):
     reference.use_empty_image_alpha = True
     reference.data = image
     reference.empty_display_size = REFERENCE_IMAGE_SIZE
-    context.collection.objects.link(reference)
-    _place_in_view(context, reference, location)
-    _select_only(context, reference)
+    try:
+        context.collection.objects.link(reference)
+        _place_in_view(context, reference, location)
+        _select_only(context, reference)
+    except Exception:
+        bpy.data.objects.remove(reference, do_unlink=True)
+        raise
     return reference
 
 
@@ -359,17 +307,11 @@ def _place_in_view(context, target_object, location=None):
         target_object.rotation_euler = region_data.view_rotation.to_euler()
 
 
-def _plane_half_dimensions(width, height):
-    if width >= height:
-        return 1.0, height / width
-    return width / height, 1.0
-
-
-def _select_only(context, plane):
+def _select_only(context, obj):
     for selected_object in getattr(context, "selected_objects", ()):
         selected_object.select_set(False)
-    plane.select_set(True)
-    context.view_layer.objects.active = plane
+    obj.select_set(True)
+    context.view_layer.objects.active = obj
 
 
 def add_image_node(context, image, event=None, location=None):
@@ -446,7 +388,7 @@ def _node_location(context, event):
 
 def paste_location(context, event=None):
     target = target_for_context(context)
-    if target == "PLANE":
+    if target == "IMAGE_EMPTY":
         return _view3d_location(context, event)
     if target == "NODE":
         return _node_location(context, event)
@@ -533,7 +475,7 @@ def set_tool_texture(context, image):
 def _set_brush_preview(context, brush, image):
     preview_path = None
     try:
-        preview_path = save_packed_image(image, context.scene)
+        preview_path = save_image_input(image)
         with context.temp_override(id=brush):
             result = bpy.ops.ed.lib_id_load_custom_preview(filepath=str(preview_path))
         if result != {"FINISHED"}:
@@ -544,7 +486,7 @@ def _set_brush_preview(context, brush, image):
         ) from error
     finally:
         if preview_path is not None:
-            cleanup_image_input(preview_path, True)
+            cleanup_image_input(preview_path)
 
 
 def _set_unbiased_paint_color(context, brush):

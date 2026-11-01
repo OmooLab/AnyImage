@@ -3,45 +3,34 @@
 from contextlib import contextmanager
 
 
-def alpha_curve(layer):
-    """Return the curve driving the supported layer's Alpha output."""
-    output = next(n for n in layer.node_tree.nodes if n.type == "GROUP_OUTPUT" and n.is_active_output)
-    return output.inputs["Alpha"].links[0].from_node
-
-
 def validate_layer(layer, color):
-    """Validate the input and passthrough contracts used when removing the group."""
+    """Validate texture inputs and the color passthrough before baking."""
     if layer.mute or layer.node_tree.animation_data:
-        raise ValueError("Bake Mesh requires an unanimated image layer")
-    if (not {"Color", "Alpha", "Normal", "Normal Scale", "Bump Scale", "Alpha Fix", "Object Space"} <= set(layer.inputs.keys())
-            or set(layer.outputs.keys()) != {"Color", "Alpha", "Roughness", "Normal", "Specular"}):
-        raise ValueError("Unsupported image layer interface")
-    for name in ("Normal Scale", "Object Space", "Bump Scale", "Alpha Fix"):
+        raise ValueError("Bake Mesh requires an unanimated texture layer")
+    controls = {"Normal Scale", "Bump Scale", "Object Space", "Roughness Scale",
+                "Roughness Contrast", "Alpha Scale", "Alpha Background", "Emission Threshold"}
+    if (not controls | {"Color Texture", "Alpha Texture", "Normal Texture"} <= set(layer.inputs.keys())
+            or set(layer.outputs.keys()) != {"Color", "Alpha", "Roughness", "Normal", "Emission"}):
+        raise ValueError("Unsupported texture layer interface")
+    for name in controls:
         if layer.inputs[name].is_linked:
             raise ValueError(f"Linked {name} is not supported by Bake Mesh")
     for name in ("Color", "Alpha"):
-        socket = layer.inputs[name]
+        socket = layer.inputs[f"{name} Texture"]
         if not socket.is_linked or socket.links[0].from_socket != color.outputs[name]:
             raise ValueError(f"Bake Mesh requires the Color texture's {name} output")
     output = next((n for n in layer.node_tree.nodes if n.type == "GROUP_OUTPUT" and n.is_active_output), None)
     if output is None or any(n.type == "GROUP" for n in layer.node_tree.nodes):
-        raise ValueError("Unsupported image layer structure")
-    for name, kind in (("Color", "GROUP_INPUT"), ("Alpha", "CURVE_FLOAT")):
-        socket = output.inputs.get(name)
-        if socket is None or not socket.is_linked or socket.links[0].from_node.type != kind or socket.links[0].from_node.mute:
-            raise ValueError(f"Unsupported image layer {name} output")
-    if output.inputs["Color"].links[0].from_socket.name != "Color":
-        raise ValueError("Unsupported image layer Color output")
-    curve = alpha_curve(layer)
-    for name, source in {"Value": "Alpha", "Factor": "Alpha Fix"}.items():
-        socket = curve.inputs[name]
-        if not socket.is_linked or socket.links[0].from_node.type != "GROUP_INPUT" or socket.links[0].from_socket.name != source:
-            raise ValueError("Unsupported image layer alpha connections")
+        raise ValueError("Unsupported texture layer structure")
+    socket = output.inputs["Color"]
+    if (not socket.is_linked or socket.links[0].from_node.type != "GROUP_INPUT"
+            or socket.links[0].from_node.mute or socket.links[0].from_socket.name != "Color Texture"):
+        raise ValueError("Unsupported texture layer Color output")
 
 
 def emission_shaders(layer, color):
     """Return Principled shaders receiving the image color as emission."""
-    return {link.to_node for socket in (layer.outputs["Color"], color.outputs["Color"])
+    return {link.to_node for socket in (layer.outputs["Emission"], layer.outputs["Color"], color.outputs["Color"])
             for link in socket.links if link.to_node.type == "BSDF_PRINCIPLED"
             and link.to_socket.name == "Emission Color"}
 
@@ -93,20 +82,6 @@ def arrange_material_textures(material):
                 link.to_node.location = (x - 330, node.location.y)
 
 
-def copy_alpha_curve(source, target):
-    """Copy the alpha mapping without changing the shared node group."""
-    for name in ("use_clip", "clip_min_x", "clip_min_y", "clip_max_x", "clip_max_y", "extend"):
-        setattr(target, name, getattr(source, name))
-    for original, copied in zip(source.curves, target.curves):
-        for point in tuple(copied.points)[2:]:
-            copied.points.remove(point)
-        for index, point in enumerate(original.points):
-            result = copied.points[index] if index < 2 else copied.points.new(*point.location)
-            result.location = point.location
-            result.handle_type = point.handle_type
-    target.update()
-
-
 def connect_static_outputs(links, layer, sources):
     """Reconnect every consumer of the original image-layer outputs."""
     for output in layer.outputs:
@@ -152,12 +127,6 @@ def static_material_outputs(material, layer, color, normal, scalar_images, emiss
             else:
                 shader = create("ShaderNodeNewGeometry", (0, -620))
             sources["Normal"] = shader.outputs["Normal"]
-        if layer.outputs["Alpha"].is_linked and layer.inputs["Alpha Fix"].default_value:
-            curve = create("ShaderNodeFloatCurve", (0, -200))
-            copy_alpha_curve(alpha_curve(layer).mapping, curve.mapping)
-            curve.inputs["Factor"].default_value = layer.inputs["Alpha Fix"].default_value
-            links.new(sources["Alpha"], curve.inputs["Value"])
-            sources["Alpha"] = curve.outputs["Value"]
         connect_static_outputs(links, layer, sources)
         emission_sources = {image: texture(image, (-400, -1400)) for image in set(emission_images.values())}
         for name, strength in emission_strengths.items():

@@ -11,7 +11,7 @@ from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh import materialization
-from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
+from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
 from tests.support.planes import create_surface
 from tests.support.panorama import panorama
 from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_material
@@ -21,7 +21,7 @@ from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modi
 def image_object(request):
     kind = request.param
     if kind == "PANORAMA":
-        obj, _ = panorama(subdivide=2)
+        obj, _ = panorama(subdivide=1)
     else:
         obj, set_value, plane, *_ = create_surface("DEPTH" if kind == "PLANE" else kind)
         if kind == "PLANE":
@@ -29,7 +29,7 @@ def image_object(request):
         else:
             set_value("Depth Scale", .5)
             set_value("Subdivide", 4)
-    OImageLayer.create_group()
+    OTextureToLayer.create_group()
     color = bpy.data.images.new("Color", width=128, height=64, alpha=True, float_buffer=True)
     color.colorspace_settings.name = "Non-Color"
     color.pixels.foreach_set(np.linspace(0, 1, 128 * 64 * 4, dtype=np.float32))
@@ -88,7 +88,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert obj.active_material == material
     remaining = {i.name: i.as_pointer() for i in bpy.data.images}
     assert all(images[name] == identity for name, identity in remaining.items() if name in images)
-    assert set(remaining) - set(images) == {"Color_roughness.png", "Color_specular.png"} | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
+    assert set(remaining) - set(images) == {"Color_roughness.png", "Color_alpha.png"} | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
     assert set(images) - set(remaining) == ({"Radial Depth"} if kind == "PANORAMA" else {"Camera"} if kind != "PLANE" else set())
     np.testing.assert_allclose(image_pixels(color), expected_color, atol=1 / 255)
     assert color.colorspace_settings.name == "sRGB" and not color.is_float
@@ -102,12 +102,12 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
     assert list(obj.data.uv_layers.keys()) == ["UVMap"]
     if normal is not None:
-        assert [call.args[-1] for call in bake.call_args_list] == ["Roughness", "Specular", "Normal"]
+        assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal", "Emission"] + (["Emission"] if kind == "PANORAMA" else [])
         assert tuple(normal.size) == (128, 64)
         node = next(n for n in material.node_tree.nodes if n.type == "NORMAL_MAP")
         assert node.space == "TANGENT" and node.inputs["Strength"].default_value == 1
     else:
-        assert [call.args[-1] for call in bake.call_args_list] == ["Roughness", "Specular"]
+        assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Emission"]
     bpy.context.scene.frame_set(2)
     assert trailing[0].strength == pytest.approx(.6)
 
@@ -181,7 +181,7 @@ def test_four_conversions_support_undo_redo(image_object):
         converted_pixels = {name: image_pixels(bpy.data.images[name]).copy() for name in image_names}
         assert bpy.ops.ed.undo() == {"FINISHED"}
         assert roughness_name not in bpy.data.images
-        assert any(n.type == "GROUP" and n.node_tree.name == "O Image Layer"
+        assert any(n.type == "GROUP" and n.node_tree.name == "O Texture to Layer"
                    for n in bpy.data.objects[name].active_material.node_tree.nodes)
         assert len(bpy.data.objects[name].modifiers) == len(names) + 1
         assert bpy.data.objects[name]["o_image_object"] is True

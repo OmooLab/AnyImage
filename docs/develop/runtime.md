@@ -1,6 +1,6 @@
 # Job Runtime 与 Server
 
-`runtime.py` 配置 BlendJob `JobRuntime` 和独立 Python 3.12 Environment。`server/app.py` 注册 Job，`model_manager.py` 管理模型文件与缓存 Session。
+`runtime.py` 配置 BlendJob `JobRuntime` 和独立 Python 3.12 Environment。`server/__init__.py` 注册 Job，`model_manager.py` 管理模型文件与缓存 Session。
 
 ```mermaid
 flowchart TD
@@ -12,16 +12,16 @@ flowchart TD
 
 | Job | 实现与用途 |
 | --- | --- |
-| `download-model`、`download-required-models` | `app.py` 下载单个或缺失模型 |
-| `remove-background` | `jobs/remove_background.py` 生成透明前景或连续 Alpha |
-| `upscale-image` | `jobs/upscale.py` 生成 2× 图像 |
-| `generate-depth-plane-geometry` | `jobs/depth_plane.py` 生成深度、元数据和法线 |
-| `generate-cutout-artifacts` | `jobs/cutout.py` 按请求生成深度和法线 |
-| `generate-panorama-geometry` | `jobs/panorama.py` 生成全景径向深度 |
+| `download_model`、`download_required_models` | `server/__init__.py` 下载单个或缺失模型 |
+| `remove_background` | `jobs/remove_background.py` 生成透明前景或连续 Alpha |
+| `upscale_image` | `jobs/upscale.py` 生成 2× 图像 |
+| `generate_depth_plane_geometry` | `jobs/depth_plane.py` 生成深度、元数据和法线 |
+| `generate_cutout_artifacts` | `jobs/cutout.py` 按请求生成深度和法线 |
+| `generate_panorama_geometry` | `jobs/panorama.py` 生成全景径向深度与对象空间法线 |
 
 `media/` 校验输入图片并限制分析尺寸，Server 只处理静态图片。Job 在阶段边界检查取消，通过 `context.progress()` 返回进度，Operator 清理 Blender 导出的临时输入。
 
-`geometry/prediction_artifacts.py` 缩放源 RGB 后运行一次 MoGe，将同一预测交给深度、法线和元数据写入器；源 Alpha 写入深度与法线产物的有效通道。参考深度由 Blender 侧按产物 Alpha 计算，文件协议见 [Job 产物](outputs.md)。
+`geometry/prediction_artifacts.py` 一次读取源图，分别保留 RGB、Alpha 和原始尺寸；RGB 在内存中缩放后交给 `models/moge.py` 推理，返回统一的 `GeometryFrame`。深度、法线和元数据写入器共享这次预测及缩放到预测尺寸的 Alpha，法线保留源图尺寸。参考深度由 Blender 侧按产物 Alpha 计算，文件协议见 [Job 产物](outputs.md)。
 
 ## 界面状态
 

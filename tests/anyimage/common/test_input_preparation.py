@@ -17,15 +17,15 @@ class InputPreparationTest(BlenderTestCase):
                 image = SimpleNamespace(file_format="OPEN_EXR", save=Mock(side_effect=failure))
                 with patch.object(self.image_data.tempfile, "mkdtemp", return_value=str(output)):
                     with self.assertRaises(RuntimeError):
-                        self.image_data.save_packed_image(image, None)
+                        self.image_data.save_image_input(image)
                 self.assertEqual(image.file_format, "OPEN_EXR")
                 self.assertFalse(output.exists())
 
 
     def test_animated_inputs_are_rejected_before_export(self):
         for source in ("MOVIE", "SEQUENCE"):
-            with self.subTest(source=source), patch.object(self.image_data, "save_packed_image") as export:
+            with self.subTest(source=source), patch.object(self.image_data, "save_image_input") as export:
                 image = SimpleNamespace(source=source, packed_file=object())
                 with self.assertRaisesRegex(RuntimeError, "Only still images"):
-                    importlib.import_module("anyimage.common.job_image").prepare_image_input(image, None)
+                    importlib.import_module("anyimage.common.job_image").prepare_image_input(image)
                 export.assert_not_called()

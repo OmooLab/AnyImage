@@ -161,10 +161,10 @@ def test_depth_cutout_leaf_controls_preserve_valid_solid(mode, boundary_smooth, 
 
 
 def test_depth_cutout_shares_smoothing_and_side_construction():
-    from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_cutout import OImageDepthCutout
+    from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_cutout import ODepthCutout
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    group = OImageDepthCutout.create_group()
+    group = ODepthCutout.create_group()
     for kind in ("GeometryNodeRepeatOutput", "GeometryNodeExtrudeMesh"):
         assert sum(node.bl_idname == kind for node in group.nodes) == 1
     for name in ("_o_side_base_uv", "_o_side_top_uv"):

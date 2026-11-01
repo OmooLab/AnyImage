@@ -338,7 +338,7 @@ def test_modal_match_throttles_preview_updates():
     context.window_manager.event_timer_remove.assert_called_once()
 
 
-@pytest.mark.parametrize("changed", ["reference", "target", "binding", "color_space", "alpha_mode"])
+@pytest.mark.parametrize("changed", ["reference", "target", "binding", "color_space", "alpha_mode", "queued_commit"])
 def test_modal_rejects_external_changes_and_releases_snapshots(changed):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
@@ -348,7 +348,18 @@ def test_modal_rejects_external_changes_and_releases_snapshots(changed):
     operator, reports = _modal_operator()
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
     images_before = tuple(bpy.data.images)
-    if changed == "color_space":
+    if changed == "queued_commit":
+        from anyimage.common.image import create_image_edit_result
+        from anyimage.common.image_target import ImageEditTarget
+
+        pending_target = ImageEditTarget.capture(context)
+        assert pending_target is operator._target
+        result = create_image_edit_result(
+            target, np.tile(np.array([0.4, 0.5, 0.1, 1.0], np.float32), 16), (4, 4),
+        )
+        pending_target.commit(result)
+        pending_target.validate()
+    elif changed == "color_space":
         target.colorspace_settings.name = "Non-Color"
     elif changed == "alpha_mode":
         target.alpha_mode = "CHANNEL_PACKED"

@@ -1,5 +1,6 @@
 """Shared Blender Image and Image Empty lifecycle helpers."""
 
+import hashlib
 import shutil
 import tempfile
 from pathlib import Path
@@ -10,6 +11,7 @@ image_content_handlers = []
 
 TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
 CLIPBOARD_HASH_PROPERTY = "anyimage_clipboard_sha256"
+IMAGE_EMPTY_REFERENCE_PROPERTY = "anyimage_image_empty_reference"
 COLOR_NORMALIZED_PROPERTY = "anyimage_color_normalized"
 
 IMAGE_NAME_SUFFIXES = (
@@ -76,18 +78,6 @@ def image_rgba(image):
     return np.flipud(image_pixels(image).reshape((height, width, 4)))
 
 
-def panorama_crop_bounds(width, height):
-    """Return the largest centered integer-pixel 2:1 bounds."""
-    width, height = int(width), int(height)
-    crop_height = min(height, width // 2)
-    crop_width = crop_height * 2
-    if crop_width <= 0 or crop_height <= 0:
-        raise ValueError("Panorama conversion requires an image at least 2 x 1 pixels")
-    left = (width - crop_width) // 2
-    top = (height - crop_height) // 2
-    return left, top, left + crop_width, top + crop_height
-
-
 def is_animated_image(image):
     return getattr(image, "source", None) in {"MOVIE", "SEQUENCE"}
 
@@ -123,9 +113,9 @@ def image_is_packed(image):
     return bool(getattr(image, "packed_files", ()))
 
 
-def cleanup_image_input(path, temporary):
-    """Remove a prepared input and its temporary container when requested."""
-    if not temporary or not path:
+def cleanup_image_input(path):
+    """Remove a prepared input and its temporary container."""
+    if not path:
         return
     path = Path(path)
     try:
@@ -163,6 +153,12 @@ def is_static_image(image):
         return False
 
 
+def mark_image_empty_reference(image):
+    """Record that an image was used by an Image Empty."""
+    if is_static_image(image) and not image.get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
+        image[IMAGE_EMPTY_REFERENCE_PROPERTY] = True
+
+
 def is_color_reference_candidate(image):
     """Return whether a static Image is selectable as a color reference."""
     if not is_static_image(image):
@@ -171,27 +167,28 @@ def is_color_reference_candidate(image):
         get = getattr(image, "get", None)
         if get is not None and get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
             return False
-        if get is not None and get(CLIPBOARD_HASH_PROPERTY):
+        if get is not None and (get(CLIPBOARD_HASH_PROPERTY) or get(IMAGE_EMPTY_REFERENCE_PROPERTY)):
             return True
         return any(is_image_empty(owner) and owner.data == image for owner in bpy.data.objects)
     except (AttributeError, ReferenceError, TypeError, ValueError):
         return False
 
 
-def save_packed_image(image, _scene):
+def save_image_input(image):
+    """Export the current Blender pixels as an independent PNG input."""
     output_path = Path(tempfile.mkdtemp(prefix="anyimage-input-")) / "input.png"
     original_file_format = image.file_format
     try:
         image.file_format = "PNG"
         image.save(filepath=str(output_path), save_copy=True)
     except (OSError, RuntimeError, ValueError) as error:
-        cleanup_image_input(output_path, True)
-        raise RuntimeError("Unable to export the packed image") from error
+        cleanup_image_input(output_path)
+        raise RuntimeError("Unable to export the image") from error
     finally:
         image.file_format = original_file_format
     if not output_path.is_file():
-        cleanup_image_input(output_path, True)
-        raise RuntimeError("Blender did not export the packed image")
+        cleanup_image_input(output_path)
+        raise RuntimeError("Blender did not export the image")
     return output_path
 
 
@@ -223,24 +220,59 @@ def create_image_edit_result(source_image, pixels, output_size):
     return image
 
 
-def has_other_image_empty(source_object, *, removed_objects=()):
-    """Check surviving image Empty objects for the same Image datablock."""
-    return any(
-        candidate != source_object
-        and candidate not in removed_objects
-        and is_image_empty(candidate)
-        and candidate.data == source_object.data
-        for candidate in bpy.data.objects
+def owner_image(owner):
+    """Return the Image assigned to an Empty, texture or image node input."""
+    if is_image_empty(owner):
+        return owner.data
+    if hasattr(owner, "image"):
+        return owner.image
+    inputs = getattr(owner, "inputs", None)
+    socket = inputs.get("Image") if inputs is not None else None
+    return getattr(socket, "default_value", None)
+
+
+def has_other_image_user(owner, *, removed_objects=()):
+    """Check actual Image references, excluding editor display and Fake User."""
+    tree = owner.id_data if hasattr(owner, "inputs") else None
+    image = owner_image(owner)
+    for user in bpy.data.user_map(subset={image})[image]:
+        if isinstance(user, bpy.types.Screen):
+            continue
+        if user == owner or user in removed_objects:
+            continue
+        if tree is not None and (user == tree or getattr(user, "node_tree", None) == tree):
+            if any(
+                other != owner and owner_image(other) == image
+                for other in tree.nodes
+            ):
+                return True
+        else:
+            return True
+    return False
+
+
+def pixel_digest(pixels):
+    """Identify complete pixels without retaining a full-size snapshot."""
+    import numpy as np
+
+    pixels = np.asarray(pixels)
+    digest = hashlib.blake2b(digest_size=32)
+    if pixels.flags.c_contiguous:
+        digest.update(memoryview(pixels))
+    else:
+        for row in pixels:
+            digest.update(memoryview(np.ascontiguousarray(row)))
+    return digest.digest()
+
+
+def image_content_signature(image, pixels=None):
+    """Identify the current pixels and their interpretation across pending edits."""
+    return (
+        tuple(image.size), image.source, image.is_float,
+        image.colorspace_settings.name, image.alpha_mode,
+        bool(image.get(COLOR_NORMALIZED_PROPERTY)),
+        pixel_digest(image_pixels(image) if pixels is None else pixels),
     )
-
-
-def require_conversion_source(operator):
-    """Validate the object and image captured when a conversion was submitted."""
-    source = require_image_empty(operator.source_object_name)
-    if (str(source.as_pointer()) != operator.source_identity
-            or str(source.data.as_pointer()) != operator.image_identity):
-        raise ValueError("The conversion source image has changed")
-    return source
 
 
 def image_content_state(image):
@@ -335,7 +367,7 @@ def refresh_image_content(image):
 
 
 def replace_empty_image(source_object, result_image, *, placement_bounds=None,
-                        removed_objects=(), isolate_image=False):
+                        removed_objects=()):
     """Replace one Empty image, retaining shared source images."""
     try:
         source_image = source_object.data
@@ -362,7 +394,7 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
         )
         original_content = None
         try:
-            shared = isolate_image or has_other_image_empty(source_object, removed_objects=removed_objects)
+            shared = has_other_image_user(source_object, removed_objects=removed_objects)
             if shared:
                 final_image = result_image
             else:
@@ -390,6 +422,11 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
             raise
 
         source_image.use_fake_user = original_fake_user
+        if final_image != source_image:
+            mark_image_empty_reference(source_image)
+        for owner in removed_objects:
+            if is_image_empty(owner):
+                mark_image_empty_reference(owner.data)
         return final_image
     finally:
         if result_image.users == 0:

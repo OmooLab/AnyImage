@@ -1,16 +1,12 @@
 from . import menu
 import bpy
 
-from .common.image_target import (
-    image_edit_owner,
-    owner_image,
-)
-from .operators.ai_setup import OpenAIEnvironmentSettings, SetupAIServer
+from .common.image_target import image_edit_owner
+from .common.image import owner_image
+from .operators.ai_setup import OpenAIEnvironmentSettings
 from .operators.convert_to_panorama import ConvertToPanorama
-from .operators.convert_to_plane.operators import (
-    ConvertToDepthPlane,
-    ConvertToReliefPlane,
-)
+from .operators.convert_to_depth_plane import ConvertToDepthPlane
+from .operators.convert_to_relief import ConvertToReliefPlane
 from .operators.remove_background import RemoveImageBackground
 from .operators.upscale import UpscaleImage
 from .operators.upscale import upscale_output_size
@@ -49,7 +45,7 @@ class AnyImageObjectMenu(menu.AnyImageObjectMenu):
 
 
 def draw_image_actions(layout, context):
-    from .ai_properties import ai_setup_label, ai_status
+    from .common.ai import draw_ai_setup
 
     layout.operator_context = "INVOKE_DEFAULT"
     layout.operator(
@@ -63,17 +59,11 @@ def draw_image_actions(layout, context):
     )
     menu.draw_image_actions(layout, context)
     layout.separator()
-    status = ai_status()
+    status = draw_ai_setup(layout)
     if status["ready"]:
         layout.operator(
             OpenAIEnvironmentSettings.bl_idname,
             icon="PREFERENCES",
-        )
-    else:
-        layout.operator(
-            SetupAIServer.bl_idname,
-            text=ai_setup_label(status),
-            icon="IMPORT",
         )
 
 

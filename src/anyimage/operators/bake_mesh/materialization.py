@@ -7,10 +7,11 @@ import numpy as np
 
 from ...common.color_image import create_normalized_color_image, require_static_color_image
 from ...common.image import create_image_edit_result, image_content_state, image_pixels, replace_image_content, restore_image_content
-from ...common.image_target import has_other_image_user, is_image_object, material_has_other_object_user, object_color_texture
+from ...common.image import has_other_image_user
+from ...common.image_target import is_image_object, material_has_other_object_user, object_color_texture
 from ...common.material import IMAGE_MATERIAL_NODE_GROUP_NAME, SHADELESS_NODE_GROUP_NAME
 from ..cutout_tool.shape import CUTOUT_NODE_GROUP_NAMES, IMAGE_REGION_ATTRIBUTE_NAME
-from ..convert_to_plane.image_plane import IMAGE_PLANE_NODE_GROUP_NAME
+from ...common.image_plane import IMAGE_PLANE_NODE_GROUP_NAME
 from .textures import build_color_tiles, create_emission_color_image
 from .materials import emission_shaders, remove_unused_material_nodes, static_material_outputs, validate_layer
 
@@ -19,11 +20,11 @@ SOURCE_UV = "_anyimage_source_uv"
 TARGET_UV = "_anyimage_target_uv"
 MARGIN = 4
 SINGLE_REGION_GROUPS = frozenset({
-    IMAGE_PLANE_NODE_GROUP_NAME, "O Image Depth Plane", "O Image Relief Plane",
-    "O Image Depth Panorama",
+    IMAGE_PLANE_NODE_GROUP_NAME, "O Depth Plane", "O Depth Relief",
+    "O Depth Panorama",
 })
 PROTOCOL_ATTRIBUTES = frozenset({
-    "o_balloon", "o_normal_reduction", "o_depth_rotation", "o_depth_face",
+    "o_emission", "o_balloon", "o_normal_reduction", "o_depth_rotation", "o_depth_face",
     "o_depth_axis", IMAGE_REGION_ATTRIBUTE_NAME,
     "_o_depth_cut", "_o_depth_limit_boundary", "_o_boundary_smooth_weight",
     "_o_boundary_falloff", "_o_cut_boundary", "_o_front_normal", "_o_leaf_id",
@@ -108,28 +109,32 @@ def material_inputs(obj, modifiers):
         if shader.type == "EMISSION" or (shader.type == "GROUP" and shader.node_tree.name == SHADELESS_NODE_GROUP_NAME):
             return material, None, color, None, (), {}
     if len(layers) != 1:
-        raise ValueError("Bake Mesh requires one O Image Layer")
+        raise ValueError("Bake Mesh requires one O Texture to Layer")
     layer = layers[0]
     validate_layer(layer, color)
     normal = None
-    if layer.inputs["Normal"].is_linked:
-        normal = layer.inputs["Normal"].links[0].from_node
+    if layer.inputs["Normal Texture"].is_linked:
+        normal = layer.inputs["Normal Texture"].links[0].from_node
         if (normal.type != "TEX_IMAGE" or normal.image is None or normal == color
-                or layer.inputs["Normal"].links[0].from_socket != normal.outputs["Color"]):
+                or layer.inputs["Normal Texture"].links[0].from_socket != normal.outputs["Color"]):
             raise ValueError("Bake Mesh requires an image Normal input")
-    elif layer.inputs["Object Space"].default_value or tuple(layer.inputs["Normal"].default_value) != (.5, .5, 1, 1):
+    elif layer.inputs["Object Space"].default_value or tuple(layer.inputs["Normal Texture"].default_value) != (.5, .5, 1, 1):
         raise ValueError("Bake Mesh requires an existing Normal image for static normals")
     if normal is not None and normal.image == color.image:
         raise ValueError("Bake Mesh requires separate Color and Normal images")
-    channels = tuple(name for name in ("Roughness", "Specular", "Normal")
+    channels = tuple(name for name in ("Roughness", "Alpha", "Normal", "Emission")
                      if layer.outputs[name].is_linked and (
                          name != "Normal" or normal is not None or layer.inputs["Bump Scale"].default_value))
     emitters = emission_shaders(layer, color)
-    emission_strengths = {
-        shader.name: None if shader.inputs["Emission Strength"].is_linked else shader.inputs["Emission Strength"].default_value
-        for shader in emitters
-    }
-    if any(strength is None for strength in emission_strengths.values()):
+    emission_strengths = {}
+    for shader in emitters:
+        strength = shader.inputs["Emission Strength"]
+        transformed = shader.inputs["Emission Color"].links[0].from_socket == layer.outputs["Emission"]
+        emission_strengths[shader.name] = (
+            None if strength.is_linked or (transformed and strength.default_value != 0)
+            else strength.default_value
+        )
+    if "Emission" not in channels and any(strength is None for strength in emission_strengths.values()):
         channels += ("Emission",)
     for node in (color, normal):
         if node is None:
@@ -250,17 +255,16 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
         output = next(node for node in nodes if node.type == "OUTPUT_MATERIAL" and node.is_active_output)
         shader = nodes.new("ShaderNodeBsdfDiffuse" if is_normal else "ShaderNodeEmission")
         created.append(shader)
-        if output_name == "Emission":
+        if output_name == "Emission" and emitter_name is not None:
             emitter = nodes[emitter_name]
             source = emitter.inputs["Emission Color"].links[0].from_socket
-            links.new(emitter.inputs["Emission Strength"].links[0].from_socket, shader.inputs["Strength"])
+            strength = emitter.inputs["Emission Strength"]
+            if strength.is_linked:
+                links.new(strength.links[0].from_socket, shader.inputs["Strength"])
+            else:
+                shader.inputs["Strength"].default_value = strength.default_value
         else:
             source = layer.outputs[output_name]
-        if output_name == "Specular":
-            grayscale = nodes.new("ShaderNodeRGBToBW")
-            created.append(grayscale)
-            links.new(layer.inputs["Color"].links[0].from_socket, grayscale.inputs["Color"])
-            source = grayscale.outputs["Val"]
         links.new(source, shader.inputs["Normal" if is_normal else "Color"])
         links.new(shader.outputs[0], output.inputs["Surface"])
         target = nodes.new("ShaderNodeTexImage")
@@ -271,7 +275,7 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
                                      use_selected_to_active=False, uv_layer=TARGET_UV, margin=MARGIN, margin_type="EXTEND")
         if result != {"FINISHED"}:
             raise RuntimeError(f"{output_name} baking was cancelled")
-        if output_name in {"Roughness", "Specular"}:
+        if output_name in {"Roughness", "Alpha"}:
             scalar_source, image = image, None
             image = bpy.data.images.new(f"Mesh bake {output_name.lower()}", width=size[0], height=size[1], alpha=True)
             image.colorspace_settings.is_data = True
@@ -346,6 +350,11 @@ def materialize_mesh_and_textures(context, obj):
                 scalar_size = tuple(int(v) * count for v, count in zip(source_color.size, grid))
                 for channel in channels:
                     if channel == "Emission":
+                        if layer.outputs["Emission"].is_linked:
+                            image = bake_material_output(bake_material, layer.name, scalar_size, channel)
+                            image.name = f"{material.name}_emission.exr"
+                            images.append(image)
+                            scalar_images[channel] = image
                         for name, strength in emission_strengths.items():
                             if strength is not None:
                                 continue

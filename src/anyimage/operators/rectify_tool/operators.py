@@ -23,7 +23,8 @@ from ...common.viewport import (
     screen_path_to_image_pixels,
     serialize_matrix,
 )
-from ...common.image import create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
+from ...common.image_target import require_conversion_source
+from ...common.image import image_content_signature, create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
 from ...common.projective_image import warp_projective_pixels
 from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from .geometry import (
@@ -71,6 +72,9 @@ class RectifyImagePerspective(bpy.types.Operator):
     _phase = "POINTS"
     _preview_texture = None
     _source_pixels = None
+    _source_object = None
+    _source_image = None
+    _source_signature = None
     _initial_aspect_ratio = 1.0
     _raw_aspect_ratio = 1.0
     _aspect_preset_label = None
@@ -178,6 +182,9 @@ class RectifyImagePerspective(bpy.types.Operator):
             )
             return {"CANCELLED"}
         self.source_object_name = source_object.name
+        self._source_object = source_object
+        self._source_image = source_object.data
+        self._source_signature = image_content_signature(source_object.data)
         self.source_matrix_data = serialize_matrix(source_object.matrix_world)
         self.quad_json = ""
         self._phase = "POINTS"
@@ -252,7 +259,7 @@ class RectifyImagePerspective(bpy.types.Operator):
                 context.area.tag_redraw()
                 return {"RUNNING_MODAL"}
             try:
-                source_object = require_image_empty(self.source_object_name)
+                source_object = require_conversion_source(self)
             except RuntimeError as error:
                 self.report({"ERROR"}, str(error))
                 self._finish(context)
@@ -334,11 +341,12 @@ class RectifyImagePerspective(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            source_object = require_image_empty(self.source_object_name)
-        except RuntimeError as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
-        try:
+            source_object = (
+                require_conversion_source(self)
+                if self._source_object is not None
+                else require_image_empty(self.source_object_name)
+            )
+            self.source_object_name = source_object.name
             if is_animated_image(source_object.data):
                 raise RuntimeError("Rectify only supports a still image")
             quad = validate_perspective_quad(json.loads(self.quad_json))
@@ -351,9 +359,7 @@ class RectifyImagePerspective(bpy.types.Operator):
                 )
                 return {"CANCELLED"}
             source_pixels = self._source_pixels
-            if source_pixels is None or len(source_pixels) != len(
-                source_object.data.pixels
-            ):
+            if source_pixels is None:
                 source_pixels = image_pixels(source_object.data)
             source_linear = image_rgba_to_linear(
                 source_object.data, source_pixels.reshape((-1, 4)),
@@ -383,4 +389,9 @@ class RectifyImagePerspective(bpy.types.Operator):
         ) as error:
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
+        finally:
+            self._source_pixels = None
+            self._source_object = None
+            self._source_image = None
+            self._source_signature = None
         return {"FINISHED"}

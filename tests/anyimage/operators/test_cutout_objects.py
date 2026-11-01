@@ -13,7 +13,7 @@ from anyimage.common import material as material_data
 from anyimage.common import object as object_data
 from anyimage.common.selection import ImageEditWarning, SelectionPath, rasterize_selection_path
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import ai_operators as cutout_main
+from anyimage.operators.cutout_tool import object as cutout_main
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from anyimage.operators.cutout_tool.boundary_padding import (
     image_rgba_buffer,
@@ -139,7 +139,7 @@ def test_balloon_build_starts_from_the_unified_single_sheet():
     assert profile.min() == 0.0 and profile.max() > 0.0
     material_tree = result.data.materials[0].node_tree
     assert not any(node.bl_idname == "ShaderNodeAttribute" for node in material_tree.nodes)
-    image_layer = _group_node(material_data.material_node_group(), material_tree)
+    image_layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), material_tree)
     assert not image_layer.inputs["Normal Scale"].is_linked
     assert image_layer.inputs["Normal Scale"].default_value == 1.0
     assert result.modifiers[0].node_group.name == cutout_shape.CUTOUT_NODE_GROUP_NAMES["SOLID"]
@@ -184,7 +184,7 @@ def test_depth_surface_object_evaluates(gesture):
     assert cutout_shape.BALLOON_ATTRIBUTE_NAME in result.data.attributes
     modifier = result.modifiers[0]
     assert modifier.node_group.name == cutout_shape.CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"]
-    layer = _group_node(material_data.material_node_group(), result.data.materials[0].node_tree)
+    layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), result.data.materials[0].node_tree)
     assert layer.inputs["Object Space"].default_value is True
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Mode")) == (1 if gesture == "POLYLINE" else 0)
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.1)
@@ -347,9 +347,9 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     }
     assert len(result.modifiers) == 2
     modifier, symmetry = result.modifiers
-    assert modifier.node_group.name == "O Image Depth Cutout"
-    assert symmetry.node_group.name == "O Image Cutout Symmetry"
-    layer = _group_node(material_data.material_node_group(), result.data.materials[0].node_tree)
+    assert modifier.node_group.name == "O Depth Cutout"
+    assert symmetry.node_group.name == "O Cutout Symmetry"
+    layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), result.data.materials[0].node_tree)
     assert layer.inputs["Object Space"].default_value is True
     assert not modifier.show_group_selector and not symmetry.show_group_selector
 
@@ -445,7 +445,7 @@ def test_local_cutout_selection_matches_uint8_tenth_alpha_boundary():
             points=((0, 0), (4, 0), (4, 4), (0, 4)),
         ),
     )
-    selection = cutout_main._cutout_content_values(
+    selection = cutout_geometry.cutout_content_values(
         top_down[:, :, 3],
         selection_mask.values,
     )
@@ -459,14 +459,14 @@ def test_cutout_content_merge_keeps_the_geometric_selection_unchanged():
     original = selection.copy()
     alpha = np.asarray(((1.0, 0.5), (0.0, 0.25)), dtype=np.float32)
 
-    content = cutout_main._cutout_content_values(
+    content = cutout_geometry.cutout_content_values(
         alpha, selection, alpha_threshold=0.5
     )
 
     np.testing.assert_array_equal(selection, original)
     np.testing.assert_allclose(content, alpha * original)
     with pytest.raises(ImageEditWarning, match="no visible image pixels"):
-        cutout_main._cutout_content_values(np.zeros((2, 2)), selection)
+        cutout_geometry.cutout_content_values(np.zeros((2, 2)), selection)
 
 
 def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
@@ -498,7 +498,7 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
             antialias=True,
         )
         left, top, right, bottom = selection_mask.bounds
-        content_values = cutout_main._cutout_content_values(
+        content_values = cutout_geometry.cutout_content_values(
             rgba[top:bottom, left:right, 3],
             selection_mask.values,
             alpha_threshold=0.5,

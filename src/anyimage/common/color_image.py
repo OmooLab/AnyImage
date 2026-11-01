@@ -1,4 +1,4 @@
-"""Prepare isolated material color files from static image bounds."""
+"""Prepare, interpret and normalize material color images."""
 
 import json
 import tempfile
@@ -9,8 +9,95 @@ import bpy
 
 from .image import (
     COLOR_NORMALIZED_PROPERTY, cleanup_image_input, image_base_name, image_is_packed, image_rgba,
-    is_animated_image,
+    is_animated_image, image_content_state, image_pixels, restore_image_content,
 )
+
+
+VIEW_TRANSFORM_COLOR_SPACES = (
+    ("ACES 1.3", "ACES 1.3 sRGB"),
+    ("ACES 2.0", "ACES 2.0 sRGB"),
+    ("AgX", "AgX Base sRGB"),
+    ("Filmic", "Filmic sRGB"),
+    ("Khronos PBR Neutral", "Khronos PBR Neutral sRGB"),
+)
+
+
+def color_alpha_mode(color_space):
+    """Pair inverse view color spaces with straight alpha."""
+    return "STRAIGHT" if color_space in dict(VIEW_TRANSFORM_COLOR_SPACES).values() else "PREMUL"
+
+
+def material_color_space_name(scene):
+    view_settings = getattr(scene, "view_settings", None)
+    view_transform = getattr(view_settings, "view_transform", "")
+    normalized = str(view_transform).strip().casefold()
+    for view_name, color_space in VIEW_TRANSFORM_COLOR_SPACES:
+        if normalized.startswith(view_name.casefold()):
+            return color_space
+    return "sRGB"
+
+
+def configure_material_color_image(image, scene=None, *, panorama=False):
+    """Preserve HDR, reverse panorama colors, and normalize surface colors."""
+    if getattr(image, "is_float", False):
+        return image
+    if image.get(COLOR_NORMALIZED_PROPERTY) and not panorama:
+        return image
+    if scene is None:
+        scene = getattr(bpy.context, "scene", None)
+    preferred = material_color_space_name(scene)
+    normalize = not panorama and preferred != "sRGB"
+    pixels = (
+        image_pixels(image)
+        if getattr(image, "source", None) == "GENERATED"
+        or getattr(image, "is_dirty", False)
+        else None
+    )
+    settings = image.colorspace_settings
+    original_space = settings.name
+    original_alpha = image.alpha_mode
+    original_content = image_content_state(image) if normalize else None
+    try:
+        for color_space in dict.fromkeys((preferred, "sRGB")):
+            try:
+                settings.name = color_space
+            except (TypeError, ValueError):
+                continue
+            if settings.name == color_space:
+                break
+        else:
+            raise RuntimeError("Unable to configure the material color space")
+        if normalize and settings.name != "sRGB":
+            import numpy as np
+            from .color_space import normalize_color_rgba
+
+            if pixels is not None:
+                image.pixels.foreach_set(pixels)
+            rgba = normalize_color_rgba(decode_color_image(image, settings.name))
+            settings.name = "sRGB"
+            image.alpha_mode = "PREMUL"
+            image.pixels.foreach_set(np.flipud(rgba).ravel())
+            image.update()
+            image.pack()
+            image[COLOR_NORMALIZED_PROPERTY] = True
+            return image
+        image.alpha_mode = color_alpha_mode(settings.name)
+        if pixels is not None:
+            image.pixels.foreach_set(pixels)
+            image.update()
+        if panorama and COLOR_NORMALIZED_PROPERTY in image:
+            del image[COLOR_NORMALIZED_PROPERTY]
+    except Exception:
+        if original_content is not None:
+            restore_image_content(image, original_content)
+            raise
+        settings.name = original_space
+        image.alpha_mode = original_alpha
+        if pixels is not None:
+            image.pixels.foreach_set(pixels)
+            image.update()
+        raise
+    return image
 
 
 def create_normalized_color_image(image):
@@ -73,13 +160,33 @@ def decode_color_image(image, color_space):
         bpy.data.images.remove(reader)
 
 
+def median_color_luminance(image):
+    """Return median linear luminance over finite, visible texture pixels."""
+    import numpy as np
+    from .color_space import srgb_to_linear_rgb
+
+    if image.is_float:
+        rgba = image_rgba(image)
+    elif image.colorspace_settings.name == "sRGB":
+        rgba = image_rgba(image)
+        rgba[..., :3] = srgb_to_linear_rgb(rgba[..., :3])
+    else:
+        rgba = decode_color_image(image, image.colorspace_settings.name)
+    visible = (rgba[..., 3] > 0) & np.isfinite(rgba).all(axis=-1)
+    if not visible.any():
+        return 0.0
+    luminance = rgba[..., :3][visible] @ np.array((.2126, .7152, .0722), dtype=np.float32)
+    return float(np.median(luminance))
+
+
 def require_static_color_image(image):
     """Reject animated inputs before preparing material resources."""
     if is_animated_image(image):
         raise ValueError("Material conversion supports static images only")
 
 
-def _save_byte_color(rgba, path, color_space):
+def save_color_png(rgba, path, color_space):
+    """Save top-down RGBA pixels with their Blender color interpretation."""
     import numpy as np
 
     height, width = rgba.shape[:2]
@@ -127,7 +234,7 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
             # Store float colors directly; the EXR interpretation is applied on load.
             save_hdr_result(cropped, path)
         else:
-            _save_byte_color(cropped, path, source.colorspace_settings.name)
+            save_color_png(cropped, path, source.colorspace_settings.name)
         metadata = {
             "name": f"{image_base_name(source)}_color{suffix}",
             "color_space": "Linear Rec.709" if source.is_float else source.colorspace_settings.name,
@@ -144,7 +251,7 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
 def cleanup_material_color_input(path):
     """Release the directory owned by a prepared material color input."""
     if path:
-        cleanup_image_input(Path(path).parent, True)
+        cleanup_image_input(Path(path).parent)
 
 
 def load_material_color_image(path):

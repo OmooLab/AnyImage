@@ -9,7 +9,8 @@ from PIL import Image
 
 from anyimage.common import image as images, material
 from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
-from anyimage.operators.convert_to_plane import plane as operators, object as conversion, image_plane
+from anyimage.operators import convert_to_plane as operators
+from anyimage.common import depth_plane as conversion, image_plane
 
 
 @pytest.fixture
@@ -63,8 +64,8 @@ def run_conversion(source, entry, monkeypatch):
         path = prepare_material_color_input(source.data)
         try:
             conversion.create_depth_plane_from_result(bpy.context, SimpleNamespace(file=lambda key: key),
-                SimpleNamespace(source_object_name=source.name, source_identity=str(source.as_pointer()),
-                                image_identity=str(source.data.as_pointer()), color_path=str(path), plane_type=entry))
+                SimpleNamespace(source_object_name=source.name, _source_object=source,
+                                _source_image=source.data, _source_signature=images.image_content_signature(source.data), color_path=str(path)), plane_type=entry, undo_label="Convert to Depth Plane")
         finally:
             cleanup_material_color_input(path)
     return bpy.context.object
@@ -112,7 +113,7 @@ def test_conversion_failure_restores_image_and_releases_resources(source, monkey
     def fail(*args, **kwargs):
         raise RuntimeError("Conversion failed")
     if failure == "material":
-        monkeypatch.setattr(material, "material_node_group", fail)
+        monkeypatch.setattr(material, "load_node_group", fail)
     elif failure == "finalize":
         monkeypatch.setattr(image_plane, "finalize_object_result", fail)
     elif entry == "PLANE":
@@ -156,11 +157,11 @@ def test_conversion_pixels_survive_library_reload(source, tmp_path, monkeypatch,
 
 @pytest.mark.parametrize("entry", ["DEPTH", "RELIEF"])
 def test_depth_result_rejects_replaced_source_image(source, entry):
-    operator = SimpleNamespace(source_object_name=source.name, source_identity=str(source.as_pointer()),
-                               image_identity=str(source.data.as_pointer()), plane_type=entry)
+    operator = SimpleNamespace(source_object_name=source.name, _source_object=source,
+                               _source_image=source.data, _source_signature=images.image_content_signature(source.data), plane_type=entry)
     source.data = source.data.copy()
-    with pytest.raises(ValueError, match="source image has changed"):
-        conversion.create_depth_plane_from_result(bpy.context, None, operator)
+    with pytest.raises(RuntimeError, match="source image has changed"):
+        conversion.create_depth_plane_from_result(bpy.context, None, operator, plane_type=entry, undo_label="Convert to Depth Plane")
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -185,3 +186,30 @@ def test_plane_undo_redo_restores_image_configuration(source, monkeypatch, share
         assert bpy.data.images[color_name].alpha_mode == "PREMUL"
     finally:
         bpy.utils.unregister_class(operators.ConvertToPlane)
+
+
+def test_conversion_source_survives_object_and_image_renaming(source):
+    from anyimage.common.image_target import require_conversion_source
+
+    operator = SimpleNamespace(_source_object=source, _source_image=source.data, _source_signature=images.image_content_signature(source.data))
+    source.name = "Renamed source"
+    source.data.name = "Renamed image"
+    assert require_conversion_source(operator) == source
+
+
+@pytest.mark.parametrize("change", ["pixels", "size", "color_space"])
+def test_conversion_rejects_in_place_source_edits(source, change):
+    from anyimage.common.image_target import require_conversion_source
+
+    operator = SimpleNamespace(
+        _source_object=source, _source_image=source.data,
+        _source_signature=images.image_content_signature(source.data),
+    )
+    if change == "pixels":
+        source.data.pixels[0] = 0.8
+    elif change == "size":
+        source.data.scale(4, 2)
+    else:
+        source.data.colorspace_settings.name = "Non-Color"
+    with pytest.raises(RuntimeError, match="source image has changed"):
+        require_conversion_source(operator)

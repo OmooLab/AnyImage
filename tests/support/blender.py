@@ -25,6 +25,8 @@ def mock_bpy_imports(fake_bpy):
 class BlenderTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Initialize Blender's bundled modules before stubbing bpy imports.
+        importlib.import_module("bpy")
         cls.previous_addon_modules = {
             name: module for name, module in sys.modules.items()
             if name == "anyimage" or name.startswith("anyimage.")
@@ -132,12 +134,11 @@ class BlenderTestCase(unittest.TestCase):
         cls.ai_setup = importlib.import_module("anyimage.operators.ai_setup")
         cls.ai = importlib.import_module("anyimage.common.ai")
         cls.image_data = importlib.import_module("anyimage.common.image")
-        cls.convert_to_plane = importlib.import_module(
-            "anyimage.operators.convert_to_plane.operators"
-        )
-        cls.convert_to_plane_object = importlib.import_module(
-            "anyimage.operators.convert_to_plane.object"
-        )
+        cls.convert_to_depth_plane = importlib.import_module("anyimage.operators.convert_to_depth_plane")
+        cls.convert_to_relief = importlib.import_module("anyimage.operators.convert_to_relief")
+        cls.plane_geometry = importlib.import_module("anyimage.operators.plane_geometry")
+        cls.depth_plane = importlib.import_module("anyimage.common.depth_plane")
+        cls.cutout_object = importlib.import_module("anyimage.operators.cutout_tool.object")
         cls.cutout_main = importlib.import_module(
             "anyimage.operators.cutout_tool.ai_operators"
         )
@@ -159,8 +160,7 @@ class BlenderTestCase(unittest.TestCase):
         cls.rectify_geometry = importlib.import_module("anyimage.operators.rectify_tool.geometry")
         cls.rectify_preview = importlib.import_module("anyimage.operators.rectify_tool.preview")
         cls.cutout_operators = importlib.import_module("anyimage.operators.cutout_tool.operators")
-        cls.cutout_construction = importlib.import_module("anyimage.operators.cutout_tool.construction")
-        cls.plane_local = importlib.import_module("anyimage.operators.convert_to_plane.plane")
+        cls.convert_to_plane = importlib.import_module("anyimage.operators.convert_to_plane")
         cls.cutout_geometry = importlib.import_module(
             "anyimage.operators.cutout_tool.geometry"
         )

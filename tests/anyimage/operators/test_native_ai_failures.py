@@ -5,7 +5,8 @@ import pytest
 
 from anyimage.operators import ai_setup
 from anyimage.operators.remove_background import operators as remove_background
-from anyimage.operators.convert_to_plane import operators as plane
+from anyimage.operators import convert_to_depth_plane as plane, convert_to_relief as relief
+from anyimage.operators import plane_geometry as conversion
 
 
 def test_native_server_controls_are_disabled_during_migration():
@@ -30,8 +31,8 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
     if kind == "background":
         inner, outer = remove_background.RunBackgroundRemoval, remove_background.RemoveImageBackground
     else:
-        inner = plane.GenerateDepthPlane
-        outer = plane.ConvertToDepthPlane if kind == "depth" else plane.ConvertToReliefPlane
+        inner = conversion.GeneratePlaneGeometry
+        outer = plane.ConvertToDepthPlane if kind == "depth" else relief.ConvertToReliefPlane
 
     def reject(operator, context):
         operator.report({"ERROR"}, reason)
@@ -44,11 +45,11 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
     with (
         patch.object(inner, "execute", reject),
         patch.object(outer, "poll", classmethod(lambda cls, context: True)),
-        patch.object(plane, "invoke_ai_setup_if_needed", return_value=None),
-        patch.object(plane, "prepare_material_color_input", return_value=path),
-        patch.object(plane, "material_analysis_input", return_value=path),
-        patch.object(plane, "depth_plane_settings", return_value=("model", 5)),
-        patch.object(plane, "configured_max_ai_input_size", return_value=2048),
+        patch.object(conversion, "invoke_ai_setup_if_needed", return_value=None),
+        patch.object(conversion, "prepare_material_color_input", return_value=path),
+        patch.object(conversion, "material_analysis_input", return_value=path),
+        patch.object(conversion, "depth_plane_settings", return_value=("model", 5)),
+        patch.object(conversion, "configured_max_ai_input_size", return_value=2048),
     ):
         owner = bpy.data.objects.new("Native validation source", None)
         image = bpy.data.images.new("Native validation image", width=1, height=1)

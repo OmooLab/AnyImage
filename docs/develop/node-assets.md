@@ -8,14 +8,15 @@
 
 | 节点组 | 源码（相对于 `nodes/O_AnyImage/O_AnyImage/`） |
 | --- | --- |
-| `O Image Plane` | `geometry/o_image_plane.py` |
-| `O Image Depth Plane` | `geometry/o_image_depth_plane.py` |
-| `O Image Relief Plane` | `geometry/o_image_relief_plane.py` |
-| `O Image Cutout` | `geometry/o_image_cutout.py` |
-| `O Image Depth Cutout` | `geometry/o_image_depth_cutout.py` |
-| `O Image Cutout Symmetry` | `geometry/o_image_cutout_symmetry.py` |
-| `O Image Depth Panorama` | `geometry/o_image_depth_panorama.py` |
-| `O Image Layer` | `shader/o_image_layer.py` |
+| `O Plane` | `geometry/o_plane.py` |
+| `O Depth Plane` | `geometry/o_depth_plane.py` |
+| `O Depth Relief` | `geometry/o_depth_relief.py` |
+| `O Cutout` | `geometry/o_cutout.py` |
+| `O Depth Cutout` | `geometry/o_depth_cutout.py` |
+| `O Cutout Symmetry` | `geometry/o_cutout_symmetry.py` |
+| `O Depth Panorama` | `geometry/o_depth_panorama.py` |
+| `O Texture to Layer` | `shader/o_texture_to_layer.py` |
+| `O Background` | `shader/o_background.py` |
 | `O Shadeless` | `shader/o_shadeless.py` |
 
 ## 构建与验证

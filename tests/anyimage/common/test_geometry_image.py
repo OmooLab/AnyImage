@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 
 from anyimage.common import geometry_image
-from anyimage.common.coordinate import canonical_direction_to_symmetry_legacy
 from anyimage.common.geometry_image import (
     FLAT_DEPTH_DIRECTION,
     REFERENCE_DEPTH_BASELINE,
+    depth_node_direction,
     depth_uniform_scale,
     fit_depth_direction,
     fit_symmetry_depth_direction,
@@ -187,7 +187,7 @@ def test_symmetry_depth_direction_returns_the_flat_direction_without_samples():
     direction = fit_symmetry_depth_direction(image, vertices, uv, 1.0)
 
     assert direction == FLAT_DEPTH_DIRECTION
-    assert canonical_direction_to_symmetry_legacy(direction) == (0.0, 0.0, 1.0)
+    assert depth_node_direction(direction) == (0.0, 0.0, 1.0)
 
 
 def test_depth_uniform_scale_converts_model_units_at_the_reference_depth():

@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 
 
+from anyimage.common import color_image as color_images
 from anyimage.common import image as images
 from anyimage.common import material
 from tests.support.color_image import color_image
@@ -48,7 +49,7 @@ def test_color_space_and_alpha_follow_business(color_data, panorama, view, space
         space = "sRGB"
     image.colorspace_settings.name = "sRGB"
     image.pixels.foreach_set(expected)
-    result = material.configure_material_color_image(image, view_scene(view), panorama=panorama)
+    result = color_images.configure_material_color_image(image, view_scene(view), panorama=panorama)
     selected = space if panorama else "sRGB"
     assert result.colorspace_settings.name == selected
     assert result.alpha_mode == ("PREMUL" if selected == "sRGB" else "STRAIGHT")
@@ -67,7 +68,7 @@ def test_linear_hdr_is_unchanged_for_both_material_roles(color_data, panorama):
     image.alpha_mode = "PREMUL"
     pixels = np.array([8, 2, .5, .25, 12, 3, 1, 0], np.float32)
     image.pixels.foreach_set(pixels)
-    result = material.configure_material_color_image(image, view_scene("AgX"), panorama=panorama)
+    result = color_images.configure_material_color_image(image, view_scene("AgX"), panorama=panorama)
     assert result == image and result.is_float
     assert result.colorspace_settings.name == "Linear Rec.709"
     assert result.alpha_mode == "PREMUL"
@@ -79,7 +80,7 @@ def test_panorama_reverses_previously_normalized_srgb(color_data):
     image.pixels.foreach_set([.8, .6, .2, .5])
     image[images.COLOR_NORMALIZED_PROPERTY] = True
     before = images.image_pixels(image)
-    material.configure_material_color_image(image, view_scene("AgX"), panorama=True)
+    color_images.configure_material_color_image(image, view_scene("AgX"), panorama=True)
     assert image.colorspace_settings.name == "AgX Base sRGB"
     assert not image.get(images.COLOR_NORMALIZED_PROPERTY)
     np.testing.assert_array_equal(images.image_pixels(image), before)
@@ -105,7 +106,7 @@ def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, k
     owner = bpy.data.objects.new("Color source owner", None)
     owner.empty_display_type = "IMAGE"
     owner.data = source
-    result = material.configure_material_color_image(source, view_scene("AgX"), panorama=True)
+    result = color_images.configure_material_color_image(source, view_scene("AgX"), panorama=True)
     assert result == source
     np.testing.assert_allclose(images.image_pixels(result), before, atol=1 / 255)
     expected = images.image_pixels(result)

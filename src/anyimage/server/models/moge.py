@@ -1,4 +1,3 @@
-from ..media.input import open_image
 from .geometry import GeometryFrame
 from . import model_adapter
 
@@ -35,35 +34,22 @@ def _geometry_frame(prediction, include_points):
 def infer(
     model_manager,
     parameters,
-    image_path,
+    image,
     *,
     include_points,
     cancel_check=None,
 ):
-    """Infer one image and return its geometry fields."""
-    if cancel_check is not None:
-        cancel_check()
-    prediction = infer_one(model_manager, parameters, image_path, include_points=include_points)
-    return _geometry_frame(prediction, include_points)
-
-
-def infer_one(
-    model_manager,
-    parameters,
-    image_path,
-    *,
-    release_memory=True,
-    include_points=True,
-):
+    """Infer an RGB image and return its geometry fields."""
     import numpy as np
 
+    if cancel_check is not None:
+        cancel_check()
     model, _load_ms = model_manager.get_session(parameters["model"], parameters["device"])
-    with open_image(image_path) as opened:
-        image = np.asarray(opened.convert("RGB"), dtype=np.float32) / 255.0
-    return model_adapter(parameters["model"]).infer(
+    prediction = model_adapter(parameters["model"]).infer(
         model,
-        image,
+        np.asarray(image, dtype=np.float32) / 255.0,
         int(parameters["resolution_level"]),
-        release_memory=release_memory,
+        release_memory=True,
         include_points=include_points,
     )
+    return _geometry_frame(prediction, include_points)

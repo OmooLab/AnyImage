@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 import bpy
 import numpy as np
+import pytest
 
 
 from anyimage.common import material as material_data
@@ -33,9 +34,9 @@ def test_generated_materials_use_implicit_uv_and_readable_layout():
         for link in material.node_tree.links
         if link.from_node == layer and link.to_node == shader
     } == {
-        ("Color", "Base Color"), ("Color", "Emission Color"),
+        ("Color", "Base Color"), ("Emission", "Emission Color"),
         ("Alpha", "Alpha"), ("Normal", "Normal"),
-        ("Roughness", "Roughness"), ("Specular", "Specular IOR Level"),
+        ("Roughness", "Roughness"),
     }
 
     panorama = material_data.create_image_material(
@@ -56,14 +57,14 @@ def test_generated_materials_use_implicit_uv_and_readable_layout():
 def test_image_layer_switches_between_tangent_and_object_space_normal():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
-    assert material_data.IMAGE_MATERIAL_NODE_GROUP_NAME == "O Image Layer"
-    group = material_data.material_node_group()
+    assert material_data.IMAGE_MATERIAL_NODE_GROUP_NAME == "O Texture to Layer"
+    group = material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME)
     normal = next(
         item
         for item in group.interface.items_tree
         if item.item_type == "SOCKET"
         and item.in_out == "INPUT"
-        and item.name == "Normal"
+        and item.name == "Normal Texture"
     )
     assert tuple(normal.default_value) == (0.5, 0.5, 1.0, 1.0)
     bump_scale = next(
@@ -120,7 +121,7 @@ def test_image_layer_switches_between_tangent_and_object_space_normal():
     )
     layer = _group_node(group, tangent_material.node_tree)
     assert layer.inputs["Object Space"].default_value is False
-    reused = material_data.material_node_group()
+    reused = material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME)
     assert {
         node.space for node in reused.nodes if node.bl_idname == "ShaderNodeNormalMap"
     } == {"TANGENT", "OBJECT"}
@@ -144,20 +145,13 @@ def test_cutout_material_uses_ior_1_2():
     )
     assert np.isclose(shader.inputs["IOR"].default_value, 1.2)
     image_layer = _group_node(
-        material_data.material_node_group(),
+        material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME),
         result.data.materials[0].node_tree,
     )
-    ior_level_link = next(
-        link
-        for link in result.data.materials[0].node_tree.links
-        if link.to_node == shader
-        and link.to_socket == shader.inputs["Specular IOR Level"]
-    )
-    assert ior_level_link.from_node == image_layer
-    assert ior_level_link.from_socket == image_layer.outputs["Specular"]
+    assert not shader.inputs["Specular IOR Level"].is_linked
 
 
-def test_plane_material_specular_drives_ior_level_but_shadeless_does_not():
+def test_plane_material_uses_default_specular_and_supports_shadeless():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     image = bpy.data.images.new("Plane", width=2, height=2, alpha=True)
     source = SimpleNamespace(data=SimpleNamespace(name="Plane"))
@@ -169,15 +163,9 @@ def test_plane_material_specular_drives_ior_level_but_shadeless_does_not():
         if node.bl_idname == "ShaderNodeBsdfPrincipled"
     )
     assert np.isclose(shader.inputs["IOR"].default_value, 1.2)
-    image_layer = _group_node(material_data.material_node_group(), material.node_tree)
+    image_layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), material.node_tree)
     assert image_layer.inputs["Bump Scale"].default_value == 0.0
-    assert any(
-        link.from_node == image_layer
-        and link.from_socket == image_layer.outputs["Specular"]
-        and link.to_node == shader
-        and link.to_socket == shader.inputs["Specular IOR Level"]
-        for link in material.node_tree.links
-    )
+    assert not shader.inputs["Specular IOR Level"].is_linked
 
     shadeless = material_data.create_image_material(
         source.data,
@@ -207,7 +195,7 @@ def test_cutout_material_uses_flat_tangent_normal():
         scene=bpy.context.scene,
     )
 
-    layer = _group_node(material_data.material_node_group(), result.node_tree)
+    layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), result.node_tree)
     assert layer.inputs["Object Space"].default_value is False
 
 
@@ -257,3 +245,24 @@ def test_panorama_normal_encoding_matches_image_layer_object_axes(tmp_path):
     actual = pixels[24:40, 24:40, :3] * 2 - 1
     rotated = np.array(obj.matrix_world.to_3x3() @ Vector(expected))
     np.testing.assert_allclose(actual, np.broadcast_to(rotated, actual.shape), atol=1e-5)
+
+
+@pytest.mark.parametrize("is_float,color_space,expected", [(True, "Linear Rec.709", 4.0), (False, "sRGB", .21404114), (False, "Non-Color", .5)])
+def test_emission_threshold_uses_visible_linear_median(is_float, color_space, expected):
+    from anyimage.common.color_image import median_color_luminance
+    from anyimage.common.image import COLOR_NORMALIZED_PROPERTY
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = bpy.data.images.new("Median", width=4, height=1, float_buffer=is_float)
+    image.colorspace_settings.name = color_space
+    values = [1, 4, 8, 100] if is_float else [.1, .5, .9, 1]
+    image.pixels.foreach_set([c for i, value in enumerate(values) for c in (value, value, value, float(i < 3))])
+    assert median_color_luminance(image) == pytest.approx(expected, abs=.005)
+    if color_space == "sRGB":
+        image[COLOR_NORMALIZED_PROPERTY] = True
+    if is_float or color_space == "sRGB":
+        material = material_data.create_image_material(image, image)
+        layer = next(n for n in material.node_tree.nodes if n.type == "GROUP")
+        assert layer.inputs["Emission Threshold"].default_value == pytest.approx(expected, abs=.005)
+    image.pixels.foreach_set([0] * 16)
+    assert median_color_luminance(image) == 0

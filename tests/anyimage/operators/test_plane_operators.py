@@ -11,8 +11,8 @@ class PlaneOperatorsTest(BlenderTestCase):
             for duration in (1, 24):
                 source = SimpleNamespace(data=SimpleNamespace(source=kind, frame_duration=duration))
                 operator = SimpleNamespace(report=Mock())
-                with patch.object(self.plane_local, "material_color_image") as prepare:
-                    result = self.plane_local.ConvertToPlane.execute(
+                with patch.object(self.convert_to_plane, "material_color_image") as prepare:
+                    result = self.convert_to_plane.ConvertToPlane.execute(
                         operator, SimpleNamespace(object=source))
                 self.assertEqual(result, {"CANCELLED"})
                 prepare.assert_not_called()
@@ -23,24 +23,26 @@ class PlaneOperatorsTest(BlenderTestCase):
         operator = SimpleNamespace(report=Mock())
         context = SimpleNamespace(object=SimpleNamespace(data=object()))
         with (
-            patch.object(self.convert_to_plane, "require_static_color_image", side_effect=ValueError("Material conversion supports static images only")),
-            patch.object(self.convert_to_plane, "invoke_ai_setup_if_needed") as setup,
+            patch.object(self.plane_geometry, "require_static_color_image", side_effect=ValueError("Material conversion supports static images only")),
+            patch.object(self.plane_geometry, "invoke_ai_setup_if_needed") as setup,
+            patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_plane_geometry=Mock())), create=True),
         ):
-            self.assertEqual(self.convert_to_plane.ConvertToDepthPlane.execute(operator, context), {"CANCELLED"})
+            self.assertEqual(self.convert_to_depth_plane.ConvertToDepthPlane.execute(operator, context), {"CANCELLED"})
             setup.assert_not_called()
         with (
-            patch.object(self.convert_to_plane, "require_static_color_image"),
-            patch.object(self.convert_to_plane, "invoke_ai_setup_if_needed", return_value={"FINISHED"}) as setup,
-            patch.object(self.convert_to_plane, "prepare_material_color_input") as prepare,
+            patch.object(self.plane_geometry, "require_static_color_image"),
+            patch.object(self.plane_geometry, "invoke_ai_setup_if_needed", return_value={"FINISHED"}) as setup,
+            patch.object(self.plane_geometry, "prepare_material_color_input") as prepare,
+            patch.object(self.fake_bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_plane_geometry=Mock())), create=True),
         ):
-            self.assertEqual(self.convert_to_plane.ConvertToDepthPlane.execute(operator, context), {"FINISHED"})
+            self.assertEqual(self.convert_to_depth_plane.ConvertToDepthPlane.execute(operator, context), {"FINISHED"})
             setup.assert_called_once()
             prepare.assert_not_called()
 
 
     def test_depth_and_relief_start_jobs_with_their_plane_type(self):
-        for plane_type, operator_class in (("DEPTH", self.convert_to_plane.ConvertToDepthPlane), ("RELIEF", self.convert_to_plane.ConvertToReliefPlane)):
-            module = self.convert_to_plane
+        for plane_type, operator_class in (("DEPTH", self.convert_to_depth_plane.ConvertToDepthPlane), ("RELIEF", self.convert_to_relief.ConvertToReliefPlane)):
+            module = self.plane_geometry
             source = SimpleNamespace(name="Source", as_pointer=lambda: 1,
                                      data=SimpleNamespace(as_pointer=lambda: 2))
             context = SimpleNamespace(object=source, scene=object())
@@ -52,7 +54,7 @@ class PlaneOperatorsTest(BlenderTestCase):
                 patch.object(module, "material_analysis_input", return_value=Path("input.png")),
                 patch.object(module, "depth_plane_settings", return_value=("moge", 5)),
                 patch.object(module, "configured_max_ai_input_size", return_value=1024),
-                patch.object(module.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_depth_plane=generate)), create=True),
+                patch.object(module.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_plane_geometry=generate)), create=True),
             ):
                 self.assertEqual(operator_class.execute(operator, context), {"FINISHED"})
             self.assertEqual(generate.call_args.kwargs["source_object_name"], "Source")
@@ -61,7 +63,7 @@ class PlaneOperatorsTest(BlenderTestCase):
     def test_depth_and_relief_results_use_their_normal_space(self):
         for plane_type, normal_space in (("DEPTH", "OBJECT"), ("RELIEF", "TANGENT")):
             normal_key = f"{normal_space.lower()}_normal"
-            module = self.convert_to_plane_object
+            module = self.depth_plane
             source = SimpleNamespace(data=SimpleNamespace(name="Source"))
             color_image = SimpleNamespace(name="", users=0)
             depth_image = SimpleNamespace(users=0)
@@ -104,7 +106,7 @@ class PlaneOperatorsTest(BlenderTestCase):
                 patch.object(module, "create_depth_plane_object") as create_object,
                 patch.object(module.bpy, "ops", ops, create=True),
             ):
-                module.create_depth_plane_from_result(context, result, operator)
+                module.create_depth_plane_from_result(context, result, operator, plane_type=plane_type, undo_label="Convert to Relief" if plane_type == "RELIEF" else "Convert to Depth Plane")
 
             load_depth.assert_called_once_with(files["depth"], source, metadata)
             undo_label = "Convert to Relief" if plane_type == "RELIEF" else "Convert to Depth Plane"
@@ -129,7 +131,7 @@ class PlaneOperatorsTest(BlenderTestCase):
 
 
     def test_depth_plane_result_cleans_unused_depth_and_normal_on_failure(self):
-        module = self.convert_to_plane_object
+        module = self.depth_plane
         source = SimpleNamespace(data=SimpleNamespace(name="Source"))
         color_image = SimpleNamespace(name="", users=0)
         depth_image = SimpleNamespace(users=0)
@@ -176,7 +178,8 @@ class PlaneOperatorsTest(BlenderTestCase):
             module.create_depth_plane_from_result(
                 SimpleNamespace(scene=object()),
                 result,
-                SimpleNamespace(source_object_name="Source", color_path="color.png", plane_type="DEPTH"),
+                SimpleNamespace(source_object_name="Source", color_path="color.png"),
+                plane_type="DEPTH", undo_label="Convert to Depth Plane",
             )
 
         remove_material.assert_called_once_with(material, do_unlink=True)

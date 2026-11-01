@@ -5,6 +5,8 @@ from .preferences import (
 from .preferences import AnyImagePreferences as SharedPreferences
 from pathlib import Path
 import bpy
+import platform
+import sys
 from .server.media.resolution import (
     DEFAULT_MAX_AI_INPUT_SIZE,
     MAX_MAX_AI_INPUT_SIZE,
@@ -20,6 +22,12 @@ from .server.model_catalog import (
 )
 
 DEFAULT_STORAGE_ROOT = Path.home() / ".anyimage"
+DEVICE_LABELS = {
+    "cuda": ("CUDA", "NVIDIA CUDA"),
+    "directml": ("DirectML", "Windows GPU (DirectML)"),
+    "coreml": ("CoreML", "Apple CoreML"),
+    "cpu": ("CPU", "CPU"),
+}
 UPSCALE_MODEL_ITEMS = tuple(
     (model.key, f"{model.tier} | {model.label}", model.description, model.enum_value)
     for model in UPSCALE_MODELS.values()
@@ -69,47 +77,49 @@ def configured_upscale_model(context=None):
     return _configured_model(context, "upscale_model", UPSCALE_MODELS, DEFAULT_UPSCALE_MODEL_KEY)
 
 
-def configured_panorama_light_probe(context=None):
-    preferences = addon_preferences(context)
-    return (
-        bool(getattr(preferences, "panorama_light_probe_enabled", True)),
-        max(0.5, float(getattr(preferences, "panorama_light_probe_max_distance", 20.0))),
-    )
-
-
 def configured_max_ai_input_size(context=None):
     preferences = addon_preferences(context)
     value = int(getattr(preferences, "max_ai_input_size", DEFAULT_MAX_AI_INPUT_SIZE))
     return min(max(value, MIN_MAX_AI_INPUT_SIZE), MAX_MAX_AI_INPUT_SIZE)
 
 
-def device_items(owner, context):
-    from .ai_properties import device_enum_items
+def supports_coreml():
+    return sys.platform == "darwin" and platform.machine().lower() in {
+        "arm64",
+        "aarch64",
+    }
 
-    return device_enum_items(owner, context)
+
+def supported_devices():
+    if sys.platform == "win32":
+        return ["directml", "cpu"]
+    return ["cpu", "coreml"] if supports_coreml() else ["cpu"]
 
 
-def geometry_model_items(owner, context):
-    from .ai_properties import geometry_model_enum_items
+def device_enum_items(_owner, _context):
+    return [
+        (name.upper(), *DEVICE_LABELS[name], index)
+        for index, name in enumerate(supported_devices())
+    ]
 
-    return geometry_model_enum_items(owner, context)
+
+def geometry_model_items(_owner, _context):
+    return [
+        (
+            model.key,
+            f"{model.tier} | {model.label}",
+            bpy.app.translations.pgettext_tip("{description}; license: {license}").format(
+                description=bpy.app.translations.pgettext_tip(model.description),
+                license=model.license_name,
+            ),
+            model.enum_value,
+        )
+        for model in MOGE_MODELS.values()
+    ]
 
 
 class AnyImagePreferences(SharedPreferences):
     bl_idname = ADDON_PACKAGE
-
-    panorama_light_probe_enabled: bpy.props.BoolProperty(
-        name="Panorama Light Probe",
-        default=True,
-        description="Create and bake a light probe volume from the panorama",
-    )
-
-    panorama_light_probe_max_distance: bpy.props.FloatProperty(
-        name="Maximum Distance per Direction (m)",
-        default=20.0,
-        min=0.5,
-        description="Maximum distance from the panorama origin in each direction, in meters",
-    )
 
     storage_root: bpy.props.StringProperty(
         name="Server Root Folder",
@@ -124,7 +134,7 @@ class AnyImagePreferences(SharedPreferences):
     device: bpy.props.EnumProperty(
         name="AI Processing Device",
         description=("Choose the CPU or GPU used to run AI models."),
-        items=device_items,
+        items=device_enum_items,
         default=0,
     )
 
@@ -175,12 +185,13 @@ class AnyImagePreferences(SharedPreferences):
 
     def draw(self, _context):
         from .operators.ai_setup import SetupAIServer
-        from .ai_properties import ai_setup_label, ai_status, model_catalog
+        from .common.ai import ai_status, model_catalog, draw_ai_setup
         from .runtime import runtime
 
         layout = self.layout
-        status = ai_status()
-        models = {model["key"]: model for model in model_catalog()}
+        catalog = model_catalog()
+        status = ai_status(catalog)
+        models = {model["key"]: model for model in catalog}
 
         server = self._draw_box(layout, "AI Server")
         location_row = server.row(align=True)
@@ -190,13 +201,13 @@ class AnyImagePreferences(SharedPreferences):
             setup_row.enabled = (runtime.state() == "UNAVAILABLE")
             setup_row.operator(
                 SetupAIServer.bl_idname,
-                text=ai_setup_label(status),
                 icon="IMPORT",
             )
         else:
             migrate_row = location_row.row(align=True)
             migrate_row.operator("anyimage.migrate_storage", icon="FILE_FOLDER")
             server.label(text="Installed", icon="CHECKMARK")
+            draw_ai_setup(server, status)
 
         if status["environment_ready"]:
             ai = self._draw_box(layout, "AI")
@@ -209,7 +220,7 @@ class AnyImagePreferences(SharedPreferences):
                 "geometry_model",
                 models,
                 DEFAULT_GEOMETRY_MODEL_KEY,
-                "AI Generate Depth Map",
+                "Depth & Normal Model",
             )
             self._draw_model_property(
                 ai,
@@ -227,11 +238,6 @@ class AnyImagePreferences(SharedPreferences):
             )
 
         super().draw(_context)
-        panorama = self._draw_box(layout, "Panorama")
-        panorama.prop(self, "panorama_light_probe_enabled")
-        probe = panorama.row()
-        probe.enabled = getattr(self, "panorama_light_probe_enabled", True)
-        probe.prop(self, "panorama_light_probe_max_distance")
 
     def _draw_model_property(
         self,

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.common import color_image, image as images, material
+from anyimage.common import color_image, image as images
 from anyimage.common.color_space import normalize_color_rgba, srgb_to_linear_rgb
 from anyimage.common.job_image import load_image_edit_result
 
@@ -53,7 +53,7 @@ def bake_texture_colors(image):
     return images.image_rgba(target.image)[..., :3]
 
 
-@pytest.mark.parametrize("space", [value for _, value in material.VIEW_TRANSFORM_COLOR_SPACES])
+@pytest.mark.parametrize("space", [value for _, value in color_image.VIEW_TRANSFORM_COLOR_SPACES])
 def test_inverse_decode_matches_cycles_with_hidden_colors(source, space):
     source.pack()
     try:
@@ -127,7 +127,7 @@ def test_normalization_is_in_place_and_survives_reload(source, kind, tmp_path, m
     scene = bpy.context.scene
     scene.view_settings.view_transform = "AgX"
     scene.view_settings.exposure = 2
-    assert material.configure_material_color_image(source, scene) == source
+    assert color_image.configure_material_color_image(source, scene) == source
     assert (source.as_pointer(), source.name, tuple(source.size), source.filepath_raw) == identity
     assert (set(bpy.data.images), set(bpy.data.scenes)) == resources
     assert scene.view_settings.exposure == 2
@@ -140,7 +140,7 @@ def test_normalization_is_in_place_and_survives_reload(source, kind, tmp_path, m
     assert not np.allclose(result[..., :3], before[..., :3])
     # Repeated calls preserve the normalized domain.
     for _ in range(2):
-        material.configure_material_color_image(source, scene)
+        color_image.configure_material_color_image(source, scene)
         np.testing.assert_array_equal(images.image_rgba(source), result)
     library = tmp_path / "normalized.blend"
     bpy.data.libraries.write(str(library), {source})
@@ -151,7 +151,7 @@ def test_normalization_is_in_place_and_survives_reload(source, kind, tmp_path, m
     assert restored[images.COLOR_NORMALIZED_PROPERTY]
     with color_image.material_color_image(restored) as copied:
         assert copied[images.COLOR_NORMALIZED_PROPERTY]
-        material.configure_material_color_image(copied, scene)
+        color_image.configure_material_color_image(copied, scene)
         np.testing.assert_array_equal(images.image_rgba(copied), result)
 
     # Verify the stored sRGB interpretation through an independent texture sample.
@@ -191,7 +191,7 @@ def test_failed_decode_restores_content_and_releases_resources(source, monkeypat
 
     monkeypatch.setattr(color_image.tempfile, "TemporaryDirectory", fail)
     with pytest.raises(RuntimeError, match="Decode failed"):
-        material.configure_material_color_image(source, bpy.context.scene)
+        color_image.configure_material_color_image(source, bpy.context.scene)
     np.testing.assert_array_equal(images.image_pixels(source), before)
     assert source.colorspace_settings.name == "sRGB"
     assert bytes(source.packed_file.data) == packed

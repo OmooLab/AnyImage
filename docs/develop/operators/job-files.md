@@ -1,5 +1,5 @@
 # Job 文件清理
 
-`operators/job_files.py` 实现 `ClearJobFiles`，在服务空闲时预览可清理的 Job 目录，并通过确认对话框提交删除。
+BlendJob 注册 `anyimage.clear_job_files` 和确认 Operator，`DangerZonePanel` 提供入口。Runtime 在服务空闲时预览可清理的 Job 目录，确认对话框显示任务数量和总大小。
 
-Blender 侧收集当前未打包图片的实际文件路径，服务端据此保护对应 Job。确认时再次收集路径并核对服务实例，返回删除数量、大小与保留结果。跨项目共享存储目录的文件由用户结合预览确认清理。
+确认时 Runtime 提交预览中的 Job 清单和服务实例标识，服务端核对后删除任务产物与日志，返回删除数量、大小和保留结果。

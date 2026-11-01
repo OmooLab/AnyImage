@@ -1,12 +1,9 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
 import numpy as np
 
 
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import ai_object as cutout_object
-from anyimage.operators.cutout_tool import shape as cutout_shape
 from anyimage.operators.cutout_tool.geometry import SelectionContours, extract_selection_contours
 
 
@@ -29,17 +26,6 @@ def mesh_component_count(faces):
             remaining.difference_update(connected)
             pending.extend(connected)
     return count
-
-
-def test_cutout_node_groups_are_loaded_from_the_asset():
-    loaded = object()
-    with patch.object(
-        cutout_object, "load_node_group", return_value=loaded
-    ) as load:
-        for shape in cutout_shape.CUTOUT_NODE_GROUP_NAMES:
-            assert cutout_object.load_cutout_node_group(shape) is loaded
-            load.assert_called_with(cutout_shape.CUTOUT_NODE_GROUP_NAMES[shape])
-        assert load.call_count == 4
 
 
 def test_selection_contours_group_holes_with_their_connected_component():

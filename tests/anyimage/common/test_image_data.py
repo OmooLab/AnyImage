@@ -18,27 +18,6 @@ class ImageDataTest(unittest.TestCase):
             self.modules.image.is_animated_image(SimpleNamespace(source="FILE"))
         )
 
-    def test_panorama_crop_bounds_returns_largest_centered_two_to_one_region(self):
-        cases = (
-            ((32, 16), (0, 0, 32, 16)),
-            ((40, 16), (4, 0, 36, 16)),
-            ((30, 20), (0, 2, 30, 17)),
-            ((31, 20), (0, 2, 30, 17)),
-            ((35, 16), (1, 0, 33, 16)),
-        )
-        for size, expected in cases:
-            with self.subTest(size=size):
-                self.assertEqual(
-                    self.modules.image.panorama_crop_bounds(*size), expected
-                )
-
-    def test_panorama_crop_bounds_rejects_unusable_dimensions(self):
-        for size in ((0, 1), (1, 1), (2, 0), (-2, 1)):
-            with self.subTest(size=size):
-                with self.assertRaisesRegex(ValueError, "at least 2 x 1 pixels"):
-                    self.modules.image.panorama_crop_bounds(*size)
-
-
     def test_image_user_settings_reads_empty_values(self):
         source_object = SimpleNamespace(
             image_user=SimpleNamespace(

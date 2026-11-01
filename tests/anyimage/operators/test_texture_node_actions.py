@@ -77,7 +77,7 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
     context = texture_context(texture)
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
     with patch(
-        "anyimage.ai_properties.ai_status",
+        "anyimage.common.ai.ai_status",
         return_value={"environment_ready": True, "ready": True},
     ):
         menu.AnyImageTextureNodeMenu.draw(SimpleNamespace(layout=layout), context)
@@ -202,7 +202,7 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
             assert parameters["device"] == "cpu"
             assert parameters["model"] == ("HAT_GAN_X4_SHARPER" if operation == upscale.UpscaleImage else "BIREFNET_LITE")
             input_path = operator.input_path
-            assert operator.delete_input
+            assert Path(input_path).is_file()
             # Selection changes must not redirect completion.
             other = texture.id_data.nodes.new("ShaderNodeTexImage")
             texture.id_data.nodes.active = other

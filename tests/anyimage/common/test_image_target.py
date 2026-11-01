@@ -1,6 +1,7 @@
 from anyimage.common.job_image import apply_image_result
 from anyimage.common.job_image import load_image_edit_result
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import bpy
 import numpy as np
@@ -9,6 +10,56 @@ import pytest
 from anyimage.common import image as images
 from anyimage.common import image_target as targets
 from tests.support.image_texture import texture, texture_context, write_result
+
+
+@pytest.mark.parametrize("failure", ["copy", "node"])
+def test_material_isolation_failure_releases_unassigned_result(texture, failure):
+    before_images = set(bpy.data.images)
+    before_materials = set(bpy.data.materials)
+    result = bpy.data.images.new("Unassigned result", width=2, height=2)
+
+    def copy_material():
+        if failure == "copy":
+            raise RuntimeError("Copy failed")
+        copied = bpy.data.materials.new("Incomplete copy")
+        copied.use_nodes = True
+        return copied
+
+    source = SimpleNamespace(copy=copy_material)
+    slot = SimpleNamespace(material=source)
+    target = SimpleNamespace(
+        object_owner=SimpleNamespace(material_slots=[slot]), material_slot=0,
+        material=source, node_identity="missing", image=texture.image,
+    )
+    with pytest.raises(RuntimeError):
+        targets.ImageEditTarget._commit_isolated_material(target, result)
+    assert slot.material is source
+    assert set(bpy.data.images) == before_images
+    assert set(bpy.data.materials) == before_materials
+
+
+@pytest.mark.parametrize("change", ["pixels", "colorspace", "alpha_mode"])
+def test_external_content_changes_reject_old_job_and_allow_new_capture(texture, tmp_path, change):
+    old = targets.ImageEditTarget.capture(texture_context(texture))
+    if change == "pixels":
+        texture.image.pixels[0] = 0.9
+        texture.image.update()
+    elif change == "colorspace":
+        texture.image.colorspace_settings.name = "Non-Color"
+    else:
+        texture.image.alpha_mode = "CHANNEL_PACKED"
+    current = targets.ImageEditTarget.capture(texture_context(texture))
+    assert current is not old
+    before = images.image_pixels(texture.image)
+    path = write_result(tmp_path)
+    count = len(bpy.data.images)
+    with pytest.raises(RuntimeError, match="content or settings have changed"):
+        apply_image_result(old, path)
+    assert len(bpy.data.images) == count
+    np.testing.assert_array_equal(images.image_pixels(texture.image), before)
+    apply_image_result(current, path)
+    assert tuple(texture.image.size) == (8, 6)
+    current.validate()
 
 
 def test_target_uses_edit_tree_and_survives_renaming(texture, tmp_path):

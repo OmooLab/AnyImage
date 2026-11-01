@@ -87,7 +87,7 @@ class ClipboardImageTest(BlenderTestCase):
 
     def test_routes_supported_contexts(self):
         contexts = (
-            (self.make_context("VIEW_3D"), "PLANE"),
+            (self.make_context("VIEW_3D"), "IMAGE_EMPTY"),
             (
                 self.make_context("VIEW_3D", mode="SCULPT"),
                 "TOOL_TEXTURE",
@@ -204,15 +204,6 @@ class ClipboardImageTest(BlenderTestCase):
             (12.0, -8.0),
         )
 
-    def test_preserves_image_aspect_ratio_for_plane(self):
-        self.assertEqual(
-            self.actions._plane_half_dimensions(1920, 1080),
-            (1.0, 0.5625),
-        )
-        self.assertEqual(
-            self.actions._plane_half_dimensions(800, 1200),
-            (2 / 3, 1.0),
-        )
 
     def test_reference_image_uses_drag_and_drop_size(self):
         reference = SimpleNamespace(select_set=Mock())
@@ -241,8 +232,6 @@ class ClipboardImageTest(BlenderTestCase):
         operator.paste_target = "NODE"
         operator.location = (10.0, 20.0, 0.0)
         operator.location_set = True
-        operator.import_as = "REFERENCE"
-        operator.shadeless = False
         operator.report = Mock()
         context = self.make_context(
             "NODE_EDITOR",
@@ -272,25 +261,12 @@ class ClipboardImageTest(BlenderTestCase):
             image,
             None,
             location=(10.0, 20.0),
-            import_as="REFERENCE",
-            shadeless=False,
         )
 
-    def test_replacement_hides_creation_options(self):
-        operator = self.clipboard_image.PasteClipboardImage()
-        operator.paste_target = "PLANE"
-        operator.import_as = "PLANE"
-        operator.is_replacement = True
-        operator.layout = Mock()
-        operator.draw(None)
-        operator.layout.prop.assert_not_called()
-        operator.is_replacement = False
-        operator.draw(None)
-        self.assertEqual(operator.layout.prop.call_count, 2)
 
     def test_empty_clipboard_leaves_selected_target_untouched(self):
         operator = self.clipboard_image.PasteClipboardImage()
-        operator.paste_target = "PLANE"
+        operator.paste_target = "IMAGE_EMPTY"
         with (
             patch.object(self.clipboard_image, "read_clipboard_image",
                          side_effect=self.clipboard.ClipboardImageUnavailable),
@@ -305,17 +281,7 @@ class ClipboardImageTest(BlenderTestCase):
         operator = self.clipboard_image.PasteClipboardImage
         self.assertEqual(self.anyimage.CLASSES.count(operator), 1)
         self.assertIn("UNDO", operator.bl_options)
-        self.assertEqual(operator.__annotations__["is_replacement"]["options"], {"HIDDEN", "SKIP_SAVE"})
 
-    def test_image_plane_requires_object_mode(self):
-        context = SimpleNamespace(mode="EDIT_MESH")
-        image = SimpleNamespace(size=(100, 100))
-
-        with self.assertRaisesRegex(
-            self.actions.PasteTargetError,
-            "Object Mode",
-        ):
-            self.actions.add_image_plane(context, image)
 
     def test_stencil_dimensions_preserve_scale_and_image_aspect(self):
         self.assertEqual(

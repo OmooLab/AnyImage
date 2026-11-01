@@ -124,7 +124,12 @@ class ModelManager:
         return self._download(context, model_key, context.progress)
 
     def download_missing(self, context, model_keys, *, online=True):
-        missing = [key for key in model_keys if not self.ready(key)]
+        missing = []
+        for key in model_keys:
+            if self.ready(key):
+                self.validation_errors.pop(key, None)
+            else:
+                missing.append(key)
         if not missing:
             context.progress(1.0, "Required models are ready")
             return {"downloaded": []}

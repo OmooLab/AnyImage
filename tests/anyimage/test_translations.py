@@ -19,11 +19,21 @@ class TranslationsTest(BlenderTestCase):
             key = ("Operator", tool.bl_label)
             self.assertEqual(builtin.get(key, catalog.get(key)), expected)
 
-    def test_paste_plane_uses_addon_translation_context(self):
-        prop = self.anyimage.keymaps.PasteClipboardImage.__annotations__["import_as"]
-        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
-        self.assertNotIn(prop["translation_context"], ("*", "Operator"))
-        self.assertEqual(catalog[(prop["translation_context"], prop["items"][0][1])], "面片")
+    def test_base_messages_are_available_in_both_editions(self):
+        from anyimage.translations import TRANSLATIONS as base
+        from anyimage.ai_translations import TRANSLATIONS as ai
+
+        self.assertFalse(base["zh_HANS"].keys() & ai["zh_HANS"].keys())
+        self.assertEqual(self.anyimage.TRANSLATIONS["zh_HANS"], {
+            **base["zh_HANS"], **ai["zh_HANS"],
+        })
+        for message in (
+            "Frame: drag a rectangle to merge selected Image Empties; RMB or Esc cancels",
+            "Rectify Aspect {ratio:.3f}: move mouse horizontally, LMB confirms, Backspace returns, RMB or Esc cancels",
+            "click points; click start, double-click, or Enter to finish; Backspace removes",
+            "Exclude areas below this opacity from the Cutout outline. Higher values exclude more semi-transparent edges.",
+        ):
+            self.assertIn(("*", message), base["zh_HANS"])
 
     def test_sidebar_translates_on_each_draw_without_changing_job_data(self):
         runtime = self.runtime.runtime

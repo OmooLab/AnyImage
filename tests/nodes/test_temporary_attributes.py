@@ -16,7 +16,7 @@ def test_depth_attribute_cleanup_has_no_warnings(kind):
         obj, set_value, *_ = create_surface("DEPTH")
         set_value("Depth Scale", 1)
     else:
-        obj, set_value = panorama(subdivide=2)
+        obj, set_value = panorama(subdivide=1)
     modifier = obj.modifiers[0]
     for split in (0.0, 0.5, 0.0):
         set_value("Depth Split", split)

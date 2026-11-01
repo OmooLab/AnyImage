@@ -10,7 +10,7 @@ from tests.support.blender import BlenderTestCase
 class ImageEditToolTest(BlenderTestCase):
 
 
-    def test_packed_image_export_does_not_use_scene_render_transform(self):
+    def test_packed_image_export_saves_a_copy_and_restores_format(self):
         with tempfile.TemporaryDirectory() as directory:
             output_directory = Path(directory)
             calls = []
@@ -23,15 +23,12 @@ class ImageEditToolTest(BlenderTestCase):
                     Path(options["filepath"]).write_bytes(b"raw image")
 
             image = Image()
-            scene = SimpleNamespace(
-                view_settings=SimpleNamespace(look="AgX - Medium High Contrast")
-            )
             with patch.object(
                 self.image_data.tempfile,
                 "mkdtemp",
                 return_value=str(output_directory),
             ):
-                output = self.image_data.save_packed_image(image, scene)
+                output = self.image_data.save_image_input(image)
 
             self.assertEqual(output, output_directory / "input.png")
             self.assertEqual(

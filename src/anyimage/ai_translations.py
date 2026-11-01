@@ -1,11 +1,8 @@
-"""AnyImage business translations registered with Blender."""
-
-from .translations import _ZH_HANS as SHARED_MESSAGES
+"""Translations for AI-only workflows; the full edition combines both catalogs."""
 
 
 # 服务器与运行环境
-SERVER_MESSAGES = {
-    'Server': '服务器',
+ENVIRONMENT = {
     'AI Server': 'AI 服务器',
     'Danger Zone': '危险操作',
     'Set Up AI Server': '设置 AI 服务器',
@@ -29,8 +26,8 @@ SERVER_MESSAGES = {
 }
 
 
-# 模型管理与下载
-MODEL_MESSAGES = {
+# 模型管理
+MODELS = {
     'Models Loaded': '已加载 AI 模型',
     'Download Required Models': '下载所需模型',
     'Download Model': '下载模型',
@@ -44,34 +41,32 @@ MODEL_MESSAGES = {
     'Free memory used by AI models to keep viewport and rendering responsive': '释放 AI 模型占用的内存，保持视口和渲染流畅',
     'Starting required model downloads': '所需模型下载启动中',
     'Required models are ready': '所需模型已就绪',
-    'Starting {model} download': '{model} 下载启动中',
     'Downloading {item}': '{item} 下载中',
     'Downloading {item} {rate}': '{item} 下载中 {rate}',
     'Downloading {item} (mirror)': '{item} 下载中（镜像）',
     'Downloading {item} (mirror) {rate}': '{item} 下载中（镜像） {rate}',
     'Loading {model}': '{model} 加载中',
     '{model} ready': '{model} 已就绪',
-    'Unloading models': '模型卸载中',
-    'Models unloaded': '模型已卸载',
     'Download: {models}': '下载：{models}',
     '{description}; license: {license}': '{description}；许可证：{license}',
+    'Starting model download': '模型下载启动中',
 }
 
 
-# 通用处理设置
-PROCESSING_MESSAGES = {
+# 处理设置
+PROCESSING = {
     'AI Processing Device': 'AI 运算设备',
     'Choose the CPU or GPU used to run AI models.': '选择运行 AI 模型的 CPU 或 GPU。',
     'Maximum AI Input Size': '处理分辨率上限',
     'Limit the longest image edge used for depth, normal, and selection refinement. Upscale requires a source image smaller than this limit.': '限制深度、法线生成和选区优化时的图像最长边。2倍高清功能要求原图尺寸小于此上限。',
     'Image long edge must be smaller than Maximum AI Input Size ({size} px)': '图像最长边必须小于处理分辨率上限（{size} 像素）',
-    "Compensate for the scene's view transform when creating materials to keep colors close to the source image. To view materials, switch the viewport to Material Preview or Rendered mode.": '创建材质时补偿场景的视图变换，使色彩接近原图。请切换到材质预览或渲染模式查看材质。',
     '{job}  [ {tier} ]': '{job}  [ {tier} ]',
 }
 
 
 # 深度与法线
-DEPTH_MESSAGES = {
+GEOMETRY = {
+    'Generate Plane Geometry': '生成面片几何',
     'Depth & Normal Model': '深度与法线模型',
     'Choose the AI model used to generate depth and surface normals.': '选择用于生成深度和表面法线的 AI 模型。',
     'Generate depth and surface normals with the fastest MoGe-2 option.': '使用速度最快的 MoGe-2 模型生成深度和表面法线。',
@@ -79,12 +74,8 @@ DEPTH_MESSAGES = {
     'Generate depth and surface normals with MoGe-3, refining the prediction in three steps.': '使用 MoGe-3 生成深度和表面法线，通过三个步骤细化预测结果。',
     'MoGe Resolution Level': 'MoGe 分辨率级别',
     'Set the processing resolution for depth and normal generation. Higher levels can capture finer details but take more time and memory.': '设置生成深度和法线的处理分辨率。级别越高，细节越丰富，但耗时和内存占用也越多。',
-    'Depth & Normal': '深度与法线',
-    'AI Generate Depth Map': 'AI 生成深度图',
-    'Generate Depth Map': '生成深度图',
     'Normal Map': '法线贴图',
     'Generate a normal map to add surface detail under lighting for Flat and Solid shapes. Depth Solid and Depth Symmetry always generate normal maps.': '为面片和体块生成法线贴图，增加光照下的表面细节。凹凸体块和对称凹凸始终生成法线贴图。',
-    'Generate Depth Plane': '生成凹凸面',
     'Convert to Depth Plane': '转为凹凸面',
     "Use AI-estimated depth to turn the image into a 3D surface that follows the source image's perspective.": '使用 AI 估计的深度，将图像转换为符合原图透视的三维表面。',
     'Convert to Relief': '转为浮雕',
@@ -104,9 +95,8 @@ DEPTH_MESSAGES = {
 }
 
 
-# 全景与光照探针
-PANORAMA_MESSAGES = {
-    'Panorama': '立体全景',
+# 全景
+PANORAMA = {
     'Generate Panorama': '生成全景',
     'Convert to Panorama': '转为立体全景',
     'Turn a still panoramic image into a surrounding 3D surface using AI-estimated depth.': '使用 AI 估计的深度，将静态全景图像转换为环绕的三维表面。',
@@ -119,17 +109,11 @@ PANORAMA_MESSAGES = {
     'Merging panorama normal maps': '全景法线图合并中',
     'Panorama conversion data is ready': '全景转换数据已就绪',
     'Panorama is ready': '全景已就绪',
-    'Panorama Light Probe': '全景光照探针',
-    'Create and bake a light probe volume from the panorama': '从全景创建并烘焙体积光照探针',
-    'Maximum Distance per Direction (m)': '单向最大距离（m）',
-    'Maximum distance from the panorama origin in each direction, in meters': '从全景原点向各方向延伸的最大距离，单位为米',
-    'Panorama has no valid light probe region': '全景没有有效的光照探针区域',
-    'Panorama light probe bake cancelled': '全景光照探针烘焙已取消',
 }
 
 
 # 图像放大
-UPSCALE_MESSAGES = {
+UPSCALE = {
     'Upscale Image Model': '2倍高清模型',
     'Model used to upscale images': '用于生成2倍高清图像的模型',
     'Enlarge images to twice their width and height with fast, restrained detail enhancement.': '将图像的宽高放大至两倍，快速、适度地增强细节。',
@@ -151,7 +135,7 @@ UPSCALE_MESSAGES = {
 
 
 # 背景移除
-BACKGROUND_MESSAGES = {
+BACKGROUND_REMOVAL = {
     'Remove Background Model': '背景移除模型',
     'Model used to remove image backgrounds': '用于移除图像背景的模型',
     'Remove backgrounds at 1024 px processing resolution while preserving soft, semi-transparent edges.': '以 1024 像素处理分辨率移除背景，保留柔和的半透明边缘。',
@@ -170,40 +154,29 @@ BACKGROUND_MESSAGES = {
 
 
 # 立体裁切
-CUTOUT_MESSAGES = {
+CUTOUT = {
     'Build the image selection as a Cutout shape': '将图像选区构建为立体裁切形状',
-    'Exclude areas below this opacity from the Cutout outline. Higher values exclude more semi-transparent edges.': '从立体裁切轮廓中排除不透明度低于此值的区域。值越高，排除的半透明边缘越多。',
     'Preparing Cutout Selection': '立体裁切选区准备中',
     'Generating Cutout artifacts': '立体裁切数据生成中',
     'Cutout artifacts are ready': '立体裁切数据已就绪',
-    'click points; click start, double-click, or Enter to finish; Backspace removes': '点击添加顶点；点击起点、双击或按 Enter 完成；Backspace 删除顶点',
+    'The normal texture is missing; the shape was created without it': '缺少法线贴图，已继续生成物体',
 }
 
-
-# 画框与透视校正
-FRAME_AND_RECTIFY_MESSAGES = {
-    'Frame: drag a rectangle to merge selected Image Empties; RMB or Esc cancels': '重设画框：拖出矩形以合并选中的图像空物体；右键或 Esc 取消',
-    'Rectify: click {remaining} more corner; click order does not matter; Backspace removes, RMB or Esc cancels': '透视校正：再点击 {remaining} 个角点，顺序不限；Backspace 删除顶点，右键或 Esc 取消',
-    'Rectify: click {remaining} more corners; click order does not matter; Backspace removes, RMB or Esc cancels': '透视校正：再点击 {remaining} 个角点，顺序不限；Backspace 删除顶点，右键或 Esc 取消',
-    'Rectify Aspect {ratio:.3f}: move mouse horizontally, LMB confirms, Backspace returns, RMB or Esc cancels': '校正宽高比 {ratio:.3f}：水平移动鼠标，左键确认，Backspace 返回，右键或 Esc 取消',
-}
 
 TRANSLATIONS = {
     "zh_HANS": {
-        (context, message): translation
-        for messages in (
-            SHARED_MESSAGES,
-            SERVER_MESSAGES,
-            MODEL_MESSAGES,
-            PROCESSING_MESSAGES,
-            DEPTH_MESSAGES,
-            PANORAMA_MESSAGES,
-            UPSCALE_MESSAGES,
-            BACKGROUND_MESSAGES,
-            CUTOUT_MESSAGES,
-            FRAME_AND_RECTIFY_MESSAGES,
+        (context, text): translation
+        for group in (
+            ENVIRONMENT,
+            MODELS,
+            PROCESSING,
+            GEOMETRY,
+            PANORAMA,
+            UPSCALE,
+            BACKGROUND_REMOVAL,
+            CUTOUT,
         )
-        for message, translation in messages.items()
+        for text, translation in group.items()
         for context in ("*", "Operator", "AnyImage")
     },
 }

@@ -1,6 +1,5 @@
 """Prepare and refresh the selected Blender color references."""
 
-import hashlib
 from typing import NamedTuple
 
 import bpy
@@ -9,7 +8,7 @@ import numpy as np
 from .color_match import prepare_color_reference, resize_rgba_proxy
 from .color_palette import extract_reference_palette
 from .color_space import image_rgba_to_linear, linear_rgb_to_srgb
-from .image import image_rgba, is_color_reference_candidate
+from .image import image_rgba, is_color_reference_candidate, pixel_digest
 
 
 class PreparedReference(NamedTuple):
@@ -95,14 +94,6 @@ def release_color_reference(key):
         _retained[key] = count - 1
 
 
-def color_reference_digest(rgba):
-    """Identify complete pixels without retaining a full-size snapshot."""
-    digest = hashlib.blake2b(digest_size=32)
-    for row in rgba:
-        digest.update(memoryview(np.ascontiguousarray(row)))
-    return digest.digest()
-
-
 def _metadata(image):
     return (tuple(image.size), image.source, image.filepath, image.is_dirty,
             image.colorspace_settings.name, image.alpha_mode)
@@ -124,7 +115,7 @@ def get_color_reference(image, *, refresh=False):
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
         invalidate_color_reference(image)
         raise
-    content_digest = color_reference_digest(rgba)
+    content_digest = pixel_digest(rgba)
     if cached is not None and cached.image == image and cached.metadata == metadata and cached.content_digest == content_digest:
         _references[key] = cached
         return cached

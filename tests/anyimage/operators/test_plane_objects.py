@@ -1,5 +1,4 @@
-from anyimage.operators.convert_to_plane import image_plane
-from unittest.mock import patch
+from anyimage.common import image_plane
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
@@ -7,13 +6,12 @@ from mathutils import Matrix, Vector
 
 from anyimage.common import image as image_data
 from anyimage.common import object as object_data
-from anyimage.common.coordinate import canonical_direction_to_legacy
-from anyimage.operators.clipboard_image import actions as clipboard_actions
-from anyimage.operators.convert_to_plane import object as plane_object
+from anyimage.common.geometry_image import depth_node_direction
+from anyimage.common import depth_plane as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
-from tests.support.image_objects import _depth_image, _depth_metadata, _evaluated_positions, _inputs
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_plane import OImageDepthPlane
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_relief_plane import OImageReliefPlane
+from tests.support.image_objects import _depth_image, _depth_metadata, _evaluated_positions
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_plane import ODepthPlane
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_relief import ODepthRelief
 
 
 def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
@@ -39,7 +37,7 @@ def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
     assert len(result.data.polygons) == 1
     assert all(polygon.use_smooth for polygon in result.data.polygons)
     assert cutout_shape.BALLOON_ATTRIBUTE_NAME not in result.data.attributes
-    assert result.modifiers[0].node_group.name == "O Image Plane"
+    assert result.modifiers[0].node_group.name == "O Plane"
     evaluated = result.evaluated_get(bpy.context.evaluated_depsgraph_get())
     evaluated_mesh = evaluated.to_mesh()
     try:
@@ -51,31 +49,9 @@ def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
         evaluated.to_mesh_clear()
 
 
-def test_clipboard_plane_uses_the_mesh_material_slot():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    image = bpy.data.images.new("Clipboard Plane", width=128, height=64, alpha=True)
-
-    with patch.object(clipboard_actions, "_place_in_view"):
-        result = clipboard_actions.add_image_plane(bpy.context, image)
-
-    assert _inputs(result.modifiers[0].node_group) == [
-        "Geometry",
-        "Subdivide",
-        "Thickness",
-    ]
-    assert len(result.data.materials) == 1
-    evaluated = result.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    evaluated_mesh = evaluated.to_mesh()
-    try:
-        assert evaluated_mesh.materials[0].original == result.data.materials[0]
-        assert all(polygon.material_index == 0 for polygon in evaluated_mesh.polygons)
-    finally:
-        evaluated.to_mesh_clear()
-
-
 def test_converted_planes_center_the_origin_without_moving_world_corners():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    saved = OImageDepthPlane.create_group()
+    saved = ODepthPlane.create_group()
 
     def create_source(name):
         image = bpy.data.images.new(name, width=200, height=100)
@@ -153,7 +129,7 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
     assert "anyimage_mesh_shape" not in depth_plane
     depth_modifier = depth_plane.modifiers[0]
     assert depth_modifier.node_group == saved
-    assert saved.name == "O Image Depth Plane"
+    assert saved.name == "O Depth Plane"
     uniform_scale = depth_modifier[
         object_data.modifier_input_identifier(
             depth_modifier.node_group,
@@ -173,7 +149,7 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
 
 def test_relief_plane_builds_a_fixed_base_terrain_block():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    OImageReliefPlane.create_group()
+    ODepthRelief.create_group()
     image = bpy.data.images.new("Terrain", width=4, height=4)
     source = bpy.data.objects.new("Terrain", None)
     source.empty_display_type = "IMAGE"
@@ -199,7 +175,7 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
     )
     assert result["o_image_object"] is True
     assert "anyimage_mesh_shape" not in result
-    assert result.modifiers[0].node_group.name == "O Image Relief Plane"
+    assert result.modifiers[0].node_group.name == "O Depth Relief"
     modifier = result.modifiers[0]
     group = modifier.node_group
     assert modifier[
@@ -282,7 +258,7 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
 
 def test_relief_plane_initializes_a_fitted_depth_direction():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    OImageReliefPlane.create_group()
+    ODepthRelief.create_group()
     image = bpy.data.images.new("Sloped Relief", width=5, height=3)
     source = bpy.data.objects.new("Sloped Relief", None)
     source.empty_display_type = "IMAGE"
@@ -319,6 +295,6 @@ def test_relief_plane_initializes_a_fitted_depth_direction():
         object_data.modifier_input_identifier(modifier.node_group, "Uniform Scale")
     ]
     canonical = np.asarray((0.2 * uniform_scale, 1.0, -0.1 * uniform_scale))
-    expected = np.asarray(canonical_direction_to_legacy(canonical))
+    expected = np.asarray(depth_node_direction(canonical))
     expected /= np.linalg.norm(expected)
     np.testing.assert_allclose(direction, expected, atol=1e-6)

@@ -1,7 +1,8 @@
 # Upstream: https://github.com/dcm3c/tangle/tree/66221c398cd90f06a7beb0c0abf637b269313af3
 # Original tangle.py SHA256: e53fe29bb9fe5174d1735f2d7060b1d7d14f1005666ef60bb93e27b4e0caa679
 # Local changes: memory entry point, isolated numeric context, resource limits;
-# removed CLI and file IO. Numerical meshing core retained under MIT.
+# removed CLI, file IO, region assignment and periodic boundary support.
+# Numerical meshing core retained under MIT.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 David Meeker
 """
@@ -38,7 +39,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import sys
 import math
 import bisect
 from collections import deque
@@ -60,47 +60,9 @@ from heapq import heappush, heappop
 EPS_SCALE = 1e-10
 EPS = EPS_SCALE
 
-# Relative tolerance for "too close" geometry: used both by cleanPSLG
-# (merge nodes within bboxDiag * CLOSE_ENOUGH) and by quality refinement
-# (reduce angle threshold for triangles with all edges < bboxDiag * CLOSE_ENOUGH).
-CLOSE_ENOUGH = 1e-6
-
 # Reduced minimum angle (degrees) for tiny triangles in locally dense
 # regions where the full minimum angle is unachievable.
 TINY_TRI_ANGLE = 15.0
-
-# Hard cap on the requested minimum angle (degrees).  Delaunay refinement is
-# only guaranteed to terminate below ~33.8 deg (Ruppert/Shewchuk); matches the
-# ceiling FEMM enforces.  Under shortest-edge ordering refinement stays tame
-# right up to this bound.
-MINANGLE_MAX_VAL = 33.8
-
-
-# ============================================================
-# Options
-# ============================================================
-
-@dataclass
-class Options:
-    pslg: bool = False
-    no_poly_out: bool = False
-    jettison: bool = False
-    quality: bool = False
-    min_angle: float = 20.0
-    edges: bool = False
-    regions: bool = False
-    area_limit: bool = False
-    max_area: float = -1.0
-    zero_indexed: bool = False
-    quiet: bool = False
-    suppress_iter: bool = False
-    no_holes: bool = False
-    no_steiner: bool = False
-    neighbors: bool = False
-    clean_pslg: bool = False
-    clean_tol: float = -1.0  # -1 = auto (bboxDiag * 1e-6)
-    reorder: bool = False  # reverse Cuthill-McKee bandwidth/profile reduction
-    first_index: int = 1
 
 
 # ============================================================
@@ -111,10 +73,6 @@ class Options:
 class Point:
     x: float
     y: float
-    id: int = 0
-    marker: int = 0
-    attribs: list = field(default_factory=list)
-    lfs: float = -1.0  # local feature size constraint (-1 = none)
 
 
 @dataclass
@@ -122,10 +80,6 @@ class Segment:
     v0: int
     v1: int
     marker: int = 0
-    lfs: float = -1.0  # per-segment LFS constraint (-1 = none)
-    pbc_type: int = -1     # 0=periodic, 1=anti-periodic (-1 = none)
-    no_split: bool = False # true for AGE chord segments (must stay uniformly spaced)
-    pbc_side: int = -1     # 0/1: declared side of an (anti)periodic pair; -1 = n/a
 
 
 @dataclass
@@ -135,20 +89,9 @@ class Hole:
 
 
 @dataclass
-class Region:
-    x: float
-    y: float
-    attrib: float = 0.0
-    max_area: float = -1.0
-
-
-@dataclass
 class Triangle:
     v: list = field(default_factory=lambda: [-1, -1, -1])
     neighbors: list = field(default_factory=lambda: [-1, -1, -1])
-    region_attrib: float = 0.0
-    region_max_area: float = -1.0
-    marker: int = 0
     generation: int = 0
 
 
@@ -225,14 +168,6 @@ def tri_area(a, b, c):
     return 0.5 * abs(orient2d(a, b, c))
 
 
-def vertex_angle(a, b, c):
-    abx, aby = b.x - a.x, b.y - a.y
-    acx, acy = c.x - a.x, c.y - a.y
-    dot = abx * acx + aby * acy
-    cross = abx * acy - aby * acx
-    return math.atan2(abs(cross), dot) * 180.0 / math.pi
-
-
 def min_angle(a, b, c):
     la = math.sqrt((b.x-c.x)*(b.x-c.x)+(b.y-c.y)*(b.y-c.y))
     lb = math.sqrt((a.x-c.x)*(a.x-c.x)+(a.y-c.y)*(a.y-c.y))
@@ -245,30 +180,6 @@ def min_angle(a, b, c):
     return min(math.acos(cos_a), math.acos(cos_b), math.acos(cos_c)) * 180.0 / math.pi
 
 
-def circumcenter(a, b, c):
-    ax, ay = b.x - a.x, b.y - a.y
-    bx, by = c.x - a.x, c.y - a.y
-    D = 2.0 * (ax * by - ay * bx)
-    if abs(D) < EPS:
-        return (a.x + b.x + c.x) / 3.0, (a.y + b.y + c.y) / 3.0
-    ux = (by * (ax * ax + ay * ay) - ay * (bx * bx + by * by)) / D
-    uy = (ax * (bx * bx + by * by) - bx * (ax * ax + ay * ay)) / D
-    return a.x + ux, a.y + uy
-
-
-def point_on_segment(p, a, b):
-    if orient2d(a, b, p) != 0:
-        return False
-    dx, dy = b.x - a.x, b.y - a.y
-    if abs(dx) > EPS:
-        t = (p.x - a.x) / dx
-    elif abs(dy) > EPS:
-        t = (p.y - a.y) / dy
-    else:
-        return False
-    return -EPS_SCALE <= t <= 1 + EPS_SCALE  # dimensionless: fixed tolerance
-
-
 def edge_key(a, b):
     return (min(a, b), max(a, b))
 
@@ -277,12 +188,6 @@ def edge_key(a, b):
 # Mesh structure
 # ============================================================
 
-@dataclass
-class PBCNodePair:
-    node_a: int
-    node_b: int
-    type: int  # 0=periodic, 1=anti-periodic
-
 
 class Mesh:
     def __init__(self):
@@ -290,12 +195,6 @@ class Mesh:
         self.triangles = []
         self.segments = []
         self.holes = []
-        self.regions = []
-        self.edges = []
-        self.pbc_pairs = []      # list of PBCNodePair, filled after refinement
-        self.pbc_twin = {}       # dict: node -> twin node (bidirectional)
-        self.pbc_node_type = {}  # dict: node -> pbc type (0 or 1)
-        self.pbc_defs = []       # PBC declarations: (marker_a, marker_b, type)
 
     def rebuild_adjacency(self):
         nt = len(self.triangles)
@@ -375,32 +274,24 @@ class Mesh:
 
 
 # ============================================================
-# PSLG cleanup (-C flag)
+# PSLG cleanup
 # ============================================================
 
-def clean_pslg(mesh, tol, quiet):
+def clean_pslg(mesh):
     pts = mesh.vertices
     segs = mesh.segments
     nv = len(pts)
 
-    # Compute auto tolerance if not specified.  tol == -1 is the -C default
-    # (bb_diag * CLOSE_ENOUGH); tol <= -2 is the always-on hygiene pass run for
-    # every PSLG, with an essentially-exact tolerance (bb_diag * 1e-12, ~4 decimal
-    # digits above double ULP) that merges only true duplicates and geometry no
-    # refinement could ever resolve, while still splitting crossing segments (the
-    # intersection test is tolerance-independent).
-    if tol < 0:
-        min_x = min(p.x for p in pts)
-        max_x = max(p.x for p in pts)
-        min_y = min(p.y for p in pts)
-        max_y = max(p.y for p in pts)
-        bb_diag = math.sqrt((max_x - min_x)**2 + (max_y - min_y)**2)
-        tol = bb_diag * (1e-12 if tol <= -2.0 else CLOSE_ENOUGH)
+    # Merge near-exact duplicates using a scale-relative tolerance.
+    min_x = min(p.x for p in pts)
+    max_x = max(p.x for p in pts)
+    min_y = min(p.y for p in pts)
+    max_y = max(p.y for p in pts)
+    bb_diag = math.sqrt((max_x - min_x)**2 + (max_y - min_y)**2)
+    tol = bb_diag * 1e-12
     tol2 = tol * tol
 
     merged_nodes = 0
-    split_segs = 0
-    removed_segs = 0
 
     # 1. Merge near-duplicate nodes (x-sorted sweep to avoid O(n²))
     remap = list(range(nv))
@@ -428,7 +319,6 @@ def clean_pslg(mesh, tol, quiet):
 
     # 2. Remove degenerate segments
     good = [s for s in segs if s.v0 != s.v1]
-    removed_segs += len(segs) - len(good)
     mesh.segments = good
     segs = mesh.segments
 
@@ -440,8 +330,6 @@ def clean_pslg(mesh, tol, quiet):
         if k not in seen:
             seen.add(k)
             good.append(s)
-        else:
-            removed_segs += 1
     mesh.segments = good
     segs = mesh.segments
 
@@ -523,10 +411,9 @@ def clean_pslg(mesh, tol, quiet):
                     best_i = i
             if best_i >= 0:
                 # Point best_i is on segment si — split it
-                s2 = Segment(best_i, segs[si].v1, segs[si].marker, segs[si].lfs, segs[si].pbc_type, segs[si].no_split, segs[si].pbc_side)
-                segs[si] = Segment(segs[si].v0, best_i, segs[si].marker, segs[si].lfs, segs[si].pbc_type, segs[si].no_split, segs[si].pbc_side)
+                s2 = Segment(best_i, segs[si].v1, segs[si].marker)
+                segs[si] = Segment(segs[si].v0, best_i, segs[si].marker)
                 segs.append(s2)
-                split_segs += 1
                 changed = True
 
     # 5. Split segments at segment-segment intersections. Segments and points
@@ -602,15 +489,14 @@ def clean_pslg(mesh, tol, quiet):
                         break
                 if near_node < 0:
                     near_node = len(pts)
-                    pts.append(Point(ix, iy, near_node, 0))
+                    pts.append(Point(ix, iy))
                 # Split both segments
-                s_i2 = Segment(near_node, segs[i].v1, segs[i].marker, segs[i].lfs, segs[i].pbc_type, segs[i].no_split, segs[i].pbc_side)
-                segs[i] = Segment(segs[i].v0, near_node, segs[i].marker, segs[i].lfs, segs[i].pbc_type, segs[i].no_split, segs[i].pbc_side)
+                s_i2 = Segment(near_node, segs[i].v1, segs[i].marker)
+                segs[i] = Segment(segs[i].v0, near_node, segs[i].marker)
                 segs.append(s_i2)
-                s_j2 = Segment(near_node, segs[j].v1, segs[j].marker, segs[j].lfs, segs[j].pbc_type, segs[j].no_split, segs[j].pbc_side)
-                segs[j] = Segment(segs[j].v0, near_node, segs[j].marker, segs[j].lfs, segs[j].pbc_type, segs[j].no_split, segs[j].pbc_side)
+                s_j2 = Segment(near_node, segs[j].v1, segs[j].marker)
+                segs[j] = Segment(segs[j].v0, near_node, segs[j].marker)
                 segs.append(s_j2)
-                split_segs += 2
                 changed = True
 
     # Compact: remove merged-away vertices and re-index
@@ -622,7 +508,6 @@ def clean_pslg(mesh, tol, quiet):
             if target != i:
                 continue
             new_idx[i] = len(new_pts)
-            pts[i].id = len(new_pts)
             new_pts.append(pts[i])
         for i in range(nv):
             if remap[i] != i:
@@ -630,17 +515,11 @@ def clean_pslg(mesh, tol, quiet):
         for i in range(nv, len(pts)):
             if new_idx[i] < 0:
                 new_idx[i] = len(new_pts)
-                pts[i].id = len(new_pts)
                 new_pts.append(pts[i])
         for s in segs:
             s.v0 = new_idx[s.v0]
             s.v1 = new_idx[s.v1]
         mesh.vertices = new_pts
-
-    if not quiet and (merged_nodes > 0 or split_segs > 0 or removed_segs > 0):
-        print(f"  PSLG cleanup: merged {merged_nodes} nodes, split "
-              f"{split_segs} segments, removed {removed_segs} duplicates",
-              file=sys.stderr)
 
 
 # ============================================================
@@ -663,9 +542,9 @@ def build_delaunay(mesh):
     global EPS
     bbox_diag = math.sqrt(dx*dx + dy*dy)
     EPS = bbox_diag * EPS_SCALE
-    pts.append(Point(min_x - d, min_y - 3 * d, n, 0))
-    pts.append(Point(min_x + 3 * d, min_y - d, n + 1, 0))
-    pts.append(Point(min_x - d, min_y + 3 * d, n + 2, 0))
+    pts.append(Point(min_x - d, min_y - 3 * d))
+    pts.append(Point(min_x + 3 * d, min_y - d))
+    pts.append(Point(min_x - d, min_y + 3 * d))
 
     tris = mesh.triangles
     tris.clear()
@@ -811,9 +690,6 @@ def build_delaunay(mesh):
             s = slots[i]
             tris[s].v = [poly[i][0], poly[i][1], pidx]
             tris[s].neighbors = [-1, -1, -1]
-            tris[s].region_attrib = 0
-            tris[s].region_max_area = -1
-            tris[s].marker = 0
             # Strictly CCW by the fan guard above -- no orientation fix-up.
 
         # Wire outer adjacency
@@ -960,9 +836,6 @@ def build_delaunay(mesh):
                 s = slots[i]
                 tris[s].v = [poly[i][0], poly[i][1], pidx]
                 tris[s].neighbors = [-1, -1, -1]
-                tris[s].region_attrib = 0
-                tris[s].region_max_area = -1
-                tris[s].marker = 0
                 if orient2d(pts[tris[s].v[0]], pts[tris[s].v[1]], pts[tris[s].v[2]]) < 0:
                     tris[s].v[0], tris[s].v[1] = tris[s].v[1], tris[s].v[0]
 
@@ -1002,7 +875,7 @@ def build_delaunay(mesh):
 # CDT: enforce PSLG segments via cavity retriangulation
 # ============================================================
 
-def enforce_constraints(mesh, quiet):
+def enforce_constraints(mesh):
     if not mesh.segments:
         return 0
 
@@ -1110,13 +983,10 @@ def enforce_constraints(mesh, quiet):
             on_seg.sort()
             prev_v = su
             for _, vi in on_seg:
-                new_segs.append(Segment(prev_v, vi, seg.marker, seg.lfs, seg.pbc_type, seg.no_split, seg.pbc_side))
+                new_segs.append(Segment(prev_v, vi, seg.marker))
                 prev_v = vi
-            new_segs.append(Segment(prev_v, sv, seg.marker, seg.lfs, seg.pbc_type, seg.no_split, seg.pbc_side))
+            new_segs.append(Segment(prev_v, sv, seg.marker))
     if len(new_segs) != len(mesh.segments):
-        if not quiet:
-            print(f"  Split {len(mesh.segments)} segments into {len(new_segs)} sub-segments (collinear vertices)",
-                  file=sys.stderr)
         mesh.segments = new_segs
 
     # Direct adjacency check: flip-based
@@ -1405,14 +1275,6 @@ def enforce_constraints(mesh, quiet):
     for s in mesh.segments:
         if not mesh.has_edge(s.v0, s.v1, v2t):
             miss += 1
-            if not quiet:
-                print(f"  UNENFORCED: v{s.v0} ({mesh.vertices[s.v0].x},{mesh.vertices[s.v0].y})"
-                      f"->v{s.v1} ({mesh.vertices[s.v1].x},{mesh.vertices[s.v1].y})"
-                      f" len={math.sqrt((mesh.vertices[s.v1].x-mesh.vertices[s.v0].x)*(mesh.vertices[s.v1].x-mesh.vertices[s.v0].x)+(mesh.vertices[s.v1].y-mesh.vertices[s.v0].y)*(mesh.vertices[s.v1].y-mesh.vertices[s.v0].y))}",
-                      file=sys.stderr)
-    if not quiet and miss > 0:
-        print(f"Warning: {miss} of {len(mesh.segments)} segments could not be enforced.",
-              file=sys.stderr)
     return miss
 
 
@@ -1420,9 +1282,7 @@ def enforce_constraints(mesh, quiet):
 # Flood-fill hole removal
 # ============================================================
 
-def remove_holes(mesh, opts):
-    if opts.no_holes:
-        return
+def remove_holes(mesh):
     mesh.rebuild_adjacency()
 
     seg_edges = set()
@@ -1491,46 +1351,6 @@ def remove_holes(mesh, opts):
         for j in range(3):
             t.neighbors[j] = remap[t.neighbors[j]] if t.neighbors[j] >= 0 else -1
     mesh.triangles = kept
-
-
-# ============================================================
-# Flood-fill region assignment
-# ============================================================
-
-def assign_regions(mesh, opts):
-    if not opts.regions or not mesh.regions:
-        return
-    mesh.rebuild_adjacency()
-
-    seg_edges = set()
-    for s in mesh.segments:
-        seg_edges.add(edge_key(s.v0, s.v1))
-
-    for t in mesh.triangles:
-        t.region_attrib = 0
-        t.region_max_area = -1
-
-    for reg in mesh.regions:
-        seed_tri = mesh.locate_triangle(reg.x, reg.y)
-        if seed_tri < 0:
-            continue
-        q = deque([seed_tri])
-        visited = [False] * len(mesh.triangles)
-        visited[seed_tri] = True
-        while q:
-            ti = q.popleft()
-            t = mesh.triangles[ti]
-            t.region_attrib = reg.attrib
-            t.region_max_area = reg.max_area
-            for j in range(3):
-                nb = t.neighbors[j]
-                if nb < 0 or visited[nb]:
-                    continue
-                key = edge_key(t.v[j], t.v[(j + 1) % 3])
-                if key in seg_edges:
-                    continue
-                visited[nb] = True
-                q.append(nb)
 
 
 # ============================================================
@@ -1615,9 +1435,6 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
                            mesh.vertices[b].x, mesh.vertices[b].y,
                            mesh.vertices[c].x, mesh.vertices[c].y) > 0.0
 
-    # Inherit region from the containing triangle
-    reg_attr = t.region_attrib
-    reg_area = t.region_max_area
 
     flip_stack = []
 
@@ -1635,12 +1452,9 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
         t2 = len(mesh.triangles)
         mesh.triangles.append(Triangle())
 
-        mesh.triangles[t0] = Triangle(v=[v0, v1, pidx], neighbors=[n0, t1, t2],
-                                      region_attrib=reg_attr, region_max_area=reg_area)
-        mesh.triangles[t1] = Triangle(v=[v1, v2, pidx], neighbors=[n1, t2, t0],
-                                      region_attrib=reg_attr, region_max_area=reg_area)
-        mesh.triangles[t2] = Triangle(v=[v2, v0, pidx], neighbors=[n2, t0, t1],
-                                      region_attrib=reg_attr, region_max_area=reg_area)
+        mesh.triangles[t0] = Triangle(v=[v0, v1, pidx], neighbors=[n0, t1, t2])
+        mesh.triangles[t1] = Triangle(v=[v1, v2, pidx], neighbors=[n1, t2, t0])
+        mesh.triangles[t2] = Triangle(v=[v2, v0, pidx], neighbors=[n2, t0, t1])
 
         if n1 >= 0:
             for k in range(3):
@@ -1673,10 +1487,8 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
             t1 = len(mesh.triangles)
             mesh.triangles.append(Triangle())
 
-            mesh.triangles[t0] = Triangle(v=[va, pidx, vc], neighbors=[-1, t1, n_cva],
-                                          region_attrib=reg_attr, region_max_area=reg_area)
-            mesh.triangles[t1] = Triangle(v=[pidx, vb, vc], neighbors=[-1, n_bvc, t0],
-                                          region_attrib=reg_attr, region_max_area=reg_area)
+            mesh.triangles[t0] = Triangle(v=[va, pidx, vc], neighbors=[-1, t1, n_cva])
+            mesh.triangles[t1] = Triangle(v=[pidx, vb, vc], neighbors=[-1, n_bvc, t0])
 
             if n_bvc >= 0:
                 for k in range(3):
@@ -1721,8 +1533,6 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
                 mesh.vertices.pop()
                 return -1
             # Inherit region from the neighbor triangle
-            reg_attr2 = tn.region_attrib
-            reg_area2 = tn.region_max_area
 
             t0 = ti
             t1 = len(mesh.triangles)
@@ -1731,14 +1541,10 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
             t3 = len(mesh.triangles)
             mesh.triangles.append(Triangle())
 
-            mesh.triangles[t0] = Triangle(v=[va, pidx, vc], neighbors=[t3, t1, n_cva],
-                                          region_attrib=reg_attr, region_max_area=reg_area)
-            mesh.triangles[t1] = Triangle(v=[pidx, vb, vc], neighbors=[t2, n_bvc, t0],
-                                          region_attrib=reg_attr, region_max_area=reg_area)
-            mesh.triangles[t2] = Triangle(v=[vb, pidx, vd], neighbors=[t1, t3, n_dvb],
-                                          region_attrib=reg_attr2, region_max_area=reg_area2)
-            mesh.triangles[t3] = Triangle(v=[pidx, va, vd], neighbors=[t0, n_avd, t2],
-                                          region_attrib=reg_attr2, region_max_area=reg_area2)
+            mesh.triangles[t0] = Triangle(v=[va, pidx, vc], neighbors=[t3, t1, n_cva])
+            mesh.triangles[t1] = Triangle(v=[pidx, vb, vc], neighbors=[t2, n_bvc, t0])
+            mesh.triangles[t2] = Triangle(v=[vb, pidx, vd], neighbors=[t1, t3, n_dvb])
+            mesh.triangles[t3] = Triangle(v=[pidx, va, vd], neighbors=[t0, n_avd, t2])
 
             if n_bvc >= 0:
                 for k in range(3):
@@ -1800,13 +1606,9 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
         if tri_n.v[fj2] != fb:
             n_ext1, n_ext2 = n_ext2, n_ext1
 
-        ra, ra2 = tri.region_attrib, tri.region_max_area
-        rb, rb2 = tri_n.region_attrib, tri_n.region_max_area
 
-        mesh.triangles[ft] = Triangle(v=[fa, fq, fp], neighbors=[n_ext1, fn, n_fp_fa],
-                                      region_attrib=ra, region_max_area=ra2)
-        mesh.triangles[fn] = Triangle(v=[fb, fp, fq], neighbors=[n_fb_fp, ft, n_ext2],
-                                      region_attrib=rb, region_max_area=rb2)
+        mesh.triangles[ft] = Triangle(v=[fa, fq, fp], neighbors=[n_ext1, fn, n_fp_fa])
+        mesh.triangles[fn] = Triangle(v=[fb, fp, fq], neighbors=[n_fb_fp, ft, n_ext2])
 
         if n_ext1 >= 0:
             for k in range(3):
@@ -1834,7 +1636,7 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
 # Quality refinement
 # ============================================================
 
-def tri_metric(mesh, ti, min_ang_threshold, global_max_a, use_region_area,
+def tri_metric(mesh, ti, min_ang_threshold, global_max_a,
                cos_min_ang=-1.0):
     t = mesh.triangles[ti]
     if t.v[0] < 0:
@@ -1852,23 +1654,7 @@ def tri_metric(mesh, ti, min_ang_threshold, global_max_a, use_region_area,
     cross = (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x)
     area = 0.5 * abs(cross)
 
-    effective_max_area = -1
-    if use_region_area and t.region_max_area > 0:
-        effective_max_area = t.region_max_area
-    if global_max_a > 0:
-        if effective_max_area > 0:
-            effective_max_area = min(effective_max_area, global_max_a)
-        else:
-            effective_max_area = global_max_a
-    # LFS constraint: if any vertex has lfs defined, impose area <= sqrt(3)/4 * lfs^2
-    for j in range(3):
-        vl = mesh.vertices[t.v[j]].lfs
-        if vl > 0:
-            lfs_area = 0.43301270189221932 * vl * vl  # sqrt(3)/4
-            if effective_max_area > 0:
-                effective_max_area = min(effective_max_area, lfs_area)
-            else:
-                effective_max_area = lfs_area
+    effective_max_area = global_max_a
     area_viol = effective_max_area > 0 and area > effective_max_area + EPS
 
     # Fast angle check using cosine comparison (no hypot/acos)
@@ -1906,18 +1692,10 @@ def tri_metric(mesh, ti, min_ang_threshold, global_max_a, use_region_area,
     return (metric, ang_viol, area_viol, area, effective_max_area, la2, lb2, lc2, cross)
 
 
-def refine_quality(mesh, opts, n_input_verts):
-    if not opts.quality and not opts.area_limit:
-        return
-    # Refine to exactly the requested angle.  (An earlier +0.1 deg overshoot
-    # "for floating-point precision" only added needless triangles: the refiner
-    # never stops at a triangle below the threshold it tests, so the output
-    # minimum can fall short by at most rounding in the angle evaluation, orders
-    # of magnitude below 0.1 deg.)
-    min_ang_val = opts.min_angle if opts.quality else 0.0
+def refine_quality(mesh, max_area, n_input_verts):
+    min_ang_val = 10.0
     cos_min_ang = math.cos(min_ang_val * math.pi / 180.0) if min_ang_val > 0 else -1.0
-    global_max_a = opts.max_area if opts.area_limit else -1.0
-    use_region_area = opts.area_limit
+    global_max_a = max_area
 
     # Estimate final triangle count from CDT using LFS integral with
     # circle-of-influence model for refinement seed vertices.
@@ -1957,24 +1735,12 @@ def refine_quality(mesh, opts, n_input_verts):
             for j in range(3):
                 lfs[t.v[j]] = min(lfs[t.v[j]], R)
 
-    # Fold in user-assigned LFS constraints
-    for vi in range(nv):
-        if mesh.vertices[vi].lfs > 0:
-            lfs[vi] = min(lfs[vi], mesh.vertices[vi].lfs)
-
     # Compute background mesh size H at each vertex from area constraints
     # and median circumradius of incident CDT triangles
     bg_size = [1e30] * nv
     for vi in range(nv):
         # Area constraint contribution (only if area limiting is active)
         amax = global_max_a
-        if use_region_area:
-            for ti in v2t[vi]:
-                t = mesh.triangles[ti]
-                if t.v[0] < 0:
-                    continue
-                if t.region_max_area > 0:
-                    amax = min(amax, t.region_max_area) if amax > 0 else t.region_max_area
         if amax > 0:
             bg_size[vi] = math.sqrt(4.0 * amax / math.sqrt(3.0))
 
@@ -2003,17 +1769,12 @@ def refine_quality(mesh, opts, n_input_verts):
     cos_min_angle = math.cos(min_ang_val * math.pi / 180.0)
 
     est_background = 0.0
-    n_cdt = 0
-    n_bad_cdt = 0
-    total_area = 0.0
     for i in range(nt):
         t = mesh.triangles[i]
         if t.v[0] < 0:
             continue
-        n_cdt += 1
         p0, p1, p2 = mesh.vertices[t.v[0]], mesh.vertices[t.v[1]], mesh.vertices[t.v[2]]
         area = tri_area(p0, p1, p2)
-        total_area += area
         H = (bg_size[t.v[0]] + bg_size[t.v[1]] + bg_size[t.v[2]]) / 3.0
         bg_est = area / (alpha * H * H)
         # Check for bad angle
@@ -2025,8 +1786,6 @@ def refine_quality(mesh, opts, n_input_verts):
         cos_a2 = (e0*e0 + e1*e1 - e2*e2) / (2*e0*e1 + 1e-30)
         cos_max = max(cos_a0, cos_a1, cos_a2)
         is_bad = cos_max > cos_min_angle
-        if is_bad:
-            n_bad_cdt += 1
         # Angle-area interaction: 1.7x when area dominates on bad triangles
         if is_bad and bg_est > 6.0:
             est_background += bg_est * 1.7
@@ -2035,13 +1794,11 @@ def refine_quality(mesh, opts, n_input_verts):
 
     # Pass 2: refinement seed contributions (circle-of-influence model)
     est_seeds = 0.0
-    n_seeds = 0
     for vi in range(nv):
         h = lfs[vi]
         H = bg_size[vi]
         if h >= 1e29 or h >= H * 0.5:
             continue
-        n_seeds += 1
         ratio = H / h
         log_r = math.log(ratio)
         # Correction: Ruppert's geometric grading creates quadratically more
@@ -2051,29 +1808,8 @@ def refine_quality(mesh, opts, n_input_verts):
         if seed_contrib > 0:
             est_seeds += seed_contrib
 
-    # Pass 3: segment LFS contributions
-    # A segment with LFS constraint h generates a grading band on both sides.
-    # Theoretical integral (linear grading) telescopes to 2*L/(alpha*h), but
-    # Ruppert's geometric grading is ~3x denser, giving 6*L/(alpha*h).
-    # NOTE: this assumes grading on both sides (interior segment).  Boundary
-    # segments only grade on one side, so this overestimates by ~2x for them.
-    # Conservative is fine for a safety cap; if a tighter estimate is ever
-    # needed, halve the contribution for boundary segments (those with only
-    # one incident triangle on the constrained edge).
-    est_seg_lfs = 0
-    for s in mesh.segments:
-        if s.lfs <= 0:
-            continue
-        Ldx = mesh.vertices[s.v1].x - mesh.vertices[s.v0].x
-        Ldy = mesh.vertices[s.v1].y - mesh.vertices[s.v0].y
-        L = math.sqrt(Ldx*Ldx + Ldy*Ldy)
-        est_seg_lfs += 6.0 * L / (alpha * s.lfs)
-
-    est_total_tris = est_background + est_seeds + est_seg_lfs
+    est_total_tris = est_background + est_seeds
     max_steiner = max(10000, int(est_total_tris * 5.0))
-    if not opts.quiet:
-        sys.stderr.write(f"  CDT: {n_cdt} tris ({n_bad_cdt} bad), area={total_area:.6g}, seeds: {n_seeds}\n")
-        sys.stderr.write(f"  Est triangles: {int(est_total_tris)}, Steiner limit: {max_steiner}\n")
     steiner_count = [0]  # use list for mutability in closures
 
     constrained_edges = set()
@@ -2259,17 +1995,14 @@ def refine_quality(mesh, opts, n_input_verts):
                         t = 1.0 - cand if side else cand
         return t
 
-    def split_segment_core(si, out_affected, hint_tri=-1, t_frac=-1.0):
-        """Split segment (corner-aligned fraction, or forced t_frac for PBC
-        partner sync). Returns split-point index or -1 on failure."""
+    def split_segment(si, out_affected, hint_tri=-1):
+        """Split a segment at a corner-aligned fraction."""
         seg = Segment(mesh.segments[si].v0, mesh.segments[si].v1,
-                      mesh.segments[si].marker, mesh.segments[si].lfs,
-                      mesh.segments[si].pbc_type, mesh.segments[si].no_split,
-                      mesh.segments[si].pbc_side)
+                      mesh.segments[si].marker)
         sa, sb = mesh.vertices[seg.v0], mesh.vertices[seg.v1]
-        t = t_frac if 0.0 < t_frac < 1.0 else split_fraction(si)
+        t = split_fraction(si)
         mx, my = sa.x + (sb.x - sa.x) * t, sa.y + (sb.y - sa.y) * t
-        mid = Point(mx, my, len(mesh.vertices), seg.marker, [], seg.lfs)
+        mid = Point(mx, my)
 
         ek = edge_key(seg.v0, seg.v1)
         constrained_edges.discard(ek)
@@ -2281,7 +2014,7 @@ def refine_quality(mesh, opts, n_input_verts):
             constrained_edges.add(ek)
             edge_to_seg[ek] = si
             grid_add_seg(si)
-            return -1
+            return False
         steiner_count[0] += 1
         # Propagate shell membership for acute-angle wedge tracking
         while len(shell_apex) <= mid_idx:
@@ -2298,8 +2031,8 @@ def refine_quality(mesh, opts, n_input_verts):
         seg_adj[seg.v0] = [mid_idx if nb == seg.v1 else nb for nb in seg_adj[seg.v0]]
         seg_adj[seg.v1] = [mid_idx if nb == seg.v0 else nb for nb in seg_adj[seg.v1]]
         seg_adj[mid_idx] = [seg.v0, seg.v1]
-        s1 = Segment(seg.v0, mid_idx, seg.marker, seg.lfs, seg.pbc_type, seg.no_split, seg.pbc_side)
-        s2 = Segment(mid_idx, seg.v1, seg.marker, seg.lfs, seg.pbc_type, seg.no_split, seg.pbc_side)
+        s1 = Segment(seg.v0, mid_idx, seg.marker)
+        s2 = Segment(mid_idx, seg.v1, seg.marker)
         mesh.segments[si] = s1
         new_si = len(mesh.segments)
         mesh.segments.append(s2)
@@ -2311,40 +2044,6 @@ def refine_quality(mesh, opts, n_input_verts):
         edge_to_seg[ek2] = new_si
         grid_add_seg(si)
         grid_add_seg(new_si)
-        return mid_idx
-
-    def split_segment(si, out_affected, hint_tri=-1):
-        """Split segment; for PBC segments, also split the partner."""
-        seg = mesh.segments[si]  # read before split modifies it
-        pbc_type = seg.pbc_type
-        sv0, sv1 = seg.v0, seg.v1
-        t_used = split_fraction(si)
-        mid_idx = split_segment_core(si, out_affected, hint_tri, t_used)
-        if mid_idx < 0:
-            return False
-
-        # Synchronized PBC partner split
-        if pbc_type >= 0:
-            tv0 = mesh.pbc_twin.get(sv0, -1)
-            tv1 = mesh.pbc_twin.get(sv1, -1)
-            if tv0 >= 0 and tv1 >= 0:
-                pek = edge_key(tv0, tv1)
-                partner_si = edge_to_seg.get(pek, -1)
-                if partner_si >= 0:
-                    partner_affected = []
-                    # Split the partner at the SAME parametric position (oriented:
-                    # partner may be stored with endpoints in either order) so the
-                    # periodic boundaries keep matching node positions.
-                    pt = t_used if mesh.segments[partner_si].v0 == tv0 else 1.0 - t_used
-                    partner_mid = split_segment_core(partner_si, partner_affected, -1, pt)
-                    if partner_mid >= 0:
-                        mesh.pbc_twin[mid_idx] = partner_mid
-                        mesh.pbc_twin[partner_mid] = mid_idx
-                        mesh.pbc_node_type[mid_idx] = pbc_type
-                        mesh.pbc_node_type[partner_mid] = pbc_type
-                        # Add partner-affected triangles so the caller can
-                        # queue them for quality checking.
-                        out_affected.extend(partner_affected)
         return True
 
     def find_encroached(px, py):
@@ -2360,8 +2059,6 @@ def refine_quality(mesh, opts, n_input_verts):
                     continue
                 for si in seg_grid[key]:
                     s = mesh.segments[si]
-                    if s.no_split:
-                        continue  # AGE chords must stay uniformly spaced
                     sa, sb = mesh.vertices[s.v0], mesh.vertices[s.v1]
                     mx2, my2 = (sa.x + sb.x) * 0.5, (sa.y + sb.y) * 0.5
                     sr2 = ((sb.x-sa.x)*(sb.x-sa.x)+(sb.y-sa.y)*(sb.y-sa.y)) * 0.25
@@ -2420,7 +2117,7 @@ def refine_quality(mesh, opts, n_input_verts):
 
     pq = []
     for i in range(len(mesh.triangles)):
-        mr = tri_metric(mesh, i, min_ang_val, global_max_a, use_region_area, cos_min_ang)
+        mr = tri_metric(mesh, i, min_ang_val, global_max_a, cos_min_ang)
         if mr[0] > 0:
             heappush(pq, (prio_key(mr), i, mesh.triangles[i].generation, 0))
 
@@ -2428,8 +2125,6 @@ def refine_quality(mesh, opts, n_input_verts):
     offconst = (0.475 * math.sqrt(
         (1.0 + math.cos(min_ang_val * math.pi / 180.0)) /
         (1.0 - math.cos(min_ang_val * math.pi / 180.0)))) if min_ang_val > 0 else 0
-
-    dbg_encroach = dbg_insert = dbg_skip = dbg_fail = 0
 
     iterations = 0
     while pq and steiner_count[0] < max_steiner:
@@ -2445,7 +2140,7 @@ def refine_quality(mesh, opts, n_input_verts):
             continue
         if bt.generation != gen:
             continue
-        tmr = tri_metric(mesh, bad_idx, min_ang_val, global_max_a, use_region_area, cos_min_ang)
+        tmr = tri_metric(mesh, bad_idx, min_ang_val, global_max_a, cos_min_ang)
         if tmr[0] <= 0:
             continue
         ang_viol, area_viol, area, _ = tmr[1], tmr[2], tmr[3], tmr[4]
@@ -2470,7 +2165,6 @@ def refine_quality(mesh, opts, n_input_verts):
             vc_v = bt.v[(min_v + 2) % 3]
             if (edge_key(va, vb_v) in constrained_edges and
                 edge_key(va, vc_v) in constrained_edges):
-                dbg_skip += 1
                 continue
             # Check if worst-angle vertex is inside a small-angle shell.
             # Only skip if at least one edge at the vertex is constrained —
@@ -2478,7 +2172,6 @@ def refine_quality(mesh, opts, n_input_verts):
             if va < len(shell_apex) and shell_apex[va] >= 0:
                 if (edge_key(va, vb_v) in constrained_edges or
                     edge_key(va, vc_v) in constrained_edges):
-                    dbg_skip += 1
                     continue
             # For tiny triangles (all edges < bb_diag * 1e-9, i.e. at the floor
             # where coordinates have ~7 ULPs of room left), accept a reduced
@@ -2490,7 +2183,6 @@ def refine_quality(mesh, opts, n_input_verts):
             if la2 < tiny_len2 and lb2 < tiny_len2 and lc2 < tiny_len2:
                 ang = min_angle(a, b, c)
                 if ang >= min(min_ang_val, TINY_TRI_ANGLE):
-                    dbg_skip += 1
                     continue
 
         # Compute circumcenter or off-center
@@ -2541,19 +2233,12 @@ def refine_quality(mesh, opts, n_input_verts):
         if enc_seg < 0:
             blk = walk_blocked(bad_idx, tcx, tcy)
             if blk == -2:
-                dbg_fail += 1
                 continue
             if blk >= 0:
-                if mesh.segments[blk].no_split:
-                    dbg_skip += 1
-                    continue
                 enc_seg = blk
-        if enc_seg >= 0 and opts.no_steiner and mesh.segments[enc_seg].marker != 0:
-            continue
         if enc_seg >= 0:
             seg_aff = []
             if split_segment(enc_seg, seg_aff, bad_idx):
-                dbg_encroach += 1
                 # Triangles modified by the split are re-queued fresh (retry=0)
                 # via seg_aff below.  If badIdx was NOT among them, the split left
                 # it unchanged but may have removed the segment its circumcenter
@@ -2563,14 +2248,14 @@ def refine_quality(mesh, opts, n_input_verts):
                         bad_idx < len(mesh.triangles) and
                         mesh.triangles[bad_idx].v[0] >= 0):
                     mrb = tri_metric(mesh, bad_idx, min_ang_val, global_max_a,
-                                     use_region_area, cos_min_ang)
+                                     cos_min_ang)
                     if mrb[0] > 0:
                         heappush(pq, (prio_key(mrb), bad_idx,
                                       mesh.triangles[bad_idx].generation, retry + 1))
                 for ti2 in seg_aff:
                     if 0 <= ti2 < len(mesh.triangles) and mesh.triangles[ti2].v[0] >= 0:
                         mr2 = tri_metric(mesh, ti2, min_ang_val, global_max_a,
-                                         use_region_area, cos_min_ang)
+                                         cos_min_ang)
                         if mr2[0] > 0:
                             heappush(pq, (prio_key(mr2), ti2,
                                           mesh.triangles[ti2].generation, 0))
@@ -2578,7 +2263,7 @@ def refine_quality(mesh, opts, n_input_verts):
                             nb = mesh.triangles[ti2].neighbors[k]
                             if nb >= 0:
                                 mr2 = tri_metric(mesh, nb, min_ang_val, global_max_a,
-                                                 use_region_area, cos_min_ang)
+                                                 cos_min_ang)
                                 if mr2[0] > 0:
                                     heappush(pq, (prio_key(mr2), nb,
                                                   mesh.triangles[nb].generation, 0))
@@ -2589,7 +2274,7 @@ def refine_quality(mesh, opts, n_input_verts):
         # triangle) of an existing vertex.
         min_edge2 = min(tmr_la2, tmr_lb2, tmr_lc2)
         guard_dist2 = GUARD_FACTOR * GUARD_FACTOR * min_edge2
-        np_pt = Point(tcx, tcy, len(mesh.vertices), 0)
+        np_pt = Point(tcx, tcy)
         affected = []
         new_pt = insert_point_lawson(mesh, np_pt, bad_idx, constrained_edges,
                                      affected, guard_dist2)
@@ -2598,11 +2283,9 @@ def refine_quality(mesh, opts, n_input_verts):
             # encroachment check above and the CDT empty-circumcircle property,
             # the circumcenter is at least one circumradius from every visible
             # vertex; a refused insertion just tolerates the bad triangle.
-            dbg_fail += 1
             continue
 
         steiner_count[0] += 1
-        dbg_insert += 1
 
         # Re-check only the affected triangles.  insert_point_lawson records every
         # modified triangle (split products + all flips) in `affected`, and a
@@ -2610,21 +2293,12 @@ def refine_quality(mesh, opts, n_input_verts):
         # neighbors cannot have changed status — no neighbor sweep needed.
         for ti in sorted(set(affected)):
             if 0 <= ti < len(mesh.triangles):
-                mr = tri_metric(mesh, ti, min_ang_val, global_max_a, use_region_area, cos_min_ang)
+                mr = tri_metric(mesh, ti, min_ang_val, global_max_a, cos_min_ang)
                 if mr[0] > 0:
                     heappush(pq, (prio_key(mr), ti, mesh.triangles[ti].generation, 0))
 
     if pq:
         raise ValueError("Cutout mesh refinement limit exceeded")
-    if not opts.quiet:
-        print(f"Quality refinement: {dbg_insert} Steiner points, "
-              f"{dbg_encroach} segment splits, {dbg_skip} skipped, "
-              f"{dbg_fail} failed insertions", file=sys.stderr)
-
-
-# ============================================================
-# Edge extraction
-# ============================================================
 
 
 def build_mesh(points, segments, holes, max_area, *, max_vertices=50000):
@@ -2642,22 +2316,21 @@ def build_mesh(points, segments, holes, max_area, *, max_vertices=50000):
     shift_y = (min(p[1] for p in points) + max(p[1] for p in points)) / 2
     mesh = Mesh()
     mesh.max_vertices = max_vertices
-    mesh.vertices = [Point(x-shift_x, y-shift_y, i) for i, (x, y) in enumerate(points)]
+    mesh.vertices = [Point(x-shift_x, y-shift_y) for x, y in points]
     mesh.segments = [Segment(a, b, marker) for a, b, marker in segments]
     mesh.holes = [Hole(x-shift_x, y-shift_y) for x, y in holes]
-    opts = Options(pslg=True, quality=True, min_angle=10., area_limit=True, max_area=max_area, quiet=True)
     with localcontext() as context:
         context.prec = 80
         previous_epsilon = EPS
         try:
-            clean_pslg(mesh, -2.0, True)
+            clean_pslg(mesh)
             for attempt in range(11):
                 if len(mesh.vertices) > max_vertices:
                     raise ValueError("Cutout mesh vertex limit exceeded")
                 mesh.triangles.clear()
                 build_delaunay(mesh)
                 mesh.rebuild_adjacency()
-                missing = enforce_constraints(mesh, True)
+                missing = enforce_constraints(mesh)
                 if not missing:
                     break
                 if attempt == 10:
@@ -2673,12 +2346,12 @@ def build_mesh(points, segments, holes, max_area, *, max_vertices=50000):
                         continue
                     a, b = mesh.vertices[segment.v0], mesh.vertices[segment.v1]
                     index = len(mesh.vertices)
-                    mesh.vertices.append(Point((a.x+b.x)/2, (a.y+b.y)/2, index))
+                    mesh.vertices.append(Point((a.x+b.x)/2, (a.y+b.y)/2))
                     mesh.segments[i:i+1] = [Segment(segment.v0, index, segment.marker), Segment(index, segment.v1, segment.marker)]
-            remove_holes(mesh, opts)
+            remove_holes(mesh)
             if not mesh.triangles:
                 raise ValueError("Cutout mesh encloses no area")
-            refine_quality(mesh, opts, len(mesh.vertices))
+            refine_quality(mesh, max_area, len(mesh.vertices))
         finally:
             EPS = previous_epsilon
     return (

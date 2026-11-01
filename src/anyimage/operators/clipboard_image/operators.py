@@ -23,31 +23,6 @@ class PasteClipboardImage(bpy.types.Operator):
     bl_description = "Paste and pack the clipboard image for the current editor"
     bl_options = {"REGISTER", "UNDO"}
 
-    import_as: bpy.props.EnumProperty(
-        name="Import As",
-        translation_context="AnyImage",
-        description="Choose the 3D View representation for the image",
-        items=(
-            (
-                "PLANE",
-                "Plane",
-                "Create a mesh plane with an image material",
-            ),
-            (
-                "REFERENCE",
-                "Reference Image",
-                "Create an image Empty like dragging an image into Blender",
-            ),
-        ),
-        default="REFERENCE",
-    )
-    shadeless: bpy.props.BoolProperty(
-        name="Shadeless",
-        description=(
-            "Use an Emission shader so the image is unaffected by scene lighting"
-        ),
-        default=False,
-    )
     paste_target: bpy.props.StringProperty(
         options={"HIDDEN", "SKIP_SAVE"},
     )
@@ -59,11 +34,6 @@ class PasteClipboardImage(bpy.types.Operator):
         default=False,
         options={"HIDDEN", "SKIP_SAVE"},
     )
-    is_replacement: bpy.props.BoolProperty(
-        default=False,
-        options={"HIDDEN", "SKIP_SAVE"},
-    )
-
     @classmethod
     def poll(cls, context):
         if not clipboard_image_supported():
@@ -81,13 +51,6 @@ class PasteClipboardImage(bpy.types.Operator):
             self.location = (*values, 0.0)[:3]
             self.location_set = True
         return self._paste(context, event)
-
-    def draw(self, _context):
-        if self.is_replacement or self.paste_target != "PLANE":
-            return
-        self.layout.prop(self, "import_as")
-        if self.import_as == "PLANE":
-            self.layout.prop(self, "shadeless")
 
     def _paste(self, context, event=None):
         if not self.paste_target:
@@ -107,7 +70,6 @@ class PasteClipboardImage(bpy.types.Operator):
         paste_succeeded = False
         try:
             replacement = replacement_for_context(context)
-            self.is_replacement = replacement is not None
             image, image_reused = acquire_packed_image(image_data, suffix)
             if replacement is not None:
                 replace_pasted_image(context, replacement, image)
@@ -122,8 +84,6 @@ class PasteClipboardImage(bpy.types.Operator):
                     image,
                     event,
                     location=location,
-                    import_as=self.import_as,
-                    shadeless=self.shadeless,
                 )
             paste_succeeded = True
         except BrushPreviewError as error:

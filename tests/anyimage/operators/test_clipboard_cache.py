@@ -83,31 +83,14 @@ def test_mask_edit_then_paste_preserves_original_clipboard_content(clipboard, sh
     np.testing.assert_array_equal(images.image_pixels(edited), edited_pixels)
 
 
-def test_painted_clipboard_plane_keeps_reference_node_and_brush_cache(clipboard, monkeypatch):
-    original, _ = actions.acquire_packed_image(clipboard, ".png")
-    expected = images.image_pixels(original)
-    monkeypatch.setattr(actions, "_place_in_view", lambda *_: None)
-    monkeypatch.setattr(actions, "_select_only", lambda *_: None)
-    obj = actions.add_image_plane(bpy.context, original, shadeless=False)
-    color = next(n.image for n in obj.data.materials[0].node_tree.nodes if n.type == "TEX_IMAGE")
-    assert color != original and actions.CLIPBOARD_HASH_PROPERTY not in color
-    assert actions.CLIPBOARD_CONTENT_PROPERTY not in color
-    color.pixels[0] = 1
-    color.pack()
-    for _ in range(3):
-        pasted, reused = actions.acquire_packed_image(clipboard, ".png")
-        assert pasted == original and reused
-        np.testing.assert_array_equal(images.image_pixels(pasted), expected)
-
-
-def test_failed_clipboard_plane_placement_releases_created_data(clipboard, monkeypatch):
+def test_failed_clipboard_reference_placement_releases_created_data(clipboard, monkeypatch):
     original, _ = actions.acquire_packed_image(clipboard, ".png")
     before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials")}
     def fail(*_):
         raise RuntimeError("Placement failed")
     monkeypatch.setattr(actions, "_place_in_view", fail)
     with pytest.raises(RuntimeError, match="Placement failed"):
-        actions.add_image_plane(bpy.context, original)
+        actions.add_reference_image(bpy.context, original)
     for name, items in before.items():
         assert set(getattr(bpy.data, name)) == items
 

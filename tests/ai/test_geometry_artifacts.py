@@ -1,11 +1,16 @@
-import importlib.util
+import importlib
 import json
-import sys
+import tempfile
+import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from tests.anyimage.server.runtime_support import ServerTestCase
 
-class GeometryArtifactsTest(ServerTestCase):
+class GeometryArtifactsTest(unittest.TestCase):
+    def setUp(self):
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.storage_root = Path(directory)
+
     def test_depth_alpha_multiplies_coverage_without_changing_geometry(self):
         import numpy as np
 
@@ -120,7 +125,7 @@ class GeometryArtifactsTest(ServerTestCase):
         import numpy as np
         from PIL import Image
 
-        artifacts = sys.modules["server.geometry.prediction_artifacts"]
+        artifacts = importlib.import_module("server.geometry.prediction_artifacts")
         first_path = self.storage_root / "first.png"
         second_path = self.storage_root / "second.png"
         first = np.asarray(
@@ -131,17 +136,25 @@ class GeometryArtifactsTest(ServerTestCase):
         second[..., 3] = 255
         Image.fromarray(first, mode="RGBA").save(first_path)
         Image.fromarray(second, mode="RGBA").save(second_path)
+        context = SimpleNamespace(
+            directory=self.storage_root,
+            resource=lambda _: None,
+            progress=lambda *_: None,
+            check_cancelled=lambda: None,
+        )
+        frame = SimpleNamespace(depth=np.ones((1, 3), dtype=np.float32))
 
         for max_size in (2048, 2):
             with self.subTest(max_size=max_size):
                 outputs = []
                 for source in (first_path, second_path):
-                    output = artifacts._limited_model_input(
-                        source, source.with_name(f"model-{source.name}"), max_size,
-                    )
-                    with Image.open(output) as opened:
-                        self.assertEqual(opened.mode, "RGB")
-                        outputs.append(np.asarray(opened))
+                    with patch.object(artifacts.moge, "infer", return_value=frame) as infer:
+                        artifacts.generate_moge_artifacts(
+                            context, {"max_input_size": max_size}, source,
+                        )
+                    model_image = infer.call_args.args[2]
+                    self.assertEqual(model_image.mode, "RGB")
+                    outputs.append(np.asarray(model_image))
                 np.testing.assert_array_equal(*outputs)
                 self.assertEqual(outputs[0].shape[1], min(3, max_size))
                 if max_size == 2048:
@@ -152,7 +165,7 @@ class GeometryArtifactsTest(ServerTestCase):
         import numpy as np
         from PIL import Image
 
-        artifacts = sys.modules["server.geometry.prediction_artifacts"]
+        artifacts = importlib.import_module("server.geometry.prediction_artifacts")
         GeometryFrame = importlib.import_module(
             "server.models.geometry"
         ).GeometryFrame
@@ -205,7 +218,7 @@ class GeometryArtifactsTest(ServerTestCase):
 
 
     def test_generate_cutout_artifacts_only_returns_requested_outputs(self):
-        job = sys.modules["server.jobs.cutout"]
+        job = importlib.import_module("server.jobs.cutout")
         input_path = self.storage_root / "input.png"
         input_path.write_bytes(b"selection")
         context = SimpleNamespace(

@@ -54,7 +54,7 @@ def test_normal_scale_preserves_missing_and_zero_weights(image_layer, engine, do
                 else:
                     normal.node_tree = image_layer
                     normal.inputs['Object Space'].default_value = space == 'OBJECT'
-                    normal.inputs['Normal'].default_value = color
+                    normal.inputs['Normal Texture'].default_value = color
                     normal.inputs['Normal Scale'].default_value = .5
                     shared = material
                 encode = nodes.new('ShaderNodeVectorMath')

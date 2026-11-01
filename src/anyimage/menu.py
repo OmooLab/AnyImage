@@ -1,5 +1,5 @@
 import bpy
-from .operators.convert_to_plane.plane import ConvertToPlane
+from .operators.convert_to_plane import ConvertToPlane
 from .operators.color_match import MatchColorReference
 from .operators.bake_mesh import BakeMesh
 

@@ -7,11 +7,11 @@ import bpy
 
 ASSET_PATH = Path(__file__).resolve().parents[2] / "src/anyimage/assets/O_AnyImage.blend"
 GEOMETRY_NAMES = {
-    "O Image Depth Panorama",
-    "O Image Plane", "O Image Depth Plane", "O Image Relief Plane",
-    "O Image Cutout", "O Image Depth Cutout", "O Image Cutout Symmetry",
+    "O Depth Panorama",
+    "O Plane", "O Depth Plane", "O Depth Relief",
+    "O Cutout", "O Depth Cutout", "O Cutout Symmetry",
 }
-SHADER_NAMES = {"O Image Layer", "O Shadeless"}
+SHADER_NAMES = {"O Texture to Layer", "O Shadeless", "O Background"}
 
 
 def check_asset_library(asset_path):
@@ -59,7 +59,7 @@ def check_asset_library(asset_path):
         modifier.node_group = node_group
         values = {"Subdivide": 0, "Thickness": 0.2, "Reference Depth": 2.0,
                   "Depth Image": depth_image, "Uniform Scale": 1.0, "Depth Split": 0.0}
-        if node_group.name == "O Image Cutout Symmetry":
+        if node_group.name == "O Cutout Symmetry":
             values["Offset"] = 0.5
         for item in node_group.interface.items_tree:
             if item.item_type == "SOCKET" and item.in_out == "INPUT" and item.name in values:

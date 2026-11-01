@@ -1,8 +1,8 @@
 """Add generated Cutout shapes and normals to the shared pie menu."""
 
-from ...ai_properties import ai_ready
+from ...common.ai import ai_ready
 from . import interaction
-from .ai_shape import CUTOUT_SHAPE_LABELS, DEPTH_CUTOUT_SHAPES
+from .shape import CUTOUT_SHAPE_LABELS, DEPTH_CUTOUT_SHAPES
 from .operators import SelectCutoutSelection as SharedSelection
 
 CUTOUT_SHAPE_BUTTONS = (

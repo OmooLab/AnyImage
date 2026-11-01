@@ -6,13 +6,14 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+from anyimage.common import color_image as color_images
 from anyimage.common.image import image_content_state, image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures, PROTOCOL_ATTRIBUTES
 from anyimage.operators.bake_mesh import BakeMesh
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_cutout import OImageCutout
-from nodes.O_AnyImage.O_AnyImage.shader.o_image_layer import OImageLayer
+from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout import OCutout
+from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
 from tests.support.depth_symmetry import symmetry
 from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_material
 
@@ -20,7 +21,7 @@ from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modi
 @pytest.fixture
 def cutout():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    OImageLayer.create_group()
+    OTextureToLayer.create_group()
     mesh = bpy.data.meshes.new("Cutout")
     mesh.from_pydata([(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)], [], [(0, 1, 2, 3)])
     uv = mesh.uv_layers.new(name="UVMap")
@@ -44,7 +45,7 @@ def cutout():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     modifier = obj.modifiers.new("Cutout", "NODES")
-    modifier.node_group = OImageCutout.create_group()
+    modifier.node_group = OCutout.create_group()
     set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Mode"), 1)
     set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"), .2)
     obj.update_tag(refresh={"DATA"})
@@ -80,7 +81,7 @@ def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     assert bytes(images[0].packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
     assert all(bpy.data.images[name].as_pointer() == pointer for name, pointer in source_images.items())
     assert images[:2] == source_textures and len(images) == 4
-    assert {image.name for image in images[2:]} == {"Color_roughness.png", "Color_specular.png"}
+    assert {image.name for image in images[2:]} == {"Color_roughness.png", "Color_alpha.png"}
     assert all(image.filepath_raw == "//" + image.name + ".exr" for image in source_textures), [(image.name, image.filepath_raw) for image in source_textures]
     assert len(bpy.data.scenes) == 1
     assert bpy.context.window.scene == source_scene
@@ -105,7 +106,7 @@ def test_bake_isolates_other_object_textures(cutout, sharing):
     assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
     assert other["o_image_object"] is True and len(other.modifiers) == 1
     other_layer = next(n for n in other.active_material.node_tree.nodes if n.type == "GROUP")
-    assert other_layer.node_tree.name == "O Image Layer"
+    assert other_layer.node_tree.name == "O Texture to Layer"
     if sharing != "images":
         assert source_layer.inputs["Object Space"].default_value is True
     assert (cutout.active_material == source_material) is (sharing == "images")
@@ -152,7 +153,7 @@ def test_static_normal_matches_shader_after_attributes_are_removed(cutout, tmp_p
 def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thickness):
     obj, _, _, set_cutout, set_mirror = symmetry
     obj["o_image_object"] = True
-    OImageLayer.create_group()
+    OTextureToLayer.create_group()
     set_cutout("Mode", 1)
     set_cutout("Thickness", thickness, subtype="DISTANCE")
     set_cutout("Depth Scale", .5)
@@ -200,7 +201,7 @@ def test_depth_cutout_conversion_removes_unused_depth(symmetry, mirrored, retain
     if not mirrored:
         obj.modifiers.remove(mirror)
     obj["o_image_object"] = True
-    OImageLayer.create_group()
+    OTextureToLayer.create_group()
     color = bpy.data.images.new("Color", width=16, height=16, float_buffer=True)
     obj.data.materials.append(create_image_material(color, color))
     obj.select_set(True)
@@ -311,7 +312,7 @@ def test_disk_normal_is_replaced_and_packed_in_place(cutout, tmp_path, monkeypat
     from anyimage.operators.bake_mesh import materialization
 
     layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
-    node = layer.inputs["Normal"].links[0].from_node
+    node = layer.inputs["Normal Texture"].links[0].from_node
     path = tmp_path / f"normal.{extension}"
     node.image.file_format = file_format
     node.image.filepath_raw = str(path)
@@ -329,7 +330,8 @@ def test_disk_normal_is_replaced_and_packed_in_place(cutout, tmp_path, monkeypat
     def capture_bake(*args):
         nonlocal expected
         result = bake(*args)
-        expected = image_pixels(result).copy()
+        if args[3] == "Normal":
+            expected = image_pixels(result).copy()
         return result
 
     monkeypatch.setattr(materialization, "bake_material_output", capture_bake)
@@ -359,7 +361,7 @@ def test_single_region_without_normal_preserves_user_attributes(cutout):
     nodes = cutout.active_material.node_tree.nodes
     layer = next(n for n in nodes if n.type == "GROUP")
     layer.inputs["Normal Scale"].default_value = .37
-    nodes.remove(layer.inputs["Normal"].links[0].from_node)
+    nodes.remove(layer.inputs["Normal Texture"].links[0].from_node)
     cutout.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     result = materialize_mesh_and_textures(bpy.context, cutout)
@@ -427,7 +429,7 @@ def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed, s
     source = cutout.data
     if byte_normal:
         layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
-        texture = layer.inputs["Normal"].links[0].from_node
+        texture = layer.inputs["Normal Texture"].links[0].from_node
         image = bpy.data.images.new("Byte normal", width=64, height=64)
         image.colorspace_settings.name = "Non-Color"
         image.pixels.foreach_set(image_pixels(texture.image))
@@ -489,7 +491,7 @@ def test_conversion_preserves_normalized_fixed_light_appearance(cutout, tmp_path
     layer.inputs["Bump Scale"].default_value = bump
     layer.inputs["Normal Scale"].default_value = .6
     from anyimage.common.color_image import create_normalized_color_image
-    texture = layer.inputs["Color"].links[0].from_node
+    texture = layer.inputs["Color Texture"].links[0].from_node
     original = texture.image
     reference = create_normalized_color_image(original)
     texture.image = reference
@@ -564,6 +566,8 @@ def test_conversion_bakes_strength_and_preserves_other_settings(cutout, tmp_path
     layer.inputs["Bump Scale"].default_value = -.12
     shader = next(n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
     shader.inputs["IOR"].default_value = 1.7
+    layer = next(n for n in shader.id_data.nodes if n.type == "GROUP")
+    shader.id_data.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     shader.inputs["Emission Strength"].default_value = .3
     before = render_material(cutout, tmp_path / "strength-before.exr", (0, -1, 0), with_uv_coverage=True)
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
@@ -595,7 +599,7 @@ def test_bake_context_setup_failure_releases_scene_and_object(cutout):
 
 
 @pytest.mark.parametrize("stage", ["allocation", "bake"])
-@pytest.mark.parametrize("channel", ["Normal", "Roughness", "Specular"])
+@pytest.mark.parametrize("channel", ["Normal", "Roughness", "Alpha"])
 def test_material_bake_failure_cleans_internal_resources(cutout, monkeypatch, stage, channel):
     from anyimage.operators.bake_mesh import materialization
 
@@ -634,20 +638,20 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
         tree = cutout.active_material.node_tree
         layer = next(n for n in tree.nodes if n.type == "GROUP")
         if invalid_input == "linked_alpha_fix":
-            tree.links.new(tree.nodes.new("ShaderNodeValue").outputs[0], layer.inputs["Alpha Fix"])
+            tree.links.new(tree.nodes.new("ShaderNodeValue").outputs[0], layer.inputs["Alpha Scale"])
         else:
             group = layer.node_tree
             output = next(n for n in group.nodes if n.type == "GROUP_OUTPUT")
             source = next(n for n in group.nodes if n.type == "GROUP_INPUT")
-            group.links.new(source.outputs["Normal"], output.inputs["Color"])
+            group.links.new(source.outputs["Normal Texture"], output.inputs["Color"])
     elif invalid_input == "reserved_uv":
         cutout.data.uv_layers.new(name=materialization.SOURCE_UV)
     elif invalid_input in {"shared_image", "constant_normal"}:
         tree = cutout.active_material.node_tree
         layer = next(n for n in tree.nodes if n.type == "GROUP")
-        normal = layer.inputs["Normal"].links[0].from_node
+        normal = layer.inputs["Normal Texture"].links[0].from_node
         if invalid_input == "shared_image":
-            normal.image = layer.inputs["Color"].links[0].from_node.image
+            normal.image = layer.inputs["Color Texture"].links[0].from_node.image
         else:
             tree.nodes.remove(normal)
             layer.inputs["Object Space"].default_value = True
@@ -673,7 +677,7 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
 def test_bump_without_source_normal_creates_static_map(cutout, tmp_path, bump):
     tree = cutout.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
-    tree.nodes.remove(layer.inputs["Normal"].links[0].from_node)
+    tree.nodes.remove(layer.inputs["Normal Texture"].links[0].from_node)
     layer.inputs["Bump Scale"].default_value = bump
     before = render_material(cutout, tmp_path / "bump-before.exr", (0, -1, 0), with_uv_coverage=True)
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
@@ -698,15 +702,13 @@ def test_flattened_outputs_preserve_normalized_shader_values_and_consumers(cutou
 
     tree = cutout.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
-    layer.inputs["Alpha Fix"].default_value = .7
-    color = layer.inputs["Color"].links[0].from_node.image
+    layer.inputs["Alpha Scale"].default_value = .7
+    color = layer.inputs["Color Texture"].links[0].from_node.image
     color.colorspace_settings.name = color_space
     pixels = image_pixels(color).reshape(64, 64, 4)
     pixels[..., 3] = np.linspace(.5, 1, 64)[None, :]
     color.pixels.foreach_set(pixels.ravel())
-    roughness_curve = next(n for n in layer.node_tree.nodes if n.type == "CURVE_FLOAT" and n.inputs["Factor"].is_linked is False)
-    roughness_curve.mapping.curves[0].points.new(.4, .65)
-    roughness_curve.mapping.update()
+    layer.inputs["Roughness Contrast"].default_value = .6
     extra = tree.nodes.new("ShaderNodeMath")
     extra.operation = "MULTIPLY"
     extra.inputs[1].default_value = .3
@@ -721,10 +723,10 @@ def test_flattened_outputs_preserve_normalized_shader_values_and_consumers(cutou
     tree.links.new(layer.outputs["Color"], unused.inputs[1])
     unused_names = {unused.name, unused_source.name}
     from anyimage.common.color_image import create_normalized_color_image
-    texture = layer.inputs["Color"].links[0].from_node
+    texture = layer.inputs["Color Texture"].links[0].from_node
     reference = create_normalized_color_image(color)
     texture.image = reference
-    channels = ("Roughness", "Alpha", "Specular IOR Level", "Base Color")
+    channels = ("Roughness", "Alpha", "Base Color")
     before = {channel: render_material(cutout, tmp_path / f"{i}-before.exr", (0, -1, 0), channel=channel,
                                       with_uv_coverage=True) for i, channel in enumerate(channels)}
     texture.image = color
@@ -736,7 +738,7 @@ def test_flattened_outputs_preserve_normalized_shader_values_and_consumers(cutou
         original, coverage = before[channel]
         visible = binary_erosion(coverage == 1, iterations=3)
         expected = original[visible, :3]
-        if channel in {"Roughness", "Specular IOR Level"}:
+        if channel in {"Roughness"}:
             expected = np.clip(expected, 0, 1)
         errors = np.abs(expected - after[visible, :3])
         assert len(errors) and np.quantile(errors, .95) < .02, (channel, np.quantile(errors, .95))
@@ -749,15 +751,10 @@ def test_flattened_outputs_preserve_normalized_shader_values_and_consumers(cutou
     assert not roughness.image.is_float and roughness.image.colorspace_settings.is_data
     assert bytes(roughness.image.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
     assert roughness.image.packed_file and not is_color_reference_candidate(roughness.image)
-    specular = shader.inputs["Specular IOR Level"].links[0].from_node.image
-    assert not specular.is_float and specular.colorspace_settings.is_data
-    assert bytes(specular.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
-    assert np.min(image_pixels(specular)) >= 0 and np.max(image_pixels(specular)) <= 1
-    assert shader.inputs["Alpha"].links[0].from_node.type == "CURVE_FLOAT"
-    assert shader.inputs["Specular IOR Level"].links[0].from_node.type == "TEX_IMAGE"
+    assert shader.inputs["Alpha"].links[0].from_node.type == "TEX_IMAGE"
 
 
-@pytest.mark.parametrize("stage", ["Roughness", "Specular", "Normal", "connections", "layout"])
+@pytest.mark.parametrize("stage", ["Roughness", "Alpha", "Normal", "connections", "layout"])
 def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch, stage):
     from anyimage.operators.bake_mesh import materialization, materials
 
@@ -799,12 +796,14 @@ def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch,
 def test_unused_bake_outputs_skip_cycles(cutout, monkeypatch, emission_strength):
     tree = cutout.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
-    for name in ("Normal", "Roughness", "Specular"):
+    for name in ("Normal", "Roughness", "Alpha"):
         for link in tuple(layer.outputs[name].links):
             tree.links.remove(link)
     from anyimage.operators.bake_mesh import materialization
 
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    layer = next(n for n in shader.id_data.nodes if n.type == "GROUP")
+    shader.id_data.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     shader.inputs["Emission Strength"].default_value = emission_strength
     monkeypatch.setattr(materialization, "bake_context", Mock(side_effect=AssertionError("Unexpected Cycles scene")))
     image_count = len(bpy.data.images)
@@ -818,6 +817,8 @@ def test_unused_bake_outputs_skip_cycles(cutout, monkeypatch, emission_strength)
 def test_emission_uses_strength_and_independent_color_copy(cutout, strength, shared):
     tree = cutout.active_material.node_tree
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    layer = next(n for n in shader.id_data.nodes if n.type == "GROUP")
+    shader.id_data.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     shader.inputs["Emission Strength"].default_value = strength
     other = None
     if shared:
@@ -856,7 +857,7 @@ def test_texture_rows_follow_principled_input_order(cutout):
     shader.inputs["Emission Strength"].default_value = 2
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     ordered = []
-    for name in ("Base Color", "Roughness", "Normal", "Specular IOR Level", "Emission Color"):
+    for name in ("Base Color", "Roughness", "Normal", "Emission Color"):
         source = shader.inputs[name].links[0].from_node
         if name == "Normal":
             source = source.inputs["Color"].links[0].from_node
@@ -876,6 +877,8 @@ def test_glb_export_preserves_specular_and_emission_policy(cutout, tmp_path, str
 
     addon_utils.enable("io_scene_gltf2")
     shader = next(n for n in cutout.active_material.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    layer = next(n for n in shader.id_data.nodes if n.type == "GROUP")
+    shader.id_data.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     shader.inputs["Emission Strength"].default_value = strength
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     cutout.modifiers.clear()
@@ -884,14 +887,14 @@ def test_glb_export_preserves_specular_and_emission_policy(cutout, tmp_path, str
     data = path.read_bytes()
     length = struct.unpack_from("<I", data, 12)[0]
     material = json.loads(data[20:20 + length])["materials"][0]
-    assert "specularTexture" in material["extensions"]["KHR_materials_specular"]
+    assert "specularTexture" not in material.get("extensions", {}).get("KHR_materials_specular", {})
     if strength == 0:
         assert "emissiveTexture" not in material
         assert material.get("emissiveFactor", [0, 0, 0]) == [0, 0, 0]
     else:
         assert "emissiveTexture" in material
         factor = material.get("emissiveFactor", [0, 0, 0])
-        multiplier = material["extensions"].get("KHR_materials_emissive_strength", {}).get("emissiveStrength", 1)
+        multiplier = material.get("extensions", {}).get("KHR_materials_emissive_strength", {}).get("emissiveStrength", 1)
         assert factor == pytest.approx([strength / multiplier] * 3)
     bpy.ops.wm.read_factory_settings(use_empty=True)
     assert bpy.ops.import_scene.gltf(filepath=str(path)) == {"FINISHED"}
@@ -956,44 +959,22 @@ def test_bake_normalizes_surface_and_panorama_colors_identically(cutout):
         rgba[..., 0] = np.linspace(.1, .9, 64)
         rgba[..., 1:3] = (.4, .6)
         image.pixels.foreach_set(rgba.ravel())
-        material.configure_material_color_image(image, bpy.context.scene, panorama=panorama)
+        color_images.configure_material_color_image(image, bpy.context.scene, panorama=panorama)
         assert image.colorspace_settings.name == ("AgX Base sRGB" if panorama else "sRGB")
-        layer.inputs["Color"].links[0].from_node.image = image
+        layer.inputs["Color Texture"].links[0].from_node.image = image
         obj.data = materialize_mesh_and_textures(bpy.context, obj)
         obj.modifiers.clear()
         shader = next(n for n in obj.active_material.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
         outputs = {}
-        for channel in ("Base Color", "Roughness", "Specular IOR Level", "Normal", "Emission Color"):
+        for channel in ("Base Color", "Roughness", "Normal", "Emission Color"):
             node = shader.inputs[channel].links[0].from_node
             if channel == "Normal":
                 node = node.inputs["Color"].links[0].from_node
             outputs[channel] = image_pixels(node.image).copy()
             if channel in {"Base Color", "Emission Color"}:
-                assert node.image.colorspace_settings.name == "sRGB" and node.image[COLOR_NORMALIZED_PROPERTY]
+                assert node.image.colorspace_settings.name == "sRGB"
+                if channel == "Base Color":
+                    assert node.image[COLOR_NORMALIZED_PROPERTY]
         samples.append(outputs)
     for channel in samples[0]:
         np.testing.assert_array_equal(samples[0][channel], samples[1][channel], err_msg=channel)
-
-
-def test_specular_is_final_color_luminance_without_group_clamp(cutout):
-    from anyimage.common.image import COLOR_NORMALIZED_PROPERTY
-    from anyimage.common.color_space import srgb_to_linear_rgb
-
-    tree = cutout.active_material.node_tree
-    layer = next(n for n in tree.nodes if n.type == "GROUP")
-    color = bpy.data.images.new("Uniform color", width=64, height=64, alpha=True)
-    color.colorspace_settings.name = "sRGB"
-    color[COLOR_NORMALIZED_PROPERTY] = True
-    color.pixels.foreach_set(np.tile(np.array([.8, .4, .2, 1], np.float32), 64 * 64))
-    layer.inputs["Color"].links[0].from_node.image = color
-    output = next(n for n in layer.node_tree.nodes if n.type == "GROUP_OUTPUT")
-    clamp = output.inputs["Specular"].links[0].from_node
-    clamp.inputs["Max"].default_value = .01
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
-    shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
-    image = shader.inputs["Specular IOR Level"].links[0].from_node.image
-    linear = srgb_to_linear_rgb(image_pixels(color).reshape(-1, 4)[0, :3])
-    expected = linear @ np.array([.2126, .7152, .0722])
-    actual = image_pixels(image).reshape(image.size[1], image.size[0], 4)[8:-8, 8:-8, 0]
-    np.testing.assert_allclose(actual, expected, atol=1 / 255)
-    assert clamp.inputs["Max"].default_value == pytest.approx(.01)

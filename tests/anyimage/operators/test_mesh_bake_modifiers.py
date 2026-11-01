@@ -19,15 +19,15 @@ def node_modifier(name):
 
 
 @pytest.mark.parametrize("groups,count", [
-    (["O Image Plane"], 1),
-    (["O Image Depth Plane"], 1),
-    (["O Image Relief Plane"], 1),
-    (["O Image Depth Panorama"], 1),
-    (["O Image Cutout"], 1),
-    (["O Image Depth Cutout"], 1),
-    (["O Image Depth Cutout", "O Image Cutout Symmetry"], 2),
-    (["O Image Cutout", "O Image Cutout Symmetry"], 1),
-    (["User nodes", "O Image Depth Cutout"], 0),
+    (["O Plane"], 1),
+    (["O Depth Plane"], 1),
+    (["O Depth Relief"], 1),
+    (["O Depth Panorama"], 1),
+    (["O Cutout"], 1),
+    (["O Depth Cutout"], 1),
+    (["O Depth Cutout", "O Cutout Symmetry"], 2),
+    (["O Cutout", "O Cutout Symmetry"], 1),
+    (["User nodes", "O Depth Cutout"], 0),
     ([], 0),
 ])
 def test_bake_menu_uses_image_prefix_with_arbitrary_modifiers(monkeypatch, groups, count):
@@ -54,6 +54,6 @@ def test_bake_menu_uses_image_prefix_with_arbitrary_modifiers(monkeypatch, group
 @pytest.mark.parametrize("index,setting", [(0, "show_viewport"), (0, "show_render"), (1, "show_viewport"), (1, "show_render")])
 def test_disabled_image_prefix_is_unavailable(index, setting):
     obj = ImageObject(o_image_object=True)
-    obj.modifiers = [node_modifier("O Image Depth Cutout"), node_modifier("O Image Cutout Symmetry")]
+    obj.modifiers = [node_modifier("O Depth Cutout"), node_modifier("O Cutout Symmetry")]
     setattr(obj.modifiers[index], setting, False)
     assert not BakeMesh.poll(SimpleNamespace(object=obj, mode="OBJECT"))

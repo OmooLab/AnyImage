@@ -51,7 +51,7 @@ class PreferencesTest(BlenderTestCase):
         ])
 
     def test_device_choices_follow_anyimage_platform_support(self):
-        properties = self.anyimage.ai_properties
+        properties = self.anyimage.ai_preferences
         for system, architecture, expected in (
             ("darwin", "arm64", ["cpu", "coreml"]),
             ("darwin", "aarch64", ["cpu", "coreml"]),
@@ -146,7 +146,7 @@ class PreferencesTest(BlenderTestCase):
         from dataclasses import replace
         from unittest.mock import Mock
 
-        properties = self.anyimage.ai_properties
+        properties = self.ai
         spec = replace(properties.shared_model_catalog.BEN2_MODEL, files=(("model.onnx", 4, "checksum"),))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -180,8 +180,8 @@ class PreferencesTest(BlenderTestCase):
         preferences.background_model = "BEN2_BASE"
         preferences.upscale_model = "HAT_GAN_X4_SHARPER"
         with (
-            patch.object(self.anyimage.ai_properties, "ai_status", return_value=status),
-            patch.object(self.anyimage.ai_properties, "model_catalog", return_value=catalog),
+            patch.object(self.ai, "ai_status", return_value=status),
+            patch.object(self.ai, "model_catalog", return_value=catalog),
             patch.object(self.anyimage.runtime, "state", return_value="IDLE"),
         ):
             preferences.draw(None)
@@ -189,10 +189,9 @@ class PreferencesTest(BlenderTestCase):
 
 
     def test_depth_plane_request_includes_the_global_ai_input_limit(self):
-        operator = self.convert_to_plane.GenerateDepthPlane()
+        operator = self.plane_geometry.GeneratePlaneGeometry()
         operator.plane_type = "DEPTH"
         operator.input_path = __file__
-        operator.analysis_input_path = __file__
         operator.source_object_name = "Source"
         operator.model = self.anyimage.ai_preferences.DEFAULT_GEOMETRY_MODEL_KEY
         operator.resolution_level = 5
@@ -201,10 +200,10 @@ class PreferencesTest(BlenderTestCase):
             scene=SimpleNamespace(anyimage_settings=SimpleNamespace())
         )
         with (
-            patch.object(self.convert_to_plane, "require_environment"),
-            patch.object(self.convert_to_plane, "require_model"),
-            patch.object(self.convert_to_plane, "require_input_path", return_value=Path("input.png")),
-            patch.object(self.convert_to_plane, "production_device", return_value="CPU"),
+            patch.object(self.plane_geometry, "require_environment"),
+            patch.object(self.plane_geometry, "require_model"),
+            patch.object(self.plane_geometry, "require_input_path", return_value=Path("input.png")),
+            patch.object(self.ai, "production_device", return_value="CPU"),
         ):
             parameters = operator.request(context)
 
@@ -230,6 +229,8 @@ class PreferencesTest(BlenderTestCase):
         )
         operator = self.upscale.UpscaleImage()
         with (
+            patch.object(self.upscale.ImageEditTarget, "capture",
+                         return_value=SimpleNamespace(image=source_image)),
             patch.object(
                 self.upscale,
                 "configured_upscale_model",
@@ -243,7 +244,7 @@ class PreferencesTest(BlenderTestCase):
             patch.object(
                 self.upscale,
                 "prepare_target_input",
-                return_value=(Path("input.png"), False),
+                return_value=Path("input.png"),
             ),
             patch.object(
                 self.runtime.JobOperator,

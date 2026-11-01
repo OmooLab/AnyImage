@@ -4,16 +4,17 @@ from ..preferences import ADDON_PACKAGE
 from ..ai_preferences import storage_root
 from ..runtime import JobOperator, runtime
 from ..server.model_catalog import DEFAULT_MODEL_KEYS, get_downloadable_model
-from ..ai_properties import (
-    model_download_size,
-    model_record,
-)
 from ..common.ai import require_environment
 from ..common.server_location import inspect_installation, server_root
 
 
 def format_download_size(size):
     return f"{size / 1_000_000:.0f} MB"
+
+
+def model_download_size(model_key):
+    model = get_downloadable_model(model_key)
+    return sum(size for _path, size, _checksum in model.files)
 
 
 class SetupAIServer(bpy.types.Operator):
@@ -145,6 +146,7 @@ class DownloadModel(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.download_model"
     bl_label = "Download Model"
     job_type = "download_model"
+    starting_message = "Starting model download"
 
     model: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
 
@@ -152,11 +154,7 @@ class DownloadModel(JobOperator, bpy.types.Operator):
         require_environment()
         if not bpy.app.online_access:
             raise RuntimeError("Online Access is disabled in Blender Preferences")
-        model = model_record(self.model)
-        label = model["label"] if model else self.model
-        self.starting_message = bpy.app.translations.pgettext_iface(
-            "Starting {model} download"
-        ).format(model=label)
+        get_downloadable_model(self.model)
         return {"model": self.model}
 
 

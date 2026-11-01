@@ -8,6 +8,9 @@ import bpy
 
 from .image import (
     image_content_state,
+    image_content_signature,
+    has_other_image_user,
+    owner_image,
     image_user_settings,
     is_animated_image,
     is_image_empty,
@@ -16,6 +19,18 @@ from .image import (
 )
 
 _image_targets = WeakValueDictionary()
+
+
+def require_conversion_source(operator):
+    """Validate the live object and image captured before conversion."""
+    try:
+        source = operator._source_object
+        if (is_image_empty(source) and source.data == operator._source_image
+                and image_content_signature(source.data) == operator._source_signature):
+            return source
+    except ReferenceError:
+        pass
+    raise RuntimeError("The conversion source image has changed")
 
 
 def active_texture_node(context):
@@ -83,37 +98,6 @@ def image_edit_owner(context):
     return object_color_texture(owner)
 
 
-def owner_image(owner):
-    """Return the Image assigned to an Empty, texture or image node input."""
-    if is_image_empty(owner):
-        return owner.data
-    if hasattr(owner, "image"):
-        return owner.image
-    inputs = getattr(owner, "inputs", None)
-    socket = inputs.get("Image") if inputs is not None else None
-    return getattr(socket, "default_value", None)
-
-
-def has_other_image_user(owner):
-    """Check actual Image references, excluding editor display and Fake User."""
-    tree = owner.id_data if hasattr(owner, "inputs") else None
-    image = owner_image(owner)
-    for user in bpy.data.user_map(subset={image})[image]:
-        if isinstance(user, bpy.types.Screen):
-            continue
-        if user == owner:
-            continue
-        if tree is not None and (user == tree or getattr(user, "node_tree", None) == tree):
-            if any(
-                other != owner and owner_image(other) == image
-                for other in tree.nodes
-            ):
-                return True
-        else:
-            return True
-    return False
-
-
 def replace_texture_image(node, result_image):
     """Commit one texture image transaction while preserving other users."""
     try:
@@ -155,6 +139,7 @@ class ImageEditTarget:
     object_owner: object = None
     material: object = None
     material_slot: int = -1
+    content_signature: tuple = None
 
     @classmethod
     def capture(cls, context):
@@ -182,15 +167,16 @@ class ImageEditTarget:
                 identity = uuid4().hex
                 owner["anyimage_identity"] = identity
         key = (object_owner or owner).as_pointer()
+        signature = image_content_signature(image)
         target = _image_targets.get(key)
         if target is None or (
             target.owner, target.image, target.material, target.node_identity, target.material_slot,
-        ) != (owner, image, material, identity, material_slot):
-            target = cls(owner, image, tree, identity, object_owner, material, material_slot)
+        ) != (owner, image, material, identity, material_slot) or target.content_signature != signature:
+            target = cls(owner, image, tree, identity, object_owner, material, material_slot, signature)
             _image_targets[key] = target
         return target
 
-    def validate(self):
+    def validate_binding(self):
         """Reject a removed owner or a changed image assignment."""
         try:
             if self.tree is None:
@@ -222,7 +208,13 @@ class ImageEditTarget:
             pass
         raise RuntimeError("The source image target is no longer available or has changed")
 
-    def commit(self, result_image, *, isolate_shared=False):
+    def validate(self):
+        """Reject source changes outside successful edits of this target."""
+        self.validate_binding()
+        if image_content_signature(self.image) != self.content_signature:
+            raise RuntimeError("The source image content or settings have changed")
+
+    def commit(self, result_image):
         """Commit an owned, fully prepared image through the target transaction."""
         try:
             self.validate()
@@ -230,12 +222,7 @@ class ImageEditTarget:
             bpy.data.images.remove(result_image)
             raise
         if self.tree is None:
-            if isolate_shared:
-                image = replace_empty_image(
-                    self.owner, result_image, isolate_image=has_other_image_user(self.owner),
-                )
-            else:
-                image = replace_empty_image(self.owner, result_image)
+            image = replace_empty_image(self.owner, result_image)
         elif self.object_owner is not None and material_has_other_object_user(
             self.material,
             self.object_owner,
@@ -248,14 +235,17 @@ class ImageEditTarget:
             image = replace_texture_image(self.owner, result_image)
         # Pending edits of the same owner follow only our successful replacements.
         self.image = image
+        self.content_signature = image_content_signature(image)
         return image
 
     def _commit_isolated_material(self, result_image):
         """Copy a shared material before committing this object's Color result."""
         slot = self.object_owner.material_slots[self.material_slot]
         source_material = self.material
-        copied_material = source_material.copy()
+        copied_material = None
+        owns_result = True
         try:
+            copied_material = source_material.copy()
             slot.material = copied_material
             copied_node = next(
                 (
@@ -267,12 +257,16 @@ class ImageEditTarget:
             )
             if copied_node is None or copied_node.image != self.image:
                 raise RuntimeError("Unable to isolate the object image material")
+            owns_result = False
             return replace_texture_image(copied_node, result_image)
         except Exception:
             slot.material = source_material
-            if copied_material.users == 0:
+            if copied_material is not None and copied_material.users == 0:
                 bpy.data.materials.remove(copied_material)
             raise
+        finally:
+            if owns_result:
+                bpy.data.images.remove(result_image)
 
 
 def material_has_other_object_user(material, target):

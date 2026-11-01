@@ -1,17 +1,17 @@
-from ..geometry.o_image_plane import OImagePlane
+from ..geometry.o_plane import OPlane
 from bpy.types import GeometryNodeTree
 from omoonodes import geometry as g, TreeBuilder
 from omoonodes.builder import CustomGeometryGroup
 
 
-class OImageReliefPlane(CustomGeometryGroup):
-    _name = "O Image Relief Plane"
+class ODepthRelief(CustomGeometryGroup):
+    _name = "O Depth Relief"
     _color_tag = "GEOMETRY"
     _tree_properties = {"description": "Build a fixed-base image relief.", "is_modifier": True}
 
     def _build_group(self, tree: TreeBuilder[GeometryNodeTree]) -> None:
         geometry = tree.inputs.geometry("Geometry", structure_type="SINGLE", force_non_field=True)
-        subdivide = tree.inputs.integer("Subdivide", 6, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=10, structure_type="SINGLE", force_non_field=True)
+        subdivide = tree.inputs.integer("Subdivide", 6, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=8, structure_type="SINGLE", force_non_field=True)
         thickness = tree.inputs.float("Thickness", 0.0, description="Set the thickness of the flat base beneath the relief.", min_value=0.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         depth_direction = tree.inputs.vector("Depth Direction", (0.0, 0.0, 1.0), description="Set the direction used to orient the reference depth plane.", structure_type="SINGLE", subtype="DIRECTION", force_non_field=True)
         depth_offset = tree.inputs.float("Depth Offset", 0.0, description="Correct the reference depth before direction and scale are applied.", min_value=-10.0, max_value=10.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
@@ -36,7 +36,7 @@ class OImageReliefPlane(CustomGeometryGroup):
         math_2 = reference_depth + depth_offset + (position.x * vector_1.x + position.z * vector_1.z) / vector_1.y
         math_3 = (g.SeparateXYZ(vector=image_texture.o.color).o.z * uniform_scale - math_2) * depth_scale * depth_mask.switch.float(1.0, (image_texture.o.alpha < mask_threshold).switch.float(1.0))
         (
-            OImagePlane(Geometry=geometry, Subdivide=subdivide, Thickness=thickness)
+            OPlane(Geometry=geometry, Subdivide=subdivide, Thickness=thickness)
             >> g.TransformGeometry(translation=g.CombineXYZ(y=thickness * 0.5), mode="Components")
             >> g.SetPosition(offset=g.CombineXYZ(y=math_3.min(0.0) * math_1 * switch))
             >> g.SetShadeSmooth.face()
@@ -44,7 +44,7 @@ class OImageReliefPlane(CustomGeometryGroup):
             >> geometry_1
         )
 
-ASSET = OImageReliefPlane
+ASSET = ODepthRelief
 
 ASSET_METADATA = {
     "description": "Build a fixed-base image relief.",

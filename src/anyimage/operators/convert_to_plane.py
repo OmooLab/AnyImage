@@ -1,9 +1,9 @@
 import bpy
 
-from ...common.image import is_image_empty
-from ...common.material import create_image_material
-from ...common.color_image import material_color_image, require_static_color_image
-from .image_plane import create_plane_object
+from ..common.image import is_image_empty
+from ..common.material import create_image_material
+from ..common.color_image import material_color_image, require_static_color_image
+from ..common.image_plane import create_plane_object
 
 
 class ConvertToPlane(bpy.types.Operator):
@@ -40,3 +40,6 @@ class ConvertToPlane(bpy.types.Operator):
                 return {"CANCELLED"}
             raise
         return {"FINISHED"}
+
+
+CLASSES = (ConvertToPlane,)

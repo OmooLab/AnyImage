@@ -16,6 +16,7 @@ from ..common.color_reference import get_color_reference, retain_color_reference
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
     create_image_edit_result,
+    owner_image,
     image_rgba,
     is_color_reference_candidate,
     is_static_image,
@@ -23,7 +24,6 @@ from ..common.image import (
 from ..common.image_target import (
     ImageEditTarget,
     image_edit_owner,
-    owner_image,
 )
 from ..common.viewport import drawing_in_region
 from ..common.image_preview import (
@@ -90,9 +90,7 @@ class MatchColorReference(bpy.types.Operator):
             self._reference_resource_key = retain_color_reference(reference)
             self._reference = prepared
             self._reference_image = reference
-            self._target_settings = (
-                self._target.image.colorspace_settings.name, self._target.image.alpha_mode,
-            )
+            self._preview_signature = self._target.content_signature
             self._target_rgba = image_rgba(self._target.image)
             self._preview_match = build_color_match(
                 prepared.transfer,
@@ -181,12 +179,10 @@ class MatchColorReference(bpy.types.Operator):
             prepared = get_color_reference(reference, refresh=True)
             target_rgba = image_rgba(target.image)
             if target is getattr(self, "_target", None):
-                if (target.image.colorspace_settings.name, target.image.alpha_mode) != self._target_settings:
-                    raise RuntimeError("The target image settings changed during preview")
+                if target.content_signature != self._preview_signature:
+                    raise RuntimeError("The source image content or settings have changed")
                 if prepared is not self._reference:
                     raise RuntimeError("The color reference changed during preview")
-                if not np.array_equal(target_rgba, self._target_rgba):
-                    raise RuntimeError("The target pixels changed during preview")
             if color == 0.0 and lightness == 0.0:
                 return {"FINISHED"}
             matched = apply_color_match(
@@ -207,7 +203,7 @@ class MatchColorReference(bpy.types.Operator):
                 np.flipud(linear_rgba_to_image(target.image, matched)).ravel(),
                 tuple(target.image.size),
             )
-            target.commit(result, isolate_shared=True)
+            target.commit(result)
         except (ReferenceError, RuntimeError, TypeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
@@ -294,7 +290,7 @@ class MatchColorReference(bpy.types.Operator):
             self._space_type.draw_handler_remove(self._handle, "WINDOW")
             self._handle = None
         self._preview_texture = None
-        self._target_settings = None
+        self._preview_signature = None
         self._tag_redraw()
 
 

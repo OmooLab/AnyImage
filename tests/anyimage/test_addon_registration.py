@@ -95,20 +95,20 @@ class AddonRegistrationTest(BlenderTestCase):
 
         self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
         self.assertIn(GeneratePanorama, self.anyimage.CLASSES)
-        for operator in (ConvertToPanorama, GeneratePanorama, self.plane_local.ConvertToPlane,
-                         self.convert_to_plane.ConvertToDepthPlane, self.convert_to_plane.ConvertToReliefPlane,
-                         self.convert_to_plane.GenerateDepthPlane):
+        for operator in (ConvertToPanorama, GeneratePanorama, self.convert_to_plane.ConvertToPlane,
+                         self.convert_to_depth_plane.ConvertToDepthPlane, self.convert_to_relief.ConvertToReliefPlane,
+                         self.plane_geometry.GeneratePlaneGeometry):
             self.assertNotIn("mesh_detail", getattr(operator, "__annotations__", {}))
-        for generator in (GeneratePanorama, self.convert_to_plane.GenerateDepthPlane):
+        for generator in (GeneratePanorama, self.plane_geometry.GeneratePlaneGeometry):
             self.assertIn(generator, self.anyimage.CLASSES)
-            for name in ("source_object_name", "source_identity", "image_identity"):
+            for name in ("source_object_name",):
                 self.assertIn(name, generator.__annotations__)
                 self.assertIn("HIDDEN", generator.__annotations__[name]["options"])
         self.assertLess(self.anyimage.CLASSES.index(GeneratePanorama), self.anyimage.CLASSES.index(ConvertToPanorama))
-        operator = self.plane_local.ConvertToPlane
+        operator = self.convert_to_plane.ConvertToPlane
         self.assertIn(operator, self.anyimage.CLASSES)
-        self.assertIn(self.convert_to_plane.ConvertToDepthPlane, self.anyimage.CLASSES)
-        self.assertIn(self.convert_to_plane.ConvertToReliefPlane, self.anyimage.CLASSES)
+        self.assertIn(self.convert_to_depth_plane.ConvertToDepthPlane, self.anyimage.CLASSES)
+        self.assertIn(self.convert_to_relief.ConvertToReliefPlane, self.anyimage.CLASSES)
         self.assertIn(self.cutout_main.CutoutSelectionToShape, self.anyimage.CLASSES)
         self.assertEqual(operator.bl_idname, "anyimage.convert_to_plane")
         self.assertIn("REGISTER", operator.bl_options)
@@ -122,7 +122,7 @@ class AddonRegistrationTest(BlenderTestCase):
         image_plane = SimpleNamespace(
             type="MESH",
             modifiers=[
-                SimpleNamespace(node_group=SimpleNamespace(name="O Image Plane"))
+                SimpleNamespace(node_group=SimpleNamespace(name="O Plane"))
             ],
         )
         plain_mesh = SimpleNamespace(type="MESH", modifiers=[])

@@ -11,12 +11,13 @@ class AiInputFailuresTest(BlenderTestCase):
     def test_image_edits_reject_same_input_before_submission(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input.tiff"
-            path.touch()
             messages = []
             for module, operator_type in (
                 (self.upscale, self.upscale.UpscaleImage),
                 (self.remove_background, self.remove_background.RunBackgroundRemoval),
             ):
+                path.parent.mkdir(exist_ok=True)
+                path.touch()
                 operator = operator_type()
                 operator.report = Mock()
                 target = Mock(image=SimpleNamespace(size=(16, 16)))
@@ -24,7 +25,7 @@ class AiInputFailuresTest(BlenderTestCase):
                     anyimage_settings=SimpleNamespace()))
                 with ExitStack() as stack:
                     stack.enter_context(patch.object(module.ImageEditTarget, "capture", return_value=target))
-                    stack.enter_context(patch.object(module, "prepare_target_input", return_value=(path, False)))
+                    stack.enter_context(patch.object(module, "prepare_target_input", return_value=path))
                     stack.enter_context(patch.object(module, "require_environment"))
                     stack.enter_context(patch.object(module, "require_model"))
                     stack.enter_context(patch.object(self.runtime.runtime, "can_submit", return_value=True))
@@ -36,14 +37,14 @@ class AiInputFailuresTest(BlenderTestCase):
                     submit.assert_not_called()
                 messages.append(operator.report.call_args.args[1])
                 self.assertIsNone(operator._image_target)
-                self.assertTrue(path.exists())
+                self.assertFalse(path.exists())
             self.assertEqual(messages[0], messages[1])
             self.assertIn("Unsupported input format: .tiff", messages[0])
 
     def test_invoke_ai_setup_reports_nested_failure(self):
         owner = SimpleNamespace(report=Mock())
         with (
-            patch.object(self.ai, "ai_ready", return_value=False),
+            patch.object(self.ai, "ai_status", return_value={"ready": False, "environment_ready": False}),
             patch.object(self.ai.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(
                 setup_ai_server=Mock(side_effect=RuntimeError("Error: setup failed\n")))), create=True),
         ):
@@ -51,7 +52,7 @@ class AiInputFailuresTest(BlenderTestCase):
         owner.report.assert_called_once_with({"ERROR"}, "setup failed")
 
     def test_depth_and_relief_cleanup_on_nested_failure(self):
-        module = self.convert_to_plane
+        module = self.plane_geometry
         for plane_type in ("DEPTH", "RELIEF"):
             for failure in (RuntimeError("Error: invalid input\n"), None):
                 with tempfile.TemporaryDirectory() as directory:
@@ -68,7 +69,7 @@ class AiInputFailuresTest(BlenderTestCase):
                         patch.object(module, "material_analysis_input", return_value=path),
                         patch.object(module, "depth_plane_settings", return_value=("model", 5)),
                         patch.object(module, "configured_max_ai_input_size", return_value=2048),
-                        patch.object(module.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_depth_plane=generate)), create=True),
+                        patch.object(module.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_plane_geometry=generate)), create=True),
                     ):
-                        self.assertEqual(module.start_depth_plane_job(operator, context, plane_type), {"CANCELLED"})
+                        self.assertEqual(module.start_depth_conversion(operator, context, plane_type), {"CANCELLED"})
                     self.assertFalse(path.parent.exists())

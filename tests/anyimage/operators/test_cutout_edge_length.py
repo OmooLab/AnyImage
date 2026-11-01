@@ -8,7 +8,7 @@ from mathutils import Matrix
 
 from anyimage import properties
 from anyimage.operators.cutout_tool import geometry as g
-from anyimage.operators.cutout_tool import ai_operators as operators
+from anyimage.operators.cutout_tool import object as operators
 
 
 def source_plane(size=(100, 100), display_size=1, matrix=None):
@@ -123,9 +123,9 @@ def test_effective_length_report_and_geometry_build_share_value():
     context = SimpleNamespace(scene=SimpleNamespace(unit_settings=SimpleNamespace(system="METRIC", scale_length=0.01)))
     source = object()
     content = np.ones((10, 10))
-    from anyimage.operators.cutout_tool import construction
-    with patch.object(construction, "effective_cutout_edge_length", return_value=20), \
-         patch.object(construction, "build_base_shape") as build, \
+    from anyimage.operators.cutout_tool import geometry
+    with patch.object(geometry, "effective_cutout_edge_length", return_value=20), \
+         patch.object(geometry, "build_base_shape") as build, \
          patch.object(operators, "create_shape_object") as create, \
          patch.object(operators.bpy.ops.ed, "undo_push", return_value={"FINISHED"}):
         operators.create_cutout_shape(
@@ -143,6 +143,6 @@ def test_effective_length_report_and_geometry_build_share_value():
     assert create.call_args.args[0] is context
     assert create.call_args.args[1] is source
     assert create.call_args.args[2] == "FLAT"
-    assert create.call_args.args[3] is content
+    assert create.call_args.kwargs["content_values"] is content
     assert report.call_args.args[0] == {"INFO"}
     assert "20 cm" in report.call_args.args[1]

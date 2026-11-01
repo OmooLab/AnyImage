@@ -2,8 +2,16 @@
 
 import bpy
 
-from ...common.image import create_image_edit_result, image_empty_bounds, image_pixels, is_image_empty, replace_empty_image, is_animated_image
+from ...common.image import (
+    create_image_edit_result,
+    image_empty_bounds,
+    image_pixels,
+    is_animated_image,
+    is_image_empty,
+    replace_empty_image,
+)
 from ...common.projective_image import premultiplied_rgba
+from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ...preferences import configured_max_frame_resolution
 from ...common.viewport import (
     active_image_edit_source,
@@ -33,7 +41,9 @@ def _frame_source(source_object, region, view3d, view_matrix, *, active):
     import numpy as np
 
     image_size = tuple(source_object.data.size)
-    pixels = image_pixels(source_object.data)
+    pixels = image_rgba_to_linear(
+        source_object.data, image_pixels(source_object.data).reshape((-1, 4)),
+    ).ravel()
     width, height = image_size
     bounds = image_empty_bounds(source_object)
     source = frame_source_projection(
@@ -105,14 +115,14 @@ def apply_frame(context, source_objects, frame_quad):
         view3d,
         output_size,
     )
-    result_image = create_image_edit_result(active.data, pixels, output_size)
+    result_image = create_image_edit_result(
+        active.data,
+        linear_rgba_to_image(active.data, pixels.reshape((-1, 4))).ravel(),
+        output_size,
+    )
     old_matrix = active.matrix_world.copy()
     old_display_size = active.empty_display_size
     old_offset = tuple(active.empty_image_offset)
-    source_images = []
-    for source in source_objects:
-        if all(image is not source.data for image in source_images):
-            source_images.append(source.data)
     try:
         active.matrix_world = matrix
         active.empty_display_size = display_size
@@ -129,12 +139,6 @@ def apply_frame(context, source_objects, frame_quad):
     for source in source_objects:
         if source is not active:
             bpy.data.objects.remove(source, do_unlink=True)
-    for image in source_images:
-        try:
-            if image.users == 0 and not image.use_fake_user:
-                bpy.data.images.remove(image, do_unlink=True)
-        except (ReferenceError, RuntimeError):
-            pass
     return active
 
 

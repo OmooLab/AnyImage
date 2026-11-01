@@ -6,9 +6,8 @@ from tests.support.materials import image_layer
 
 
 @pytest.mark.parametrize("shadeless", [False, True])
-def test_material_alpha_fix_defaults_to_zero(image_layer, monkeypatch, shadeless):
+def test_material_alpha_scale_defaults_to_one(image_layer, shadeless):
     view = "AgX"
-    monkeypatch.setattr(material, "material_node_group", lambda depth_plane=False: image_layer)
     color = bpy.data.images.new("Alpha edge", width=2, height=2, alpha=True)
     scene = SimpleNamespace(view_settings=SimpleNamespace(view_transform=view))
     result = material.create_image_material(color, color, shadeless=shadeless, scene=scene)
@@ -20,12 +19,12 @@ def test_material_alpha_fix_defaults_to_zero(image_layer, monkeypatch, shadeless
         assert len([node for node in result.node_tree.nodes if node.type == "GROUP"]) == 1
         return
     layer = next(node for node in result.node_tree.nodes if node.type == "GROUP" and node.node_tree == image_layer)
-    assert layer.inputs["Alpha Fix"].default_value == 0
+    assert layer.inputs["Alpha Scale"].default_value == 1
     alpha_link = layer.outputs["Alpha"].links[0]
     assert alpha_link.to_node.type == "BSDF_PRINCIPLED"
     assert alpha_link.to_socket.name == "Alpha"
-    layer.inputs["Alpha Fix"].default_value = 0.5
+    layer.inputs["Alpha Scale"].default_value = 0.5
     second = material.create_image_material(color, color, shadeless=shadeless, scene=scene)
     second_layer = next(node for node in second.node_tree.nodes if node.type == "GROUP" and node.node_tree == image_layer)
-    assert second_layer.inputs["Alpha Fix"].default_value == 0
-    assert layer.inputs["Alpha Fix"].default_value == 0.5
+    assert second_layer.inputs["Alpha Scale"].default_value == 1
+    assert layer.inputs["Alpha Scale"].default_value == 0.5

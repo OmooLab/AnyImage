@@ -25,7 +25,7 @@ class ServerPanelTest(BlenderTestCase):
                 self.assertIn("anyimage.stop_server", operators)
                 self.assertIn(("row", "Models Loaded", None), events.labels)
                 self.assertNotIn("anyimage.unload_models", operators)
-                self.assertIn(("row", "Generate Depth Map", "RADIOBUT_OFF"), events.labels)
+                self.assertIn(("row", "Depth & Normal Model", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Remove Background", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Upscale Image", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("anyimage.open_server_log", True), events.operators)
@@ -45,7 +45,7 @@ class ServerPanelTest(BlenderTestCase):
                     self.assertNotIn("anyimage.start_server", operators)
                     self.assertIn(("row", "Stopping", "TIME"), events.labels)
                 self.assertIn(("row", "Models Loaded", None), events.labels)
-                self.assertIn(("row", "Generate Depth Map", "RADIOBUT_OFF"), events.labels)
+                self.assertIn(("row", "Depth & Normal Model", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Remove Background", "RADIOBUT_OFF"), events.labels)
                 self.assertIn(("row", "Upscale Image", "RADIOBUT_OFF"), events.labels)
 

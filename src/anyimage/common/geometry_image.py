@@ -17,6 +17,12 @@ DEPTH_LIMIT_MEDIAN_FACTOR = 1.5
 FLAT_DEPTH_DIRECTION = (0.0, 1.0, 0.0)
 
 
+def depth_node_direction(direction):
+    """Map a canonical XZ depth-plane direction to the node socket axes."""
+    x, y, z = direction
+    return (-x, -z, y)
+
+
 def depth_data_name(source_object):
     return f"{image_base_name(source_object.data)}_depth.exr"
 

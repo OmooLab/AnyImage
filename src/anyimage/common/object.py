@@ -2,6 +2,8 @@
 
 import bpy
 
+from .image import is_image_empty, mark_image_empty_reference
+
 
 def blender_frame_rotation():
     """Map Image Empty local axes to the canonical Blender object frame."""
@@ -27,7 +29,7 @@ def modifier_input_identifier(node_group, name, *, subtype=None):
 
 
 def _modifier_input_slots(modifier):
-    """Return the runtime input collection, or None for the legacy API."""
+    """Return RNA inputs on Blender 5.x; Blender 4.5 uses ID properties."""
     properties = getattr(modifier, "properties", None)
     if properties is None:
         return None
@@ -69,6 +71,8 @@ def finalize_object_result(
     result_object.select_set(True)
     context.view_layer.objects.active = result_object
     if not keep_source:
+        if is_image_empty(source_object):
+            mark_image_empty_reference(source_object.data)
         bpy.data.objects.remove(source_object, do_unlink=True)
         result_object.name = source_name
     return result_object

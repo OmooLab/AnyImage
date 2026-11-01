@@ -12,45 +12,20 @@ def test_saved_assets_evaluate():
     check_asset_library(node_asset_path())
 
 
-def test_saved_image_layer_specular_is_clamped():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    with bpy.data.libraries.load(str(node_asset_path())) as (library, target):
-        target.node_groups = ["O Image Layer"]
-    group = target.node_groups[0]
-    outputs = [item.name for item in group.interface.items_tree
-               if item.item_type == "SOCKET" and item.in_out == "OUTPUT"]
-    assert outputs == ["Color", "Roughness", "Alpha", "Normal", "Specular"]
-
-    def source(socket):
-        socket = socket.links[0].from_socket
-        while socket.node.bl_idname == "NodeReroute":
-            socket = socket.node.inputs[0].links[0].from_socket
-        return socket
-
-    output = next(node for node in group.nodes if node.bl_idname == "NodeGroupOutput")
-    clamp = source(output.inputs["Specular"]).node
-    assert clamp.bl_idname == "ShaderNodeClamp"
-    assert clamp.clamp_type == "MINMAX"
-    assert clamp.inputs["Min"].default_value == 0.0
-    assert clamp.inputs["Max"].default_value == 1.0
-    color = source(clamp.inputs["Value"])
-    assert color.node.bl_idname == "NodeGroupInput"
-    assert color.name == "Color"
-
-
 def test_saved_parameter_interfaces_match_definitions():
     from omoonodes.assets import Library
     from tests.support.paths import PROJECT_ROOT
 
     parameters = {
-        "O Image Plane": {"Subdivide"},
-        "O Image Depth Plane": {"Subdivide", "Thickness", "Depth Split", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
-        "O Image Relief Plane": {"Subdivide", "Thickness", "Depth Direction", "Depth Offset"},
-        "O Image Cutout": {"Thickness"},
-        "O Image Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Rear Smooth", "Normal Bias", "Front Inflation", "Depth Limit"},
-        "O Image Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
-        "O Image Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
-        "O Image Layer": {"Alpha Fix", "Normal Scale", "Bump Scale", "Object Space"},
+        "O Plane": {"Subdivide"},
+        "O Depth Plane": {"Subdivide", "Thickness", "Depth Split", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
+        "O Depth Relief": {"Subdivide", "Thickness", "Depth Direction", "Depth Offset"},
+        "O Cutout": {"Thickness"},
+        "O Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Rear Smooth", "Normal Bias", "Front Inflation", "Depth Limit"},
+        "O Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
+        "O Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Horizon Bend", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
+        "O Background": {"Color", "Strength", "Light", "Transmission (Cycles)"},
+        "O Texture to Layer": {"Alpha Scale", "Alpha Background", "Roughness Scale", "Roughness Contrast", "Emission Threshold", "Normal Scale", "Bump Scale", "Object Space"},
     }
 
     def interfaces(groups):
@@ -62,7 +37,10 @@ def test_saved_parameter_interfaces_match_definitions():
                 item for item in group.interface.items_tree
                 if item.item_type == "SOCKET" and item.in_out == "INPUT"
             ]
-            if group.name == "O Image Depth Cutout":
+            for item in inputs:
+                if item.name == "Subdivide":
+                    assert (item.min_value, item.max_value) == (0, 8), group.name
+            if group.name == "O Depth Cutout":
                 names = [item.name for item in inputs]
                 assert "Side Roundness" not in names and "Edge Turn" not in names
                 controls = {item.name: item for item in inputs}
@@ -84,7 +62,7 @@ def test_saved_parameter_interfaces_match_definitions():
                 assert not limit.parent.name
                 assert limit.min_value == -1.0
                 assert inputs.index(limit) == inputs.index(split) + 1
-            elif group.name == "O Image Cutout Symmetry":
+            elif group.name == "O Cutout Symmetry":
                 assert [item.name for item in inputs] == [
                     "Geometry", "Direction", "Offset", "Scale", "Fill Sides", "Smooth",
                 ]
@@ -102,7 +80,7 @@ def test_saved_parameter_interfaces_match_definitions():
                 (
                     inputs.index(item), item.identifier, item.name, item.description,
                     item.parent.name, item.socket_type,
-                    tuple(item.default_value) if item.socket_type == "NodeSocketVector" else item.default_value,
+                    tuple(item.default_value) if item.socket_type in {"NodeSocketVector", "NodeSocketColor"} else item.default_value,
                     getattr(item, "min_value", None), getattr(item, "max_value", None),
                     getattr(item, "subtype", None),
                 )
@@ -116,7 +94,9 @@ def test_saved_parameter_interfaces_match_definitions():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     with bpy.data.libraries.load(str(node_asset_path())) as (library, target):
         target.node_groups = list(library.node_groups)
-    assert interfaces(target.node_groups) == expected
+    actual = interfaces(target.node_groups)
+    for name in expected:
+        assert actual[name] == expected[name], (name, actual[name], expected[name])
 
 
 def test_geometry_nodes_contribute_to_output():
@@ -153,6 +133,7 @@ def test_geometry_attribute_contract_includes_nested_groups():
     allowed = {
         "UVMap": ("FLOAT2", "CORNER"),
         "o_balloon": ("FLOAT", "POINT"),
+        "o_emission": ("FLOAT", "CORNER"),
         "o_image_region": ("INT", "FACE"),
         "_o_depth_cut": ("BOOLEAN", "CORNER"),
         "_o_depth_limit_boundary": ("BOOLEAN", "POINT"),

@@ -44,7 +44,6 @@ def test_base_contents_and_dependencies(tmp_path):
         assert not any(name.startswith("server/") for name in archive.namelist())
         assert "runtime.py" not in archive.namelist()
         assert "common/job_image.py" not in archive.namelist()
-        assert "common/analysis_image.py" not in archive.namelist()
         assert not any(
             name == excluded or name.startswith(excluded + "/")
             for name in archive.namelist()
@@ -124,7 +123,7 @@ mesh = SimpleNamespace(vertices=np.array([[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-
 for shape in ('FLAT', 'SOLID'):
     result = shape_object.create_shape_object(bpy.context, source, shape, (0, 0, 4, 4), mesh, color_image=image)
     assert len(result.data.vertices) == 4
-    assert result.modifiers[0].node_group.name == 'O Image Cutout'
+    assert result.modifiers[0].node_group.name == 'O Cutout'
 bpy.context.view_layer.objects.active = result
 assert bpy.ops.anyimage.bake_mesh() == {'FINISHED'}
 bpy.context.view_layer.objects.active = source

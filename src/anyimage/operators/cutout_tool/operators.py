@@ -10,9 +10,8 @@ from ...common.image import image_rgba, require_image_empty, is_animated_image
 from ...common.color_image import material_color_image
 from ...common.selection import ImageEditWarning, SelectionPath, rasterize_selection_path
 from ...common.viewport import ImageGesture, deserialize_matrix, report_image_edit_exception
-from .construction import _cutout_content_values, build_cutout_shape, push_cutout_undo
-from .object import create_shape_object
-from .boundary_padding import pad_cutout_images
+from .geometry import cutout_content_values
+from .object import create_cutout_shape
 from .interaction import open_shape_pie
 from .preview import CutoutGridPreview, screen_to_grid_matrix
 
@@ -48,35 +47,19 @@ class CreateCutoutShape(bpy.types.Operator):
             context.view_layer.objects.active = source
             source.select_set(True)
             left, top, right, bottom = selection.bounds
-            values = _cutout_content_values(
+            values = cutout_content_values(
                 rgba[top:bottom, left:right, 3],
                 selection.values,
                 alpha_threshold=self.alpha_threshold,
             )
-            shape = build_cutout_shape(
-                context,
-                source,
-                self.edge_length,
-                values,
-                selection.bounds,
-                self.alpha_threshold,
-                self.fine_outline,
-                self.report,
-            )
             with material_color_image(source.data, bounds=selection.bounds, rgba=rgba) as color:
-                pad_cutout_images(
-                    color, None, None, shape.mask, 0.5, configured_cutout_boundary_padding(context)
+                create_cutout_shape(
+                    context, source, self.shape, self.edge_length, values, selection.bounds,
+                    alpha_threshold=self.alpha_threshold,
+                    fine_outline=self.fine_outline,
+                    boundary_padding=configured_cutout_boundary_padding(context),
+                    color_image=color, gesture=self.gesture, report=self.report,
                 )
-                create_shape_object(
-                    context,
-                    source,
-                    self.shape,
-                    selection.bounds,
-                    shape,
-                    color_image=color,
-                    gesture=self.gesture,
-                )
-            push_cutout_undo(self.shape)
         except (ImageEditWarning, OSError, RuntimeError, TypeError, ValueError) as error:
             report_image_edit_exception(self, error)
             return {"CANCELLED"}

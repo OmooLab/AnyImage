@@ -4,9 +4,9 @@ import bpy
 import numpy as np
 import pytest
 
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_plane import OImagePlane
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_plane import OImageDepthPlane
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_relief_plane import OImageReliefPlane
+from nodes.O_AnyImage.O_AnyImage.geometry.o_plane import OPlane
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_plane import ODepthPlane
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_relief import ODepthRelief
 
 
 @pytest.fixture
@@ -21,9 +21,9 @@ def relief():
 
 def create_surface(plane_type):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    builder = OImageDepthPlane.create_group if plane_type == "DEPTH" else OImageReliefPlane.create_group
+    builder = ODepthPlane.create_group if plane_type == "DEPTH" else ODepthRelief.create_group
     group = builder()
-    plane = OImagePlane.create_group()
+    plane = OPlane.create_group()
     mesh = bpy.data.meshes.new("Rectangle")
     mesh.from_pydata([(-2, 0, -1), (2, 0, -1), (2, 0, 1), (-2, 0, 1)], [], [(0, 1, 2, 3)])
     material = bpy.data.materials.new("Image")

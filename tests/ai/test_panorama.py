@@ -140,6 +140,32 @@ def test_full_resolution_fusion_preserves_detail_and_periodic_alignment():
     assert np.max(abs(merged[:, [0, -1]] / expected[:, [0, -1]] - 1)) < 0.01
 
 
+def test_refinement_handles_partial_sky_coverage_and_cancellation():
+    bases = geometry.camera_bases()
+    rays = geometry.view_rays(64)
+    masks, distances = [], []
+    for basis in bases:
+        directions = rays @ basis
+        directions /= np.linalg.norm(directions, axis=-1, keepdims=True)
+        masks.append(directions[..., 2] < .3)
+        distances.append(np.full((64, 64), 3.0))
+    merged, valid = geometry.merge_distances(distances, masks, bases, 1024, 512)
+    assert valid.any() and not valid.all()
+    assert np.isfinite(merged).all() and (merged > 0).all()
+    np.testing.assert_allclose(merged[valid], 3, rtol=1e-5)
+    checks = 0
+
+    def cancel():
+        nonlocal checks
+        checks += 1
+        if checks == 5:
+            raise RuntimeError("Cancelled refinement")
+
+    with pytest.raises(RuntimeError, match="Cancelled refinement"):
+        geometry.merge_distances(distances, masks, bases, 1024, 512, cancel_check=cancel)
+    assert checks == 5
+
+
 @pytest.mark.parametrize("kind", ["transparent", "invalid_model", "wrong_ratio", "cancel", "normal_merge"])
 def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind):
     source, context, parameters, calls, _ = panorama_job

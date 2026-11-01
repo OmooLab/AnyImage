@@ -3,8 +3,8 @@ from omoonodes import geometry as g, TreeBuilder
 from omoonodes.builder import CustomGeometryGroup
 
 
-class OImageCutout(CustomGeometryGroup):
-    _name = "O Image Cutout"
+class OCutout(CustomGeometryGroup):
+    _name = "O Cutout"
     _color_tag = "GEOMETRY"
     _tree_properties = {"is_modifier": True}
 
@@ -64,7 +64,7 @@ class OImageCutout(CustomGeometryGroup):
             >> geometry_1
         )
 
-ASSET = OImageCutout
+ASSET = OCutout
 
 ASSET_METADATA = {
     "catalog_id": "00000000-0000-0000-0000-000000000000",

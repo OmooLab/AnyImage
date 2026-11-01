@@ -38,6 +38,44 @@ def test_color_reference_candidate_rejects_animated_images():
     assert not is_color_reference_candidate(image)
 
 
+def test_converted_empty_reference_survives_save_and_reload(tmp_path):
+    from anyimage.common.object import finalize_object_result
+    from tests.support.color_reference import create_rgba_image, create_image_empty
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = create_rgba_image("Former Empty", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
+    source = create_image_empty("Source", image)
+    result = bpy.data.objects.new("Converted", bpy.data.meshes.new("Mesh"))
+    bpy.context.collection.objects.link(result)
+    material = bpy.data.materials.new("Converted material")
+    material.use_nodes = True
+    material.node_tree.nodes.new("ShaderNodeTexImage").image = image
+    result.data.materials.append(material)
+    finalize_object_result(bpy.context, source, result)
+    assert is_color_reference_candidate(image)
+    assert not image.use_fake_user
+    path = str(tmp_path / "reference.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=path)
+    bpy.ops.wm.open_mainfile(filepath=path)
+    assert is_color_reference_candidate(bpy.data.images["Former Empty"])
+
+
+@pytest.mark.parametrize("excluded", ["SEQUENCE", "MOVIE", "preview"])
+def test_former_empty_reference_still_excludes_animation_and_previews(excluded):
+    from anyimage.common.image import mark_image_empty_reference, TEMPORARY_IMAGE_PREVIEW_PROPERTY
+    from tests.support.color_reference import create_rgba_image
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = create_rgba_image("Former Empty", np.ones((2, 2, 4)))
+    mark_image_empty_reference(image)
+    assert is_color_reference_candidate(image)
+    if excluded == "preview":
+        image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
+    else:
+        image.source = excluded
+    assert not is_color_reference_candidate(image)
+
+
 def test_reference_cache_refreshes_consecutive_pixel_edits(registered_color_reference):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     rgba = np.full((4, 4, 4), (0.7, 0.2, 0.1, 1.0), dtype=np.float32)

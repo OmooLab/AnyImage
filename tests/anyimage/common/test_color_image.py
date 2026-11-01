@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import bpy
 import numpy as np
 import pytest
-from anyimage.common.analysis_image import material_analysis_input
 from PIL import Image
 
 from anyimage.common import color_image as colors, image as images, material
+from anyimage.common.job_image import material_analysis_input
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, mo
             assert color.colorspace_settings.name == "Linear Rec.709"
             assert color.alpha_mode == ("PREMUL" if alpha == "STRAIGHT" else alpha)
             layer = next(n for n in result.node_tree.nodes if n.type == "GROUP")
-            assert layer.inputs["Alpha Fix"].default_value == 0
+            assert layer.inputs["Alpha Scale"].default_value == 1
         assert (source.filepath_raw, source.colorspace_settings.name, source.alpha_mode) == state
         np.testing.assert_array_equal(images.image_rgba(source), before)
     finally:
@@ -95,11 +95,11 @@ def test_failed_color_preparation_releases_owned_resources(source, tmp_path, mon
     def fail(*_, **__):
         raise RuntimeError("Color failure")
     if stage == "export":
-        monkeypatch.setattr(colors, "_save_byte_color", fail)
+        monkeypatch.setattr(colors, "save_color_png", fail)
     elif stage == "load":
         monkeypatch.setattr(colors, "load_material_color_image", fail)
     elif stage == "material":
-        monkeypatch.setattr(material, "material_node_group", fail)
+        monkeypatch.setattr(material, "load_node_group", fail)
     result = None
     try:
         with pytest.raises(RuntimeError, match="Color failure"):
@@ -115,7 +115,6 @@ def test_failed_color_preparation_releases_owned_resources(source, tmp_path, mon
 
 
 def test_ai_color_uses_submitted_crop_after_source_changes(source):
-    from anyimage.operators.cutout_tool.ai_operators import _generated_color_result
     bounds = (1, 0, 3, 2)
     expected = images.image_rgba(source)[:, 1:3].copy()
     with colors.material_color_image(source, bounds=bounds) as direct:
@@ -128,9 +127,10 @@ def test_ai_color_uses_submitted_crop_after_source_changes(source):
             with Image.open(analysis) as image:
                 assert image.size == (2, 2)
             source.pixels.foreach_set(np.zeros(32, np.float32))
-            result, alpha, result_bounds = _generated_color_result(path, bounds)
+            result = colors.load_material_color_image(path)
+            alpha = images.image_rgba(result)[..., 3]
             try:
-                assert result_bounds == bounds and tuple(result.size) == (2, 2)
+                assert tuple(result.size) == (2, 2)
                 np.testing.assert_array_equal(images.image_rgba(result), images.image_rgba(direct))
                 np.testing.assert_allclose(images.image_rgba(result), expected, atol=1/255)
                 np.testing.assert_allclose(alpha, expected[..., 3], atol=1/255)

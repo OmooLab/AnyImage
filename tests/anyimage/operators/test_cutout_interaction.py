@@ -142,7 +142,7 @@ def test_cutout_pie_passes_image_lasso_options_to_all_ai_shapes(monkeypatch):
         "DEPTH_SOLID",
     ]
     assert all(call[2].generate_normal for call in window_manager.pie.calls)
-    from anyimage.ai_translations import TRANSLATIONS
+    from anyimage import TRANSLATIONS
 
     catalog = TRANSLATIONS["zh_HANS"]
     assert [catalog[(call[1]["text_ctxt"], call[1]["text"])]

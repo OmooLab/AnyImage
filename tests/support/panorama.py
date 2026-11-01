@@ -3,12 +3,12 @@
 import bpy
 import numpy as np
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from nodes.O_AnyImage.O_AnyImage.geometry.o_image_depth_panorama import OImageDepthPanorama
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_panorama import ODepthPanorama
 
 
-def panorama(depth=3, alpha=1, subdivide=3):
+def panorama(depth=3, alpha=1, subdivide=2):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    group = OImageDepthPanorama.create_group()
+    group = ODepthPanorama.create_group()
     image = bpy.data.images.new("Radial Depth", width=128, height=64, float_buffer=True)
     image.colorspace_settings.name = "Non-Color"
     image.alpha_mode = "CHANNEL_PACKED"
@@ -29,6 +29,7 @@ def panorama(depth=3, alpha=1, subdivide=3):
     for name, value in (("Depth Image", image), ("Subdivide", subdivide)):
         set_value(name, value)
     set_value("Depth Mask", True)
+    set_value("Horizon Bend", 0)
     set_value("Boundary Smooth", 0)
     set_value("Depth Split", 0)
     return obj, set_value

@@ -28,7 +28,7 @@ class AiSetupTest(BlenderTestCase):
         status = {"environment_ready": True, "missing_models": ("BIREFNET_LITE",)}
         with (
             patch.object(self.ai_setup, "inspect_installation", return_value=status) as inspect,
-            patch.object(self.ai_setup, "model_record", side_effect=AssertionError("Preview must use static labels")),
+            patch.object(self.ai, "model_catalog", side_effect=AssertionError("Preview must use static labels")),
         ):
             operator.draw(None)
             operator.draw(None)
@@ -116,7 +116,7 @@ class AiSetupTest(BlenderTestCase):
 
 
     def test_ai_status_checks_environment_and_required_model_files(self):
-        properties = self.anyimage.ai_properties
+        properties = self.ai
         with (
             patch.object(self.anyimage.runtime, "state", return_value="IDLE"),
             patch.object(
@@ -136,7 +136,6 @@ class AiSetupTest(BlenderTestCase):
         self.assertTrue(status["environment_ready"])
         self.assertEqual(status["missing_models"], ("BIREFNET_LITE",))
         self.assertFalse(status["ready"])
-        self.assertEqual(properties.ai_setup_label(status), "Download Required Models")
 
         with (
             patch.object(self.anyimage.runtime, "state", return_value="UNAVAILABLE"),
@@ -151,9 +150,7 @@ class AiSetupTest(BlenderTestCase):
         ):
             status = properties.ai_status()
             self.assertFalse(status["ready"])
-            self.assertEqual(
-                properties.ai_setup_label(status), "Set Up AI Server"
-            )
+            self.assertFalse(status["environment_ready"])
 
 
     def test_setup_prepares_the_selected_location_without_changing_preferences(self):
@@ -206,7 +203,7 @@ class AiSetupTest(BlenderTestCase):
 
 
     def test_ui_reads_required_model_files_without_starting_server(self):
-        properties = importlib.import_module("anyimage.ai_properties")
+        properties = importlib.import_module("anyimage.common.ai")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             from dataclasses import replace
@@ -240,3 +237,31 @@ class AiSetupTest(BlenderTestCase):
                 self.assertEqual(properties.ai_status()["missing_models"], ())
                 path.write_bytes(b"")
                 self.assertIn(spec.key, properties.ai_status()["missing_models"])
+
+    def test_setup_dispatches_environment_or_required_models(self):
+        for environment_ready, expected in (
+            (False, "setup_ai_server"), (True, "download_required_models"),
+        ):
+            with self.subTest(environment_ready=environment_ready):
+                owner = SimpleNamespace(report=Mock())
+                setup = Mock(return_value={"FINISHED"})
+                download = Mock(return_value={"FINISHED"})
+                with (
+                    patch.object(self.ai, "ai_status", return_value={
+                        "ready": False, "environment_ready": environment_ready,
+                    }),
+                    patch.object(self.ai.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(
+                        setup_ai_server=setup, download_required_models=download,
+                    )), create=True),
+                ):
+                    self.assertEqual(self.ai.invoke_ai_setup_if_needed(owner), {"FINISHED"})
+                chosen, other = (download, setup) if environment_ready else (setup, download)
+                chosen.assert_called_once_with("INVOKE_DEFAULT")
+                other.assert_not_called()
+
+    def test_model_validation_reads_the_catalog_once(self):
+        with patch.object(self.ai, "model_catalog", return_value=(
+            {"key": "model", "label": "Model", "installed": True},
+        )) as catalog:
+            self.assertEqual(self.ai.require_model("model")["key"], "model")
+        catalog.assert_called_once_with()

@@ -1,4 +1,4 @@
-"""Composite projected image samples with independent RGB and Alpha coverage."""
+"""Composite linear image samples with independent RGB and Alpha coverage."""
 
 import math
 from ...common.projective_image import PROJECTIVE_CHUNK_ROWS, homography_from_points, sample_rgba, transform_homography
@@ -88,7 +88,7 @@ def _frame_boundary_pixels(sources, points, output_to_screen):
 
 
 def composite_frame_pixels(sources, frame_quad, output_size):
-    """Composite projected Image Empty sources into one Blender-order RGBA image."""
+    """Composite linear Image Empty samples into Blender-order linear RGBA."""
     import numpy as np
 
     output_width, output_height = (int(value) for value in output_size)

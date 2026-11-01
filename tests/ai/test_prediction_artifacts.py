@@ -40,13 +40,48 @@ def test_alpha_resize_retains_threshold_values(tmp_path):
     rgba[0, :, 3] = [25, 26, 242, 243]
     path = tmp_path / "alpha.png"
     Image.fromarray(rgba).save(path)
-    alpha = artifacts._image_alpha(path, (2, 8))
+    context = SimpleNamespace(
+        directory=tmp_path,
+        resource=lambda _: None,
+        progress=lambda *_: None,
+        check_cancelled=lambda: None,
+    )
+    with (
+        patch.object(artifacts.moge, "infer", return_value=make_frame(np.ones((2, 8)))),
+        patch.object(artifacts, "write_depth_texture") as depth,
+        patch.object(artifacts, "write_depth_metadata"),
+    ):
+        artifacts.generate_moge_artifacts(context, {}, path, generate_depth=True)
+    alpha = depth.call_args.kwargs["alpha"]
     np.testing.assert_array_equal(
         alpha >= 0.1, [[False] * 2 + [True] * 6] * 2
     )
     np.testing.assert_array_equal(
         alpha >= 0.95, [[False] * 6 + [True] * 2] * 2
     )
+
+
+def test_source_is_closed_before_cancelled_inference(tmp_path):
+    path = tmp_path / "source.png"
+    Image.new("RGBA", (4, 4)).save(path)
+    context = SimpleNamespace(
+        directory=tmp_path,
+        resource=lambda _: None,
+        progress=lambda *_: None,
+        check_cancelled=lambda: None,
+    )
+    with Image.open(path) as source:
+        def cancel(*_args, **_kwargs):
+            assert source.fp is None
+            raise RuntimeError("cancelled")
+
+        with (
+            patch.object(artifacts, "open_image", return_value=source),
+            patch.object(artifacts.moge, "infer", side_effect=cancel),
+            pytest.raises(RuntimeError, match="cancelled"),
+        ):
+            artifacts.generate_moge_artifacts(context, {}, path, generate_depth=True)
+    assert list(tmp_path.iterdir()) == [path]
 
 
 @pytest.mark.parametrize(
@@ -82,7 +117,7 @@ def test_artifacts_write_raw_requested_depth_and_preserve_normals(
             artifacts, "write_depth_metadata", return_value=tmp_path / "depth.json"
         ) as metadata,
         patch.object(
-            artifacts, "_write_normal", return_value=tmp_path / "normal.png"
+            artifacts, "write_camera_normal_texture", return_value=tmp_path / "normal.png"
         ) as normal,
     ):
         artifacts.generate_moge_artifacts(
@@ -91,6 +126,9 @@ def test_artifacts_write_raw_requested_depth_and_preserve_normals(
     infer.assert_called_once()
     if normal_mode != "NONE":
         assert normal.call_args.args[0] is frame
+        np.testing.assert_array_equal(normal.call_args.args[1], alpha >= 0.1)
+        assert normal.call_args.args[3:5] == ((35, 25), (35, 25))
+        assert normal.call_args.kwargs["normal_mode"] == normal_mode
     else:
         normal.assert_not_called()
     if generate_depth:

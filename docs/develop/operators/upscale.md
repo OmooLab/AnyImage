@@ -1,11 +1,11 @@
 # 2倍高清
 
-`operators/upscale.py` 从 Image Empty 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于**处理分辨率上限**。
+`operators/upscale.py` 从 Image Empty、AnyImage 图片 Mesh 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于**处理分辨率上限**。
 
 ```mermaid
 flowchart TD
-    A[检查源图尺寸并冻结模型设置] --> B[准备图片输入]
-    B --> C[upscale-image 单张处理]
+    A[检查源图尺寸并冻结模型设置] --> B[准备当前像素的独立输入]
+    B --> C[upscale_image 单张处理]
     C --> D[分块执行 4× RGB 推理]
     D --> E[统一缩放为源图 2×]
     E --> F[原 Alpha 独立 Lanczos 缩放]

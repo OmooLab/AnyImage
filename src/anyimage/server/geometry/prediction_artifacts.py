@@ -10,41 +10,6 @@ from .depth_texture import (
 from .normal_texture import write_camera_normal_texture
 
 
-def _limited_model_input(source_path, output_path, max_input_size):
-    with open_image(source_path) as opened:
-        limited = limit_image(opened.convert("RGB"), max_input_size)
-        limited.save(output_path, format="PNG", compress_level=1)
-    return output_path
-
-
-def _image_alpha(image_path, shape):
-    import numpy as np
-    from PIL import Image
-
-    with open_image(image_path) as opened:
-        alpha = opened.convert("RGBA").getchannel("A")
-    alpha = alpha.resize(
-        (int(shape[1]), int(shape[0])),
-        Image.Resampling.NEAREST,
-    )
-    return np.asarray(alpha, dtype=np.float32) / 255.0
-
-
-def _write_normal(frame, color_path, output_path, normal_mode):
-    valid = _image_alpha(color_path, frame.depth.shape) >= 0.1
-    with open_image(color_path) as source:
-        output_size = source.size
-    return write_camera_normal_texture(
-        frame,
-        valid,
-        (0, 0),
-        output_size,
-        output_size,
-        output_path,
-        normal_mode=normal_mode,
-    )
-
-
 def generate_moge_artifacts(
     context,
     parameters,
@@ -54,44 +19,50 @@ def generate_moge_artifacts(
     normal_mode="NONE",
 ):
     """Run MoGe once and write only the requested file artifacts."""
+    import numpy as np
+    from PIL import Image
+
     normal_mode = str(normal_mode).upper()
     if normal_mode not in {"NONE", "TANGENT", "OBJECT"}:
         raise ValueError(f"Unsupported normal mode: {normal_mode}")
-    model_path = _limited_model_input(
-        input_path,
-        context.directory / "model-input.png",
-        parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE),
-    )
-    try:
-        frame = moge.infer(
-            context.resource("model_manager"),
-            parameters,
-            model_path,
-            include_points=generate_depth,
-            cancel_check=context.check_cancelled,
+    with open_image(input_path) as source:
+        model_image = limit_image(
+            source.convert("RGB"),
+            parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE),
         )
-        result = {}
-        if generate_depth:
-            context.progress(0.45, "Generating depth texture")
-            alpha = _image_alpha(input_path, frame.depth.shape)
-            result["depth"] = write_depth_texture(
-                frame, context.directory / "depth.exr", alpha=alpha,
-            )
-            result["depth_metadata"] = write_depth_metadata(
-                frame,
-                context.directory / "depth.json",
-            )
-
-        if normal_mode != "NONE":
-            context.progress(0.72, "Generating surface normal")
-            key = f"{normal_mode.lower()}_normal"
-            result[key] = _write_normal(
-                frame,
-                input_path,
-                context.directory / f"{normal_mode.lower()}-normal.png",
-                normal_mode,
-            )
-        return result
-    finally:
-        if model_path != input_path:
-            model_path.unlink(missing_ok=True)
+        source_alpha = source.convert("RGBA").getchannel("A")
+        output_size = source.size
+    frame = moge.infer(
+        context.resource("model_manager"),
+        parameters,
+        model_image,
+        include_points=generate_depth,
+        cancel_check=context.check_cancelled,
+    )
+    height, width = frame.depth.shape
+    alpha = np.asarray(
+        source_alpha.resize((width, height), Image.Resampling.NEAREST),
+        dtype=np.float32,
+    ) / 255.0
+    result = {}
+    if generate_depth:
+        context.progress(0.45, "Generating depth texture")
+        result["depth"] = write_depth_texture(
+            frame, context.directory / "depth.exr", alpha=alpha,
+        )
+        result["depth_metadata"] = write_depth_metadata(
+            frame, context.directory / "depth.json",
+        )
+    if normal_mode != "NONE":
+        context.progress(0.72, "Generating surface normal")
+        key = f"{normal_mode.lower()}_normal"
+        result[key] = write_camera_normal_texture(
+            frame,
+            alpha >= 0.1,
+            (0, 0),
+            output_size,
+            output_size,
+            context.directory / f"{normal_mode.lower()}-normal.png",
+            normal_mode=normal_mode,
+        )
+    return result

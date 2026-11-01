@@ -1,42 +1,34 @@
 # AI 环境管理
 
-AI 环境管理从当前安装状态出发，补齐独立运行环境和必需模型，并提供设置入口与模型缓存释放操作。
+`operators/ai_setup.py` 提供 AI 环境安装、模型下载、偏好设置和模型缓存释放入口。环境与服务器生命周期由 BlendJob 管理。
 
 ## 执行过程
 
 ```mermaid
 flowchart TD
-    Entry["设置 AI 服务器"] --> Status["读取环境与必需模型状态"]
-    Status --> Ready{"是否全部就绪？"}
-    Ready -- "是" --> Done["结束"]
-    Ready -- "否" --> Environment{"运行环境是否就绪？"}
-    Environment -- "否" --> Install["安装隔离 Python 环境"]
-    Environment -- "是" --> Download["下载缺失的必需模型"]
-    Install --> Download --> Done
+    Entry[选择 Server Location] --> Preview[检查目标环境与缺失模型]
+    Preview --> Setup[runtime.setup 准备或采用目标环境]
+    Setup --> Callback[post_setup 回调]
+    Callback --> Download[提交 download_required_models]
+    Download --> Ready[校验并补齐默认模型]
 ```
 
-`SetupAIServer` 是统一入口。首次使用时先安装运行环境，再下载默认模型；环境已经存在时，只补齐缺失模型。环境安装由 Blender Operator 启动，模型下载通过 Job Server 执行。
+`SetupAIServer` 在 Runtime 状态为 `UNAVAILABLE` 时可用。用户选择目标目录后，对话框预览环境是否已安装、缺失模型及下载量；Runtime 在执行时重新校验目录。
 
-## 节点说明
+## 安装独立环境
 
-### 读取状态，选择下一步
+`SetupAIServer.execute()` 调用 `runtime.setup(target=..., mirror=..., online=...)`。`use_mirror` 决定 uv、Python 和安装包的下载源，模型使用模型目录中声明的来源。
 
-入口位于 `src/anyimage/operators/ai_setup.py`。`SetupAIServer` 通过 `ai_properties.py` 中的 `ai_status()` 读取环境和模型状态，并根据结果结束、安装环境或调用 `DownloadRequiredModels`。对话框同时显示预计下载量和缺失模型名称。
+安装完成后，`runtime.py` 的 `prepare_models()` 作为 `post_setup` 回调，在主线程通过 `runtime.submit()` 提交默认模型下载任务。进度由 BlendJob 显示，模型依赖加载于独立 Server 环境。
 
-`runtime.py` 提供当前 Environment 与 Server 状态；Server 正忙时不会启动新的安装流程。`OpenAIEnvironmentSettings` 打开 AnyImage 的扩展首选项。
+## 下载模型
 
-### 安装独立环境
+`DownloadModel` 校验环境与 Blender Online Access，提交单个模型的 `download_model` Job；`DownloadRequiredModels` 校验环境，将默认模型集合及联网策略交给 `download_required_models` Job。Server 校验文件并下载缺失或损坏的模型。
 
-环境尚未就绪时，`SetupAIServer` 调用 Runtime 注册的安装 Operator。`use_mirror` 决定 uv、Python 和安装包的下载源，模型使用模型目录中声明的来源。
+Job 在 `server/__init__.py` 注册；`server/model_catalog.py` 保存模型名称、文件和来源，`server/model_download.py` 下载并校验文件，`server/model_manager.py` 管理模型目录与已加载 Session。下载进度和错误通过同一套 BlendJob Runtime 返回 Blender。
 
-安装完成后由 `post_setup()` 在主线程启动默认模型下载任务，进度显示在侧边栏任务列表。模型依赖加载于独立 Server 环境。
+## 设置与模型缓存
 
-### 下载模型
+`OpenAIEnvironmentSettings` 打开扩展首选项。`UnloadModels` 在 Server 空闲时调用 `runtime.clear_resource("model_manager")`，释放已加载的模型 Session；下次推理从模型目录重新加载。
 
-`ai_setup.py` 中的 `DownloadModel` 处理单个模型，`DownloadRequiredModels` 处理默认必需模型集合。两者先检查 Environment、Blender Online Access 和模型记录，再提交 `download-model` 或 `download-required-models` Job。
-
-Job 在 `server/app.py` 注册；`server/model_catalog.py` 保存模型名称、文件和来源，`server/model_download.py` 下载并校验文件，`server/model_manager.py` 管理模型目录与已加载 Session。下载进度和错误通过同一套 BlendJob Runtime 返回 Blender。
-
-### 释放模型缓存
-
-`ai_setup.py` 中的 `UnloadModels` 调用 `runtime.clear_resource("model_manager")`，释放 Server 中已加载的模型 Session。下次推理从模型目录重新加载 Session。
+环境未安装时，操作入口调用 `SetupAIServer`；环境可用而默认模型未齐时，调用 `DownloadRequiredModels`。三个默认模型全部就绪后开放 AI 功能。模型选择项由 `ai_preferences.py` 读取静态目录，安装与校验状态由 `common/ai.py` 查询。

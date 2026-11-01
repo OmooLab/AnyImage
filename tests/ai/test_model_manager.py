@@ -176,6 +176,16 @@ def test_required_downloads_skip_ready_models_and_aggregate_progress(tmp_path):
     context.progress.assert_called_once_with(0.5, "loading")
 
 
+def test_required_models_clear_stale_errors_after_files_are_repaired(tmp_path):
+    manager = ModelManager(tmp_path)
+    manager.validation_errors = {"BIREFNET_LITE": "Old failure", "BEN2_BASE": "Unrelated failure"}
+    context = SimpleNamespace(progress=Mock())
+    with patch.object(manager, "_download") as download:
+        assert manager.download_missing(context, ("BIREFNET_LITE",), online=False) == {"downloaded": []}
+    download.assert_not_called()
+    assert manager.snapshot()["validation_errors"] == {"BEN2_BASE": "Unrelated failure"}
+
+
 @pytest.mark.parametrize("ready", (True, False))
 def test_offline_preparation_only_accepts_verified_models(tmp_path, ready):
     manager = ModelManager(tmp_path)

@@ -4,7 +4,7 @@ import pytest
 from anyimage.common.node import load_node_group
 
 
-@pytest.mark.parametrize("group_name", ["O Shadeless", "O Image Depth Panorama"])
+@pytest.mark.parametrize("group_name", ["O Shadeless", "O Depth Panorama"])
 @pytest.mark.skipif(bpy.app.version >= (5, 0, 0), reason="Append behavior before Blender 5.0")
 def test_appended_groups_are_not_assets(group_name):
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -31,8 +31,8 @@ def test_appended_groups_are_not_assets(group_name):
 def test_loaded_groups_reuse_nested_dependencies():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     try:
-        plane = load_node_group("O Image Plane")
-        depth_plane = load_node_group("O Image Depth Plane")
+        plane = load_node_group("O Plane")
+        depth_plane = load_node_group("O Depth Plane")
 
         assert any(
             node.type == "GROUP" and node.node_tree == plane

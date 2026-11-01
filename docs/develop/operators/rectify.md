@@ -12,6 +12,6 @@ flowchart TD
     F --> G[映射 placement bounds 并替换 Packed Image]
 ```
 
-四角允许任意点击顺序，退化或非凸输入在提交前校验。预览根据源颜色空间配置显示，像素重采样复用 `common/image.py`。输出最长边上限 8192，总像素上限 16,777,216。
+四角允许任意点击顺序，退化或非凸输入在提交前校验。预览和输出通过 `common/color_space.py` 转到线性颜色，像素重采样复用 `common/projective_image.py`。预览保留原生对象、Image 引用和内容签名，确认时校验绑定、像素与颜色解释，支持对象重命名。输出最长边上限 8192，总像素上限 16,777,216。
 
 `replace_empty_image()` 根据校正区域的 placement bounds 调整画框，保留源 Image 名称、对象身份和共享引用语义。

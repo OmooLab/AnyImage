@@ -42,13 +42,13 @@ def view_context(*objects, mode="OBJECT", brush=None):
     )
 
 
-def paste(context, monkeypatch, data=None, import_as="REFERENCE"):
+def paste(context, monkeypatch, data=None):
     monkeypatch.setattr(operators, "read_clipboard_image", lambda: (
         clipboard_bytes() if data is None else data, ".png",
     ))
     reports = []
     operator = SimpleNamespace(
-        paste_target="", location_set=False, import_as=import_as, shadeless=False,
+        paste_target="", location_set=False,
         report=lambda level, message: reports.append((level, message)),
     )
     result = operators.PasteClipboardImage._paste(operator, context)
@@ -101,7 +101,7 @@ def test_last_image_user_preserves_identity_and_saved_content(monkeypatch, tmp_p
 
     result, operator, reports = paste(view_context(obj), monkeypatch)
 
-    assert result == {"FINISHED"} and operator.is_replacement
+    assert result == {"FINISHED"}
     assert reports[-1][1] == "Replaced and packed Original.png"
     assert image.as_pointer() == identity and image.name == "Original.png"
     assert obj.data == image and area.spaces.active.image == image
@@ -261,7 +261,7 @@ def test_mixed_multiselection_creates_without_replacing(kind, monkeypatch):
         count = len(context.space_data.edit_tree.nodes)
     assert actions.replacement_for_context(context) is None
     result, operator, _ = paste(context, monkeypatch)
-    assert result == {"FINISHED"} and not operator.is_replacement
+    assert result == {"FINISHED"}
     np.testing.assert_array_equal(images.image_pixels(image), before)
     assert (len(bpy.data.objects) if kind == "objects" else len(context.space_data.edit_tree.nodes)) == count + 1
 
@@ -279,15 +279,17 @@ def test_linked_geometry_input_and_empty_image_slots_are_not_targets():
     assert actions.replacement_for_context(view_context(image_empty())) is None
 
 
-def test_plane_creation_retains_original_clipboard_cache(monkeypatch):
-    result, operator, _ = paste(view_context(), monkeypatch, import_as="PLANE")
-    assert result == {"FINISHED"} and not operator.is_replacement
+def test_view_creation_only_adds_image_empty(monkeypatch):
+    before_meshes, before_materials = set(bpy.data.meshes), set(bpy.data.materials)
+    result, _, _ = paste(view_context(), monkeypatch)
+    assert result == {"FINISHED"}
     cached, reused = actions.acquire_packed_image(clipboard_bytes(), ".png")
-    assert reused and cached.users == 0
-    plane = bpy.context.view_layer.objects.active
-    material_image = next(node.image for node in plane.active_material.node_tree.nodes
-                          if node.bl_idname == "ShaderNodeTexImage")
-    assert material_image != cached
+    created = bpy.context.view_layer.objects.active
+    assert reused and cached.users == 1
+    assert created.type == "EMPTY" and created.empty_display_type == "IMAGE"
+    assert created.data == cached and cached.packed_file
+    assert set(bpy.data.meshes) == before_meshes
+    assert set(bpy.data.materials) == before_materials
 
 
 @pytest.mark.parametrize("source", ["SEQUENCE", "MOVIE", "TILED"])
@@ -351,7 +353,7 @@ def test_operator_reuses_target_as_input_without_removing_it(monkeypatch):
     before = set(bpy.data.images)
     pixels = images.image_pixels(image)
     result, operator, _ = paste(view_context(obj), monkeypatch)
-    assert result == {"FINISHED"} and operator.is_replacement
+    assert result == {"FINISHED"}
     assert obj.data == image and set(bpy.data.images) == before
     np.testing.assert_array_equal(images.image_pixels(image), pixels)
     assert actions.CLIPBOARD_HASH_PROPERTY not in image
@@ -379,7 +381,7 @@ def test_existing_brush_replaces_content_without_changing_settings(mode, monkeyp
     context = view_context(image_empty(), image_empty(), mode=mode, brush=brush)
     for _ in range(2):
         result, operator, _ = paste(context, monkeypatch)
-        assert result == {"FINISHED"} and operator.is_replacement
+        assert result == {"FINISHED"}
         assert brush.texture == brush.texture_slot.texture == texture and texture.image == image
         assert (tuple(brush.color), tuple(brush.stencil_dimension), brush.texture_slot.map_mode) == state
         assert image[images.COLOR_NORMALIZED_PROPERTY] and image.alpha_mode == "PREMUL"

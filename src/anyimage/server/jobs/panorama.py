@@ -56,11 +56,13 @@ def run(context, parameters):
             masks.append((prediction["mask"] > 0.5) & visible)
             normals.append(prediction["normal"])
             del prediction
+        del image, rays, directions
         context.progress(0.75, "Merging panorama depth maps")
         distance, valid = merge_distances(distances, masks, bases, width, height,
                                          cancel_check=context.check_cancelled)
         alpha = np.asarray(source.getchannel("A"),
                            dtype=np.float32) / 255.0
+        source.close()
         alpha *= valid
         valid_depth = (alpha >= 0.9) & np.isfinite(distance) & (distance > 0)
         if not valid_depth.any():
@@ -73,13 +75,19 @@ def run(context, parameters):
         outputs[1].write_text(json.dumps({
             "projection": "equirectangular", "image_size": [width, height],
         }, separators=(",", ":")), encoding="utf-8")
+        del rgba, distance, valid, valid_depth, alpha, distances
         context.progress(0.9, "Merging panorama normal maps")
         normal = merge_normals(normals, masks, bases, width, height,
                                cancel_check=context.check_cancelled)
-        # Panorama geometry mirrors projection X. O Image Layer rotates +90 degrees
+        # Panorama geometry mirrors projection X. O Texture to Layer rotates +90 degrees
         # around X, so encode its inverse: (x, y, z) -> (-x, z, -y).
-        normal = normal[..., [0, 2, 1]] * np.array((-1, 1, -1), dtype=np.float32)
-        encoded = np.round(np.clip(normal * 0.5 + 0.5, 0, 1) * 255).astype(np.uint8)
+        normal[..., :2] *= -1
+        normal *= .5
+        normal += .5
+        np.clip(normal, 0, 1, out=normal)
+        normal *= 255
+        np.rint(normal, out=normal)
+        encoded = normal.astype(np.uint8)[..., [0, 2, 1]]
         Image.fromarray(encoded).save(outputs[2])
         context.check_cancelled()
         context.progress(1.0, "Panorama conversion data is ready")

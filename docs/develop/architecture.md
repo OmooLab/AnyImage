@@ -2,11 +2,11 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| `__init__.py` | 注册类型、工具、菜单、快捷键与 Runtime |
-| `menu.py`、`panel.py` | Image Empty 与 Shader Image Texture 上下文菜单与 AI 服务器面板 |
-| `preferences.py` | 扩展设置及读取入口 |
-| `properties.py` | Scene 手势与参考状态、参考生命周期、模型安装查询、枚举与 Operator 属性构造 |
-| `tools.py` | 3D View WorkspaceTool 声明、顺序与注册 |
+| `__init_base__.py`、`__init__.py` | 基础版与完整版的类型、工具、菜单、快捷键注册，以及完整版 Runtime 生命周期 |
+| `menu.py`、`ai_menu.py`、`panel.py` | 图片上下文菜单、AI 操作入口与服务器面板 |
+| `preferences.py`、`ai_preferences.py` | 公共工具设置、AI 设置、设备与模型枚举及读取入口 |
+| `properties.py`、`ai_properties.py` | 基础与 AI Scene 属性、手势与参考状态、参考生命周期和 Operator 属性构造 |
+| `tools.py`、`ai_tools.py` | 3D View WorkspaceTool 声明、顺序与注册 |
 | `keymaps.py` | 扩展快捷键的注册与清理 |
 | `common/` | Blender 侧公共能力 |
 | `operators/` | 交互、任务参数、结果导入和 Undo |
@@ -14,7 +14,7 @@
 
 ## 注册与配置
 
-顶层入口注册类型后，通过 `tools.py` 统一注册 WorkspaceTool，通过 `keymaps.py` 统一注册快捷键。注销按相反生命周期关闭 Runtime、快捷键与工具，再移除菜单和 Scene 属性，按 `CLASSES` 逆序注销类型。设备、存储目录、模型、材质显示适配和功能上限统一通过 `preferences.py` 读取。
+顶层入口注册类型后，通过 `tools.py` 统一组织 WorkspaceTool，通过 `keymaps.py` 注册快捷键。注销时关闭 Runtime、清理参考资源、快捷键、菜单、Scene 属性和工具，最后按 `CLASSES` 逆序注销类型。公共设置与 AI 设置分别在 `preferences.py`、`ai_preferences.py` 定义，均通过 `addon_preferences()` 读取。基础文件只依赖基础能力，AI 文件在其上扩展；`__init_base__.py` 注册基础类型与翻译，`__init__.py` 组合基础和 AI 类型与翻译。两版各自维护注册和注销流程。
 
 **处理分辨率上限** 限制模型分析输入和**2倍高清**可提交源图的长边；**画框分辨率上限** 限制**重设画框**输出长边；**最小相对边长** 与 **边界扩展** 控制**立体裁切**的网格密度和轮廓边界采样。
 
@@ -40,4 +40,4 @@ MoGe-2 与 MoGe-3 输出统一为 `GeometryFrame`：包含 Depth、Validity、In
 
 AnyImage 创建的图片 Mesh 通过 `o_image_object` 提供对象图片操作。Bake 成功后固化网格并移除该标记，结果成为普通 Mesh；Undo 恢复原节点栈和能力。Shader Editor 的贴图节点继续按活动编辑树解析目标。
 
-模型 UI 通过本地文件存在性和大小查询安装状态，读取 Runtime 已有快照显示加载与校验失败。服务端在创建 Session 前校验文件内容，并以模型 key 发布状态；档位统一来自模型目录。流程见 [Runtime](runtime.md)。
+`common/ai.py` 统一读取模型安装状态和 Runtime 快照；模型枚举直接读取静态目录，同一次 UI 绘制复用一份状态。服务端在创建 Session 前校验文件内容，并以模型 key 发布状态；档位统一来自模型目录。流程见 [Runtime](runtime.md)。

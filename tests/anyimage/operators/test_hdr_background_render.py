@@ -20,7 +20,7 @@ def test_hdr_texture_rgb_remains_visible_independently_of_alpha(hdr_texture, tmp
     try:
         result = snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture)), path)
     finally:
-        cleanup_image_input(snapshot.path, True)
+        cleanup_image_input(snapshot.path)
 
     # A second removal must accept its own independent-channel result and keep RGB intact.
     snapshot = HdrBackgroundInput.prepare(result)
@@ -28,7 +28,7 @@ def test_hdr_texture_rgb_remains_visible_independently_of_alpha(hdr_texture, tmp
         snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture)), path)
         np.testing.assert_array_equal(image_rgba(result)[..., :3], np.tile([4, 2, 0.5], (3, 4, 1)))
     finally:
-        cleanup_image_input(snapshot.path, True)
+        cleanup_image_input(snapshot.path)
     result.reload()
 
     scene = bpy.context.scene

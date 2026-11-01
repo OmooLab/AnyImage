@@ -5,7 +5,7 @@ from anyimage.common.object import (
     set_modifier_input,
 )
 
-from anyimage.operators.convert_to_plane.image_plane import (
+from anyimage.common.image_plane import (
     add_image_plane_processing,
     create_image_plane_mesh,
 )
@@ -27,7 +27,7 @@ def test_saved_image_plane_evaluation():
     bpy.context.scene.collection.objects.link(obj)
     modifier = add_image_plane_processing(obj)
     group = modifier.node_group
-    assert group.name == "O Image Plane"
+    assert group.name == "O Plane"
     assert group.is_modifier
     inputs = {
         item.name: item
@@ -36,7 +36,7 @@ def test_saved_image_plane_evaluation():
     }
     assert list(inputs) == ["Geometry", "Subdivide", "Thickness"]
     assert inputs["Subdivide"].default_value == 0
-    assert inputs["Subdivide"].max_value == 10
+    assert inputs["Subdivide"].max_value == 8
     assert inputs["Thickness"].default_value == 0.0
     assert obj.data.materials[0] == material
 

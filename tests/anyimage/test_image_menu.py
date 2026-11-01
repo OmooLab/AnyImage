@@ -56,13 +56,10 @@ class ImageMenuTest(BlenderTestCase):
                 ("anyimage.upscale_image", True),
                 ("anyimage.match_color_reference", True),
                 ("separator", True),
-                ("anyimage.setup_ai_server", True),
+                ("anyimage.download_required_models", True),
             ],
         )
-        self.assertEqual(
-            labels["anyimage.setup_ai_server"],
-            "Download Required Models",
-        )
+        self.assertIsNone(labels["anyimage.download_required_models"])
 
         self.assertEqual(
             labels["anyimage.upscale_image"],
@@ -118,7 +115,7 @@ class ImageMenuTest(BlenderTestCase):
 
         menu = self.anyimage.AnyImageImageMenu()
         menu.layout = Layout()
-        with patch("anyimage.ai_properties.ai_status", return_value=status):
+        with patch("anyimage.common.ai.ai_status", return_value=status):
             menu.draw(
                 SimpleNamespace(
                     area=SimpleNamespace(type=area_type),
@@ -137,8 +134,8 @@ class ImageMenuTest(BlenderTestCase):
             object=SimpleNamespace(type="EMPTY", empty_display_type="IMAGE", data=SimpleNamespace()),
         )
         operators = (
-            self.convert_to_plane.ConvertToDepthPlane,
-            self.convert_to_plane.ConvertToReliefPlane,
+            self.convert_to_depth_plane.ConvertToDepthPlane,
+            self.convert_to_relief.ConvertToReliefPlane,
             self.remove_background.RemoveImageBackground,
         )
 

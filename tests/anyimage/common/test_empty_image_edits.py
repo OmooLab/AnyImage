@@ -1,5 +1,6 @@
 from anyimage.common.job_image import load_image_edit_result
 from unittest.mock import patch
+from types import SimpleNamespace
 import bpy
 import numpy as np
 import pytest
@@ -73,7 +74,7 @@ def test_shared_edit_preserves_other_empty(source, sharing):
         scene.collection.objects.link(other)
     other.empty_display_size = 7
     other.image_user.frame_start = 9
-    assert images.has_other_image_empty(source)
+    assert images.has_other_image_user(source)
     assert images.replace_empty_image(source, result) == result
     assert source.data == result
     assert result.name == "Source.png.001"
@@ -85,16 +86,34 @@ def test_shared_edit_preserves_other_empty(source, sharing):
     np.testing.assert_array_equal(images.image_rgba(original), rgba)
 
 
-@pytest.mark.parametrize("reference", ["none", "fake_user", "material", "collections"])
+@pytest.mark.parametrize("entry", ["replace", "job"])
+def test_empty_edit_isolates_material_references(source, tmp_path, entry):
+    from anyimage.common.image_target import ImageEditTarget
+    from anyimage.common.job_image import apply_image_result
+    from tests.support.image_texture import write_result
+
+    original = source.data
+    before = images.image_rgba(original).copy()
+    material = bpy.data.materials.new("Other image owner")
+    material.use_nodes = True
+    node = material.node_tree.nodes.new("ShaderNodeTexImage")
+    node.image = original
+    assert images.has_other_image_user(source)
+    if entry == "replace":
+        images.replace_empty_image(source, edit_result(source))
+    else:
+        target = ImageEditTarget.capture(SimpleNamespace(object=source, space_data=None))
+        apply_image_result(target, write_result(tmp_path))
+    assert source.data != original
+    assert node.image == original
+    np.testing.assert_array_equal(images.image_rgba(original), before)
+
+
+@pytest.mark.parametrize("reference", ["none", "fake_user", "collections"])
 def test_sole_edit_preserves_id_and_releases_result(source, reference, tmp_path):
     original = source.data
     pointer = original.as_pointer()
     original.use_fake_user = reference == "fake_user"
-    if reference == "material":
-        material = bpy.data.materials.new("Manual reference")
-        material.use_nodes = True
-        node = material.node_tree.nodes.new("ShaderNodeTexImage")
-        node.image = original
     if reference == "collections":
         collection = bpy.data.collections.new("Another collection")
         bpy.context.scene.collection.children.link(collection)
@@ -102,14 +121,12 @@ def test_sole_edit_preserves_id_and_releases_result(source, reference, tmp_path)
     count = len(bpy.data.images)
     result = edit_result(source)
     expected = images.image_rgba(result)
-    assert not images.has_other_image_empty(source)
+    assert not images.has_other_image_user(source)
     final = images.replace_empty_image(source, result)
     assert final.as_pointer() == pointer == source.data.as_pointer()
     assert final.name == "Source.png"
     assert final.use_fake_user == (reference == "fake_user")
     assert len(bpy.data.images) == count
-    if reference == "material":
-        assert node.image == final
     np.testing.assert_allclose(images.image_rgba(final), expected, atol=1 / 255)
     path = str(tmp_path / "edited.blend")
     bpy.ops.wm.save_as_mainfile(filepath=path)
@@ -125,9 +142,11 @@ def test_frame_sharing_uses_surviving_objects(source, outside):
     merged = create_empty("Merged", original)
     if outside:
         other = create_empty("Outside", original)
-    assert images.has_other_image_empty(source, removed_objects=(merged,)) == outside
+    assert images.has_other_image_user(source, removed_objects=(merged,)) == outside
     result = edit_result(source)
     final = images.replace_empty_image(source, result, removed_objects=(merged,))
+    assert original.get(images.IMAGE_EMPTY_REFERENCE_PROPERTY)
+    assert not original.use_fake_user
     bpy.data.objects.remove(merged, do_unlink=True)
     assert (final == original) == (not outside)
     if outside:

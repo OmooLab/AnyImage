@@ -1,14 +1,15 @@
-"""Create Image Plane objects used by conversion and clipboard paste."""
+"""Create rectangular image meshes and plane objects."""
 
 import bpy
 
-from ...common.object import blender_frame_rotation, modifier_input_identifier, set_modifier_input
-from ...common.node import load_node_group
-from ...common.image import image_empty_bounds
-from ...common.object import finalize_object_result
+from .object import (
+    blender_frame_rotation, finalize_object_result, modifier_input_identifier, set_modifier_input,
+)
+from .node import load_node_group
+from .image import image_empty_bounds
 
 
-IMAGE_PLANE_NODE_GROUP_NAME = "O Image Plane"
+IMAGE_PLANE_NODE_GROUP_NAME = "O Plane"
 
 
 def build_image_plane_matrix(matrix_world, bounds):
@@ -59,10 +60,9 @@ def add_image_plane_processing(
         type="NODES",
     )
     modifier.node_group = node_group
-    if hasattr(modifier, "show_group_selector"):
-        modifier.show_group_selector = False
+    modifier.show_group_selector = False
     for name, value in (
-        ("Subdivide", max(0, int(subdivisions))),
+        ("Subdivide", max(0, min(8, int(subdivisions)))),
         ("Thickness", max(0.0, float(thickness))),
     ):
         identifier = modifier_input_identifier(node_group, name)
@@ -70,58 +70,25 @@ def add_image_plane_processing(
     return modifier
 
 
-def create_image_plane_object(
-    context,
-    name,
-    bounds,
-    material,
-    matrix_world=None,
-    subdivisions=0,
-    thickness=0.0,
-):
-    mesh = create_image_plane_mesh(name, bounds)
+def create_plane_object(context, source_object, subdivisions, material):
+    """Create a rectangular image object and replace its source Empty."""
+    source_name = source_object.name
+    bounds = image_empty_bounds(source_object)
+    mesh = create_image_plane_mesh(source_name, bounds)
     plane = None
     try:
+        for polygon in mesh.polygons:
+            polygon.use_smooth = True
         mesh.materials.append(material)
-        plane = bpy.data.objects.new(name, mesh)
+        plane = bpy.data.objects.new(source_name, mesh)
         context.collection.objects.link(plane)
-        if matrix_world is None:
-            from mathutils import Matrix
-
-            matrix_world = Matrix.Identity(4)
-        plane.matrix_world = build_image_plane_matrix(matrix_world, bounds)
-        add_image_plane_processing(
-            plane,
-            subdivisions=subdivisions,
-            thickness=thickness,
-        )
+        plane.matrix_world = build_image_plane_matrix(source_object.matrix_world, bounds)
+        plane["o_image_object"] = True
+        add_image_plane_processing(plane, subdivisions=subdivisions)
+        return finalize_object_result(context, source_object, plane)
     except Exception:
         if plane is not None:
             bpy.data.objects.remove(plane, do_unlink=True)
-        if mesh.users == 0:
-            bpy.data.meshes.remove(mesh)
-        raise
-    return plane
-
-
-def create_plane_object(context, source_object, subdivisions, material):
-    source_name = source_object.name
-    plane = create_image_plane_object(
-        context,
-        source_name,
-        image_empty_bounds(source_object),
-        material,
-        matrix_world=source_object.matrix_world,
-        subdivisions=subdivisions,
-    )
-    try:
-        for polygon in plane.data.polygons:
-            polygon.use_smooth = True
-        plane["o_image_object"] = True
-        return finalize_object_result(context, source_object, plane)
-    except Exception:
-        mesh = plane.data
-        bpy.data.objects.remove(plane, do_unlink=True)
         if mesh.users == 0:
             bpy.data.meshes.remove(mesh)
         raise

@@ -135,11 +135,19 @@ class MaskToolTest(BlenderTestCase):
                     "serialize_matrix",
                     return_value="serialized",
                 ),
+                patch.object(
+                    self.rectify,
+                    "image_content_signature",
+                    return_value=("source pixels",),
+                ),
             ):
                 rectify = self.rectify.RectifyImagePerspective()
                 rectify.report = Mock()
                 self.assertEqual(rectify.invoke(context, event), {"RUNNING_MODAL"})
                 self.assertEqual(rectify._points, [(12.0, 18.0)])
+                self.assertIs(rectify._source_object, source)
+                self.assertIs(rectify._source_image, source.data)
+                self.assertEqual(rectify._source_signature, ("source pixels",))
         finally:
             if previous_space is None:
                 del self.fake_bpy.types.SpaceView3D

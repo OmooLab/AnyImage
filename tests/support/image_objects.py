@@ -5,7 +5,7 @@ import numpy as np
 from anyimage.common import image as image_data
 from anyimage.common.selection import SelectionMask
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import ai_object as cutout_object
+from anyimage.operators.cutout_tool import object as cutout_object
 from tests.support.color_image import color_image as prepared_color_image
 
 
@@ -59,9 +59,9 @@ def _create_cutout_shape(
         bpy.context,
         source,
         shape,
-        selection_mask.values,
         selection_mask.bounds,
         base_shape,
+        content_values=selection_mask.values,
         depth_image=depth_image,
         depth_metadata=depth_metadata,
         gesture=gesture,

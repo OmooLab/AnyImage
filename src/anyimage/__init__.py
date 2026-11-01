@@ -7,11 +7,9 @@ from .tools import tool_definitions
 from .ai_menu import AnyImageImageMenu, AnyImageObjectMenu, AnyImageTextureNodeMenu
 from .operators.ai_setup import CLASSES as AI_SETUP_CLASSES
 from .operators.convert_to_panorama import CLASSES as PANORAMA_CLASSES
-from .operators.convert_to_plane.operators import (
-    GenerateDepthPlane,
-    ConvertToDepthPlane,
-    ConvertToReliefPlane,
-)
+from .operators.convert_to_depth_plane import ConvertToDepthPlane
+from .operators.convert_to_relief import ConvertToReliefPlane
+from .operators.plane_geometry import GeneratePlaneGeometry
 from .operators.cutout_tool.ai_interaction import SelectCutoutSelection
 from .operators.cutout_tool.operators import SelectCutoutSelection as SharedSelection
 from .operators.cutout_tool.ai_operators import CutoutSelectionToShape
@@ -22,7 +20,9 @@ from .ai_preferences import AnyImagePreferences
 from .ai_properties import AnyImageSettings
 from .runtime import runtime
 from .ai_tools import CutoutTool
-from .ai_translations import TRANSLATIONS
+from .ai_translations import TRANSLATIONS as AI_TRANSLATIONS
+
+TRANSLATIONS = {"zh_HANS": {**base.TRANSLATIONS["zh_HANS"], **AI_TRANSLATIONS["zh_HANS"]}}
 
 _FULL_TYPES = {
     base.AnyImagePreferences: AnyImagePreferences,
@@ -34,7 +34,7 @@ _FULL_TYPES = {
 }
 CLASSES = (
     *(_FULL_TYPES.get(cls, cls) for cls in base.CLASSES),
-    GenerateDepthPlane,
+    GeneratePlaneGeometry,
     ConvertToDepthPlane,
     ConvertToReliefPlane,
     CutoutSelectionToShape,

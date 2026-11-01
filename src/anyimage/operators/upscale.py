@@ -3,7 +3,7 @@ import bpy
 
 from ..ai_preferences import configured_max_ai_input_size
 from ..ai_preferences import configured_upscale_model
-from ..ai_properties import upscale_model_label
+from ..server.model_catalog import UPSCALE_MODELS
 from ..server.media.resolution import (
     DEFAULT_MAX_AI_INPUT_SIZE,
     MAX_MAX_AI_INPUT_SIZE,
@@ -17,8 +17,8 @@ from ..common.ai import (
     require_environment,
     require_model,
 )
-from ..common.image import cleanup_image_input
-from ..common.image_target import ImageEditTarget, image_edit_owner, owner_image
+from ..common.image import cleanup_image_input, owner_image
+from ..common.image_target import ImageEditTarget, image_edit_owner
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
@@ -62,7 +62,6 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
         options=_HIDDEN,
     )
     input_path: bpy.props.StringProperty(options=_HIDDEN)
-    delete_input: bpy.props.BoolProperty(default=False, options=_HIDDEN)
 
     @classmethod
     def poll(cls, context):
@@ -102,13 +101,12 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
             )
             return {"CANCELLED"}
         try:
-            source_path, delete_input = prepare_target_input(self._image_target, context)
+            source_path = prepare_target_input(self._image_target)
         except (OSError, RuntimeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
 
         self.input_path = str(source_path)
-        self.delete_input = delete_input
         return super().execute(context)
 
     def request(self, context):
@@ -123,9 +121,9 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
 
     def response(self, _context, result):
         apply_image_result(self._image_target, result.file("upscale"))
-        model_label = upscale_model_label(self.model)
+        model_label = UPSCALE_MODELS[self.model].label
         return bpy.app.translations.pgettext_iface("Image is upscaled with {model}").format(model=model_label)
 
     def cleanup(self):
-        cleanup_image_input(self.input_path, self.delete_input)
+        cleanup_image_input(self.input_path)
         self._image_target = None

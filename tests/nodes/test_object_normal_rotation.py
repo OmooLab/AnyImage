@@ -55,7 +55,7 @@ def test_object_normals_follow_rotation_mirror_axis_and_wall_mask(image_layer, e
         layer.node_tree = image_layer
         layer.inputs['Object Space'].default_value = object_space
         layer.inputs['Normal Scale'].default_value = strength
-        layer.inputs['Normal'].default_value = (*((np.array(normal) + 1) / 2), 1)
+        layer.inputs['Normal Texture'].default_value = (*((np.array(normal) + 1) / 2), 1)
         encode = nodes.new('ShaderNodeVectorMath')
         encode.operation = 'MULTIPLY_ADD'
         encode.inputs[1].default_value = (.5, .5, .5)

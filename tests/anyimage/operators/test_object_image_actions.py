@@ -279,7 +279,7 @@ def test_object_menu_and_operator_polls_use_marked_object():
 
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
     with patch(
-        "anyimage.ai_properties.ai_status",
+        "anyimage.common.ai.ai_status",
         return_value={"environment_ready": True, "ready": True},
     ):
         menu.AnyImageObjectMenu.draw(SimpleNamespace(layout=layout), context)

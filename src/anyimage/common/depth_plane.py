@@ -1,9 +1,11 @@
-"""Create Blender Image, Material, Mesh, and Object data for Plane conversion."""
+"""Load geometry artifacts and create depth-based plane objects."""
 
 import bpy
 
-from ...common.image import image_empty_bounds, require_conversion_source
-from ...common.geometry_image import (
+from .image import image_empty_bounds
+from .image_target import require_conversion_source
+from .geometry_image import (
+    depth_node_direction,
     depth_uniform_scale,
     fit_image_depth_direction,
     load_depth_metadata,
@@ -11,15 +13,14 @@ from ...common.geometry_image import (
     load_normal_result_image,
     reference_depth,
 )
-from ...common.coordinate import canonical_direction_to_legacy
-from ...common.material import create_image_material
-from ...common.color_image import material_color_image
-from ...common.object import (
+from .material import create_image_material
+from .color_image import material_color_image
+from .object import (
     finalize_object_result,
     modifier_input_identifier,
     set_modifier_input,
 )
-from ...common.node import load_node_group
+from .node import load_node_group
 from .image_plane import (
     build_image_plane_matrix,
     create_image_plane_mesh,
@@ -36,8 +37,8 @@ def create_depth_plane_object(
     plane_type,
 ):
     node_group = load_node_group({
-        "DEPTH": "O Image Depth Plane",
-        "RELIEF": "O Image Relief Plane",
+        "DEPTH": "O Depth Plane",
+        "RELIEF": "O Depth Relief",
     }[plane_type])
     source_name = source_object.name
     bounds = image_empty_bounds(source_object)
@@ -62,13 +63,13 @@ def create_depth_plane_object(
             model_reference,
         )
         inputs = [
-            ("Subdivide", max(0, min(10, int(subdivisions)))),
+            ("Subdivide", max(0, min(8, int(subdivisions)))),
             ("Reference Depth", model_reference * uniform_scale),
             ("Uniform Scale", uniform_scale),
             ("Depth Image", depth_image),
         ]
         if plane_type == "RELIEF":
-            depth_direction = canonical_direction_to_legacy(
+            depth_direction = depth_node_direction(
                 fit_image_depth_direction(
                     depth_image,
                     bounds,
@@ -94,8 +95,8 @@ def create_depth_plane_object(
         raise
 
 
-def create_depth_plane_from_result(context, result, operator):
-    normal_space = {"DEPTH": "OBJECT", "RELIEF": "TANGENT"}[operator.plane_type]
+def create_depth_plane_from_result(context, result, operator, *, plane_type, undo_label):
+    normal_space = {"DEPTH": "OBJECT", "RELIEF": "TANGENT"}[plane_type]
     source_object = require_conversion_source(operator)
     material = None
     depth_image = None
@@ -116,7 +117,7 @@ def create_depth_plane_from_result(context, result, operator):
             )
             create_depth_plane_object(
                 context, source_object, 6, material,
-                depth_image, depth_metadata, operator.plane_type,
+                depth_image, depth_metadata, plane_type,
             )
     except Exception:
         if material is not None and material.users == 0:
@@ -125,6 +126,5 @@ def create_depth_plane_from_result(context, result, operator):
             if image is not None and image.users == 0:
                 bpy.data.images.remove(image, do_unlink=True)
         raise
-    label = "Convert to Relief" if operator.plane_type == "RELIEF" else "Convert to Depth Plane"
-    if "FINISHED" not in bpy.ops.ed.undo_push(message=label):
-        raise RuntimeError(f"Unable to create the {label} Undo step")
+    if "FINISHED" not in bpy.ops.ed.undo_push(message=undo_label):
+        raise RuntimeError(f"Unable to create the {undo_label} Undo step")

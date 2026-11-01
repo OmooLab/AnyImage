@@ -1,4 +1,3 @@
-from ...common.analysis_image import material_analysis_input
 """Convert one image Selection into a Cutout Shape."""
 
 import json
@@ -25,15 +24,17 @@ from ...server.media.resolution import (
     MAX_MAX_AI_INPUT_SIZE,
     MIN_MAX_AI_INPUT_SIZE,
 )
+from ...common.job_image import material_analysis_input
 from ...common.ai import (
     invoke_ai_setup_if_needed,
-    moge2_parameters,
+    geometry_job_parameters,
     production_device,
     require_environment,
     require_input_path,
     require_model,
 )
-from ...common.image import image_rgba, require_image_empty, is_animated_image
+from ...common.image import image_content_signature, image_rgba, require_image_empty, is_animated_image
+from ...common.image_target import require_conversion_source
 from ...common.geometry_image import (
     load_depth_metadata,
     load_depth_result_image,
@@ -52,88 +53,11 @@ from ...common.selection import (
     SelectionPath,
     rasterize_selection_path,
 )
-from .geometry import (
-    CUTOUT_ALPHA_THRESHOLD,
-)
-from .construction import _cutout_content_values, build_cutout_shape, push_cutout_undo
-from .ai_object import (
-    NormalMode,
-    create_shape_object,
-)
-from .ai_shape import CUTOUT_SHAPES, DEPTH_CUTOUT_SHAPES
-from .boundary_padding import pad_cutout_images
+from .geometry import cutout_content_values
+from .object import create_cutout_shape
+from .shape import CUTOUT_NODE_GROUP_NAMES, DEPTH_CUTOUT_SHAPES, normal_mode_for_shape
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
-
-
-def normal_mode_for_shape(shape, generate_normal):
-    if shape in DEPTH_CUTOUT_SHAPES:
-        return NormalMode.OBJECT
-    if not generate_normal:
-        return NormalMode.NONE
-    return NormalMode.TANGENT
-
-
-def shape_uses_depth(shape):
-    return shape in {"DEPTH_SOLID", "DEPTH_SYMMETRY"}
-
-
-def create_cutout_shape(
-    context,
-    source_object,
-    shape,
-    edge_length,
-    content_values,
-    content_bounds,
-    *,
-    alpha_threshold=CUTOUT_ALPHA_THRESHOLD,
-    fine_outline=False,
-    depth_image=None,
-    depth_metadata=None,
-    normal_image=None,
-    normal_mode=NormalMode.NONE,
-    boundary_padding=DEFAULT_CUTOUT_BOUNDARY_PADDING,
-    color_image,
-    gesture="LASSO",
-    report=None,
-):
-    base_shape = build_cutout_shape(context, source_object, edge_length, content_values, content_bounds, alpha_threshold, fine_outline, report)
-    pad_cutout_images(
-        color_image,
-        depth_image,
-        depth_metadata,
-        base_shape.mask,
-        0.5,
-        boundary_padding,
-    )
-    result = create_shape_object(
-        context,
-        source_object,
-        shape,
-        content_values,
-        content_bounds,
-        base_shape,
-        depth_image=depth_image,
-        depth_metadata=depth_metadata,
-        normal_image=normal_image,
-        normal_mode=normal_mode,
-        color_image=color_image,
-        gesture=gesture,
-    )
-    push_cutout_undo(shape)
-    return result
-
-
-def _generated_color_result(input_path, source_bounds):
-    image = load_material_color_image(input_path)
-    try:
-        rgba = image_rgba(image)
-        alpha = rgba[..., 3]
-    except Exception:
-        if image.users == 0:
-            bpy.data.images.remove(image, do_unlink=True)
-        raise
-    return image, alpha, source_bounds
 
 
 def cutout_geometry_settings(context):
@@ -186,6 +110,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         max=MAX_CUTOUT_BOUNDARY_PADDING,
         options=_HIDDEN,
     )
+
     def execute(self, context):
         try:
             source_object = require_image_empty(self.source_object_name)
@@ -193,7 +118,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             self._source_image = source_object.data
             if is_animated_image(source_object.data):
                 raise ValueError("Cutout currently supports still images")
-            if self.shape not in CUTOUT_SHAPES:
+            if self.shape not in CUTOUT_NODE_GROUP_NAMES:
                 raise ValueError(f"Unsupported Cutout shape: {self.shape}")
             selection_path = SelectionPath.from_json(self.selection_path_json)
             selection_mask = rasterize_selection_path(
@@ -202,6 +127,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 antialias=True,
             )
             source_rgba = image_rgba(source_object.data)
+            self._source_signature = image_content_signature(source_object.data, source_rgba[::-1])
             context.view_layer.objects.active = source_object
             source_object.select_set(True)
             self.max_ai_input_size = configured_max_ai_input_size(context)
@@ -236,24 +162,20 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     def request(self, context):
         require_environment()
         source_path = require_input_path(self.input_path)
-        generate_depth = shape_uses_depth(self.shape)
+        generate_depth = self.shape in DEPTH_CUTOUT_SHAPES
         normal_mode = normal_mode_for_shape(self.shape, self.generate_normal)
-        if generate_depth or normal_mode != NormalMode.NONE:
+        if generate_depth or normal_mode != "NONE":
             require_model(self.model)
         parameters = {
             "input": str(source_path),
             "device": production_device().lower(),
             "generate_depth": generate_depth,
-            "normal_mode": normal_mode.value,
+            "normal_mode": normal_mode,
             "max_input_size": int(self.max_ai_input_size),
         }
-        if generate_depth or normal_mode != NormalMode.NONE:
+        if generate_depth or normal_mode != "NONE":
             parameters.update(
-                model=self.model,
-                resolution_level=self.resolution_level,
-            )
-            parameters.update(
-                moge2_parameters(
+                geometry_job_parameters(
                     source_path,
                     self.model,
                     self.resolution_level,
@@ -262,36 +184,34 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         return parameters
 
     def response(self, context, result):
-        source_object = require_image_empty(self.source_object_name)
-        if source_object != self._source_object or source_object.data != self._source_image:
-            raise RuntimeError("The source image target is no longer available or has changed")
+        source_object = require_conversion_source(self)
         source_bounds = tuple(json.loads(self.selection_bounds_json))
-        color_image, source_alpha, color_bounds = _generated_color_result(
-            self.color_path,
-            source_bounds,
-        )
+        color_image = load_material_color_image(self.color_path)
         value = result.value if isinstance(result.value, dict) else {}
         normal_image = None
         depth_image = None
+        normal_missing = False
         try:
             selection_mask = getattr(self, "_selection_mask", None)
             if selection_mask is None:
                 raise RuntimeError("The Cutout Selection is no longer available")
-            content_values = _cutout_content_values(
-                source_alpha,
+            content_values = cutout_content_values(
+                image_rgba(color_image)[..., 3],
                 selection_mask.values,
                 alpha_threshold=self.alpha_threshold,
             )
-            content_bounds = color_bounds
             normal_mode = normal_mode_for_shape(self.shape, self.generate_normal)
-            normal_key = f"{normal_mode.value.lower()}_normal"
-            if normal_key in value:
-                normal_image = load_normal_result_image(
-                    result.file(normal_key),
-                    source_object,
-                )
+            normal_key = f"{normal_mode.lower()}_normal"
+            if normal_mode != "NONE":
+                try:
+                    if normal_key not in value:
+                        raise FileNotFoundError(normal_key)
+                    normal_path = result.file(normal_key)
+                    normal_image = load_normal_result_image(normal_path, source_object)
+                except (FileNotFoundError, RuntimeError):
+                    normal_missing = True
             depth_metadata = None
-            if shape_uses_depth(self.shape):
+            if self.shape in DEPTH_CUTOUT_SHAPES:
                 depth_metadata = load_depth_metadata(result.file("depth_metadata"))
                 depth_image = load_depth_result_image(
                     result.file("depth"),
@@ -304,7 +224,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 self.shape,
                 self.edge_length,
                 content_values,
-                content_bounds,
+                source_bounds,
                 depth_image=depth_image,
                 depth_metadata=depth_metadata,
                 normal_image=normal_image,
@@ -316,6 +236,8 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 gesture=self.gesture,
                 report=self.report,
             )
+            if normal_missing:
+                self.report({"WARNING"}, "The normal texture is missing; the shape was created without it")
         except Exception:
             if normal_image is not None and normal_image.users == 0:
                 bpy.data.images.remove(normal_image, do_unlink=True)
@@ -330,3 +252,4 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         cleanup_material_color_input(self.color_path)
         self._source_object = None
         self._source_image = None
+        self._source_signature = None

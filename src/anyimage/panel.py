@@ -26,7 +26,7 @@ class ServerPanel(bpy.types.Panel):
         slots = tuple(
             (cached.get(family), job)
             for family, job in (
-                ("geometry", "Generate Depth Map"),
+                ("geometry", "Depth & Normal Model"),
                 ("background", "Remove Background"),
                 ("upscale", "Upscale Image"),
             )

@@ -45,7 +45,7 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
         target_context = SimpleNamespace(object=owner, space_data=None) if owner_kind == "empty" else texture_context(owner)
         operator._image_target = ImageEditTarget.capture(target_context)
         operator._hdr_input = HdrBackgroundInput.prepare(current_image())
-        operator.input_path, operator.delete_input = str(operator._hdr_input.path), True
+        operator.input_path = str(operator._hdr_input.path)
         try:
             operator.response(context, SimpleNamespace(file=lambda key: alpha_path))
         finally:
@@ -126,4 +126,4 @@ def test_hdr_request_uses_alpha_output_and_current_still(hdr_texture):
         assert parameters["output_kind"] == "alpha"
         assert "start_frame" not in parameters and "video_frames" not in parameters
     finally:
-        cleanup_image_input(snapshot.path, True)
+        cleanup_image_input(snapshot.path)

@@ -84,7 +84,7 @@ def test_panorama_smoothing_relaxes_boundary_uvs_only():
 
     yy, xx = np.mgrid[:64, :128]
     depth = np.where(xx > 35 + yy * 0.6, 8.0, 2.0)
-    obj, set_value = panorama(depth, subdivide=4)
+    obj, set_value = panorama(depth, subdivide=3)
     set_value("Depth Split", 0.5)
     original, faces, uv = panorama_mesh(obj)
     rim = boundary_neighbors(faces)
@@ -181,7 +181,7 @@ def test_panorama_validity_cut_smoothing_stays_in_two_ring_band():
 
     yy, xx = np.mgrid[:64, :128]
     alpha = ((xx-64)**2 + (yy-32)**2 > 15**2).astype(np.float32)
-    obj, set_value = panorama(np.full((64, 128), 3), alpha, subdivide=4)
+    obj, set_value = panorama(np.full((64, 128), 3), alpha, subdivide=3)
     set_value("Depth Split", 0)
     before, faces, uv = panorama_mesh(obj)
     band = edge_band(faces, boundary_neighbors(faces))

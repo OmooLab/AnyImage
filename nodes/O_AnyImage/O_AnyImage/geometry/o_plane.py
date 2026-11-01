@@ -3,14 +3,14 @@ from omoonodes import geometry as g, TreeBuilder
 from omoonodes.builder import CustomGeometryGroup
 
 
-class OImagePlane(CustomGeometryGroup):
-    _name = "O Image Plane"
+class OPlane(CustomGeometryGroup):
+    _name = "O Plane"
     _color_tag = "GEOMETRY"
     _tree_properties = {"description": "Build an aspect-adaptive image plane and add optional centered thickness.", "is_modifier": True}
 
     def _build_group(self, tree: TreeBuilder[GeometryNodeTree]) -> None:
         geometry = tree.inputs.geometry("Geometry", structure_type="SINGLE", force_non_field=True)
-        subdivide = tree.inputs.integer("Subdivide", 0, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=10, structure_type="SINGLE", force_non_field=True)
+        subdivide = tree.inputs.integer("Subdivide", 0, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=8, structure_type="SINGLE", force_non_field=True)
         thickness = tree.inputs.float("Thickness", 0.0, min_value=0.0, max_value=10000.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         geometry_1 = tree.outputs.geometry("Geometry")
 
@@ -44,7 +44,7 @@ class OImagePlane(CustomGeometryGroup):
             >> geometry_1
         )
 
-ASSET = OImagePlane
+ASSET = OPlane
 
 ASSET_METADATA = {
     "description": "Build an aspect-adaptive image plane and add optional centered thickness.",

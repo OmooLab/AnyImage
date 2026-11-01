@@ -3,6 +3,53 @@ from anyimage.common import projective_image
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from tests.support.blender import BlenderTestCase
+import bpy
+import numpy as np
+import pytest
+
+
+@pytest.mark.parametrize("change", ["rename", "binding", "pixels", "colorspace", "alpha_mode"])
+def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
+    from anyimage.common.image import image_content_signature, image_pixels
+    from anyimage.operators.rectify_tool import operators
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = bpy.data.images.new("Rectify source", width=2, height=2, alpha=True)
+    image.colorspace_settings.name = "sRGB"
+    image.pixels.foreach_set(np.tile(np.array([0.2, 0.5, 0.8, 1.0], np.float32), 4))
+    source = bpy.data.objects.new("Rectify Empty", None)
+    source.empty_display_type = "IMAGE"
+    source.data = image
+    bpy.context.collection.objects.link(source)
+    pixels = image_pixels(image)
+    operator = SimpleNamespace(
+        _source_object=source, _source_image=image, _source_pixels=pixels,
+        _source_signature=image_content_signature(image, pixels),
+        source_object_name=source.name, quad_json="[[0,0],[2,0],[2,2],[0,2]]",
+        aspect_ratio=1.0, report=Mock(),
+    )
+    if change == "rename":
+        source.name = "Renamed during preview"
+    elif change == "binding":
+        source.data = bpy.data.images.new("Replacement", width=2, height=2, alpha=True)
+    elif change == "pixels":
+        image.pixels[0] = 0.9
+        image.update()
+    elif change == "colorspace":
+        image.colorspace_settings.name = "Non-Color"
+    else:
+        image.alpha_mode = "CHANNEL_PACKED"
+    current = source.data
+    before = image_pixels(current)
+    result = operators.RectifyImagePerspective.execute(operator, SimpleNamespace())
+    if change == "rename":
+        assert result == {"FINISHED"}
+        assert operator.source_object_name == "Renamed during preview"
+    else:
+        assert result == {"CANCELLED"}
+        assert source.data == current
+        np.testing.assert_array_equal(image_pixels(current), before)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
 class RectifyToolTest(BlenderTestCase):
@@ -13,7 +60,7 @@ class RectifyToolTest(BlenderTestCase):
         for floating, fails in ((False, False), (True, False), (True, True)):
             with self.subTest(floating=floating, fails=fails):
                 image = SimpleNamespace(is_float=floating, size=(4, 4))
-                owner = SimpleNamespace(data=image)
+                owner = SimpleNamespace(data=image, name="Source")
                 operator = self.rectify.RectifyImagePerspective()
                 operator.source_object_name = "Source"
                 operator.source_matrix_data = "matrix"
@@ -35,11 +82,12 @@ class RectifyToolTest(BlenderTestCase):
                 with (
                     patch.object(self.rectify, "active_view3d_tool_id", return_value=None),
                     patch.object(self.rectify, "drawing_in_region", return_value=True),
-                    patch.object(self.rectify, "require_image_empty", return_value=owner),
+                    patch.object(self.rectify, "require_conversion_source", return_value=owner),
                     patch.object(self.rectify, "deserialize_matrix"),
                     patch.object(self.rectify, "image_empty_bounds"),
                     patch.object(self.rectify, "screen_path_to_image_pixels", return_value=quad),
                     patch.object(self.rectify, "image_pixels", return_value=source_pixels),
+                    patch.object(self.rectify, "image_content_signature", return_value=None),
                     patch.object(self.rectify, "warp_projective_pixels", return_value=preview_pixels) as warp,
                     patch.object(self.rectify, "create_preview_texture", return_value=texture,
                                  side_effect=RuntimeError("GPU failed") if fails else None) as create,
@@ -67,7 +115,7 @@ class RectifyToolTest(BlenderTestCase):
                     is_float=floating, size=(2, 1), pixels=np.zeros(8),
                     colorspace_settings=SimpleNamespace(name="Custom OCIO"), alpha_mode="PREMUL",
                 )
-                owner = SimpleNamespace(data=image)
+                owner = SimpleNamespace(data=image, name="Source")
                 operator = self.rectify.RectifyImagePerspective()
                 operator.source_object_name = "Source"
                 operator.quad_json = "[[0,0],[2,0],[2,1],[0,1]]"
@@ -82,6 +130,7 @@ class RectifyToolTest(BlenderTestCase):
                 with (
                     patch.object(self.rectify, "require_image_empty", return_value=owner),
                     patch.object(self.rectify, "is_animated_image", return_value=False),
+                    patch.object(self.rectify, "image_content_signature", return_value=None),
                     patch.object(self.rectify, "validate_perspective_quad", return_value=((0, 0), (2, 0), (2, 1), (0, 1))),
                     patch.object(self.rectify, "perspective_quad_overlaps_image", return_value=True),
                     patch.object(self.rectify, "extract_perspective_pixels", side_effect=sample_center),

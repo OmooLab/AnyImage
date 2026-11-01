@@ -1,17 +1,17 @@
-from ..geometry.o_image_plane import OImagePlane
+from ..geometry.o_plane import OPlane
 from bpy.types import GeometryNodeTree
 from omoonodes import geometry as g, TreeBuilder
 from omoonodes.builder import CustomGeometryGroup
 
 
-class OImageDepthPlane(CustomGeometryGroup):
-    _name = "O Image Depth Plane"
+class ODepthPlane(CustomGeometryGroup):
+    _name = "O Depth Plane"
     _color_tag = "GEOMETRY"
     _tree_properties = {"description": "Build a camera-projected image shell.", "is_modifier": True}
 
     def _build_group(self, tree: TreeBuilder[GeometryNodeTree]) -> None:
         geometry = tree.inputs.geometry("Geometry", structure_type="SINGLE", force_non_field=True)
-        subdivide = tree.inputs.integer("Subdivide", 6, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=10, structure_type="SINGLE", force_non_field=True)
+        subdivide = tree.inputs.integer("Subdivide", 6, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=8, structure_type="SINGLE", force_non_field=True)
         thickness = tree.inputs.float("Thickness", 0.0, description="Add shell thickness inward from the depth surface. Zero keeps a single surface.", min_value=0.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         depth_scale = tree.inputs.float("Depth Scale", 1.0, min_value=0.0, max_value=2.0, structure_type="SINGLE", force_non_field=True)
         depth_split = tree.inputs.float("Depth Split", 0.1, description="Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
@@ -27,7 +27,7 @@ class OImageDepthPlane(CustomGeometryGroup):
 
         face_of_corner = g.FaceOfCorner(corner_index=g.CornersOfEdge().o.corner_index)
         face_of_corner_1 = g.FaceOfCorner(corner_index=g.CornersOfEdge(sort_index=1).o.corner_index)
-        o_image_plane = OImagePlane(Geometry=geometry, Subdivide=subdivide)
+        o_plane = OPlane(Geometry=geometry, Subdivide=subdivide)
         index = g.Index()
         boolean_math = g.Compare.integer.equal(g.EdgeNeighbors(), 1).o.result.edge.evaluate() | g.Compare.integer.equal(g.VertexNeighbors().o.vertex_count, 1)
         boolean_math_1 = g.Compare.integer.equal(g.EdgeNeighbors(), 1).o.result.edge.evaluate() | g.Compare.integer.equal(g.VertexNeighbors().o.vertex_count, 1)
@@ -56,7 +56,7 @@ class OImageDepthPlane(CustomGeometryGroup):
         evaluate_at_index_2 = g.EdgeNeighbors().o.face_count.edge.at(g.EdgesOfCorner(corner_index=offset_corner_in_face_2).o.next_edge_index)
         boolean_math_4 = g.Compare.integer.equal(evaluate_at_index, 1).o.result & g.Compare.integer.equal(evaluate_at_index_2, 1)
         boolean_math_5 = g.Compare.integer.equal(g.FaceNeighbors().o.vertex_count, 4).o.result & (compare.o.result & g.Compare.integer.equal(evaluate_at_index_1, 1) | boolean_math_4)
-        switch = depth_mask.switch.geometry(o_image_plane, g.DeleteGeometry.face(o_image_plane, image_texture.o.color.a < mask_threshold))
+        switch = depth_mask.switch.geometry(o_plane, g.DeleteGeometry.face(o_plane, image_texture.o.color.a < mask_threshold))
         boolean_math_6 = (depth_split > 0.0).switch.boolean(true=named_attribute_1.o.attribute) | boolean_math.point.evaluate()
         switch_1 = (~named_attribute_1.o.attribute).switch.float(evaluate_on_domain)
         math_1 = named_attribute.o.attribute.x.min(named_attribute.o.attribute.y).min((1.0 - named_attribute.o.attribute.x).min(1.0 - named_attribute.o.attribute.y))
@@ -131,7 +131,7 @@ class OImageDepthPlane(CustomGeometryGroup):
             >> geometry_1
         )
 
-ASSET = OImageDepthPlane
+ASSET = ODepthPlane
 
 ASSET_METADATA = {
     "description": "Build a camera-projected image shell.",

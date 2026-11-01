@@ -91,7 +91,7 @@ def test_panorama_blurs_opening_radially(region):
     hole = (distance**2 + (yy - 32)**2 < 9**2) if region == "seam" else (yy > 54)
     spike = ((distance < 4) & (yy > 40) & (yy < 44)) if region == "seam" else ((yy > 50) & (xx < 8))
     depth = np.where(spike, 10., 3.)
-    obj, set_value = panorama(depth, (~hole).astype(float), subdivide=5)
+    obj, set_value = panorama(depth, (~hole).astype(float), subdivide=4)
     before, faces, uv = panorama_mesh(obj)
     set_value("Boundary Smooth", 12)
     after, result_faces, result_uv = panorama_mesh(obj)

@@ -8,15 +8,19 @@ from anyimage.common.color_space import srgb_to_linear_rgb
 from tests.support.color_reference import create_rgba_image, create_clipboard_image, create_image_empty, registered_color_reference, isolate_reference_cache
 
 
-def test_scene_reference_defaults_replaces_and_clears(registered_color_reference):
+@pytest.mark.parametrize("fake_user", [False, True])
+def test_scene_reference_defaults_replaces_and_clears(registered_color_reference, fake_user):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     first = create_clipboard_image("First", np.full((2, 2, 4), (0.2, 0.3, 0.4, 1.0)))
     second = create_clipboard_image("Second", np.full((2, 2, 4), (0.6, 0.2, 0.1, 1.0)))
+    first.use_fake_user = second.use_fake_user = fake_user
+    assert first.users == second.users == int(fake_user)
 
     assert bpy.context.scene.anyimage_settings.color_reference is None
     bpy.context.scene.anyimage_settings.color_reference = first
     settings = bpy.context.scene.anyimage_settings
     assert settings.color_reference == first
+    assert first.users == 1 + int(fake_user)
     assert settings.color_reference_palette_count == 1
     np.testing.assert_allclose(
         settings.color_reference_palette_0,
@@ -28,9 +32,13 @@ def test_scene_reference_defaults_replaces_and_clears(registered_color_reference
         np.testing.assert_array_equal(getattr(settings, name), (0.0, 0.0, 0.0))
     bpy.context.scene.anyimage_settings.color_reference = second
     assert settings.color_reference == second
+    assert first.users == int(fake_user)
+    assert second.users == 1 + int(fake_user)
     bpy.context.scene.anyimage_settings.color_reference = None
     assert settings.color_reference is None
     assert settings.color_reference_palette_count == 0
+    assert second.users == int(fake_user)
+    assert first.use_fake_user == second.use_fake_user == fake_user
 
 
 def test_reference_edit_refreshes_detached_preview_and_palette_without_reselection(registered_color_reference):
@@ -73,10 +81,11 @@ def test_color_reference_gallery_selects_only_candidates(registered_color_refere
     assert properties.get_color_reference_choice(settings) == 0
 
 
-def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_reference):
+@pytest.mark.parametrize("fake_user", [False, True])
+def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_reference, fake_user):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Persistent reference", np.full((2, 2, 4), (0.4, 0.3, 0.2, 1.0)))
-    reference.use_fake_user = True
+    reference.use_fake_user = fake_user
     bpy.context.scene.anyimage_settings.color_reference = reference
     path = tmp_path / "color-reference.blend"
 
@@ -84,6 +93,7 @@ def test_scene_reference_survives_save_and_reopen(tmp_path, registered_color_ref
     bpy.ops.wm.open_mainfile(filepath=str(path))
 
     assert bpy.context.scene.anyimage_settings.color_reference == bpy.data.images["Persistent reference"]
+    assert bpy.data.images["Persistent reference"].use_fake_user == fake_user
 
 
 def test_reference_reload_and_lifecycle_invalidate_cache(tmp_path, registered_color_reference):

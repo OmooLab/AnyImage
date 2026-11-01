@@ -13,7 +13,7 @@ def test_depth_plane_face_sampling_keeps_full_image_uv():
     from tests.support.planes import create_surface
 
     _obj, _set_value, _plane, _inputs, _image = create_surface("DEPTH")
-    group = bpy.data.node_groups["O Image Depth Plane"]
+    group = bpy.data.node_groups["O Depth Plane"]
     face_samples = [
         node
         for node in group.nodes

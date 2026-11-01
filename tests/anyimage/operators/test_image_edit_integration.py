@@ -6,9 +6,25 @@ from mathutils import Matrix
 
 from anyimage.common import image as image_data
 from anyimage.common.selection import SelectionMask
+from anyimage.common.color_space import srgb_to_linear_rgb, linear_rgb_to_srgb
 from anyimage.operators import mask_tool as edit_mask
 from anyimage.operators.frame_tool import operators as edit_frame
-from anyimage.operators.frame_tool.compositing import composite_frame_pixels
+
+
+def apply_frame(monkeypatch, objects, frame, size):
+    """Use the actual color and image transaction with deterministic viewport geometry."""
+    context = SimpleNamespace(
+        active_object=objects[-1],
+        region=SimpleNamespace(width=size[0], height=size[1]),
+        region_data=SimpleNamespace(
+            perspective_matrix=Matrix.Identity(4), view_matrix=Matrix.Identity(4),
+            is_perspective=False,
+        ),
+    )
+    monkeypatch.setattr(edit_frame, "configured_max_frame_resolution", lambda _: max(size))
+    monkeypatch.setattr(edit_frame, "frame_output_size", lambda *_: size)
+    monkeypatch.setattr(edit_frame, "frame_result_transform", lambda *_: (Matrix.Identity(4), 2.0))
+    return edit_frame.apply_frame(context, objects, frame).data
 
 
 def test_image_edit_result_uses_complete_shared_source_name():
@@ -59,7 +75,7 @@ def test_image_edit_result_recovers_unshared_source_name():
     assert bpy.data.images.get("Poster.png") == result_image
 
 
-def test_mask_frame_mask_extend_preserves_packed_hidden_rgb():
+def test_mask_frame_mask_extend_preserves_packed_hidden_rgb(monkeypatch):
     from io import BytesIO
     from PIL import Image
 
@@ -81,18 +97,10 @@ def test_mask_frame_mask_extend_preserves_packed_hidden_rgb():
     assert edit_mask.EditImageAlpha._apply_mask(
         operator, SimpleNamespace(), source, selection
     ) == {"FINISHED"}
-    descriptor = edit_frame._frame_source(
-        source, SimpleNamespace(width=4, height=4),
-        SimpleNamespace(perspective_matrix=Matrix.Identity(4), is_perspective=False),
-        Matrix.Identity(4), active=True,
+    result = apply_frame(
+        monkeypatch, (source,), ((0, 4), (4, 4), (4, 0), (0, 0)), (4, 4),
     )
-    np.testing.assert_allclose(descriptor["rgba"][..., :3], expected[..., :3])
-    np.testing.assert_array_equal(descriptor["pixels"], 0)
-    framed = composite_frame_pixels(
-        (descriptor,), ((0, 4), (4, 4), (4, 0), (0, 0)), (4, 4)
-    )
-    result = image_data.create_image_edit_result(source.data, framed, (4, 4))
-    result = image_data.replace_empty_image(source, result)
+    assert not result.is_float and result.colorspace_settings.name == "sRGB"
     assert result.alpha_mode == "STRAIGHT"
     assert source.use_empty_image_alpha
     assert result.packed_file is not None
@@ -110,7 +118,7 @@ def test_mask_frame_mask_extend_preserves_packed_hidden_rgb():
     np.testing.assert_array_equal(restored[..., 3], 1)
 
 
-def test_frame_restored_alpha_keeps_foreground_blended_into_white():
+def test_frame_restored_alpha_keeps_foreground_blended_into_white(monkeypatch):
     from io import BytesIO
     from PIL import Image
 
@@ -132,29 +140,27 @@ def test_frame_restored_alpha_keeps_foreground_blended_into_white():
         source.data = image
         source.matrix_world = Matrix.Translation((0, 0, -depth))
         bpy.context.collection.objects.link(source)
-        sources.append(edit_frame._frame_source(
-            source, SimpleNamespace(width=6, height=2),
-            SimpleNamespace(perspective_matrix=Matrix.Identity(4), is_perspective=False),
-            Matrix.Identity(4), active=name == "Foreground",
-        ))
+        sources.append(source)
     front = sources[1]
-    source_alpha = front["rgba"][..., 3:4]
-    expected = front["rgba"][..., :3] * source_alpha + 1 - source_alpha
-    # The image aspect makes its orthographic screen projection two thirds of a pixel high.
-    pixels = composite_frame_pixels(
-        sources, ((0, 4 / 3), (6, 4 / 3), (6, 2 / 3), (0, 2 / 3)), (6, 2)
+    front_rgba = image_data.image_rgba(front.data)
+    source_alpha = front_rgba[..., 3:4]
+    expected = linear_rgb_to_srgb(
+        srgb_to_linear_rgb(front_rgba[..., :3]) * source_alpha + 1 - source_alpha,
     )
-    result = image_data.create_image_edit_result(front["object"].data, pixels, (6, 2))
-    result = image_data.replace_empty_image(front["object"], result)
+    # The image aspect makes its orthographic screen projection two thirds of a pixel high.
+    result = apply_frame(
+        monkeypatch, sources, ((0, 4 / 3), (6, 4 / 3), (6, 2 / 3), (0, 2 / 3)), (6, 2),
+    )
+    assert not result.is_float and result.colorspace_settings.name == "sRGB"
     encoded = np.asarray(Image.open(BytesIO(result.packed_file.data)).convert("RGBA")) / 255
     np.testing.assert_allclose(encoded[..., :3], expected, atol=1 / 255)
     np.testing.assert_allclose(encoded[..., 3:4], source_alpha, atol=1 / 255)
     selection = SelectionMask(np.ones((2, 6), dtype=np.float32), (0, 0, 6, 2))
     operator = SimpleNamespace(mode="EXTEND", report=lambda *_args: None)
     assert edit_mask.EditImageAlpha._apply_mask(
-        operator, SimpleNamespace(), front["object"], selection
+        operator, SimpleNamespace(), front, selection
     ) == {"FINISHED"}
-    restored = image_data.image_rgba(front["object"].data)
+    restored = image_data.image_rgba(front.data)
     np.testing.assert_allclose(restored[..., :3], expected, atol=1 / 255)
     np.testing.assert_array_equal(restored[..., 3], 1)
     assert np.all(np.diff(restored[0, :, 0]) <= 0)

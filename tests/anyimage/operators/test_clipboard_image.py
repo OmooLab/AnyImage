@@ -453,6 +453,114 @@ class ClipboardImageTest(BlenderTestCase):
         with self.assertRaises(self.clipboard.ClipboardImageError):
             self.clipboard.dib_to_bmp(b"\x28\x00\x00\x00")
 
+    def test_bitfields_preserve_pixels_with_external_or_embedded_masks(self):
+        for header_size in (40, 108, 124):
+            for compression, mask_size in ((3, 12), (6, 16)):
+                for bit_count in (16, 32):
+                    for height in (-2, 2):
+                        for duplicate in ((True,) if header_size == 40 else (False, True)):
+                            with self.subTest(
+                                header_size=header_size, compression=compression,
+                                bit_count=bit_count, height=height, duplicate=duplicate,
+                            ):
+                                header = build_dib_header(
+                                    header_size, width=3, height=height,
+                                    bit_count=bit_count, compression=compression,
+                                )
+                                stride = ((3 * bit_count + 31) // 32) * 4
+                                pixels = bytes(range(stride * abs(height)))
+                                masks = build_dib_header(bit_count=bit_count)[40:40 + mask_size]
+                                table = masks if header_size == 40 or duplicate else b""
+                                dib = header + table + pixels
+
+                                bmp = self.clipboard.dib_to_bmp(dib)
+
+                                offset = struct.unpack_from("<I", bmp, 10)[0]
+                                self.assertEqual(offset, 14 + header_size + len(table))
+                                self.assertEqual(bmp[offset:], pixels)
+
+    def test_preserves_pixels_that_match_embedded_masks(self):
+        for header_size in (108, 124):
+            for compression, mask_size in ((0, 12), (3, 12), (6, 16)):
+                with self.subTest(header_size=header_size, compression=compression):
+                    header = build_dib_header(header_size, compression=compression)
+                    pixels = header[40:40 + mask_size] + bytes(64 - mask_size)
+
+                    bmp = self.clipboard.dib_to_bmp(header + pixels)
+
+                    offset = struct.unpack_from("<I", bmp, 10)[0]
+                    self.assertEqual(offset, 14 + header_size)
+                    self.assertEqual(bmp[offset:], pixels)
+
+    def test_requires_matching_alpha_mask_before_skipping_table(self):
+        header = build_dib_header(compression=6)
+        pixels = header[40:52] + bytes(52)
+        dib = header + pixels + bytes(16)
+
+        bmp = self.clipboard.dib_to_bmp(dib)
+
+        self.assertEqual(struct.unpack_from("<I", bmp, 10)[0], 138)
+
+    def test_bitfields_account_for_color_table(self):
+        header = build_dib_header()
+        struct.pack_into("<I", header, 32, 2)
+        masks = header[40:52]
+        colors = bytes(8)
+        pixels = bytes(range(64))
+
+        bmp = self.clipboard.dib_to_bmp(header + masks + colors + pixels)
+
+        offset = struct.unpack_from("<I", bmp, 10)[0]
+        self.assertEqual(offset, 158)
+        self.assertEqual(bmp[offset:], pixels)
+
+    def test_v5_profile_is_excluded_from_pixel_data(self):
+        for profile_before in (False, True):
+            for duplicate in (False, True):
+                with self.subTest(profile_before=profile_before, duplicate=duplicate):
+                    header = build_dib_header()
+                    masks = header[40:52] if duplicate else b""
+                    # A normal pixel array may begin with the mask values.
+                    pixels = header[40:52] + bytes(52)
+                    profile = bytes(32)
+                    profile_offset = 124 + len(masks) + (0 if profile_before else 64)
+                    struct.pack_into("<I", header, 56, 0x4D424544)  # PROFILE_EMBEDDED
+                    struct.pack_into("<II", header, 112, profile_offset, len(profile))
+                    payload = profile + pixels if profile_before else pixels + profile
+
+                    bmp = self.clipboard.dib_to_bmp(header + masks + payload)
+
+                    offset = struct.unpack_from("<I", bmp, 10)[0]
+                    expected = 138 + len(masks) + (len(profile) if profile_before else 0)
+                    self.assertEqual(offset, expected)
+                    self.assertEqual(bmp[offset:offset + 64], pixels)
+
+    def test_rejects_incomplete_bitfields_pixels_and_masks(self):
+        for header_size in (40, 108, 124):
+            for compression, mask_size in ((3, 12), (6, 16)):
+                for payload_size in (0, mask_size - 1, 63):
+                    with self.subTest(
+                        header_size=header_size, compression=compression,
+                        payload_size=payload_size,
+                    ):
+                        header = build_dib_header(header_size, compression=compression)
+                        with self.assertRaises(self.clipboard.ClipboardImageError):
+                            self.clipboard.dib_to_bmp(header + bytes(payload_size))
+
+    def test_rejects_invalid_bitfields_dimensions_and_depth(self):
+        for options in ({"width": 0}, {"width": -1}, {"height": 0}, {"bit_count": 24}):
+            with self.subTest(options=options):
+                with self.assertRaises(self.clipboard.ClipboardImageError):
+                    self.clipboard.dib_to_bmp(build_dib_header(**options) + bytes(64))
+
+    def test_rejects_out_of_range_v5_profile(self):
+        for profile_offset, profile_size in ((120, 4), (188, 32)):
+            with self.subTest(profile_offset=profile_offset, profile_size=profile_size):
+                header = build_dib_header()
+                struct.pack_into("<II", header, 112, profile_offset, profile_size)
+                with self.assertRaises(self.clipboard.ClipboardImageError):
+                    self.clipboard.dib_to_bmp(header + bytes(64))
+
     @staticmethod
     def make_context(area_type, mode="OBJECT", **space_options):
         return SimpleNamespace(
@@ -461,6 +569,22 @@ class ClipboardImageTest(BlenderTestCase):
             region=SimpleNamespace(type="WINDOW"),
             space_data=SimpleNamespace(**space_options),
         )
+
+def build_dib_header(
+    header_size=124, *, width=8, height=2, bit_count=32, compression=3,
+):
+    header = bytearray(header_size)
+    struct.pack_into(
+        "<IiiHHIIiiII", header, 0,
+        header_size, width, height, 1, bit_count, compression, 0, 0, 0, 0, 0,
+    )
+    if header_size >= 56:
+        masks = (0xF800, 0x07E0, 0x001F, 0) if bit_count == 16 else (
+            0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000,
+        )
+        struct.pack_into("<4I", header, 40, *masks)
+    return header
+
 
 class FakeImage:
     def __init__(self, property_name, image_hash, packed):

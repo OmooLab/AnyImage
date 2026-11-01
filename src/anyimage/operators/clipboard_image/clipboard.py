@@ -12,6 +12,9 @@ from pathlib import Path
 
 CF_DIB = 8
 CF_DIBV5 = 17
+BI_RGB = 0
+BI_BITFIELDS = 3
+BI_ALPHABITFIELDS = 6
 MAX_CLIPBOARD_IMAGE_SIZE = 512 * 1024 * 1024
 CLIPBOARD_COMMAND_TIMEOUT = 10
 LINUX_IMAGE_FORMATS = (
@@ -80,19 +83,52 @@ def _info_dib_pixel_offset(dib_data, header_size):
     if color_count == 0 and bit_count <= 8:
         color_count = 1 << bit_count
 
-    mask_size = 0
-    if header_size == 40 and compression == 3:
-        mask_size = 12
-    if header_size == 40 and compression == 6:
-        mask_size = 16
+    pixel_size = 0
+    if compression in (BI_RGB, BI_BITFIELDS, BI_ALPHABITFIELDS):
+        width, height = struct.unpack_from("<ii", dib_data, 4)
+        valid_bit_counts = (
+            (1, 4, 8, 16, 24, 32) if compression == BI_RGB else (16, 32)
+        )
+        if width <= 0 or height == 0 or bit_count not in valid_bit_counts:
+            raise ClipboardImageError(
+                "Clipboard DIB dimensions or bit depth are invalid"
+            )
+        stride = ((width * bit_count + 31) // 32) * 4
+        pixel_size = stride * abs(height)
 
-    pixel_offset = header_size + mask_size + color_count * 4
+    mask_size = {BI_BITFIELDS: 12, BI_ALPHABITFIELDS: 16}.get(compression, 0)
+    pixel_offset = header_size + color_count * 4
+    if header_size == 40:
+        pixel_offset += mask_size
+    pixel_end = len(dib_data)
+    profile_before_pixels = False
     if header_size >= 124:
         profile_offset = struct.unpack_from("<I", dib_data, 112)[0]
         profile_size = struct.unpack_from("<I", dib_data, 116)[0]
         if profile_offset and profile_size:
-            pixel_offset = max(pixel_offset, profile_offset + profile_size)
+            profile_end = profile_offset + profile_size
+            if profile_offset < pixel_offset or profile_end > len(dib_data):
+                raise ClipboardImageError("Clipboard DIB color profile is out of range")
+            if pixel_size and profile_offset >= pixel_offset + pixel_size:
+                pixel_end = profile_offset
+            else:
+                pixel_offset = profile_end
+                profile_before_pixels = True
+
+    # Windows 合成的 V4/V5 DIB 可能在头后再次附加完整掩码表。
+    # 跳过后必须仍有完整像素数据，避免把开头的真实像素当成掩码。
+    if (
+        header_size in (108, 124)
+        and mask_size
+        and not profile_before_pixels
+        and pixel_offset + mask_size + pixel_size <= pixel_end
+        and dib_data[header_size:header_size + mask_size] == dib_data[40:40 + mask_size]
+    ):
+        pixel_offset += mask_size
+
     _validate_pixel_offset(dib_data, pixel_offset)
+    if pixel_offset + pixel_size > pixel_end:
+        raise ClipboardImageError("Clipboard DIB pixel data is incomplete")
     return pixel_offset
 
 

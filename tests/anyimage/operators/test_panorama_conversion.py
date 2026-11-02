@@ -144,6 +144,7 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     from anyimage.common.object import get_modifier_input, modifier_input_identifier
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Subdivide")) == 6
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Horizon Bend")) == pytest.approx(-0.1)
+    assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Depth Split")) == pytest.approx(0.01)
     assert saved.name == "O Depth Panorama"
     assert obj.name == operator.source_object_name and obj.type == "MESH"
     np.testing.assert_allclose(obj.location, matrix.translation, atol=1e-6)
@@ -166,11 +167,12 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     color = layer.inputs["Color Texture"].links[0].from_node.image
     world = bpy.context.scene.world
     environment = next(n for n in world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
-    background = next(n for n in world.node_tree.nodes if n.type == "GROUP")
+    background = next(n for n in world.node_tree.nodes if n.type == "GROUP" and n.node_tree.name == "O Background")
+    assert world.name == material.name
     assert environment.image == color
     assert background.node_tree.name == "O Background"
     assert background.inputs["Light"].links[0].from_node == environment
-    assert not background.inputs["Color"].is_linked
+    assert background.inputs["Color"].links[0].from_node == environment
     assert color.colorspace_settings.name == "AgX Base sRGB"
     assert color.alpha_mode == "STRAIGHT"
     normal = layer.inputs["Normal Texture"].links[0].from_node
@@ -286,7 +288,7 @@ def test_panorama_conversion_undo_restores_empty(source, artifacts):
             bpy.utils.unregister_class(operators.GeneratePanorama)
 
 
-def test_depth_mask_default_preserves_background_dome(source, artifacts, monkeypatch):
+def test_depth_mask_default_removes_background_dome(source, artifacts, monkeypatch):
     from anyimage.common.object import get_modifier_input, modifier_input_identifier
 
     rgba = np.ones((16, 32, 4), np.float32)
@@ -298,7 +300,9 @@ def test_depth_mask_default_preserves_background_dome(source, artifacts, monkeyp
     obj = conversion.create_panorama_from_result(bpy.context, *artifacts)
     modifier = obj.modifiers[0]
     identifier = modifier_input_identifier(modifier.node_group, "Depth Mask")
-    assert get_modifier_input(modifier, identifier) is False
+    assert get_modifier_input(modifier, identifier) is True
+    bend = modifier_input_identifier(modifier.node_group, "Horizon Bend")
+    assert get_modifier_input(modifier, bend) == pytest.approx(-0.1)
     evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = evaluated.to_mesh()
     try:
@@ -306,6 +310,6 @@ def test_depth_mask_default_preserves_background_dome(source, artifacts, monkeyp
         mesh.vertices.foreach_get("co", positions)
         radii = np.linalg.norm(positions.reshape(-1, 3), axis=1)
         assert np.isclose(radii, 3, atol=0.01).any()
-        assert np.isclose(radii, 200, atol=0.01).any()
+        assert not np.isclose(radii, 500, atol=0.01).any()
     finally:
         evaluated.to_mesh_clear()

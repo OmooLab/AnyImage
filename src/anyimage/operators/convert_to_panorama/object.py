@@ -58,10 +58,12 @@ def create_panorama_from_result(context, result, operator):
             modifier.show_group_selector = False
             for name, value in (
                 ("Subdivide", 6), ("Depth Image", depth),
+                ("Horizon Bend", -0.1),
+                ("Depth Split", 0.01),
             ):
                 set_modifier_input(modifier, modifier_input_identifier(group, name), value)
             obj.update_tag(refresh={"DATA"})
-            world = create_panorama_world(obj, color)
+            world = create_panorama_world(obj, source.data, color)
             context.scene.world = world
             finalize_object_result(context, source, obj)
     except Exception:

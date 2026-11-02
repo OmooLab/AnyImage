@@ -69,7 +69,7 @@ def test_depth_mask_keeps_only_the_faces_above_the_threshold():
     set_value("Depth Mask", False)
     points, faces, _ = evaluated(obj)
     assert len(faces) == 384
-    np.testing.assert_allclose(np.linalg.norm(points, axis=1), 200, atol=1e-5)
+    np.testing.assert_allclose(np.linalg.norm(points, axis=1), 500, atol=1e-5)
     set_value("Depth Mask", True)
     set_value("Mask Threshold", 0.49)
     assert len(evaluated(obj)[1]) == 384
@@ -142,7 +142,7 @@ def test_masked_region_ignores_its_own_depth_and_depth_scale():
     for scale in (0.0, 1.0):
         set_value("Depth Scale", scale)
         radii = np.linalg.norm(evaluated(obj)[0], axis=1)
-        on_dome = np.isclose(radii, 200, atol=1e-3)
+        on_dome = np.isclose(radii, 500, atol=1e-3)
         assert on_dome.any()
         assert np.all(on_dome | np.isclose(radii, 3.0, atol=1e-3))
 
@@ -223,7 +223,7 @@ def test_horizon_bend_keeps_depth_surface_fixed_when_dome_radius_changes():
     set_value("Dome Radius", 1000.0)
     far, far_faces, far_uv = evaluated(obj)
     np.testing.assert_allclose(far[surface], near[surface], atol=1e-5)
-    assert np.max(np.linalg.norm(far[~surface] - near[~surface], axis=1)) > 700
+    assert np.max(np.linalg.norm(far[~surface] - near[~surface], axis=1)) > 400
     assert far_faces == faces
     np.testing.assert_allclose(far_uv, uv, atol=1e-6)
 
@@ -238,7 +238,7 @@ def test_boundary_smooth_relaxes_both_masked_region_boundaries():
     set_value("Depth Mask", False)
     before, _, uv = evaluated(obj)
     assert np.all((uv >= 0) & (uv <= 1))
-    low = np.isclose(np.linalg.norm(before, axis=1), 200, atol=1e-3)
+    low = np.isclose(np.linalg.norm(before, axis=1), 500, atol=1e-3)
     assert low.any()
     set_value("Boundary Smooth", 5)
     after, _, uv = evaluated(obj)
@@ -248,7 +248,7 @@ def test_boundary_smooth_relaxes_both_masked_region_boundaries():
     moved = np.linalg.norm(after - before, axis=1) > 1e-6
     assert moved[low].any() and moved[~low].any()
     assert not moved[low].all()
-    np.testing.assert_allclose(np.linalg.norm(after[low & ~moved], axis=1), 200, atol=1e-5)
+    np.testing.assert_allclose(np.linalg.norm(after[low & ~moved], axis=1), 500, atol=1e-5)
 
 
 def test_flat_scale_without_mask_returns_a_whole_sphere():
@@ -264,7 +264,7 @@ def test_flat_scale_without_mask_returns_a_whole_sphere():
     assert len(faces) == len(whole_faces)
     assert len(points) == len(whole)
     assert free_edges(faces) == 0
-    np.testing.assert_allclose(np.linalg.norm(points, axis=1), 200, atol=1e-6)
+    np.testing.assert_allclose(np.linalg.norm(points, axis=1), 500, atol=1e-6)
 
 
 def test_controls_and_material_slot_inheritance():
@@ -277,10 +277,10 @@ def test_controls_and_material_slot_inheritance():
         "Subdivide", "Dome Radius", "Horizon Bend", "Depth Scale",
     ]
     assert inputs["Dome Radius"].parent == inputs["Subdivide"].parent
-    assert inputs["Dome Radius"].default_value == 200
+    assert inputs["Dome Radius"].default_value == 500
     assert (inputs["Dome Radius"].min_value, inputs["Dome Radius"].max_value) == (1, 10000)
     assert inputs["Dome Radius"].subtype == "DISTANCE"
-    assert inputs["Horizon Bend"].default_value == pytest.approx(-0.1)
+    assert inputs["Horizon Bend"].default_value == 0
     assert (inputs["Horizon Bend"].min_value, inputs["Horizon Bend"].max_value) == (-1, 1)
     assert inputs["Subdivide"].default_value == 6
     assert inputs["Horizon Bend"].subtype == "FACTOR"
@@ -288,7 +288,7 @@ def test_controls_and_material_slot_inheritance():
     assert inputs["Boundary Smooth"].parent.name == "Options"
     assert "Smooth Weight" not in inputs
     assert inputs["Depth Mask"].parent == inputs["Subdivide"].parent
-    assert inputs["Depth Mask"].default_value is False
+    assert inputs["Depth Mask"].default_value is True
     obj.data.from_pydata([(0, 0, 0)], [], [])
     material = bpy.data.materials.new("Slot Material")
     obj.data.materials.append(material)

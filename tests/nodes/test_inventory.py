@@ -25,6 +25,7 @@ def test_saved_parameter_interfaces_match_definitions():
         "O Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
         "O Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Horizon Bend", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Background": {"Color", "Strength", "Light", "Transmission (Cycles)"},
+        "O World Vector": {"Rotation", "Blur", "Horizon Bend"},
         "O Texture to Layer": {"Alpha Scale", "Alpha Background", "Roughness Scale", "Roughness Contrast", "Highlight Threshold", "Normal Scale", "Bump Scale", "Object Space"},
     }
 
@@ -62,6 +63,12 @@ def test_saved_parameter_interfaces_match_definitions():
                 assert not limit.parent.name
                 assert limit.min_value == -1.0
                 assert inputs.index(limit) == inputs.index(split) + 1
+            elif group.name == "O World Vector":
+                assert [item.name for item in inputs] == ["Rotation", "Blur", "Horizon Bend"]
+                assert inputs[0].subtype == "EULER"
+                assert tuple(inputs[0].default_value) == (0, 0, 0)
+                assert (inputs[1].default_value, inputs[1].min_value, inputs[1].max_value) == (0, 0, 1)
+                assert (inputs[2].default_value, inputs[2].min_value, inputs[2].max_value) == (0, -1, 1)
             elif group.name == "O Cutout Symmetry":
                 assert [item.name for item in inputs] == [
                     "Geometry", "Direction", "Offset", "Scale", "Fill Sides", "Smooth",

@@ -2,20 +2,19 @@
 
 import bpy
 
+from ...common.image import image_base_name
 from ...common.node import load_node_group
 
 
-def create_panorama_world(obj, color_image):
-    world = bpy.data.worlds.new(f"{obj.name} World")
+def create_panorama_world(obj, source_image, color_image):
+    world = bpy.data.worlds.new(image_base_name(source_image))
     try:
         world.use_nodes = True
         nodes = world.node_tree.nodes
         nodes.clear()
-        coordinates = nodes.new("ShaderNodeTexCoord")
-        coordinates.location = (-800, 0)
-        rotation = nodes.new("ShaderNodeVectorRotate")
-        rotation.rotation_type = "EULER_XYZ"
-        rotation.invert = True
+        rotation = nodes.new("ShaderNodeGroup")
+        rotation.node_tree = load_node_group("O World Vector")
+        rotation.inputs["Horizon Bend"].default_value = -0.1
         rotation.location = (-580, 0)
         for index, axis in enumerate("XYZ"):
             driver = rotation.inputs["Rotation"].driver_add("default_value", index).driver
@@ -38,8 +37,8 @@ def create_panorama_world(obj, color_image):
         output = nodes.new("ShaderNodeOutputWorld")
         output.location = (240, 0)
         links = world.node_tree.links
-        links.new(coordinates.outputs["Generated"], rotation.inputs["Vector"])
         links.new(rotation.outputs["Vector"], texture.inputs["Vector"])
+        links.new(texture.outputs["Color"], background.inputs["Color"])
         links.new(texture.outputs["Color"], background.inputs["Light"])
         links.new(background.outputs["Shader"], output.inputs["Surface"])
     except Exception:

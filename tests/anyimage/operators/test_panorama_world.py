@@ -2,10 +2,22 @@
 
 import bpy
 import numpy as np
+import pytest
 from mathutils import Euler, Vector
 
 from anyimage.common.image import image_rgba
 from anyimage.operators.convert_to_panorama.world import create_panorama_world
+
+
+@pytest.mark.parametrize("image_name, world_name", [("Sunset.exr", "Sunset"), ("Sunset.png.001", "Sunset.001")])
+def test_world_uses_source_image_name(image_name, world_name):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    obj = bpy.data.objects.new("Empty.001", None)
+    source = bpy.data.images.new(image_name, width=4, height=2)
+    color = bpy.data.images.new("Processed color", width=4, height=2)
+    world = create_panorama_world(obj, source, color)
+    assert world.name == world_name
+    assert create_panorama_world(obj, source, color) != world
 
 
 def test_environment_tracks_world_rotation_without_translation_or_scale(tmp_path):
@@ -22,12 +34,11 @@ def test_environment_tracks_world_rotation_without_translation_or_scale(tmp_path
     image.pixels.foreach_set(rgba.ravel())
     image.pack()
     scene = bpy.context.scene
-    scene.world = create_panorama_world(obj, image)
-    nodes = scene.world.node_tree.nodes
-    texture = next(node for node in nodes if node.type == "TEX_ENVIRONMENT")
-    background = next(node for node in nodes if node.type == "GROUP")
-    # Expose the lighting texture to camera rays for direction comparison.
-    scene.world.node_tree.links.new(texture.outputs["Color"], background.inputs["Color"])
+    scene.world = create_panorama_world(obj, image, image)
+    vector = next(node for node in scene.world.node_tree.nodes
+                  if node.type == "GROUP" and node.node_tree.name == "O World Vector")
+    assert vector.inputs["Horizon Bend"].default_value == pytest.approx(-0.1)
+    vector.inputs["Horizon Bend"].default_value = 0.0
     camera = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera"))
     bpy.context.collection.objects.link(camera)
     camera.data.lens = 100
@@ -79,3 +90,20 @@ def test_environment_tracks_world_rotation_without_translation_or_scale(tmp_path
     camera = scene.camera
     obj.rotation_quaternion = Euler((-.7, .2, -.4)).to_quaternion()
     np.testing.assert_allclose(render(4), baseline, atol=.015)
+    vector = next(node for node in scene.world.node_tree.nodes
+                  if node.type == "GROUP" and node.node_tree.name == "O World Vector")
+    assert len(scene.world.node_tree.animation_data.drivers) == 3
+    for index, bend in enumerate((-1.0, -.5, .5, 1.0), start=5):
+        vector.inputs["Horizon Bend"].default_value = bend
+        direction = local_ray.copy()
+        direction.z -= bend * (direction.x ** 2 + direction.y ** 2)
+        direction.normalize()
+        np.testing.assert_allclose(render(index), np.array(direction) * .5 + .5, atol=.015)
+    vector.inputs["Blur"].default_value = 1.0
+    blurred = render(9)
+    assert np.isfinite(blurred).all()
+    assert not np.allclose(blurred, np.array(direction) * .5 + .5, atol=.001)
+    vector.inputs["Blur"].default_value = 0.0
+    for index, pole in enumerate((-1.0, 1.0), start=10):
+        local_ray = Vector((0, 0, pole))
+        np.testing.assert_allclose(render(index), np.array(local_ray) * .5 + .5, atol=.015)

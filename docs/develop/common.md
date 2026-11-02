@@ -55,4 +55,8 @@ flowchart TD
 
 `create_image_material()` 按**无光照**、法线空间和全景用途组合节点、连接颜色与 Alpha。材质颜色处理读取 Scene 的 View Transform，保留 HDR，并分别处理普通表面的颜色归一化与全景颜色反变换。`set_modifier_input()` 按 Blender 版本的实际输入 API 设置值，`finalize_object_result()` 完成结果对象激活和源对象处理。Image 替换路径保留 Empty 的矩阵、显示尺寸、偏移和 Image User 帧设置。
 
+`linear_color_rgba()` 统一读取直通 Alpha 的线性 RGB，供发光编码和亮度统计使用。`Highlight Threshold` 根据完整原图的亮度直方图和空间对比估计：普通物体比较四角与中心，全景比较下方与上方区域。统计包含透明区域保留的 RGB；Alpha 用于确认是否存在 `alpha > 0.1` 的有效区域。没有有效区域、数据非有限或亮度完全一致时返回 1。裁切材质沿用完整原图在相同颜色解释下算出的阈值。
+
+`O Texture to Layer` 在阈值 `t` 到 `4t` 之间平滑增加发光并抑制颜色 Bump。`Bump Scale` 默认 1、范围 -10 到 10，乘以 0.01 作为凹凸距离，正负控制方向；创建材质时直接沿用节点组默认值。Roughness 使用独立的亮度映射。
+
 Geometry Nodes 从 `src/anyimage/assets/O_AnyImage.blend` 按公开名称加载。构建与布局职责见[节点资产](node-assets.md)，深度字段见[Job 产物](outputs.md)。

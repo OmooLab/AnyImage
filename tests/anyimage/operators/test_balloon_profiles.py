@@ -4,6 +4,14 @@ import numpy as np
 
 from anyimage.operators.cutout_tool import balloon
 from anyimage.operators.cutout_tool.balloon import poisson_balloon_profile
+from anyimage.operators.cutout_tool.mesh import build_mesh
+
+
+def test_small_quality_mesh_has_positive_balloon_support():
+    points, faces, boundary, _, _ = build_mesh(np.ones((2, 2)), 32, .9)
+    profile = poisson_balloon_profile(points, faces, boundary)
+    assert np.all(profile[boundary] == 0)
+    assert profile.max() > 0
 
 
 def test_poisson_balloon_profile_is_zero_on_boundary_and_positive_inside():

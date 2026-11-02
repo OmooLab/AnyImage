@@ -185,7 +185,7 @@ def test_depth_surface_object_evaluates(gesture):
     modifier = result.modifiers[0]
     assert modifier.node_group.name == cutout_shape.CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"]
     layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), result.data.materials[0].node_tree)
-    assert layer.inputs["Object Space"].default_value is True
+    assert layer.inputs["Object Space"].default_value is False
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Mode")) == (1 if gesture == "POLYLINE" else 0)
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.1)
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE")) == 1.0
@@ -350,7 +350,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert modifier.node_group.name == "O Depth Cutout"
     assert symmetry.node_group.name == "O Cutout Symmetry"
     layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), result.data.materials[0].node_tree)
-    assert layer.inputs["Object Space"].default_value is True
+    assert layer.inputs["Object Space"].default_value is False
     assert not modifier.show_group_selector and not symmetry.show_group_selector
 
     def value(modifier, name, subtype=None):

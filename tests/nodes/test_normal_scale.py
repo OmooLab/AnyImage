@@ -4,14 +4,13 @@ import numpy as np
 import pytest
 
 from anyimage.operators.cutout_tool.shape import NORMAL_REDUCTION_ATTRIBUTE_NAME
-from tests.support.materials import image_layer
+from tests.support.materials import image_layer, render_engine
 
 
-@pytest.mark.parametrize('engine', ['CYCLES', 'BLENDER_EEVEE_NEXT'])
-@pytest.mark.parametrize('domain', ['POINT', 'FACE'])
-def test_normal_scale_preserves_missing_and_zero_weights(image_layer, engine, domain, tmp_path):
+@pytest.mark.parametrize('domain', ['POINT', 'FACE', 'CORNER'])
+def test_normal_scale_preserves_missing_and_zero_weights(image_layer, render_engine, domain, tmp_path):
     scene = bpy.context.scene
-    scene.render.engine = engine
+    scene.render.engine = render_engine
     scene.cycles.device = 'CPU'
     scene.cycles.samples = 1
     scene.cycles.use_denoising = False
@@ -24,7 +23,8 @@ def test_normal_scale_preserves_missing_and_zero_weights(image_layer, engine, do
     scene.camera = bpy.context.object
     scene.camera.data.type = 'ORTHO'
     scene.camera.data.ortho_scale = 10
-    for mode_index, space in enumerate(('TANGENT',)):
+    assert {n.attribute_name for n in image_layer.nodes if n.type == 'ATTRIBUTE'} == {'o_normal_reduction', 'o_emission', 'o_normal_transform'}
+    for mode_index, space in enumerate(('TANGENT', 'OBJECT')):
         shared = None
         for weight_index, weight in enumerate((None, 0.0, 0.4, 1.0, 2.0)):
             column = mode_index * 5 + weight_index
@@ -33,6 +33,7 @@ def test_normal_scale_preserves_missing_and_zero_weights(image_layer, engine, do
                     size=.8, location=(column - 4.5, .5 if reference else -.5, 0),
                 )
                 obj = bpy.context.object
+                obj.rotation_euler.z = .3
                 obj.data.uv_layers.active.name = 'UVMap'
                 if weight is not None and not reference:
                     attr = obj.data.attributes.new(NORMAL_REDUCTION_ATTRIBUTE_NAME, 'FLOAT', domain)
@@ -71,7 +72,7 @@ def test_normal_scale_preserves_missing_and_zero_weights(image_layer, engine, do
     rendered = bpy.data.images.load(scene.render.filepath, check_existing=False)
     try:
         pixels = np.array(rendered.pixels[:]).reshape(64, 320, 4)
-        columns = np.arange(5) * 32 + 16
+        columns = np.arange(10) * 32 + 16
         np.testing.assert_allclose(pixels[16, columns, :3], pixels[48, columns, :3], atol=2e-4)
         assert np.linalg.norm(pixels[16, 16, :3] - pixels[16, 48, :3]) > .01
     finally:

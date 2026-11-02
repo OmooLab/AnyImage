@@ -16,7 +16,8 @@ def run(context, parameters):
         parameters,
         input_path,
         generate_depth=True,
-        normal_mode="OBJECT" if plane_type == "DEPTH" else "TANGENT",
+        generate_normal=True,
+        normal_space="OBJECT" if plane_type == "DEPTH" else "TANGENT",
     )
     context.check_cancelled()
     context.progress(1.0, "Depth conversion data is ready")

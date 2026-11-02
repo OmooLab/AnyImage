@@ -5,14 +5,14 @@ from contextlib import ExitStack, contextmanager
 import bpy
 import numpy as np
 
-from ...common.color_image import create_normalized_color_image, require_static_color_image
+from ...common.color_image import require_static_color_image
 from ...common.image import create_image_edit_result, image_content_state, image_pixels, replace_image_content, restore_image_content
 from ...common.image import has_other_image_user
 from ...common.image_target import is_image_object, material_has_other_object_user, object_color_texture
 from ...common.material import IMAGE_MATERIAL_NODE_GROUP_NAME, SHADELESS_NODE_GROUP_NAME
 from ..cutout_tool.shape import CUTOUT_NODE_GROUP_NAMES, IMAGE_REGION_ATTRIBUTE_NAME
 from ...common.image_plane import IMAGE_PLANE_NODE_GROUP_NAME
-from .textures import build_color_tiles, create_emission_color_image
+from .textures import build_color_tiles, create_emission_color_image, merge_color_alpha
 from .materials import emission_shaders, remove_unused_material_nodes, static_material_outputs, validate_layer
 
 
@@ -24,8 +24,7 @@ SINGLE_REGION_GROUPS = frozenset({
     "O Depth Panorama",
 })
 PROTOCOL_ATTRIBUTES = frozenset({
-    "o_emission", "o_balloon", "o_normal_reduction", "o_depth_rotation", "o_depth_face",
-    "o_depth_axis", IMAGE_REGION_ATTRIBUTE_NAME,
+    "o_emission", "o_balloon", "o_normal_reduction", "o_normal_transform", IMAGE_REGION_ATTRIBUTE_NAME,
     "_o_depth_cut", "_o_depth_limit_boundary", "_o_boundary_smooth_weight",
     "_o_boundary_falloff", "_o_cut_boundary", "_o_front_normal", "_o_leaf_id",
     "_o_side_ring_target", "_o_leaf_source_index", "_o_side_base_uv", "_o_side_top_uv",
@@ -232,16 +231,16 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
     original_group = layer.node_tree
     group = original_group.copy()
     image = None
-    scalar_source = None
     nodes, links = material.node_tree.nodes, material.node_tree.links
     created = []
     original_links = [(link.from_socket, link.to_socket) for link in links]
     active = nodes.active
     try:
         is_normal = output_name == "Normal"
-        image = bpy.data.images.new(f"Mesh bake {output_name.lower()}", width=size[0], height=size[1], alpha=True, float_buffer=True)
-        image.colorspace_settings.is_data = True
-        image.file_format = "OPEN_EXR"
+        is_roughness = output_name == "Roughness"
+        image = bpy.data.images.new(f"Mesh bake {output_name.lower()}", width=size[0], height=size[1], alpha=True, float_buffer=not is_roughness)
+        image.colorspace_settings.name = "Non-Color"
+        image.file_format = "PNG" if is_roughness else "OPEN_EXR"
         layer.node_tree = group
         for node in group.nodes:
             if node.type == "NORMAL_MAP" and node.space == "TANGENT":
@@ -275,13 +274,6 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
                                      use_selected_to_active=False, uv_layer=TARGET_UV, margin=MARGIN, margin_type="EXTEND")
         if result != {"FINISHED"}:
             raise RuntimeError(f"{output_name} baking was cancelled")
-        if output_name in {"Roughness", "Alpha"}:
-            scalar_source, image = image, None
-            image = bpy.data.images.new(f"Mesh bake {output_name.lower()}", width=size[0], height=size[1], alpha=True)
-            image.colorspace_settings.is_data = True
-            image.file_format = "PNG"
-            image.pixels.foreach_set(np.clip(image_pixels(scalar_source), 0, 1))
-            image.update()
         image.pack()
         return image
     except Exception:
@@ -296,8 +288,6 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
         for source, target in original_links:
             links.new(source, target)
         nodes.active = active
-        if scalar_source is not None:
-            bpy.data.images.remove(scalar_source, do_unlink=True)
         bpy.data.node_groups.remove(group)
 
 
@@ -319,7 +309,7 @@ def materialize_mesh_and_textures(context, obj):
                        for node in (color, normal) if node is not None}
     static_material = None
     updates = []
-    scalar_images = {}
+    output_images = {}
     emission_images = {}
     static_normal = None
     images_updated = False
@@ -334,31 +324,24 @@ def materialize_mesh_and_textures(context, obj):
         grid = (len(tiles[0]), len(tiles))
         size = tuple(max(c, n) for c, n in zip(color.image.size, normal.image.size)) if normal else tuple(color.image.size)
         size = tuple(int(v) * count for v, count in zip(size, grid))
-        normalized_color = create_normalized_color_image(source_color)
-        images.append(normalized_color)
-        final_color = normalized_color
-        if not single_region:
-            pixels = build_color_tiles(normalized_color, tiles)
-            final_color = create_image_edit_result(normalized_color, pixels.ravel(), (pixels.shape[1], pixels.shape[0]))
-            images.append(final_color)
-            del pixels
-        updates.append((color.name, source_color, image_content_state(source_color), final_color))
+        pixels = build_color_tiles(source_color, tiles)
+        source_color_state = image_content_state(source_color)
+        baked_alpha = None
         if channels:
             bake_material = material.copy()
-            bake_material.node_tree.nodes[color.name].image = normalized_color
             with bake_context(mesh, bake_material, obj.matrix_world):
-                scalar_size = tuple(int(v) * count for v, count in zip(source_color.size, grid))
+                color_size = tuple(int(v) * count for v, count in zip(source_color.size, grid))
                 for channel in channels:
                     if channel == "Emission":
                         if layer.outputs["Emission"].is_linked:
-                            image = bake_material_output(bake_material, layer.name, scalar_size, channel)
+                            image = bake_material_output(bake_material, layer.name, color_size, channel)
                             image.name = f"{material.name}_emission.exr"
                             images.append(image)
-                            scalar_images[channel] = image
+                            output_images[channel] = image
                         for name, strength in emission_strengths.items():
                             if strength is not None:
                                 continue
-                            linear_emission = bake_material_output(bake_material, layer.name, scalar_size, channel, name)
+                            linear_emission = bake_material_output(bake_material, layer.name, color_size, channel, name)
                             try:
                                 image, emission_strengths[name] = create_emission_color_image(linear_emission)
                             finally:
@@ -367,9 +350,11 @@ def materialize_mesh_and_textures(context, obj):
                             image.name = f"{material.name}_emissioncolor.png"
                             emission_images[name] = image
                         continue
-                    image = bake_material_output(bake_material, layer.name, size if channel == "Normal" else scalar_size, channel)
+                    image = bake_material_output(bake_material, layer.name, size if channel == "Normal" else color_size, channel)
                     images.append(image)
-                    if channel == "Normal":
+                    if channel == "Alpha":
+                        baked_alpha = image_pixels(image).reshape(-1, 4)[:, 0]
+                    elif channel == "Normal":
                         static_normal = image
                         if normal is not None:
                             updates.append((normal.name, source_normal, image_content_state(source_normal), image))
@@ -377,16 +362,25 @@ def materialize_mesh_and_textures(context, obj):
                             image.name = f"{material.name}_normal.exr"
                     else:
                         image.name = f"{material.name}_{channel.lower()}.png"
-                        scalar_images[channel] = image
+                        output_images[channel] = image
             bpy.data.materials.remove(bake_material)
             bake_material = None
+        if baked_alpha is not None:
+            merge_color_alpha(pixels, baked_alpha, source_color)
+        final_color = create_image_edit_result(source_color, pixels.ravel(), (pixels.shape[1], pixels.shape[0]))
+        images.append(final_color)
+        if baked_alpha is not None and final_color.alpha_mode == "NONE":
+            final_color.alpha_mode = "STRAIGHT"
+        updates.insert(0, (color.name, source_color, source_color_state, final_color))
+        del pixels
         constant_emitters = [name for name, strength in emission_strengths.items() if name not in emission_images and strength > 0]
         if constant_emitters:
-            emission_image = create_image_edit_result(final_color, image_pixels(final_color), tuple(final_color.size))
+            emission_image, strength_scale = create_emission_color_image(final_color)
             images.append(emission_image)
             emission_image.name = f"{material.name}_emissioncolor.png"
-            emission_image.file_format = "PNG"
-            emission_images.update({name: emission_image for name in constant_emitters})
+            for name in constant_emitters:
+                emission_images[name] = emission_image
+                emission_strengths[name] *= strength_scale
         mesh.uv_layers.remove(mesh.uv_layers[SOURCE_UV])
         mesh.uv_layers[TARGET_UV].name = "UVMap"
         mesh.uv_layers.active = mesh.uv_layers["UVMap"]
@@ -406,7 +400,7 @@ def materialize_mesh_and_textures(context, obj):
         static_color = static_nodes[color.name]
         static_normal_node = static_nodes[normal.name] if normal is not None else None
         with static_material_outputs(static_material, static_layer, static_color,
-                                     (static_normal, static_normal_node), scalar_images, emission_images, emission_strengths):
+                                     (static_normal, static_normal_node), output_images, emission_images, emission_strengths):
             images_updated = True
             for node_name, source, _, result in updates:
                 if isolated_images[node_name]:

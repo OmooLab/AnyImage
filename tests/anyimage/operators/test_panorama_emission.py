@@ -136,17 +136,19 @@ def test_emission_failure_restores_strength_links_and_images(image_object, monke
     np.testing.assert_array_equal(image_pixels(image), pixels)
 
 
-def test_emission_encoding_preserves_hdr_ratios(image_object):
+def test_emission_encoding_clamps_negative_rgb_and_preserves_hdr_ratios(image_object):
     from anyimage.common.color_space import srgb_to_linear_rgb
 
     source = bpy.data.images.new("Linear emission", width=3, height=1, alpha=True, float_buffer=True)
     source.colorspace_settings.name = "Non-Color"
-    pixels = np.array([[1, .5, .25, 1], [10, 5, 2.5, 1], [100, 50, 25, 1]], np.float32)
+    pixels = np.array([[-1, .5, .25, 1], [10, 5, 2.5, 1], [100, 50, 25, 1]], np.float32)
     source.pixels.foreach_set(pixels.ravel())
     result, strength = create_emission_color_image(source)
     assert strength == 100
+    assert not result.is_float and result.colorspace_settings.name == "sRGB"
+    assert bytes(result.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
     restored = srgb_to_linear_rgb(image_pixels(result).reshape(-1, 4)[:, :3]) * strength
-    np.testing.assert_allclose(restored, pixels[:, :3], rtol=.025, atol=.01)
+    np.testing.assert_allclose(restored, np.maximum(pixels[:, :3], 0), rtol=.025, atol=.01)
 
 
 def test_inverse_mask_emission_survives_baking(image_object, tmp_path):
@@ -162,7 +164,7 @@ def test_inverse_mask_emission_survives_baking(image_object, tmp_path):
     depth.pixels.foreach_set(pixels.ravel())
     tree = obj.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
-    layer.inputs["Emission Threshold"].default_value = .1
+    layer.inputs["Highlight Threshold"].default_value = .1
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
     for link in tuple(shader.inputs["Emission Strength"].links):
         tree.links.remove(link)

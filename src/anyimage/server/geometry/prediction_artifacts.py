@@ -7,7 +7,7 @@ from .depth_texture import (
     write_depth_metadata,
     write_depth_texture,
 )
-from .normal_texture import write_camera_normal_texture
+from .normal_texture import write_normal_texture
 
 
 def generate_moge_artifacts(
@@ -16,15 +16,13 @@ def generate_moge_artifacts(
     input_path,
     *,
     generate_depth=False,
-    normal_mode="NONE",
+    generate_normal=False,
+    normal_space="TANGENT",
 ):
     """Run MoGe once and write only the requested file artifacts."""
     import numpy as np
     from PIL import Image
 
-    normal_mode = str(normal_mode).upper()
-    if normal_mode not in {"NONE", "TANGENT", "OBJECT"}:
-        raise ValueError(f"Unsupported normal mode: {normal_mode}")
     with open_image(input_path) as source:
         model_image = limit_image(
             source.convert("RGB"),
@@ -53,16 +51,14 @@ def generate_moge_artifacts(
         result["depth_metadata"] = write_depth_metadata(
             frame, context.directory / "depth.json",
         )
-    if normal_mode != "NONE":
+    if generate_normal:
         context.progress(0.72, "Generating surface normal")
-        key = f"{normal_mode.lower()}_normal"
-        result[key] = write_camera_normal_texture(
+        normal_name = f"{normal_space.lower()}_normal"
+        result[normal_name] = write_normal_texture(
             frame,
             alpha >= 0.1,
-            (0, 0),
             output_size,
-            output_size,
-            context.directory / f"{normal_mode.lower()}-normal.png",
-            normal_mode=normal_mode,
+            context.directory / f"{normal_name.replace('_', '-')}.png",
+            normal_space=normal_space,
         )
     return result

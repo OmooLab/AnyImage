@@ -66,10 +66,11 @@ def test_normal_fusion_rotates_views_rejects_invalid_samples_and_preserves_seam(
         normal[4:8, :4] = 0
         normal[8:12, :4] = -expected
         mask[8:12, :4] = False
-    merged = geometry.merge_normals(normals, masks, bases, 1024, 512)
-    np.testing.assert_allclose(merged, np.broadcast_to(expected, merged.shape), atol=1e-6)
-    empty = geometry.merge_normals(normals, np.zeros_like(masks), bases, 64, 32)
-    np.testing.assert_allclose(empty, -geometry.panorama_directions(64, 32), atol=1e-6)
+    merged = geometry.merge_object_normals(normals, masks, bases, 1024, 512)
+    np.testing.assert_allclose(merged, np.broadcast_to(expected * (-1, 1, 1), merged.shape), atol=1e-6)
+    empty = geometry.merge_object_normals(normals, np.zeros_like(masks), bases, 64, 32)
+    np.testing.assert_allclose(empty, -geometry.panorama_directions(64, 32) * (-1, 1, 1), atol=1e-6)
+
 
 
 @pytest.fixture
@@ -111,10 +112,7 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     assert np.any(np.isclose(alpha, 128 / 255))
     np.testing.assert_allclose(pixels[0][..., 0], pixels[0][..., 2])
     encoded = np.asarray(Image.open(context.directory / result["object_normal"])).astype(float) / 255 * 2 - 1
-    # Apply the existing Image Layer +90 degree X rotation to recover object axes.
-    decoded = encoded[..., [0, 2, 1]] * (1, -1, 1)
-    expected = -geometry.panorama_directions(64, 32) * (-1, 1, 1)
-    np.testing.assert_allclose(decoded[alpha > 0.9], expected[alpha > 0.9], atol=0.015)
+    np.testing.assert_allclose(encoded[alpha > 0.9], (-geometry.panorama_directions(64, 32) * (-1, 1, 1))[alpha > 0.9], atol=0.015)
     metadata = json.loads((context.directory / result["depth_metadata"]).read_text())
     assert metadata["projection"] == "equirectangular"
     assert metadata["image_size"] == [64, 32]
@@ -176,7 +174,7 @@ def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind)
     if kind == "normal_merge":
         def fail_merge(*args, **kwargs):
             raise RuntimeError("Failed normal fusion")
-        monkeypatch.setattr(job, "merge_normals", fail_merge)
+        monkeypatch.setattr(job, "merge_object_normals", fail_merge)
     if kind == "cancel":
         count = [0]
         def cancel():

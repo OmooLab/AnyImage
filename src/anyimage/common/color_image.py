@@ -160,23 +160,80 @@ def decode_color_image(image, color_space):
         bpy.data.images.remove(reader)
 
 
-def median_color_luminance(image):
-    """Return median linear luminance over finite, visible texture pixels."""
+def linear_color_rgba(image):
+    """Read straight-alpha linear RGB while preserving the image alpha."""
     import numpy as np
     from .color_space import srgb_to_linear_rgb
 
-    if image.is_float:
+    space = image.colorspace_settings
+    if image.is_float and (space.is_data or space.name == "Linear Rec.709"):
         rgba = image_rgba(image)
-    elif image.colorspace_settings.name == "sRGB":
+    elif not image.is_float and space.name == "sRGB":
         rgba = image_rgba(image)
         rgba[..., :3] = srgb_to_linear_rgb(rgba[..., :3])
     else:
-        rgba = decode_color_image(image, image.colorspace_settings.name)
-    visible = (rgba[..., 3] > 0) & np.isfinite(rgba).all(axis=-1)
-    if not visible.any():
-        return 0.0
-    luminance = rgba[..., :3][visible] @ np.array((.2126, .7152, .0722), dtype=np.float32)
-    return float(np.median(luminance))
+        rgba = decode_color_image(image, space.name)
+    if image.is_float and image.alpha_mode in {"STRAIGHT", "PREMUL"}:
+        rgba[..., :3] /= np.where(rgba[..., 3:4] > 0, rgba[..., 3:4], 1)
+    return rgba
+
+
+def _luminance_split(values, percentile, *, logarithmic=False):
+    """Separate dark and bright luminance by maximum between-class variance."""
+    import numpy as np
+
+    values = np.minimum(values, np.quantile(values, percentile))
+    if logarithmic:
+        values = np.log2(np.maximum(values, 1e-6))
+    histogram, edges = np.histogram(values, bins=256)
+    centers = (edges[:-1] + edges[1:]) / 2
+    counts = np.cumsum(histogram)
+    sums = np.cumsum(histogram * centers)
+    variance = (sums[-1] * counts - sums * counts[-1]) ** 2 / np.maximum(
+        counts * (counts[-1] - counts), 1,
+    )
+    split = edges[np.argmax(variance[:-1]) + 1]
+    return max(float(2 ** split if logarithmic else split), 0.0001)
+
+
+def estimate_highlight_threshold(image, *, panorama=False):
+    """Estimate highlight onset from full RGB and spatial brightness contrast."""
+    import numpy as np
+
+    rgba = linear_color_rgba(image)
+    if not (rgba[..., 3] > 0.1).any() or not np.isfinite(rgba).all():
+        return 1.0
+    # Transparent pixels retain the original surroundings; alpha is not a weight.
+    luminance = rgba[..., :3] @ np.array((.2126, .7152, .0722))
+    if np.ptp(luminance) == 0:
+        return 1.0
+    high = _luminance_split(luminance, .99)
+    bright_fraction = np.mean(luminance > high)
+    height, width = luminance.shape
+    if panorama:
+        band = max(1, height // 3)
+        reference = max(float(np.median(luminance[-band:])), .0001)
+        subject = float(np.median(luminance[:band]))
+        base = high
+        target = _luminance_split(luminance, .95, logarithmic=True)
+    else:
+        rows, columns = max(1, height // 10), max(1, width // 10)
+        corners = [np.median(region) for region in (
+            luminance[:rows, :columns], luminance[:rows, -columns:],
+            luminance[-rows:, :columns], luminance[-rows:, -columns:],
+        )]
+        dark, typical = np.quantile(corners, (.25, .5))
+        reference = max(float(dark), .0001)
+        subject = float(np.median(luminance[
+            height // 4:height - height // 4, width // 4:width - width // 4,
+        ]))
+        base = max(high, float(typical))
+        target = reference
+    # Broaden emission with 5–10% bright area and 2–4x spatial contrast.
+    area_weight = np.clip(20 * bright_fraction - 1, 0, 1)
+    contrast_weight = np.clip(np.log2(max(subject / reference, .0001)) - 1, 0, 1)
+    weight = area_weight * contrast_weight
+    return float(np.exp((1 - weight) * np.log(base) + weight * np.log(target)))
 
 
 def require_static_color_image(image):

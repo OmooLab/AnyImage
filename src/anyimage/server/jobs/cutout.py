@@ -11,14 +11,15 @@ def run(context, parameters):
     input_path = validate_input_path(parameters["input"])
     result = {}
     generate_depth = bool(parameters.get("generate_depth", False))
-    normal_mode = str(parameters.get("normal_mode", "NONE"))
-    if generate_depth or normal_mode != "NONE":
+    generate_normal = bool(parameters.get("generate_normal", False))
+    if generate_depth or generate_normal:
         artifacts = generate_moge_artifacts(
             context,
             parameters,
             input_path,
             generate_depth=generate_depth,
-            normal_mode=normal_mode,
+            generate_normal=generate_normal,
+            normal_space="OBJECT",
         )
         result.update({key: path.name for key, path in artifacts.items()})
     context.check_cancelled()

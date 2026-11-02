@@ -75,8 +75,8 @@ def warp_log_distances(log_distances, masks, bases, width, height, *, directions
     return np.asarray(logs), np.asarray(validities)
 
 
-def merge_normals(normals, masks, bases, width, height, *, cancel_check=None):
-    """Fuse camera normals in panorama axes using masked, center-weighted samples."""
+def merge_object_normals(normals, masks, bases, width, height, *, cancel_check=None):
+    """Fuse camera normals in the panorama mesh's local coordinate system."""
     from scipy.ndimage import map_coordinates
 
     unit_normals = []
@@ -114,7 +114,8 @@ def merge_normals(normals, masks, bases, width, height, *, cancel_check=None):
         # Uncovered pixels use the inward dome normal.
         merged = -directions
         np.divide(total, length, out=merged, where=length > 1e-8)
-        result[start:stop] = merged
+        # Panorama UVs mirror projection X in the mesh's local coordinates.
+        result[start:stop] = merged * (-1, 1, 1)
     return result
 
 

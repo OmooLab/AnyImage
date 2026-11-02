@@ -83,10 +83,10 @@ def visible_uv_coverage(obj, camera, resolution):
     return coverage
 
 
-def render_material(obj, path, direction, *, channel="Normal", lighting=False, with_uv_coverage=False):
+def render_material(obj, path, direction, *, channel="Normal", lighting=False, with_uv_coverage=False, engine="CYCLES"):
     """Render a material input or its lit surface as linear RGB."""
     scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
+    scene.render.engine = engine
     scene.cycles.samples = 1
     scene.cycles.use_denoising = False
     scene.render.resolution_x = scene.render.resolution_y = 64

@@ -36,6 +36,12 @@ OmooNodes 默认读取 `nodes/`，目标为 `b45`，由工具包准备默认版�
 
 `tests/nodes/` 覆盖节点求值、接口、布局和属性协议；`test_inventory.py` 重新加载保存资产，检查资产清单、接口一致性和几何行为。修改节点逻辑、接口或布局后，应重新构建、复制资产并运行相关测试。
 
+## Symmetry 法线属性
+
+`O Cutout Symmetry` 在对齐网格后向全部面写入 `o_normal_transform`，类型为 FLOAT_VECTOR、域为 FACE。X 保存对齐旋转轴在 XZ 平面内的方位角，Y 保存对齐角度，Z 保存 Y 轴的逆缩放；缩放分母下限为 0.000001。镜像分支将 Z 取负，保留分面数据直到材质求值。
+
+`O Texture to Layer` 在 Object Space 分支中读取这个属性，依次恢复逆对齐、带镜像符号的法线缩放与最终的 Z 轴 90° 转向。属性缺失时使用原始对象空间法线。`o_normal_reduction` 继续负责边缘和侧壁的强度，Bake Mesh 完成后清理已烘焙的属性。
+
 ## 在 Blender 中编辑
 
 先从源码生成开发库：

@@ -25,4 +25,4 @@ jobs:
         run: uv run --group blender build-assets
 
       - name: Run tests
-        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not BLENDER_EEVEE_NEXT"
+        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not EEVEE"

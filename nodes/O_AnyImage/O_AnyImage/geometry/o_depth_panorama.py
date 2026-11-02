@@ -10,11 +10,11 @@ class ODepthPanorama(CustomGeometryGroup):
     def _build_group(self, tree: TreeBuilder[GeometryNodeTree]) -> None:
         geometry = tree.inputs.geometry("Geometry", structure_type="SINGLE", force_non_field=True)
         subdivide = tree.inputs.integer("Subdivide", 6, description="Increase mesh density to represent finer shapes. Higher levels create more vertices and require more processing time.", min_value=0, max_value=8, structure_type="SINGLE", force_non_field=True)
-        dome_radius = tree.inputs.float("Dome Radius", 200.0, description="Radius of the sphere kept at Depth Scale 0, and where mask areas below Mask Threshold land.", min_value=1.0, max_value=10000.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
-        horizon_bend = tree.inputs.float("Horizon Bend", -0.1, description="Bend the final surface by squared horizontal distance relative to Dome Radius, preserving radial distance. Negative values lower distant scenery; positive values raise it.", min_value=-1.0, max_value=1.0, structure_type="SINGLE", force_non_field=True)
+        dome_radius = tree.inputs.float("Dome Radius", 200.0, description="Base sphere radius before Horizon Bend, used at Depth Scale 0 and for mask areas below Mask Threshold.", min_value=1.0, max_value=10000.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
+        horizon_bend = tree.inputs.float("Horizon Bend", -0.1, description="Bend with squared horizontal distance after depth displacement and smoothing, preserving each point's distance from the object origin. Negative values lower distant scenery; positive values raise it.", min_value=-1.0, max_value=1.0, subtype="FACTOR", structure_type="SINGLE", force_non_field=True)
         depth_scale = tree.inputs.float("Depth Scale", 1.0, description="Blend between a sphere at zero and the estimated depth surface at one.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
         depth_split = tree.inputs.float("Depth Split", 0.1, description="Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
-        depth_mask = tree.inputs.boolean("Depth Mask", False, description="Remove mesh areas marked invalid by the depth mask; with the mask off, they rest on the dome sphere.", structure_type="SINGLE", force_non_field=True)
+        depth_mask = tree.inputs.boolean("Depth Mask", False, description="Remove mesh areas marked invalid by the depth mask; with the mask off, they use the dome radius before Horizon Bend.", structure_type="SINGLE", force_non_field=True)
         with tree.inputs.panel("Options", default_closed=True):
             boundary_smooth = tree.inputs.integer("Boundary Smooth", 2, description="Smooth depth and geometry near cut edges on the panorama surface. Zero disables boundary smoothing.", min_value=0, max_value=16, structure_type="SINGLE", force_non_field=True)
             mask_threshold = tree.inputs.float("Mask Threshold", 0.9, description="Set the minimum depth mask value treated as valid. Higher values exclude more partially valid boundary areas.", min_value=0.0, max_value=0.99, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
@@ -132,10 +132,19 @@ class ODepthPanorama(CustomGeometryGroup):
         )
         store_named_attribute_1 = g.StoreNamedAttribute.point.boolean(remove_named_attribute, name="_o_pinned_smooth_boundary", value=boolean_math_3.point.evaluate())
         store_named_attribute_2 = g.StoreNamedAttribute.point.float(store_named_attribute_1, name="_o_pinned_smooth_normalization", value=g.BlurAttribute.float(named_attribute_1.o.attribute, weight=0.5))
+        # Topology stays fixed during relaxation; preserve each consumer's domain.
+        boundary_weights = (
+            store_named_attribute_2
+            >> g.StoreNamedAttribute.point.float(name="_o_pinned_smooth_weight_point", value=math_7)
+            >> g.StoreNamedAttribute.corner.float(name="_o_pinned_smooth_weight_corner", value=math_7)
+        )
+        position_weight = g.NamedAttribute.float("_o_pinned_smooth_weight_point").o.attribute
+        uv_weight = g.NamedAttribute.float("_o_pinned_smooth_weight_corner").o.attribute
         repeat_zone = g.RepeatZone(boundary_smooth)
-        geometry_2 = repeat_zone.items.geometry(store_named_attribute_2, "Geometry")
+        geometry_2 = repeat_zone.items.geometry(boundary_weights, "Geometry")
         vector_math_2 = g.VectorMath.scale(position_1, named_attribute_1.o.attribute).o.vector.blur(weight=0.5) * (1.0 / named_attribute_2.o.attribute.max(0.00000001))
-        math_16 = 1.0 * g.Normal().o.normal.blur(10).length() * math_7
+        normal_weight = g.Normal().o.normal.blur(10).length()
+        math_16 = normal_weight * position_weight
         vector_math_3 = named_attribute_1.o.attribute.switch.vector(position_1.o.position.blur(), vector_math_2) - position_1
         blur_attribute = g.VectorMath.scale(evaluate_on_domain_3, named_attribute_1.o.attribute).o.vector.blur(weight=0.5)
         switch_5 = named_attribute_1.o.attribute.switch.vector(evaluate_on_domain_3.blur(), blur_attribute * (1.0 / named_attribute_2.o.attribute.max(0.00000001)))
@@ -144,7 +153,7 @@ class ODepthPanorama(CustomGeometryGroup):
         vector_math_4 = uv_3 + g.CombineXYZ(
             x=longitude_delta_3 - longitude_delta_3.round(),
             y=smoothed_uv_3.z - uv_3.y,
-        ).o.vector * math_16
+        ).o.vector * (normal_weight * uv_weight)
         store_named_attribute_3 = g.StoreNamedAttribute.corner.vector_2d(geometry_2.current, name="UVMap", value=vector_math_4)
         set_position = (
             g.Compare.integer.less_than(repeat_zone.iteration, 4).o.result.switch.geometry(geometry_2.current, store_named_attribute_3)
@@ -160,10 +169,15 @@ class ODepthPanorama(CustomGeometryGroup):
         set_position_1 = separate_geometry >> g.SetPosition(position=vector_math_5)
         store_named_attribute_4 = g.StoreNamedAttribute.point.boolean(set_position_1, name="_o_pinned_smooth_boundary", value=boolean_math_5.point.evaluate())
         store_named_attribute_5 = g.StoreNamedAttribute.point.float(store_named_attribute_4, name="_o_pinned_smooth_normalization", value=g.BlurAttribute.float(named_attribute_4.o.attribute, weight=0.5))
+        dome_boundary_weights = (
+            store_named_attribute_5
+            >> g.StoreNamedAttribute.point.float(name="_o_pinned_smooth_weight_point", value=math_8)
+            >> g.StoreNamedAttribute.corner.float(name="_o_pinned_smooth_weight_corner", value=math_8)
+        )
         repeat_zone_1 = g.RepeatZone(boundary_smooth)
-        geometry_3 = repeat_zone_1.items.geometry(store_named_attribute_5, "Geometry")
+        geometry_3 = repeat_zone_1.items.geometry(dome_boundary_weights, "Geometry")
         vector_math_6 = g.VectorMath.scale(position_2, named_attribute_4.o.attribute).o.vector.blur(weight=0.5) * (1.0 / named_attribute_5.o.attribute.max(0.00000001))
-        math_17 = 1.0 * g.Normal().o.normal.blur(10).length() * math_8
+        math_17 = normal_weight * position_weight
         vector_math_7 = named_attribute_4.o.attribute.switch.vector(position_2.o.position.blur(), vector_math_6) - position_2
         blur_attribute_1 = g.VectorMath.scale(evaluate_on_domain_4, named_attribute_4.o.attribute).o.vector.blur(weight=0.5)
         switch_7 = named_attribute_4.o.attribute.switch.vector(evaluate_on_domain_4.blur(), blur_attribute_1 * (1.0 / named_attribute_5.o.attribute.max(0.00000001)))
@@ -172,7 +186,7 @@ class ODepthPanorama(CustomGeometryGroup):
         vector_math_8 = uv_6 + g.CombineXYZ(
             x=longitude_delta_6 - longitude_delta_6.round(),
             y=smoothed_uv_6.z - uv_6.y,
-        ).o.vector * math_17
+        ).o.vector * (normal_weight * uv_weight)
         store_named_attribute_6 = g.StoreNamedAttribute.corner.vector_2d(geometry_3.current, name="UVMap", value=vector_math_8)
         set_position_2 = (
             g.Compare.integer.less_than(repeat_zone_1.iteration, 4).o.result.switch.geometry(geometry_3.current, store_named_attribute_6)
@@ -188,7 +202,7 @@ class ODepthPanorama(CustomGeometryGroup):
         switch_8 = (~(depth_scale > 0.0) & ~depth_mask).switch.geometry(join_geometry, g.SetPosition(geometry=store_named_attribute, position=vector_math_5))
         final_position = g.Position().o.position
         horizontal_distance_squared = final_position.x * final_position.x + final_position.y * final_position.y
-        bent_direction = final_position + g.CombineXYZ(z=horizon_bend * horizontal_distance_squared / dome_radius)
+        bent_direction = final_position + g.CombineXYZ(z=horizon_bend * 0.001 * horizontal_distance_squared)
         emission_uv = g.SeparateXYZ(vector=g.NamedAttribute.vector("UVMap"))
         emission_mask = g.ImageTexture(
             image=depth_image,

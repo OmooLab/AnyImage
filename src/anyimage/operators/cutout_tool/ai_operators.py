@@ -55,7 +55,7 @@ from ...common.selection import (
 )
 from .geometry import cutout_content_values
 from .object import create_cutout_shape
-from .shape import CUTOUT_NODE_GROUP_NAMES, DEPTH_CUTOUT_SHAPES, normal_mode_for_shape
+from .shape import CUTOUT_NODE_GROUP_NAMES, DEPTH_CUTOUT_SHAPES
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
@@ -163,17 +163,17 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         require_environment()
         source_path = require_input_path(self.input_path)
         generate_depth = self.shape in DEPTH_CUTOUT_SHAPES
-        normal_mode = normal_mode_for_shape(self.shape, self.generate_normal)
-        if generate_depth or normal_mode != "NONE":
+        generate_normal = generate_depth or self.generate_normal
+        if generate_normal:
             require_model(self.model)
         parameters = {
             "input": str(source_path),
             "device": production_device().lower(),
             "generate_depth": generate_depth,
-            "normal_mode": normal_mode,
+            "generate_normal": generate_normal,
             "max_input_size": int(self.max_ai_input_size),
         }
-        if generate_depth or normal_mode != "NONE":
+        if generate_normal:
             parameters.update(
                 geometry_job_parameters(
                     source_path,
@@ -200,13 +200,11 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 selection_mask.values,
                 alpha_threshold=self.alpha_threshold,
             )
-            normal_mode = normal_mode_for_shape(self.shape, self.generate_normal)
-            normal_key = f"{normal_mode.lower()}_normal"
-            if normal_mode != "NONE":
+            if self.shape in DEPTH_CUTOUT_SHAPES or self.generate_normal:
                 try:
-                    if normal_key not in value:
-                        raise FileNotFoundError(normal_key)
-                    normal_path = result.file(normal_key)
+                    if "object_normal" not in value:
+                        raise FileNotFoundError("object_normal")
+                    normal_path = result.file("object_normal")
                     normal_image = load_normal_result_image(normal_path, source_object)
                 except (FileNotFoundError, RuntimeError):
                     normal_missing = True
@@ -228,7 +226,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 depth_image=depth_image,
                 depth_metadata=depth_metadata,
                 normal_image=normal_image,
-                normal_mode=normal_mode,
                 alpha_threshold=self.alpha_threshold,
                 fine_outline=self.fine_outline,
                 boundary_padding=self.boundary_padding,

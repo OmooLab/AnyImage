@@ -17,9 +17,3 @@ CUTOUT_SHAPE_LABELS = {
 }
 
 DEPTH_CUTOUT_SHAPES = frozenset({"DEPTH_SYMMETRY", "DEPTH_SOLID"})
-
-
-def normal_mode_for_shape(shape, generate_normal):
-    if shape in DEPTH_CUTOUT_SHAPES:
-        return "OBJECT"
-    return "TANGENT" if generate_normal else "NONE"

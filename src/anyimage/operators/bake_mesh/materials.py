@@ -8,7 +8,7 @@ def validate_layer(layer, color):
     if layer.mute or layer.node_tree.animation_data:
         raise ValueError("Bake Mesh requires an unanimated texture layer")
     controls = {"Normal Scale", "Bump Scale", "Object Space", "Roughness Scale",
-                "Roughness Contrast", "Alpha Scale", "Alpha Background", "Emission Threshold"}
+                "Roughness Contrast", "Alpha Scale", "Alpha Background", "Highlight Threshold"}
     if (not controls | {"Color Texture", "Alpha Texture", "Normal Texture"} <= set(layer.inputs.keys())
             or set(layer.outputs.keys()) != {"Color", "Alpha", "Roughness", "Normal", "Emission"}):
         raise ValueError("Unsupported texture layer interface")
@@ -90,7 +90,7 @@ def connect_static_outputs(links, layer, sources):
 
 
 @contextmanager
-def static_material_outputs(material, layer, color, normal, scalar_images, emission_images, emission_strengths):
+def static_material_outputs(material, layer, color, normal, output_images, emission_images, emission_strengths):
     """Stage replacement nodes and restore original links on any failure."""
     if layer is None:
         yield
@@ -116,7 +116,7 @@ def static_material_outputs(material, layer, color, normal, scalar_images, emiss
 
     try:
         sources = {"Color": color.outputs["Color"], "Alpha": color.outputs["Alpha"]}
-        for channel, image in scalar_images.items():
+        for channel, image in output_images.items():
             sources[channel] = texture(image, (-400, -1000))
         if layer.outputs["Normal"].is_linked:
             if normal_image is not None:

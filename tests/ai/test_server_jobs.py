@@ -22,9 +22,11 @@ class ServerJobsTest(unittest.TestCase):
         cls.upscale_job = load_server_module("jobs.upscale")
 
 
-    def test_plane_job_requests_depth_and_matching_normal_space(self):
-        for plane_type, normal_space in (("DEPTH", "OBJECT"), ("RELIEF", "TANGENT")):
+    def test_plane_job_requests_matching_normal_space(self):
+        for plane_type in ("DEPTH", "RELIEF"):
+            normal_space = "OBJECT" if plane_type == "DEPTH" else "TANGENT"
             normal_key = f"{normal_space.lower()}_normal"
+            normal_filename = f"{normal_space.lower()}-normal.png"
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 input_path = root / "input.png"
@@ -32,7 +34,7 @@ class ServerJobsTest(unittest.TestCase):
                 context = FakeJobContext(root / "result", "generate_depth_plane_geometry")
                 depth_texture = context.directory / "depth.exr"
                 metadata = context.directory / "depth.json"
-                normal_texture = context.directory / f"{normal_space.lower()}-normal.png"
+                normal_texture = context.directory / normal_filename
                 parameters = {"input": str(input_path), "plane_type": plane_type}
                 with (
                     patch.object(
@@ -57,7 +59,7 @@ class ServerJobsTest(unittest.TestCase):
                 {
                     "depth": "depth.exr",
                     "depth_metadata": "depth.json",
-                    normal_key: f"{normal_space.lower()}-normal.png",
+                    normal_key: normal_filename,
                 },
             )
             generate.assert_called_once_with(
@@ -65,7 +67,8 @@ class ServerJobsTest(unittest.TestCase):
                 parameters,
                 input_path,
                 generate_depth=True,
-                normal_mode=normal_space,
+                generate_normal=True,
+                normal_space=normal_space,
             )
 
 

@@ -1,9 +1,9 @@
-"""Generate radial depth and object normal textures from the current RGBA panorama."""
+"""Generate radial depth and object-space normal textures from the current RGBA panorama."""
 
 import json
 
 from ..geometry.depth_texture import write_float_exr
-from ..geometry.panorama import camera_bases, merge_distances, merge_normals, sample_panorama, view_rays
+from ..geometry.panorama import camera_bases, merge_distances, merge_object_normals, sample_panorama, view_rays
 from ..media.input import open_image, validate_input_path
 from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, normalized_max_input_size
 from ..models import model_adapter
@@ -77,17 +77,14 @@ def run(context, parameters):
         }, separators=(",", ":")), encoding="utf-8")
         del rgba, distance, valid, valid_depth, alpha, distances
         context.progress(0.9, "Merging panorama normal maps")
-        normal = merge_normals(normals, masks, bases, width, height,
-                               cancel_check=context.check_cancelled)
-        # Panorama geometry mirrors projection X. O Texture to Layer rotates +90 degrees
-        # around X, so encode its inverse: (x, y, z) -> (-x, z, -y).
-        normal[..., :2] *= -1
+        normal = merge_object_normals(normals, masks, bases, width, height,
+                                      cancel_check=context.check_cancelled)
         normal *= .5
         normal += .5
         np.clip(normal, 0, 1, out=normal)
         normal *= 255
         np.rint(normal, out=normal)
-        encoded = normal.astype(np.uint8)[..., [0, 2, 1]]
+        encoded = normal.astype(np.uint8)
         Image.fromarray(encoded).save(outputs[2])
         context.check_cancelled()
         context.progress(1.0, "Panorama conversion data is ready")

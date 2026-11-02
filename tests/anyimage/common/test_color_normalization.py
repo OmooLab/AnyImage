@@ -210,3 +210,39 @@ def test_float_decode_preserves_hdr_values_and_matches_cycles(source):
     opaque[..., 3] = 1
     image.pixels.foreach_set(opaque.ravel())
     np.testing.assert_allclose(decoded[..., :3], bake_texture_colors(image), atol=1e-5)
+
+
+@pytest.mark.parametrize("space,is_float", [("sRGB", False), ("AgX Base sRGB", False), ("Non-Color", True), ("Linear Rec.709", True)])
+def test_normalized_color_is_bounded_repeatable_and_preserves_source(space, is_float):
+    from anyimage.common.color_image import decode_color_image
+    from anyimage.common.color_space import normalize_color_rgba
+    from anyimage.common.image import COLOR_NORMALIZED_PROPERTY, image_rgba
+    from anyimage.common.color_image import create_normalized_color_image
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    source = bpy.data.images.new("Color", width=4, height=1, alpha=True, float_buffer=is_float)
+    source.colorspace_settings.name = space
+    pixels = np.array([[.2, .4, .8, .25], [.9, .7, .3, 1], [.5, .5, .5, 0], [.1, .05, .2, .7]], np.float32)
+    if is_float:
+        pixels[:, :3] *= 10
+        pixels[0, 0] = -1
+    source.pixels.foreach_set(pixels.ravel())
+    original = images.image_pixels(source).copy()
+    expected = image_rgba(source) if space == "sRGB" else normalize_color_rgba(decode_color_image(source, space))
+    result = create_normalized_color_image(source)
+    try:
+        assert not result.is_float and result.colorspace_settings.name == "sRGB"
+        assert result[COLOR_NORMALIZED_PROPERTY]
+        assert bytes(result.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
+        np.testing.assert_allclose(image_rgba(result), expected, atol=1 / 255)
+        assert np.min(images.image_pixels(result)) >= 0 and np.max(images.image_pixels(result)) <= 1
+        again = create_normalized_color_image(result)
+        try:
+            np.testing.assert_array_equal(images.image_pixels(again), images.image_pixels(result))
+        finally:
+            bpy.data.images.remove(again)
+        np.testing.assert_array_equal(images.image_pixels(source), original)
+        assert source.colorspace_settings.name == space and source.is_float == is_float
+    finally:
+        bpy.data.images.remove(result)
+        bpy.data.images.remove(source)

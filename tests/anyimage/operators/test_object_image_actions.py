@@ -39,13 +39,12 @@ def _context(obj):
 
 
 def _material(kind="PLAIN", image=None):
-    source = SimpleNamespace(name=f"{kind} Source")
     color = image or bpy.data.images.new(f"{kind} Color", width=4, height=3, alpha=True)
     if kind == "SHADELESS":
-        return material_data.create_image_material(source, color, shadeless=True), color
+        return material_data.create_image_material(color, color, shadeless=True), color
     if kind == "PANORAMA":
-        return material_data.create_image_material(source, color, emission_strength=1.0), color
-    return material_data.create_image_material(source, color), color
+        return material_data.create_image_material(color, color, emission_strength=1.0), color
+    return material_data.create_image_material(color, color), color
 
 
 def test_pending_edits_follow_shared_material_replacement(tmp_path):

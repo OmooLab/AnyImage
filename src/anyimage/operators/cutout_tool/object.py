@@ -97,16 +97,11 @@ def create_shape_object(
     depth_image=None,
     depth_metadata=None,
     normal_image=None,
-    normal_mode="NONE",
     color_image,
     gesture="LASSO",
 ):
     from mathutils import Matrix
 
-    if shape in DEPTH_CUTOUT_SHAPES:
-        normal_mode = "OBJECT"
-    elif normal_mode not in {"NONE", "TANGENT", "OBJECT"}:
-        raise ValueError(f"Unsupported Cutout normal mode: {normal_mode}")
     bounds = crop_plane_bounds(
         source_object,
         content_bounds,
@@ -120,7 +115,7 @@ def create_shape_object(
             source_object.data,
             color_image,
             normal_image=normal_image,
-            normal_space="TANGENT" if normal_mode == "NONE" else normal_mode,
+            normal_space="OBJECT",
             scene=context.scene,
         )
         depth_reference = None
@@ -233,7 +228,6 @@ def create_cutout_shape(
     depth_image=None,
     depth_metadata=None,
     normal_image=None,
-    normal_mode="NONE",
     boundary_padding=DEFAULT_CUTOUT_BOUNDARY_PADDING,
     color_image,
     gesture="LASSO",
@@ -261,7 +255,6 @@ def create_cutout_shape(
         depth_image=depth_image,
         depth_metadata=depth_metadata,
         normal_image=normal_image,
-        normal_mode=normal_mode,
         color_image=color_image,
         gesture=gesture,
     )

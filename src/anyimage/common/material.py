@@ -14,7 +14,7 @@ SHADELESS_NODE_GROUP_NAME = "O Shadeless"
 def create_image_material(
     source_image,
     color_image,
-    bump_scale=0.0,
+    *,
     shadeless=False,
     normal_image=None,
     normal_space="TANGENT",
@@ -59,15 +59,18 @@ def create_image_material(
         material_inputs.node_tree = load_node_group(IMAGE_MATERIAL_NODE_GROUP_NAME)
         material_inputs.width = material_inputs.node_tree.default_group_node_width
         material_inputs.location = (-300.0, 300.0)
-        material_inputs.inputs["Emission Threshold"].default_value = max(
-            color_images.median_color_luminance(material_image), 0.0001,
-        )
-        if panorama:
-            material_inputs.inputs["Roughness Scale"].default_value = 1.0
-        material_inputs.inputs["Bump Scale"].default_value = bump_scale
+        if source_image == material_image:
+            threshold = color_images.estimate_highlight_threshold(material_image, panorama=panorama)
+        else:
+            # Use the complete source in the same color interpretation as the crop.
+            with color_images.material_color_image(source_image) as reference:
+                color_images.configure_material_color_image(reference, scene, panorama=panorama)
+                threshold = color_images.estimate_highlight_threshold(reference, panorama=panorama)
+        material_inputs.inputs["Highlight Threshold"].default_value = threshold
         if normal_space not in {"TANGENT", "OBJECT"}:
             raise ValueError(f"Unsupported normal space: {normal_space}")
-        material_inputs.inputs["Object Space"].default_value = normal_space == "OBJECT"
+        # Without a normal texture, the neutral tangent input follows the mesh.
+        material_inputs.inputs["Object Space"].default_value = normal_image is not None and normal_space == "OBJECT"
         links.new(color_texture.outputs["Color"], material_inputs.inputs["Color Texture"])
         links.new(alpha, material_inputs.inputs["Alpha Texture"])
         if normal_image is not None:

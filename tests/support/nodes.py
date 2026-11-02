@@ -9,7 +9,3 @@ CUTOUT_BUILDERS = {
     "DEPTH_SOLID": ODepthCutout.create_group,
     "DEPTH_SYMMETRY": OCutoutSymmetry.create_group,
 }
-
-ROTATION_ATTRIBUTE = "o_depth_rotation"
-FACE_ATTRIBUTE = "o_depth_face"
-AXIS_ATTRIBUTE = "o_depth_axis"

@@ -39,6 +39,14 @@ class OCutoutSymmetry(CustomGeometryGroup):
         math_1 = g.Math.maximum(named_attribute_3.o.attribute, g.BlurAttribute.float(named_attribute_3.o.attribute, 4))
         align_rotation_to_vector = g.AlignRotationToVector(vector=g.CombineXYZ(x=direction.x, y=direction.z, z=direction.y), axis="Y")
         rotation_to_euler = align_rotation_to_vector.o.rotation.to_euler()
+        rotation_axis_angle = g.RotationToAxisAngle(align_rotation_to_vector.o.rotation)
+        # Face-local protocol: axis azimuth, alignment angle, signed inverse Y scale.
+        # A bounded inverse keeps collapsed geometry finite; zero marks no transform.
+        normal_transform = g.CombineXYZ(
+            x=rotation_axis_angle.o.axis.z.atan2(rotation_axis_angle.o.axis.x),
+            y=rotation_axis_angle.o.angle,
+            z=1.0 / scale.max(0.000001),
+        )
         position_2 = g.Position().o.position
         compare_2 = position_2.y > 0.000001
         combine_xyz = g.CombineXYZ(x=position_2.x, z=position_2.z)
@@ -57,20 +65,19 @@ class OCutoutSymmetry(CustomGeometryGroup):
         vector_math_2 = named_attribute_2.o.attribute + (switch.point.evaluate() - named_attribute_2.o.attribute) * math_5
         math_6 = 0.2 * g.Normal().o.normal.blur(10).length() * g.NamedAttribute.float("_o_pinned_smooth_region_point").o.attribute
         vector_math_3 = g.VectorRotate.euler(g.Position(), rotation=rotation_to_euler, invert=True).o.vector + g.CombineXYZ(y=offset * -1.0)
-        store_named_attribute = (
+        aligned_geometry = (
             geometry
             >> g.SetPosition(position=vector_math_3 * g.CombineXYZ(y=scale, x=1.0, z=1.0))
-            >> g.StoreNamedAttribute.face.vector(name="o_depth_rotation", value=rotation_to_euler)
+            >> g.StoreNamedAttribute.face.vector(name="o_normal_transform", value=normal_transform)
         )
-        attribute_statistic = g.AttributeStatistic.edge.float(store_named_attribute, attribute=edge_vertices.o.position_1.distance(edge_vertices.o.position_2))
-        store_named_attribute_1 = (
-            g.DeleteGeometry.face(store_named_attribute, compare_2.point.evaluate())
+        attribute_statistic = g.AttributeStatistic.edge.float(aligned_geometry, attribute=edge_vertices.o.position_1.distance(edge_vertices.o.position_2))
+        retained_geometry = (
+            g.DeleteGeometry.face(aligned_geometry, compare_2.point.evaluate())
             >> g.DeleteGeometry.face(selection=evaluate_on_domain.o.value.face.evaluate() * face_neighbors.o.vertex_count > 1.5)
             >> g.SetPosition(selection=boolean_math_2, position=combine_xyz)
             >> g.SetShadeSmooth.face()
-            >> g.StoreNamedAttribute.face.float(name="o_depth_face", value=1.0)
         )
-        store_named_attribute_2 = g.StoreNamedAttribute.point.boolean(store_named_attribute_1, name="_o_pinned_smooth_boundary", value=boolean_math_1.point.evaluate())
+        store_named_attribute_2 = g.StoreNamedAttribute.point.boolean(retained_geometry, name="_o_pinned_smooth_boundary", value=boolean_math_1.point.evaluate())
         store_named_attribute_3 = g.StoreNamedAttribute.point.float(store_named_attribute_2, name="_o_pinned_smooth_normalization", value=g.BlurAttribute.float(named_attribute.o.attribute, weight=0.5))
         repeat_zone = g.RepeatZone(smooth)
         geometry_2 = repeat_zone.items.geometry(store_named_attribute_3, "Geometry")
@@ -85,7 +92,7 @@ class OCutoutSymmetry(CustomGeometryGroup):
             >> g.RemoveNamedAttribute(name="_o_pinned_smooth_*", pattern_mode="Wildcard")
         )
         delete_geometry = (
-            g.Switch.geometry(smooth, store_named_attribute_1, remove_named_attribute)
+            g.Switch.geometry(smooth, retained_geometry, remove_named_attribute)
             >> g.SetPosition(selection=boolean_math_3 | boolean_math_2, position=combine_xyz)
             >> g.DeleteGeometry.face(selection=(math_2.face.evaluate() < 0.000001) & (abs(g.Normal().o.normal.y) > 0.999))
             >> g.DeleteGeometry.face(selection=math_4 > 0.0)
@@ -95,13 +102,13 @@ class OCutoutSymmetry(CustomGeometryGroup):
             extrude_mesh
             >> g.SetPosition(selection=extrude_mesh.o.top, position=combine_xyz)
             >> g.StoreNamedAttribute.face.boolean(name="_o_symmetry_weld", value=extrude_mesh.o.side.point.evaluate())
-            >> g.StoreNamedAttribute.face.float(selection=extrude_mesh.o.side, name="o_depth_face", value=3.0)
+            >> g.StoreNamedAttribute.corner.float(selection=extrude_mesh.o.side, name="o_normal_reduction", value=1.0)
         )
         switch_1 = fill_sides.switch.geometry(delete_geometry, store_named_attribute_5)
         store_named_attribute_6 = (
             g.TransformGeometry(geometry=switch_1, scale=(1.0, -1.0, 1.0), mode="Components")
             >> g.FlipFaces()
-            >> g.StoreNamedAttribute.face.float(selection=g.Compare.float.equal(g.NamedAttribute.float("o_depth_face").o.attribute, 1.0, 0.001), name="o_depth_face", value=2.0)
+            >> g.StoreNamedAttribute.face.vector(name="o_normal_transform", value=normal_transform * (1.0, 1.0, -1.0))
             >> g.StoreNamedAttribute.face.integer(name="o_image_region", value=g.NamedAttribute.integer("o_image_region").o.attribute + 2.0)
         )
         merge_by_distance = g.MergeByDistance(geometry=g.JoinGeometry(geometry=(store_named_attribute_6, switch_1)), selection=compare_3, distance=0.000001, mode="All")
@@ -117,9 +124,8 @@ class OCutoutSymmetry(CustomGeometryGroup):
         map_range = abs(position_2.x).map_range(from_max=attribute_statistic.o.median * 4.0, to_min=1.0, to_max=0.0, interpolation_type="SMOOTHSTEP")
         (
             fill_sides.switch.geometry(merge_by_distance, g.Switch.geometry(smooth, merge_by_distance, remove_named_attribute_1))
-            >> g.StoreNamedAttribute.face.float(name="o_depth_axis", value=1.0)
             >> g.TransformGeometry(rotation=(0.0, 0.0, 1.5707963), mode="Components")
-            >> g.StoreNamedAttribute.point.float(name="o_normal_reduction", value=g.NamedAttribute.float("o_normal_reduction").o.attribute.max(map_range))
+            >> g.StoreNamedAttribute.corner.float(name="o_normal_reduction", value=g.NamedAttribute.float("o_normal_reduction").o.attribute.max(map_range))
             >> g.RemoveNamedAttribute(name="_o_*", pattern_mode="Wildcard")
             >> geometry_1
         )

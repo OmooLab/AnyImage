@@ -49,7 +49,7 @@ jobs:
         run: uv run pack
 
       - name: Run tests
-        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not BLENDER_EEVEE_NEXT"
+        run: uv run --group blender pytest tests/anyimage tests/nodes tests/tools -k "not EEVEE"
 
       - name: Check extension archives
         run: uv run --group blender python -m tools.validate_extensions

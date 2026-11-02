@@ -25,7 +25,7 @@ def test_saved_parameter_interfaces_match_definitions():
         "O Cutout Symmetry": {"Direction", "Offset", "Scale", "Fill Sides", "Smooth"},
         "O Depth Panorama": {"Subdivide", "Depth Scale", "Depth Split", "Dome Radius", "Horizon Bend", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Background": {"Color", "Strength", "Light", "Transmission (Cycles)"},
-        "O Texture to Layer": {"Alpha Scale", "Alpha Background", "Roughness Scale", "Roughness Contrast", "Emission Threshold", "Normal Scale", "Bump Scale", "Object Space"},
+        "O Texture to Layer": {"Alpha Scale", "Alpha Background", "Roughness Scale", "Roughness Contrast", "Highlight Threshold", "Normal Scale", "Bump Scale", "Object Space"},
     }
 
     def interfaces(groups):
@@ -135,6 +135,7 @@ def test_geometry_attribute_contract_includes_nested_groups():
         "o_balloon": ("FLOAT", "POINT"),
         "o_emission": ("FLOAT", "CORNER"),
         "o_image_region": ("INT", "FACE"),
+        "o_normal_transform": ("FLOAT_VECTOR", "FACE"),
         "_o_depth_cut": ("BOOLEAN", "CORNER"),
         "_o_depth_limit_boundary": ("BOOLEAN", "POINT"),
         "_o_boundary_smooth_weight": ("FLOAT", "POINT"),
@@ -146,14 +147,13 @@ def test_geometry_attribute_contract_includes_nested_groups():
         "_o_leaf_source_index": ("INT", "POINT"),
         "_o_pinned_smooth_boundary": ("BOOLEAN", "POINT"),
         "_o_pinned_smooth_normalization": ("FLOAT", "POINT"),
+        "_o_pinned_smooth_weight_point": ("FLOAT", "POINT"),
+        "_o_pinned_smooth_weight_corner": ("FLOAT", "CORNER"),
         "_o_pinned_smooth_region_point": ("FLOAT", "POINT"),
         "_o_pinned_smooth_region_corner": ("FLOAT", "CORNER"),
         "_o_side_base_uv": ("FLOAT_VECTOR", "POINT"),
         "_o_side_top_uv": ("FLOAT_VECTOR", "POINT"),
         "_o_symmetry_weld": ("BOOLEAN", "FACE"),
-        "o_depth_rotation": ("FLOAT_VECTOR", "FACE"),
-        "o_depth_face": ("FLOAT", "FACE"),
-        "o_depth_axis": ("FLOAT", "FACE"),
     }
     while pending:
         group = pending.pop()
@@ -168,7 +168,7 @@ def test_geometry_attribute_contract_includes_nested_groups():
                 continue
             name = node.inputs["Name"].default_value
             if name == "o_normal_reduction":
-                assert node.data_type == "FLOAT" and node.domain in {"POINT", "FACE"}
+                assert node.data_type == "FLOAT" and node.domain in {"POINT", "FACE", "CORNER"}
             else:
                 assert name in allowed, (group.name, name)
                 assert (node.data_type, node.domain) == allowed[name]

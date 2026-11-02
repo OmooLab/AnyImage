@@ -46,7 +46,6 @@ class CutoutOperatorsTest(BlenderTestCase):
                 "Bounds",
                 color_image=color,
                 normal_image=normal,
-                normal_mode="TANGENT",
                 depth_image=depth,
                 depth_metadata="Metadata",
             )
@@ -301,15 +300,21 @@ class CutoutOperatorsTest(BlenderTestCase):
                 return_value={"model": operator.model, "resolution_level": 5},
             ),
         ):
-            parameters = operator.request(context)
-
-        self.assertEqual(
-            [call.args[0] for call in require_model.call_args_list],
-            [operator.model],
-        )
-        self.assertTrue(parameters["generate_depth"])
-        self.assertNotIn("alpha_threshold", parameters)
-        self.assertEqual(parameters["normal_mode"], "OBJECT")
+            for shape in ("FLAT", "SOLID", "DEPTH_SOLID", "DEPTH_SYMMETRY"):
+                for enabled in (False, True):
+                    with self.subTest(shape=shape, enabled=enabled):
+                        operator.shape = shape
+                        operator.generate_normal = enabled
+                        require_model.reset_mock()
+                        parameters = operator.request(context)
+                        depth = shape in {"DEPTH_SOLID", "DEPTH_SYMMETRY"}
+                        self.assertEqual(parameters["generate_depth"], depth)
+                        self.assertEqual(parameters["generate_normal"], depth or enabled)
+                        self.assertNotIn("alpha_threshold", parameters)
+                        if depth or enabled:
+                            require_model.assert_called_once_with(operator.model)
+                        else:
+                            require_model.assert_not_called()
 
 
     def test_cutout_tool_settings_gate_normal_generation(self):
@@ -397,7 +402,7 @@ class CutoutOperatorsTest(BlenderTestCase):
         results = (
             SimpleNamespace(value={}, file=lambda _key: Path(__file__)),
             SimpleNamespace(
-                value={"tangent_normal": "missing.png"},
+                value={"object_normal": "missing.png"},
                 file=Mock(side_effect=RuntimeError("Job result file does not exist")),
             ),
         )

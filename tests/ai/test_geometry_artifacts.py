@@ -69,7 +69,7 @@ class GeometryArtifactsTest(unittest.TestCase):
         self.assertEqual(set(metadata), {"image_size", "intrinsics"})
 
 
-    def test_object_normal_texture_matches_depth_surface_axes(self):
+    def test_normal_texture_matches_tangent_and_object_axes(self):
         import numpy as np
         from PIL import Image
 
@@ -77,7 +77,7 @@ class GeometryArtifactsTest(unittest.TestCase):
         GeometryFrame = importlib.import_module(
             "server.models.geometry"
         ).GeometryFrame
-        output_path = self.storage_root / "object-normal.png"
+        output_path = self.storage_root / "tangent-normal.png"
         camera_normals = np.asarray(
             [[
                 (0.0, 0.0, -1.0),
@@ -95,14 +95,11 @@ class GeometryArtifactsTest(unittest.TestCase):
             normal=camera_normals,
         )
 
-        normal_texture.write_camera_normal_texture(
+        normal_texture.write_normal_texture(
             frame,
             valid,
-            (0, 0),
-            (4, 1),
             (4, 1),
             output_path,
-            normal_mode="OBJECT",
         )
 
         with Image.open(output_path) as opened:
@@ -119,6 +116,19 @@ class GeometryArtifactsTest(unittest.TestCase):
                 dtype=np.uint8,
             ),
         )
+
+
+        normal_texture.write_normal_texture(
+            frame, valid, (4, 1), output_path, normal_space="OBJECT",
+        )
+        with Image.open(output_path) as opened:
+            encoded = np.asarray(opened, dtype=np.uint8)
+        np.testing.assert_array_equal(encoded, [[
+            (127, 0, 127),
+            (255, 127, 127),
+            (127, 127, 0),
+            (128, 0, 128),
+        ]])
 
 
     def test_moge_model_input_preserves_rgb_independently_of_alpha(self):
@@ -199,7 +209,7 @@ class GeometryArtifactsTest(unittest.TestCase):
                 {"max_input_size": 2048},
                 input_path,
                 generate_depth=True,
-                normal_mode="OBJECT",
+                generate_normal=True,
             )
 
         np.testing.assert_array_equal(write.call_args.args[0][..., 3], [[1, 0], [1, 1]])
@@ -210,7 +220,7 @@ class GeometryArtifactsTest(unittest.TestCase):
         infer.assert_called_once()
         self.assertEqual(
             set(result),
-            {"depth", "depth_metadata", "object_normal"},
+            {"depth", "depth_metadata", "tangent_normal"},
         )
         self.assertFalse((output_directory / "model-input.png").exists())
         self.assertTrue(all(path.is_file() for path in result.values()))
@@ -243,7 +253,7 @@ class GeometryArtifactsTest(unittest.TestCase):
                 {
                     "input": str(input_path),
                     "generate_depth": True,
-                    "normal_mode": "OBJECT",
+                    "generate_normal": True,
                 },
             )
 
@@ -260,9 +270,10 @@ class GeometryArtifactsTest(unittest.TestCase):
             {
                 "input": str(input_path),
                 "generate_depth": True,
-                "normal_mode": "OBJECT",
+                "generate_normal": True,
             },
             input_path,
             generate_depth=True,
-            normal_mode="OBJECT",
+            generate_normal=True,
+            normal_space="OBJECT",
         )

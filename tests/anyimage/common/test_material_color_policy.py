@@ -146,12 +146,12 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         for key, image in data_textures.items()
     }
     color = color_image(source, (0, 0, 2, 2), images.image_rgba(source))
-    first = material.create_image_material(source, color, 0, shadeless=shadeless, scene=scene, **data_textures)
+    first = material.create_image_material(source, color, shadeless=shadeless, scene=scene, **data_textures)
     original_color = color_texture(first)
     assert original_color.colorspace_settings.name == "sRGB"
     assert original_color.alpha_mode == "PREMUL"
     before_repeat = images.image_pixels(original_color)
-    second = material.create_image_material(source, original_color, 0, shadeless=shadeless, scene=scene)
+    second = material.create_image_material(source, original_color, shadeless=shadeless, scene=scene)
     new_color = color_texture(second)
     assert new_color == original_color
     np.testing.assert_array_equal(images.image_pixels(new_color), before_repeat)

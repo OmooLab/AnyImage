@@ -21,7 +21,9 @@ from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modi
 def image_object(request):
     kind = request.param
     if kind == "PANORAMA":
-        obj, _ = panorama(subdivide=1)
+        obj, set_value = panorama(subdivide=1)
+        set_value("Horizon Bend", -0.1)
+        obj.data.from_pydata([(0, 0, 0)], [], [])
     else:
         obj, set_value, plane, *_ = create_surface("DEPTH" if kind == "PLANE" else kind)
         if kind == "PLANE":
@@ -40,8 +42,8 @@ def image_object(request):
         normal.pixels.foreach_set(np.tile(np.array([.7, .6, .95, 1], np.float32), 128 * 64))
         normal.pack()
     if kind == "PANORAMA":
-        material = create_image_material(color, color, normal_image=normal, normal_space="OBJECT",
-                                         texture_extension="REPEAT", emission_strength=1.0)
+        material = create_image_material(color, color, normal_image=normal,
+                                         normal_space="OBJECT", texture_extension="REPEAT", emission_strength=1.0)
     else:
         material = create_image_material(color, color, normal_image=normal,
                                          normal_space="OBJECT" if kind == "DEPTH" else "TANGENT")
@@ -72,8 +74,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     material = obj.active_material
     images = {i.name: i.as_pointer() for i in bpy.data.images}
     color_pixels = image_pixels(color).copy()
-    from anyimage.common.color_space import normalize_color_rgba
-    expected_color = normalize_color_rgba(color_pixels.reshape(-1, 4)).ravel()
+    expected_color = color_pixels
     bake = Mock(wraps=materialization.bake_material_output)
     monkeypatch.setattr(materialization, "bake_material_output", bake)
     assert BakeMesh.poll(bpy.context)
@@ -88,11 +89,15 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert obj.active_material == material
     remaining = {i.name: i.as_pointer() for i in bpy.data.images}
     assert all(images[name] == identity for name, identity in remaining.items() if name in images)
-    assert set(remaining) - set(images) == {"Color_roughness.png", "Color_alpha.png"} | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
+    assert set(remaining) - set(images) == {"Color_roughness.png"} | ({"Color_normal.exr"} if kind == "PLANE" else set()) | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
     assert set(images) - set(remaining) == ({"Radial Depth"} if kind == "PANORAMA" else {"Camera"} if kind != "PLANE" else set())
-    np.testing.assert_allclose(image_pixels(color), expected_color, atol=1 / 255)
-    assert color.colorspace_settings.name == "sRGB" and not color.is_float
-    assert bytes(color.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
+    actual = image_pixels(color).reshape(-1, 4)
+    expected = expected_color.reshape(-1, 4)
+    visible = (actual[:, 3] > 0) & (expected[:, 3] > 0)
+    assert visible.any()
+    np.testing.assert_allclose(actual[visible, :3] / actual[visible, 3:4],
+                               expected[visible, :3] / expected[visible, 3:4], atol=1 / 255)
+    assert color.colorspace_settings.name == "Non-Color" and color.is_float
     np.testing.assert_array_equal([v.co[:] for v in obj.data.vertices], positions)
     np.testing.assert_array_equal([v.uv[:] for v in obj.data.uv_layers["UVMap"].data], uv)
     assert [tuple(p.vertices) for p in obj.data.polygons] == faces
@@ -107,7 +112,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
         node = next(n for n in material.node_tree.nodes if n.type == "NORMAL_MAP")
         assert node.space == "TANGENT" and node.inputs["Strength"].default_value == 1
     else:
-        assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Emission"]
+        assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal", "Emission"]
     bpy.context.scene.frame_set(2)
     assert trailing[0].strength == pytest.approx(.6)
 
@@ -133,7 +138,7 @@ def test_visibility_animation_does_not_apply_subsequent_modifier_twice(image_obj
 
 
 @pytest.mark.parametrize("image_object,depth_scale", [
-    ("DEPTH", 0), ("DEPTH", 1.5), ("RELIEF", .5),
+    ("DEPTH", 0), ("DEPTH", 1.5), ("RELIEF", .5), ("PANORAMA", 1),
 ], indirect=["image_object"])
 def test_single_region_normal_render_survives_attribute_cleanup(image_object, tmp_path, depth_scale):
     obj, kind, _, normal = image_object
@@ -146,14 +151,17 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     layer = next(n for n in obj.active_material.node_tree.nodes if n.type == "GROUP")
     strength = .6 if kind == "RELIEF" else 1.0
     layer.inputs["Normal Scale"].default_value = strength
-    before = render_material(obj, tmp_path / "before.exr", (0, -1, 0), with_uv_coverage=True)
+    direction = (0, -.2, 0) if kind == "PANORAMA" else (0, -1, 0)
+    before = render_material(obj, tmp_path / "before.exr", direction, with_uv_coverage=True)
     obj.data = materialization.materialize_mesh_and_textures(bpy.context, obj)
     obj.modifiers.clear()
-    after = render_material(obj, tmp_path / "after.exr", (0, -1, 0), with_uv_coverage=True)
+    after = render_material(obj, tmp_path / "after.exr", direction, with_uv_coverage=True)
     np.testing.assert_array_equal(before[1], after[1])
     visible = binary_erosion(before[1] == 1, iterations=3)
+    source_normals = before[0][visible, :3] * 2 - 1
+    np.testing.assert_allclose(np.linalg.norm(source_normals, axis=-1), 1, atol=.01)
     errors = np.linalg.norm(before[0][visible, :3] - after[0][visible, :3], axis=-1)
-    assert len(errors) and np.quantile(errors, .95) < .04
+    assert len(errors) and np.quantile(errors, .95) < .04, (kind, np.quantile(errors, [.5, .95, 1]))
     assert not any(n.type == "GROUP" for n in obj.active_material.node_tree.nodes)
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
 

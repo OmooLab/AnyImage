@@ -15,6 +15,31 @@ def free_edges(faces):
     return sum(count == 1 for count in edges.values())
 
 
+def test_panorama_object_normals_match_evaluated_mesh_coordinates():
+    from tests.anyimage.server.support import load_server_module
+
+    geometry = load_server_module("geometry.panorama")
+    bases = geometry.camera_bases()
+    rays = geometry.view_rays(64)
+    camera_normals = -rays / np.linalg.norm(rays, axis=-1, keepdims=True)
+    texture = geometry.merge_object_normals(
+        [camera_normals] * len(bases), np.ones((12, 64, 64), bool), bases, 512, 256,
+    )
+    # Include the PNG quantization used by the job.
+    texture = np.rint((texture + 1) * 127.5) / 127.5 - 1
+    obj, _ = panorama(subdivide=3)
+    evaluated_obj = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    mesh = evaluated_obj.to_mesh()
+    try:
+        uv = np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
+        actual = geometry.sample_panorama(texture, geometry.uv_directions(uv[:, 0], 1 - uv[:, 1]))
+        positions = np.array([mesh.vertices[loop.vertex_index].co[:] for loop in mesh.loops])
+        expected = -positions / np.linalg.norm(positions, axis=-1, keepdims=True)
+        np.testing.assert_allclose(actual, expected, atol=.012)
+    finally:
+        evaluated_obj.to_mesh_clear()
+
+
 @pytest.mark.parametrize("subdivide", [0, 1, 4])
 def test_quad_sphere_topology_and_radial_endpoints(subdivide):
     obj, set_value = panorama(subdivide=subdivide)
@@ -150,11 +175,11 @@ def test_horizon_bend_follows_depth_displacement_and_smoothing(depth_scale, dept
     set_value("Boundary Smooth", 3)
     before, faces, uv = evaluated(obj)
     radii = np.linalg.norm(before, axis=1)
-    for strength in (-0.2, 0.2):
+    for strength in (-1.0, 1.0):
         set_value("Horizon Bend", strength)
         after, after_faces, after_uv = evaluated(obj)
         expected = before.copy()
-        expected[:, 2] += strength * np.sum(before[:, :2] ** 2, axis=1) / 200
+        expected[:, 2] += strength * np.sum(before[:, :2] ** 2, axis=1) / 1000
         expected *= (radii / np.linalg.norm(expected, axis=1))[:, None]
         np.testing.assert_allclose(after, expected, atol=5e-5)
         np.testing.assert_allclose(np.linalg.norm(after, axis=1), radii, atol=5e-5)
@@ -165,22 +190,42 @@ def test_horizon_bend_follows_depth_displacement_and_smoothing(depth_scale, dept
 
 
 def test_horizon_bend_lowers_distant_horizon_more_and_keeps_poles_fixed():
-    depth = np.full((64, 128), 20.0)
-    depth[:, 64:] = 100.0
+    depth = np.full((64, 128), 100.0)
+    depth[:, 64:] = 200.0
     obj, set_value = panorama(depth, subdivide=3)
     before, _, _ = evaluated(obj)
-    set_value("Horizon Bend", -0.1)
+    set_value("Horizon Bend", -1.0)
     after, _, _ = evaluated(obj)
     poles = np.linalg.norm(before[:, :2], axis=1) < 1e-6
     assert poles.sum() == 2
     np.testing.assert_allclose(after[poles], before[poles], atol=1e-6)
     horizon = abs(before[:, 2]) < 1e-6
     radii = np.linalg.norm(before, axis=1)
-    near = horizon & np.isclose(radii, 20)
-    far = horizon & np.isclose(radii, 100)
+    near = horizon & np.isclose(radii, 100)
+    far = horizon & np.isclose(radii, 200)
     assert near.any() and far.any()
-    np.testing.assert_allclose(after[near, 2], -0.199990, atol=1e-5)
-    np.testing.assert_allclose(after[far, 2], -4.993762, atol=1e-5)
+    np.testing.assert_allclose(after[near, 2], -9.950372, atol=1e-5)
+    np.testing.assert_allclose(after[far, 2], -39.223227, atol=1e-5)
+    assert np.all(np.linalg.norm(after[horizon, :2], axis=1) < radii[horizon])
+
+
+def test_horizon_bend_keeps_depth_surface_fixed_when_dome_radius_changes():
+    mask = np.ones((64, 128))
+    mask[:, 64:] = 0
+    obj, set_value = panorama(60.0, mask, subdivide=3)
+    set_value("Depth Mask", False)
+    set_value("Boundary Smooth", 3)
+    before, faces, uv = evaluated(obj)
+    surface = np.linalg.norm(before, axis=1) < 100
+    assert surface.any() and (~surface).any()
+    set_value("Horizon Bend", -0.1)
+    near, _, _ = evaluated(obj)
+    set_value("Dome Radius", 1000.0)
+    far, far_faces, far_uv = evaluated(obj)
+    np.testing.assert_allclose(far[surface], near[surface], atol=1e-5)
+    assert np.max(np.linalg.norm(far[~surface] - near[~surface], axis=1)) > 700
+    assert far_faces == faces
+    np.testing.assert_allclose(far_uv, uv, atol=1e-6)
 
 
 def test_boundary_smooth_relaxes_both_masked_region_boundaries():
@@ -197,6 +242,8 @@ def test_boundary_smooth_relaxes_both_masked_region_boundaries():
     assert low.any()
     set_value("Boundary Smooth", 5)
     after, _, uv = evaluated(obj)
+    mesh = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
+    assert not any(attribute.name.startswith("_o_") for attribute in mesh.attributes)
     assert np.all((uv >= 0) & (uv <= 1))
     moved = np.linalg.norm(after - before, axis=1) > 1e-6
     assert moved[low].any() and moved[~low].any()
@@ -234,8 +281,9 @@ def test_controls_and_material_slot_inheritance():
     assert (inputs["Dome Radius"].min_value, inputs["Dome Radius"].max_value) == (1, 10000)
     assert inputs["Dome Radius"].subtype == "DISTANCE"
     assert inputs["Horizon Bend"].default_value == pytest.approx(-0.1)
+    assert (inputs["Horizon Bend"].min_value, inputs["Horizon Bend"].max_value) == (-1, 1)
     assert inputs["Subdivide"].default_value == 6
-    assert inputs["Horizon Bend"].subtype == "NONE"
+    assert inputs["Horizon Bend"].subtype == "FACTOR"
     assert inputs["Mask Threshold"].parent.name == "Options"
     assert inputs["Boundary Smooth"].parent.name == "Options"
     assert "Smooth Weight" not in inputs
@@ -368,7 +416,7 @@ def test_panorama_emission_tracks_inverse_mask(mask, depth_scale):
     obj, set_value = panorama(alpha=mask)
     set_value("Depth Mask", False)
     set_value("Depth Scale", depth_scale)
-    set_value("Horizon Bend", -0.2)
+    set_value("Horizon Bend", -0.1)
     result = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = result.to_mesh()
     try:

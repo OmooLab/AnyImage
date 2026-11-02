@@ -6,9 +6,6 @@ import bpy
 import numpy as np
 from scipy.spatial import cKDTree
 
-from tests.support.nodes import AXIS_ATTRIBUTE, FACE_ATTRIBUTE, ROTATION_ATTRIBUTE
-
-
 from tests.support.depth_symmetry import symmetry
 
 
@@ -23,7 +20,7 @@ def _evaluated(obj):
     try:
         points = np.array([vertex.co[:] for vertex in mesh.vertices])
         faces = [tuple(polygon.vertices) for polygon in mesh.polygons]
-        marker = np.array([item.value for item in mesh.attributes[FACE_ATTRIBUTE].data])
+        marker = np.array([item.value // 2 for item in mesh.attributes["o_image_region"].data])
     finally:
         result.to_mesh_clear()
     return points, faces, marker
@@ -60,8 +57,8 @@ def test_seam_clamps_geometry_onto_the_symmetry_plane(symmetry):
     tolerance = _tolerance(points)
     plane = np.abs(points[:, 0]) <= tolerance
 
-    assert _marked_vertices(points, faces, marker, 1)[:, 0].min() >= -tolerance
-    assert _marked_vertices(points, faces, marker, 2)[:, 0].max() <= tolerance
+    assert _marked_vertices(points, faces, marker, 0)[:, 0].min() >= -tolerance
+    assert _marked_vertices(points, faces, marker, 1)[:, 0].max() <= tolerance
     assert plane.any()
     assert not any(all(plane[index] for index in face) for face in faces)
     # 跨界的面保留，切口环被回拉到对称面上。
@@ -76,15 +73,12 @@ def test_fill_closes_sides_and_keeps_the_seam_welded_when_disabled(symmetry):
 
     # 补面应消除开放边；粗网格的多层表面可能在接缝共边，不要求流形拓扑。
     assert faces and not _open_edges(faces)
-    assert (marker == 3).any()
     assert band.any()
-    for face, value in zip(faces, marker):
-        if value == 3:
-            assert np.abs(points[list(face)][:, 0]).max() > tolerance
+    filled_face_count = len(faces)
 
     mirror_setter("Fill Sides", False)
     points, faces, marker = _evaluated(obj)
-    assert not (marker == 3).any()
+    assert len(faces) < filled_face_count
     tolerance = _tolerance(points)
     open_edges = _open_edges(faces)
     assert open_edges
@@ -92,6 +86,24 @@ def test_fill_closes_sides_and_keeps_the_seam_welded_when_disabled(symmetry):
         np.abs(points[list(edge)][:, 0]).max() <= tolerance
         for edge in open_edges
     )
+
+
+def test_symmetry_fill_suppresses_wall_normals(symmetry):
+    obj, cutout, _mirror, _cutout_setter, _mirror_setter = symmetry
+    # An offset triangle sheet produces quad walls without any depth walls or
+    # collapsed faces, making the newly filled surface unambiguous.
+    cutout.show_viewport = False
+    for vertex in obj.data.vertices:
+        vertex.co.y = -.4
+    obj.data.update()
+    bpy.context.view_layer.update()
+    mesh = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
+    walls = [p for p in mesh.polygons if len(p.vertices) == 4]
+    surface = [p for p in mesh.polygons if len(p.vertices) == 3]
+    reduction = mesh.attributes["o_normal_reduction"]
+    assert walls and surface
+    assert all(reduction.data[i].value == 1 for p in walls for i in p.loop_indices)
+    assert any(reduction.data[i].value < 1 for p in surface for i in p.loop_indices)
 
 
 def test_fill_smooth_relaxes_the_junction_band(symmetry):
@@ -136,17 +148,16 @@ def test_final_orientation_preserves_symmetry_and_normal_attributes(symmetry):
         assert cKDTree(points).query(points * (-1, 1, 1))[0].max() < 1e-5
         assert np.ptp(points[:, 2]) > 1.0
         assert all(face.use_smooth for face in mesh.polygons)
-        assert AXIS_ATTRIBUTE in mesh.attributes
-        assert ROTATION_ATTRIBUTE in mesh.attributes
-        assert FACE_ATTRIBUTE in mesh.attributes
-        axis = np.array([item.value for item in mesh.attributes[AXIS_ATTRIBUTE].data])
-        face = np.array([item.value for item in mesh.attributes[FACE_ATTRIBUTE].data])
-        rotation = np.array(
-            [item.vector[:] for item in mesh.attributes[ROTATION_ATTRIBUTE].data]
-        )
-        assert np.allclose(axis, 1)
-        assert set(np.unique(face)) <= {1, 2, 3}
-        assert np.isfinite(rotation).all()
+        assert not {"o_depth_axis", "o_depth_rotation", "o_depth_face"} & set(mesh.attributes.keys())
+        transform = mesh.attributes["o_normal_transform"]
+        assert transform.data_type == "FLOAT_VECTOR" and transform.domain == "FACE"
+        values = np.array([item.vector[:] for item in transform.data])
+        regions = np.array([item.value for item in mesh.attributes["o_image_region"].data])
+        np.testing.assert_allclose(values[:, :2], 0, atol=1e-6)
+        np.testing.assert_array_equal(values[:, 2], np.where(regions < 2, 1, -1))
+        reduction = mesh.attributes["o_normal_reduction"]
+        assert reduction.domain == "CORNER"
+        assert np.isfinite([item.value for item in reduction.data]).all()
         uv = np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
         assert uv[:, 1].min() >= -1e-6 and uv[:, 1].max() <= 1.0 + 1e-6
         assert (uv[:, 1] < 0.5 - 1e-6).any()
@@ -160,8 +171,8 @@ def test_symmetry_preserves_source_uv_and_separates_regions(symmetry):
     evaluated_obj = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     mesh = evaluated_obj.to_mesh()
     try:
-        marker = np.array([item.value for item in mesh.attributes[FACE_ATTRIBUTE].data])
-        owner_uv = {1: set(), 2: set()}
+        marker = np.array([item.value // 2 for item in mesh.attributes["o_image_region"].data])
+        owner_uv = {0: set(), 1: set()}
         for polygon, owner in zip(mesh.polygons, marker):
             values = np.array([
                 mesh.uv_layers["UVMap"].data[index].uv.y
@@ -173,10 +184,8 @@ def test_symmetry_preserves_source_uv_and_separates_regions(symmetry):
                     tuple(np.round(mesh.uv_layers["UVMap"].data[index].uv[:], 5))
                     for index in polygon.loop_indices
                 )
-        assert owner_uv[1] == owner_uv[2]
+        assert owner_uv[0] == owner_uv[1]
         regions = np.array([item.value for item in mesh.attributes["o_image_region"].data])
-        assert set(regions[marker == 1]) == {0, 1}
-        assert set(regions[marker == 2]) == {2, 3}
-        assert set(regions[marker == 3]) <= {0, 1, 2, 3}
+        assert set(regions) == {0, 1, 2, 3}
     finally:
         evaluated_obj.to_mesh_clear()

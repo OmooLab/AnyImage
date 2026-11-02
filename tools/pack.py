@@ -6,7 +6,6 @@ import subprocess
 import sys
 import tempfile
 import tomllib
-from dataclasses import dataclass
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -24,17 +23,12 @@ PYTHON_TARGETS = {
 BLENDER_PROVIDED_PACKAGES = frozenset({"numpy"})
 
 
-@dataclass(frozen=True)
-class Platform:
-    pip_platform: str
-
-
-PLATFORM_CONFIGS = {
-    "windows-x64": Platform(pip_platform="win_amd64"),
-    "macos-arm64": Platform(pip_platform="macosx_12_0_arm64"),
-    "linux-x64": Platform(pip_platform="manylinux2014_x86_64"),
+PIP_PLATFORMS = {
+    "windows-x64": "win_amd64",
+    "macos-arm64": "macosx_12_0_arm64",
+    "linux-x64": "manylinux2014_x86_64",
 }
-PLATFORMS = tuple(PLATFORM_CONFIGS)
+PLATFORMS = tuple(PIP_PLATFORMS)
 
 
 def require_node_asset():
@@ -61,7 +55,6 @@ def download_wheels(platform, destination, edition="full"):
     dependencies = project_dependencies(edition)
     if not dependencies:
         return []
-    config = PLATFORM_CONFIGS[platform]
     # Blender supplies NumPy; resolve against each runtime's compatible range.
     dependencies = [
         dependency
@@ -86,7 +79,7 @@ def download_wheels(platform, destination, edition="full"):
             "--only-binary=:all:",
             f"--python-version={python_version}",
             "--implementation=cp",
-            f"--platform={config.pip_platform}",
+            f"--platform={PIP_PLATFORMS[platform]}",
         ]
         if platform == "linux-x64":
             command.extend([

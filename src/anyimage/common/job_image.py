@@ -1,34 +1,12 @@
 """Prepare and commit image files for server jobs."""
 
 from pathlib import Path
-import shutil
-import tempfile
 import bpy
-import numpy as np
 
 from .color_image import load_material_color_image, save_color_png
-from .image import (
-    COLOR_NORMALIZED_PROPERTY, is_animated_image, image_is_packed, save_image_input,
-    image_path, cleanup_image_input, image_rgba,
-)
-
-
-def prepare_image_input(image):
-    """Prepare one still image for a Server job."""
-    if is_animated_image(image):
-        raise RuntimeError("Only still images are supported")
-    if image_is_packed(image) or image.is_dirty or image.source == "GENERATED":
-        return save_image_input(image)
-    source_path = image_path(image)
-    if not source_path.is_file():
-        raise RuntimeError(f"Source image file does not exist: {source_path}")
-    snapshot = Path(tempfile.mkdtemp(prefix="anyimage-input-")) / source_path.name
-    try:
-        shutil.copyfile(source_path, snapshot)
-    except OSError:
-        cleanup_image_input(snapshot)
-        raise
-    return snapshot
+from .image import COLOR_NORMALIZED_PROPERTY, image_rgba
+from .image_input import prepare_image_input
+from .hdr_image import build_recognition_rgba
 
 
 def load_image_edit_result(source_image, output_path):
@@ -73,7 +51,7 @@ def material_analysis_input(color_path):
         rgba = image_rgba(image)
         if image.alpha_mode == "NONE":
             rgba[..., 3] = 1
-        preview = recognition_rgba(
+        preview = build_recognition_rgba(
             rgba, associated=image.alpha_mode not in {"CHANNEL_PACKED", "NONE"}
         )
         output = path.parent / "analysis.png"
@@ -81,18 +59,3 @@ def material_analysis_input(color_path):
         return output
     finally:
         bpy.data.images.remove(image)
-
-
-def recognition_rgba(rgba, *, associated=True):
-    """Tone-map scene-linear pixels for sRGB recognition without changing the source."""
-    alpha = rgba[..., 3:4]
-    rgb = rgba[..., :3].astype(np.float64)
-    if associated:
-        rgb = np.divide(rgb, alpha, out=np.zeros_like(rgb), where=alpha > 0)
-    rgb = np.maximum(rgb, 0)
-    luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
-    rgb /= 1 + luminance[..., None]
-    encoded = np.where(rgb <= 0.0031308, rgb * 12.92, 1.055 * rgb ** (1 / 2.4) - 0.055)
-    preview = np.ones(rgba.shape, dtype=np.float32)
-    preview[..., :3] = np.clip(encoded, 0, 1) * alpha
-    return preview

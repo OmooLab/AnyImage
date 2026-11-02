@@ -78,7 +78,7 @@ def test_local_export_failure_cleans_temporary_output(tmp_path):
     module = load_sync_models()
     model = replace(next(model for model in module.MODEL_FILES if model.build), folder="test")
 
-    def export(exporter, source, destination):
+    def export(source, destination):
         destination.write_bytes(b"partial")
         raise RuntimeError("export failed")
 
@@ -86,7 +86,7 @@ def test_local_export_failure_cleans_temporary_output(tmp_path):
         patch.object(module, "MODELS_DIR", tmp_path),
         patch.object(module, "PROJECT_ROOT", tmp_path),
         patch.object(module, "prepare_source", return_value=tmp_path / "weights.pth"),
-        patch("tools.models.exports.export_model", side_effect=export),
+        patch("tools.models.realesrgan_export.export_realesrgan_wdn_x4", side_effect=export),
     ):
         model.destination.parent.mkdir()
         model.destination.write_bytes(b"original")

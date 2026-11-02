@@ -64,9 +64,3 @@ def test_animated_png_is_rejected(media, tmp_path):
     with pytest.raises(RuntimeError, match="Only still images"):
         with media.open_image(path):
             pytest.fail("Animated images must not reach processing")
-
-
-def test_ai_jobs_support_cooperative_cancellation(media):
-    with pytest.raises(media.JobCancelled):
-        media.check_cancelled(lambda: True)
-    media.check_cancelled(lambda: False)

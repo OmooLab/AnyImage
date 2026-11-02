@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from anyimage import ai_menu as menu
+from anyimage import ai_menus as menu
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh.materialization import mesh_bake_modifiers
 
@@ -43,7 +43,7 @@ def test_bake_menu_uses_image_prefix_with_arbitrary_modifiers(monkeypatch, group
     assert BakeMesh.poll(context) is bool(count)
     layout = SimpleNamespace(operator=Mock(), separator=Mock())
     monkeypatch.setattr(menu, "draw_image_actions", Mock())
-    menu.AnyImageObjectMenu.draw(SimpleNamespace(layout=layout), context)
+    menu.ObjectMenu.draw(SimpleNamespace(layout=layout), context)
     layout.operator.assert_called_once_with(BakeMesh.bl_idname, icon="MESH_DATA")
     context.mode = "EDIT_MESH"
     assert not BakeMesh.poll(context)

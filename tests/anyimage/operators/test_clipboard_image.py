@@ -395,7 +395,7 @@ class ClipboardImageTest(BlenderTestCase):
                     mode=mode,
                     tool_settings=SimpleNamespace(
                         **{
-                            self.actions.PAINT_SETTINGS_BY_MODE[mode][0]:
+                            self.actions.PAINT_SETTINGS_BY_MODE[mode]:
                                 SimpleNamespace(
                                     unified_paint_settings=unified_settings,
                                 )
@@ -589,8 +589,7 @@ def build_dib_header(
 class FakeImage:
     def __init__(self, property_name, image_hash, packed):
         self.properties = {property_name: image_hash}
-        self.packed_file = object() if packed else None
-        self.packed_files = ()
+        self.packed_files = (object(),) if packed else ()
 
     def get(self, property_name, default=None):
         return self.properties.get(property_name, default)

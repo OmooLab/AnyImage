@@ -6,7 +6,7 @@ from PIL import Image
 
 from server.jobs import remove_background
 from server.model_manager import ModelManager
-from server.models import background
+from server.models import model_adapter
 from tests.anyimage.server.support import FakeJobContext
 
 
@@ -19,7 +19,7 @@ def test_models_dispatch_keep_alpha(tmp_path, key, kind):
     Image.new("RGBA", (7, 5), (60, 120, 180, 128)).save(source)
     manager = ModelManager(tmp_path / "models")
     context = FakeJobContext(tmp_path / "job", "remove_background", manager)
-    adapter = background.model_adapter(key)
+    adapter = model_adapter(key)
     parameters = {"input": str(source), "model": key, "device": "directml"}
     if kind == "alpha":
         parameters["output_kind"] = kind

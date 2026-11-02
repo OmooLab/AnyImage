@@ -3,7 +3,7 @@
 | 模块 | 职责 |
 | --- | --- |
 | `__init_base__.py`、`__init__.py` | 基础版与完整版的类型、工具、菜单、快捷键注册，以及完整版 Runtime 生命周期 |
-| `menu.py`、`ai_menu.py`、`panel.py` | 图片上下文菜单、AI 操作入口与服务器面板 |
+| `menus.py`、`ai_menus.py`、`panel.py` | 图片上下文菜单、AI 操作入口与服务器面板 |
 | `preferences.py`、`ai_preferences.py` | 公共工具设置、AI 设置、设备与模型枚举及读取入口 |
 | `properties.py`、`ai_properties.py` | 基础与 AI Scene 属性、手势与参考状态、参考生命周期和 Operator 属性构造 |
 | `tools.py`、`ai_tools.py` | 3D View WorkspaceTool 声明、顺序与注册 |
@@ -14,7 +14,9 @@
 
 ## 注册与配置
 
-顶层入口注册类型后，通过 `tools.py` 统一组织 WorkspaceTool，通过 `keymaps.py` 注册快捷键。注销时关闭 Runtime、清理参考资源、快捷键、菜单、Scene 属性和工具，最后按 `CLASSES` 逆序注销类型。公共设置与 AI 设置分别在 `preferences.py`、`ai_preferences.py` 定义，均通过 `addon_preferences()` 读取。基础文件只依赖基础能力，AI 文件在其上扩展；`__init_base__.py` 注册基础类型与翻译，`__init__.py` 组合基础和 AI 类型与翻译。两版各自维护注册和注销流程。
+`__init_base__.py` 与 `__init__.py` 分别直接导入本版的类型，在各自的 `CLASSES` 中按设置、Operator、Menu、Panel 逐项列出，并各自直接遍历静态清单注册，注销时反序遍历同一清单。生成任务类型先于对应操作入口注册。完整版从公共与 AI 翻译目录组合译文。
+
+顶层入口注册类型后，通过 `tools.py` 组织 WorkspaceTool，通过 `keymaps.py` 注册快捷键。注销时关闭 Runtime、清理参考资源、快捷键、菜单、Scene 属性和工具，最后按 `CLASSES` 逆序注销类型。公共设置与 AI 设置分别在 `preferences.py`、`ai_preferences.py` 定义，均通过 `addon_preferences()` 读取。基础文件只依赖基础能力，AI 文件在其上扩展。
 
 **处理分辨率上限** 限制模型分析输入和**2倍高清**可提交源图的长边；**画框分辨率上限** 限制**重设画框**输出长边；**最小相对边长** 与 **边界扩展** 控制**立体裁切**的网格密度和轮廓边界采样。
 

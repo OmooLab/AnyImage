@@ -1,3 +1,3 @@
 from .operators import CreateCutoutShape, SelectCutoutSelection
 
-CLASSES = (CreateCutoutShape, SelectCutoutSelection)
+__all__ = ("CreateCutoutShape", "SelectCutoutSelection")

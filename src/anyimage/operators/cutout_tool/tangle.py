@@ -1,7 +1,8 @@
 # Upstream: https://github.com/dcm3c/tangle/tree/66221c398cd90f06a7beb0c0abf637b269313af3
 # Original tangle.py SHA256: e53fe29bb9fe5174d1735f2d7060b1d7d14f1005666ef60bb93e27b4e0caa679
 # Local changes: memory entry point, isolated numeric context, resource limits;
-# removed CLI, file IO, region assignment and periodic boundary support.
+# fixed Cutout quality settings; removed CLI, file IO, region assignment and
+# periodic boundary support.
 # Numerical meshing core retained under MIT.
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 David Meeker
@@ -1636,11 +1637,10 @@ def insert_point_lawson(mesh, np, hint_tri, constrained_edges, affected, min_dis
 # Quality refinement
 # ============================================================
 
-def tri_metric(mesh, ti, min_ang_threshold, global_max_a,
-               cos_min_ang=-1.0):
+def tri_metric(mesh, ti, max_area, cos_min_ang):
     t = mesh.triangles[ti]
     if t.v[0] < 0:
-        return (0, False, False, 0, -1, 0, 0, 0, 0)
+        return (0, False, False, 0, 0, 0)
     a = mesh.vertices[t.v[0]]
     b = mesh.vertices[t.v[1]]
     c = mesh.vertices[t.v[2]]
@@ -1654,8 +1654,7 @@ def tri_metric(mesh, ti, min_ang_threshold, global_max_a,
     cross = (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x)
     area = 0.5 * abs(cross)
 
-    effective_max_area = global_max_a
-    area_viol = effective_max_area > 0 and area > effective_max_area + EPS
+    area_viol = area > max_area + EPS
 
     # Fast angle check using cosine comparison (no hypot/acos)
     # Minimum angle < threshold iff maximum cosine > cosMinAng.
@@ -1663,39 +1662,32 @@ def tri_metric(mesh, ti, min_ang_threshold, global_max_a,
     # Compare squared: (lb²+lc²-la²)² > cos²Threshold · 4·lb²·lc²
     ang_viol = False
     max_cos_ratio = 0.0
-    if min_ang_threshold > 0 and cos_min_ang > -0.5:
-        cos2t = cos_min_ang * cos_min_ang
-        for num, prod in ((lb2 + lc2 - la2, lb2 * lc2),
-                          (la2 + lc2 - lb2, la2 * lc2),
-                          (la2 + lb2 - lc2, la2 * lb2)):
-            if num > 0:
-                denom = cos2t * 4.0 * prod
-                if denom > 0:
-                    ratio = num * num / denom
-                    if ratio > 1.0:
-                        ang_viol = True
-                        if ratio > max_cos_ratio:
-                            max_cos_ratio = ratio
-    elif min_ang_threshold > 0:
-        ang = min_angle(a, b, c)
-        ang_viol = ang < min_ang_threshold - EPS
-        if ang_viol:
-            max_cos_ratio = (min_ang_threshold - ang) / min_ang_threshold + 1.0
+    cos2t = cos_min_ang * cos_min_ang
+    for num, prod in ((lb2 + lc2 - la2, lb2 * lc2),
+                      (la2 + lc2 - lb2, la2 * lc2),
+                      (la2 + lb2 - lc2, la2 * lb2)):
+        if num > 0:
+            denom = cos2t * 4.0 * prod
+            if denom > 0:
+                ratio = num * num / denom
+                if ratio > 1.0:
+                    ang_viol = True
+                    if ratio > max_cos_ratio:
+                        max_cos_ratio = ratio
 
     if not area_viol and not ang_viol:
-        return (0, False, False, area, effective_max_area, la2, lb2, lc2, cross)
+        return (0, False, False, la2, lb2, lc2)
     metric = 0
     if area_viol:
-        metric = area / (effective_max_area if effective_max_area > 0 else 1.0)
+        metric = area / max_area
     if ang_viol:
         metric = max(metric, max_cos_ratio)
-    return (metric, ang_viol, area_viol, area, effective_max_area, la2, lb2, lc2, cross)
+    return (metric, ang_viol, area_viol, la2, lb2, lc2)
 
 
 def refine_quality(mesh, max_area, n_input_verts):
     min_ang_val = 10.0
-    cos_min_ang = math.cos(min_ang_val * math.pi / 180.0) if min_ang_val > 0 else -1.0
-    global_max_a = max_area
+    cos_min_ang = math.cos(min_ang_val * math.pi / 180.0)
 
     # Estimate final triangle count from CDT using LFS integral with
     # circle-of-influence model for refinement seed vertices.
@@ -1739,10 +1731,7 @@ def refine_quality(mesh, max_area, n_input_verts):
     # and median circumradius of incident CDT triangles
     bg_size = [1e30] * nv
     for vi in range(nv):
-        # Area constraint contribution (only if area limiting is active)
-        amax = global_max_a
-        if amax > 0:
-            bg_size[vi] = math.sqrt(4.0 * amax / math.sqrt(3.0))
+        bg_size[vi] = math.sqrt(4.0 * max_area / math.sqrt(3.0))
 
         # Median circumradius of incident CDT triangles
         inc_r = []
@@ -1766,7 +1755,6 @@ def refine_quality(mesh, max_area, n_input_verts):
     # Pass 1: background mesh estimate from CDT triangles
     alpha = math.sqrt(3.0) / 4.0
     pi_over_alpha = math.pi / alpha
-    cos_min_angle = math.cos(min_ang_val * math.pi / 180.0)
 
     est_background = 0.0
     for i in range(nt):
@@ -1785,7 +1773,7 @@ def refine_quality(mesh, max_area, n_input_verts):
         cos_a1 = (e0*e0 + e2*e2 - e1*e1) / (2*e0*e2 + 1e-30)
         cos_a2 = (e0*e0 + e1*e1 - e2*e2) / (2*e0*e1 + 1e-30)
         cos_max = max(cos_a0, cos_a1, cos_a2)
-        is_bad = cos_max > cos_min_angle
+        is_bad = cos_max > cos_min_ang
         # Angle-area interaction: 1.7x when area dominates on bad triangles
         if is_bad and bg_est > 6.0:
             est_background += bg_est * 1.7
@@ -1930,8 +1918,6 @@ def refine_quality(mesh, max_area, n_input_verts):
         arms make the wedge isoceles (min angle >= (180-theta)/2) so the
         resonance cannot form. Everywhere else: exact midpoint.
         """
-        if min_ang_val <= 0.0:
-            return 0.5   # no angle bound -> no resonance possible
         seg = mesh.segments[si]
         sa, sb = mesh.vertices[seg.v0], mesh.vertices[seg.v1]
         sx, sy = sb.x - sa.x, sb.y - sa.y
@@ -2113,18 +2099,16 @@ def refine_quality(mesh, max_area, n_input_verts):
     GUARD_FACTOR = 0.5  # too-close-insertion guard: reject radius factor
 
     def prio_key(mr):
-        return min(mr[5], mr[6], mr[7])  # shortest squared edge
+        return min(mr[3], mr[4], mr[5])  # shortest squared edge
 
     pq = []
     for i in range(len(mesh.triangles)):
-        mr = tri_metric(mesh, i, min_ang_val, global_max_a, cos_min_ang)
+        mr = tri_metric(mesh, i, max_area, cos_min_ang)
         if mr[0] > 0:
             heappush(pq, (prio_key(mr), i, mesh.triangles[i].generation, 0))
 
     # Precompute off-center constant (loop-invariant)
-    offconst = (0.475 * math.sqrt(
-        (1.0 + math.cos(min_ang_val * math.pi / 180.0)) /
-        (1.0 - math.cos(min_ang_val * math.pi / 180.0)))) if min_ang_val > 0 else 0
+    offconst = 0.475 * math.sqrt((1.0 + cos_min_ang) / (1.0 - cos_min_ang))
 
     iterations = 0
     while pq and steiner_count[0] < max_steiner:
@@ -2140,11 +2124,10 @@ def refine_quality(mesh, max_area, n_input_verts):
             continue
         if bt.generation != gen:
             continue
-        tmr = tri_metric(mesh, bad_idx, min_ang_val, global_max_a, cos_min_ang)
+        tmr = tri_metric(mesh, bad_idx, max_area, cos_min_ang)
         if tmr[0] <= 0:
             continue
-        ang_viol, area_viol, area, _ = tmr[1], tmr[2], tmr[3], tmr[4]
-        tmr_la2, tmr_lb2, tmr_lc2 = tmr[5], tmr[6], tmr[7]
+        _, ang_viol, area_viol, tmr_la2, tmr_lb2, tmr_lc2 = tmr
 
         a = mesh.vertices[bt.v[0]]
         b = mesh.vertices[bt.v[1]]
@@ -2247,14 +2230,14 @@ def refine_quality(mesh, max_area, n_input_verts):
                 if (bad_idx not in seg_aff and retry + 1 < REQUEUE_CAP and
                         bad_idx < len(mesh.triangles) and
                         mesh.triangles[bad_idx].v[0] >= 0):
-                    mrb = tri_metric(mesh, bad_idx, min_ang_val, global_max_a,
+                    mrb = tri_metric(mesh, bad_idx, max_area,
                                      cos_min_ang)
                     if mrb[0] > 0:
                         heappush(pq, (prio_key(mrb), bad_idx,
                                       mesh.triangles[bad_idx].generation, retry + 1))
                 for ti2 in seg_aff:
                     if 0 <= ti2 < len(mesh.triangles) and mesh.triangles[ti2].v[0] >= 0:
-                        mr2 = tri_metric(mesh, ti2, min_ang_val, global_max_a,
+                        mr2 = tri_metric(mesh, ti2, max_area,
                                          cos_min_ang)
                         if mr2[0] > 0:
                             heappush(pq, (prio_key(mr2), ti2,
@@ -2262,7 +2245,7 @@ def refine_quality(mesh, max_area, n_input_verts):
                         for k in range(3):
                             nb = mesh.triangles[ti2].neighbors[k]
                             if nb >= 0:
-                                mr2 = tri_metric(mesh, nb, min_ang_val, global_max_a,
+                                mr2 = tri_metric(mesh, nb, max_area,
                                                  cos_min_ang)
                                 if mr2[0] > 0:
                                     heappush(pq, (prio_key(mr2), nb,
@@ -2293,7 +2276,7 @@ def refine_quality(mesh, max_area, n_input_verts):
         # neighbors cannot have changed status — no neighbor sweep needed.
         for ti in sorted(set(affected)):
             if 0 <= ti < len(mesh.triangles):
-                mr = tri_metric(mesh, ti, min_ang_val, global_max_a, cos_min_ang)
+                mr = tri_metric(mesh, ti, max_area, cos_min_ang)
                 if mr[0] > 0:
                     heappush(pq, (prio_key(mr), ti, mesh.triangles[ti].generation, 0))
 

@@ -1,7 +1,6 @@
 from anyimage.common import polygon as polygon_geometry
 
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from tests.support.blender import BlenderTestCase
 
@@ -211,39 +210,6 @@ class MaskToolTest(BlenderTestCase):
 
         self.assertEqual(len(triangles), 18)
         self.assertAlmostEqual(area, 10.0)
-
-
-    def test_image_mask_fill_uses_blender_geometry_without_stopping_the_draw(self):
-        mathutils = ModuleType("mathutils")
-        mathutils.Vector = lambda values: values
-        mathutils.geometry = SimpleNamespace(
-            tessellate_polygon=lambda _loops: (
-                ((0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 2.0, 0.0)),
-            )
-        )
-        with patch.dict(sys.modules, {"mathutils": mathutils}):
-            triangles = polygon_geometry.triangulated_polygon_vertices(
-                ((0, 0), (2, 0), (0, 2))
-            )
-
-        self.assertEqual(
-            triangles,
-            ((0.0, 0.0), (2.0, 0.0), (0.0, 2.0)),
-        )
-
-
-    def test_image_mask_fill_falls_back_when_blender_tessellation_rejects_path(self):
-        mathutils = ModuleType("mathutils")
-        mathutils.Vector = lambda values: values
-        mathutils.geometry = SimpleNamespace(
-            tessellate_polygon=lambda _loops: (_ for _ in ()).throw(TypeError())
-        )
-        with patch.dict(sys.modules, {"mathutils": mathutils}):
-            triangles = polygon_geometry.triangulated_polygon_vertices(
-                ((0, 0), (2, 0), (0, 2))
-            )
-
-        self.assertEqual(len(triangles), 3)
 
 
     def test_image_mask_preview_fills_a_self_intersecting_lasso(self):

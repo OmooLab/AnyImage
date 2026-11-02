@@ -35,8 +35,8 @@ def oklab_to_linear_rgb(lab):
 
 
 def linear_rgb_to_srgb(rgb):
-    """Encode linear RGB without clipping floating-point image values."""
-    rgb = np.asarray(rgb, dtype=np.float32)
+    """Encode linear RGB while preserving floating-point precision and range."""
+    rgb = np.asarray(rgb)
     return np.where(
         rgb <= 0.0031308, rgb * 12.92,
         1.055 * np.maximum(rgb, 0.0) ** (1 / 2.4) - 0.055,

@@ -42,7 +42,7 @@ class RecordingLayout:
 
 class PreferencesTest(BlenderTestCase):
     def test_base_preferences_draw_only_tool_settings(self):
-        preferences = self.anyimage.preferences.AnyImagePreferences()
+        preferences = self.anyimage.preferences.PreferencesBase()
         preferences.layout = RecordingLayout([])
         preferences.draw(None)
         self.assertEqual(preferences.layout.properties, [
@@ -167,14 +167,14 @@ class PreferencesTest(BlenderTestCase):
                 self.assertEqual(record["validation_error"], "Checksum mismatch")
                 layout = Mock()
                 operator = layout.row.return_value.row.return_value.operator.return_value
-                self.anyimage.AnyImagePreferences._draw_model_status(layout, record, "AI Remove Background")
+                self.anyimage.Preferences._draw_model_status(layout, record, "AI Remove Background")
                 self.assertEqual(operator.model, spec.key)
                 self.assertEqual(layout.row.return_value.row.return_value.operator.call_args.kwargs["text"], "Download Again")
 
 
     def draw_preferences(self, status, catalog):
         operators = []
-        preferences = self.anyimage.AnyImagePreferences()
+        preferences = self.anyimage.Preferences()
         preferences.layout = RecordingLayout(operators)
         preferences.geometry_model = "MOGE2_VITS_NORMAL"
         preferences.background_model = "BEN2_BASE"
@@ -189,7 +189,7 @@ class PreferencesTest(BlenderTestCase):
 
 
     def test_depth_plane_request_includes_the_global_ai_input_limit(self):
-        operator = self.plane_geometry.GeneratePlaneGeometry()
+        operator = self.depth_plane_operators.GeneratePlaneGeometry()
         operator.plane_type = "DEPTH"
         operator.input_path = __file__
         operator.source_object_name = "Source"
@@ -200,9 +200,9 @@ class PreferencesTest(BlenderTestCase):
             scene=SimpleNamespace(anyimage_settings=SimpleNamespace())
         )
         with (
-            patch.object(self.plane_geometry, "require_environment"),
-            patch.object(self.plane_geometry, "require_model"),
-            patch.object(self.plane_geometry, "require_input_path", return_value=Path("input.png")),
+            patch.object(self.depth_plane_operators, "require_environment"),
+            patch.object(self.depth_plane_operators, "require_model"),
+            patch.object(self.depth_plane_operators, "require_input_path", return_value=Path("input.png")),
             patch.object(self.ai, "production_device", return_value="CPU"),
         ):
             parameters = operator.request(context)

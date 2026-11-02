@@ -30,7 +30,7 @@ flowchart TD
 
 `geometry.py` 组合源 Alpha 与 Selection，提取连通轮廓与孔洞，按**边长**生成 `BaseShape`。**边长**是世界空间的网格目标边长，**最小相对边长**会按内容范围提高其下界。
 
-`mesh.py` 负责轮廓分离、孔洞处理、质量三角化和边界支撑，`polygon.py` 提供轮廓简化，`tangle.py` 是随包分发的 Delaunay 三角化核心。**精细轮廓**展开时保留小孔与细节轮廓，关闭时填洞并简化。
+`mesh.py` 负责轮廓分离、孔洞处理、质量三角化和边界支撑，`polygon.py` 提供轮廓简化，`tangle.py` 是随包分发的 Delaunay 三角化核心，按目标边长计算最大三角形面积，并以 10° 为质量细分的最小角目标。**精细轮廓**展开时保留小孔与细节轮廓，关闭时填洞并简化。
 
 `balloon.py` 负责 **体块鼓起算法**，按 Preferences 选择 Poisson 或 Teddy，生成所有预设共用的 POINT 属性 `o_balloon`。`boundary_padding.py` 按**边界扩展**沿结构内法线重采样轮廓附近的颜色与深度。
 

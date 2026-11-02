@@ -1,8 +1,8 @@
 """Export requested depth and normal artifacts from one MoGe prediction."""
 
 from ..media.input import open_image
-from ..media import DEFAULT_MAX_AI_INPUT_SIZE, limit_image
-from ..models import moge
+from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, limit_image
+from ..models.geometry import infer_geometry
 from .depth_texture import (
     write_depth_metadata,
     write_depth_texture,
@@ -30,7 +30,7 @@ def generate_moge_artifacts(
         )
         source_alpha = source.convert("RGBA").getchannel("A")
         output_size = source.size
-    frame = moge.infer(
+    frame = infer_geometry(
         context.resource("model_manager"),
         parameters,
         model_image,

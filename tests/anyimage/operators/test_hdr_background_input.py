@@ -7,13 +7,26 @@ import pytest
 from PIL import Image
 
 from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.hdr_image import save_hdr_result
-from anyimage.common.job_image import recognition_rgba
-from anyimage.common.image import cleanup_image_input, image_content_state, image_rgba, restore_image_content
+from anyimage.common.hdr_image import build_recognition_rgba, save_hdr_image
+from anyimage.common.image import image_content_state, image_rgba, restore_image_content
+from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.common import image_target as targets
 from tests.support.image_texture import texture, texture_context
 from tests.support.hdr_image import hdr_texture
+
+
+def test_recognition_preview_preserves_byte_rounding_at_half_step():
+    rgba = np.array([[[
+        0.0004766954225488007, 0.0009378092945553362,
+        0.9160183072090149, 0.9861790537834167,
+    ]]], dtype=np.float32)
+
+    preview = build_recognition_rgba(rgba)
+
+    np.testing.assert_array_equal(
+        np.rint(preview * 255).astype(np.uint8), [[[1, 3, 237, 255]]],
+    )
 
 
 def test_queued_hdr_results_follow_successful_target_replacements(hdr_texture, tmp_path):
@@ -63,7 +76,7 @@ def test_hdr_commit_keeps_float_pixels_and_transaction(hdr_texture, tmp_path, so
     rgba = image_rgba(source).copy()
     if source_kind != "generated":
         path = tmp_path / "source.exr"
-        save_hdr_result(rgba, path)
+        save_hdr_image(rgba, path)
         source = bpy.data.images.load(str(path), check_existing=False)
         texture.image = source
         if source_kind == "packed":
@@ -159,7 +172,7 @@ def test_hdr_preview_is_fixed_and_preserves_source(hdr_texture):
         with Image.open(first.path) as a, Image.open(second.path) as b:
             np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
         np.testing.assert_array_equal(image_rgba(image), before)
-        np.testing.assert_array_equal(recognition_rgba(np.zeros((1, 1, 4), np.float32)), [[[0, 0, 0, 1]]])
+        np.testing.assert_array_equal(build_recognition_rgba(np.zeros((1, 1, 4), np.float32)), [[[0, 0, 0, 1]]])
     finally:
         cleanup_image_input(first.path)
         cleanup_image_input(second.path)
@@ -176,14 +189,14 @@ def test_hdr_export_failure_releases_blender_resources(hdr_texture, tmp_path):
     blocked = tmp_path / "file"
     blocked.write_bytes(b"not a directory")
     with pytest.raises(RuntimeError):
-        save_hdr_result(image_rgba(hdr_texture.image), blocked / "output.exr")
+        save_hdr_image(image_rgba(hdr_texture.image), blocked / "output.exr")
     assert (len(bpy.data.images), len(bpy.data.scenes)) == (images, scenes)
 
 
 def test_straight_exr_only_changes_alpha(hdr_texture, tmp_path):
     path = tmp_path / "straight.exr"
     encoded = image_rgba(hdr_texture.image).copy()
-    save_hdr_result(encoded, path)
+    save_hdr_image(encoded, path)
     source = bpy.data.images.load(str(path), check_existing=False)
     source.alpha_mode = "STRAIGHT"
     hdr_texture.image = source

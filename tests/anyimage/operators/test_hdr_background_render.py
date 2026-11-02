@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 
 from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.image import cleanup_image_input, image_rgba
+from anyimage.common.image import image_rgba
+from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from tests.support.hdr_image import hdr_texture
 from tests.support.image_texture import texture, texture_context

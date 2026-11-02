@@ -2,9 +2,9 @@
 
 import bpy
 
-from .image import image_empty_bounds
-from .image_target import require_conversion_source
-from .geometry_image import (
+from ...common.image import image_empty_bounds
+from ...common.image_target import require_conversion_source
+from ...common.geometry_image import (
     depth_node_direction,
     depth_uniform_scale,
     fit_image_depth_direction,
@@ -13,15 +13,15 @@ from .geometry_image import (
     load_normal_result_image,
     reference_depth,
 )
-from .material import create_image_material
-from .color_image import material_color_image
-from .object import (
+from ...common.material import create_image_material
+from ...common.color_image import material_color_image
+from ...common.object import (
     finalize_object_result,
     modifier_input_identifier,
     set_modifier_input,
 )
-from .node import load_node_group
-from .image_plane import (
+from ...common.node import load_node_group
+from ...common.image_plane import (
     build_image_plane_matrix,
     create_image_plane_mesh,
 )

@@ -54,9 +54,9 @@ def test_base_contents_and_dependencies(tmp_path):
     assert all(not item.startswith("blendjob") for item in requirements)
     assert any(item.startswith("pillow") for item in requirements)
     assert any(item.startswith("scipy") for item in requirements)
-    with patch.object(validate_extensions.subprocess, "run") as validate:
+    with patch.object(validate_extensions, "subprocess") as validator_process:
         validate_extensions.validate_archives([full, base])
-    assert validate.call_count == 2
+    assert validator_process.run.call_count == 2
 
 
 @pytest.mark.parametrize("first", ["full", "base"])
@@ -107,7 +107,7 @@ base.register()
 settings = bpy.context.scene.anyimage_settings
 assert settings.cutout_edge_length > 0
 assert not hasattr(settings, 'cutout_generate_normal')
-assert not hasattr(base.AnyImagePreferences, 'storage_root')
+assert not hasattr(base.PreferencesBase, 'storage_root')
 assert 'blendjob' not in sys.modules
 image = bpy.data.images.new('Base source', width=4, height=4, alpha=True)
 image.pixels.foreach_set(np.ones(4 * 4 * 4, dtype=np.float32))
@@ -148,7 +148,6 @@ except RuntimeError as error:
     assert 'already enabled' in str(error)
 else:
     raise AssertionError('Second edition was enabled')
-second.unregister()
 assert full.runtime.enable.call_count == poll_starts
 assert bpy.context.scene.anyimage_settings.bl_rna.as_pointer() == original
 first.unregister()

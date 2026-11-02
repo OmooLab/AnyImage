@@ -10,7 +10,8 @@ from PIL import Image
 from anyimage.common import image as images, material
 from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
 from anyimage.operators import convert_to_plane as operators
-from anyimage.common import depth_plane as conversion, image_plane
+from anyimage.operators.depth_plane import object as conversion
+from anyimage.common import image_plane
 
 
 @pytest.fixture

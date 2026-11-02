@@ -26,25 +26,6 @@ class FakeSession:
 
 
 class Ben2OnnxTest(unittest.TestCase):
-    def test_infer_forwards_memory_release_boundary(self):
-        session = FakeSession()
-
-        with patch.object(
-            onnx_ben2,
-            "run_session",
-            side_effect=lambda model, names, feeds, **_options: model.run(
-                names, feeds
-            ),
-        ) as run:
-            result = onnx_ben2.infer_alpha(
-                session,
-                Image.new("RGB", (40, 20)),
-                release_memory=False,
-            )
-
-        self.assertEqual(result.shape, (20, 40))
-        self.assertFalse(run.call_args.kwargs["release_memory"])
-
     def test_preprocess_matches_model_layout(self):
         image = Image.new("RGB", (40, 20), (64, 128, 192))
         result = onnx_ben2.preprocess(image)

@@ -4,20 +4,17 @@ from pathlib import Path
 
 EDITIONS = ("full", "base")
 AI_PATHS = (
-    "ai_menu.py",
+    "ai_menus.py",
     "ai_preferences.py",
     "ai_properties.py",
     "ai_translations.py",
     "ai_tools.py",
     "common/ai.py",
-    "common/depth_plane.py",
     "common/job_image.py",
     "common/server_location.py",
     "operators/ai_setup.py",
     "operators/convert_to_panorama",
-    "operators/convert_to_depth_plane.py",
-    "operators/convert_to_relief.py",
-    "operators/plane_geometry.py",
+    "operators/depth_plane",
     "operators/cutout_tool/ai_interaction.py",
     "operators/cutout_tool/ai_operators.py",
     "operators/remove_background",

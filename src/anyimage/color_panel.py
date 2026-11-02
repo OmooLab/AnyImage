@@ -10,7 +10,7 @@ class ColorMatchPanel(bpy.types.Panel):
     bl_idname = "ANYIMAGE_PT_color_match"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AnyImage"
+    bl_category = "Any Image"
     bl_order = 10
 
     def draw(self, context):

@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from anyimage.common.job_image import prepare_target_input, apply_image_result
-from anyimage.common.image import cleanup_image_input
+from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
@@ -99,15 +99,16 @@ def test_queued_edits_capture_inputs_and_apply_in_order(tmp_path, same_target, s
 
 
 def test_disk_input_is_snapshotted_before_queueing(tmp_path):
-    from anyimage.common.job_image import prepare_image_input
+    from anyimage.common.image_input import prepare_image_input
     source = tmp_path / "source.png"
     source.write_bytes(b"first")
-    with patch("anyimage.common.job_image.is_animated_image", return_value=False), \
-         patch("anyimage.common.job_image.image_is_packed", return_value=False), \
-         patch("anyimage.common.job_image.image_path", return_value=source):
-        first = prepare_image_input(SimpleNamespace(is_dirty=False, source="FILE"))
-        source.write_bytes(b"second")
-        second = prepare_image_input(SimpleNamespace(is_dirty=False, source="FILE"))
+    image = SimpleNamespace(
+        is_dirty=False, source="FILE", packed_files=(),
+        filepath_from_user=lambda: str(source),
+    )
+    first = prepare_image_input(image)
+    source.write_bytes(b"second")
+    second = prepare_image_input(image)
     try:
         assert first.read_bytes() == b"first"
         assert second.read_bytes() == b"second"
@@ -120,7 +121,7 @@ def test_disk_input_is_snapshotted_before_queueing(tmp_path):
 @pytest.mark.parametrize("kind", ["dirty", "generated"])
 def test_input_snapshot_exports_current_unsaved_pixels(tmp_path, kind):
     from anyimage.common.image import image_pixels
-    from anyimage.common.job_image import prepare_image_input
+    from anyimage.common.image_input import prepare_image_input
 
     if kind == "dirty":
         original = tmp_path / "original.png"

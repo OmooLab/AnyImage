@@ -2,6 +2,4 @@
 
 from .operators import RectifyImagePerspective
 
-CLASSES = (RectifyImagePerspective,)
-
-__all__ = ("CLASSES", "RectifyImagePerspective")
+__all__ = ("RectifyImagePerspective",)

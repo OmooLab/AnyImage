@@ -28,7 +28,6 @@ class BuildSpec:
     source_filename: str
     source_size: int
     source_sha256: str
-    exporter: str
 
 
 @dataclass(frozen=True)
@@ -61,7 +60,6 @@ MODEL_BUILDS = {
         source_sha256=(
             "1641f8c4464b9f097c9fdda5589273713f67cf59f3d909e0bd688f0cee269dca"
         ),
-        exporter="realesrgan_wdn_x4",
     ),
 }
 
@@ -165,7 +163,7 @@ def prepare_source(build):
 
 
 def build_model(model):
-    from tools.models.exports import export_model
+    from tools.models.realesrgan_export import export_realesrgan_wdn_x4
 
     source = prepare_source(model.build)
     destination = model.destination
@@ -174,7 +172,7 @@ def build_model(model):
     temporary.unlink(missing_ok=True)
     print(f"Build: {destination.relative_to(PROJECT_ROOT)}")
     try:
-        export_model(model.build.exporter, source, temporary)
+        export_realesrgan_wdn_x4(source, temporary)
         verify_file(temporary, model.size, model.sha256)
         temporary.replace(destination)
     except Exception:

@@ -7,10 +7,16 @@ import bpy
 
 from ...common.color_image import create_normalized_color_image
 from ...common.image import (
-    CLIPBOARD_HASH_PROPERTY, cleanup_image_input, image_content_state, image_pixels, image_is_packed, is_image_empty,
-    replace_image_content, restore_image_content, save_image_input, mark_image_empty_reference,
+    CLIPBOARD_HASH_PROPERTY,
+    image_content_state,
+    image_pixels,
+    is_image_empty,
+    replace_image_content,
+    restore_image_content,
+    mark_image_empty_reference,
     has_other_image_user,
 )
+from ...common.image_input import cleanup_image_input, save_image_input
 
 CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 CLIPBOARD_TEXTURE_PROPERTY = "anyimage_clipboard_texture"
@@ -25,27 +31,15 @@ NODE_TYPES = {
 WORLD_TEXTURE_NODE_TYPE = "ShaderNodeTexEnvironment"
 IMAGE_NODE_TYPES = {*NODE_TYPES.values(), WORLD_TEXTURE_NODE_TYPE, "GeometryNodeInputImage"}
 
-BRUSH_TEXTURE_MODES = {
-    "SCULPT",
-    "PAINT_TEXTURE",
-    "PAINT_VERTEX",
-}
-
 WHITE_BRUSH_COLOR_MODES = {
     "PAINT_TEXTURE",
     "PAINT_VERTEX",
 }
 
 PAINT_SETTINGS_BY_MODE = {
-    "SCULPT": ("sculpt",),
-    "PAINT_TEXTURE": ("image_paint",),
-    "PAINT_VERTEX": ("vertex_paint",),
-    "PAINT_WEIGHT": ("weight_paint",),
-    "PAINT_GREASE_PENCIL": ("grease_pencil_paint", "gpencil_paint"),
-    "VERTEX_GREASE_PENCIL": ("gpencil_vertex_paint",),
-    "SCULPT_GREASE_PENCIL": ("grease_pencil_sculpt", "gpencil_sculpt_paint"),
-    "WEIGHT_GREASE_PENCIL": ("grease_pencil_weight", "gpencil_weight_paint"),
-    "SCULPT_CURVES": ("curves_sculpt",),
+    "SCULPT": "sculpt",
+    "PAINT_TEXTURE": "image_paint",
+    "PAINT_VERTEX": "vertex_paint",
 }
 
 
@@ -62,7 +56,7 @@ def target_for_context(context):
     area_type = getattr(area, "type", None)
     if area_type == "VIEW_3D":
         mode = getattr(context, "mode", "OBJECT")
-        if mode in BRUSH_TEXTURE_MODES:
+        if mode in PAINT_SETTINGS_BY_MODE:
             return "TOOL_TEXTURE"
         if mode == "OBJECT":
             return "IMAGE_EMPTY"
@@ -239,7 +233,7 @@ def _find_packed_clipboard_image(image_hash):
     for image in bpy.data.images:
         if image.get(CLIPBOARD_HASH_PROPERTY) != image_hash:
             continue
-        if not image_is_packed(image):
+        if not image.packed_files:
             continue
         baseline = image.get(CLIPBOARD_CONTENT_PROPERTY)
         if not baseline:
@@ -501,17 +495,8 @@ def _set_unbiased_paint_color(context, brush):
         scene = getattr(context, "scene", None)
         tool_settings = getattr(scene, "tool_settings", None)
 
-    unified_settings = None
-    mode = getattr(context, "mode", "")
-    for settings_name in PAINT_SETTINGS_BY_MODE.get(mode, ()):
-        paint_settings = getattr(tool_settings, settings_name, None)
-        unified_settings = getattr(
-            paint_settings,
-            "unified_paint_settings",
-            None,
-        )
-        if unified_settings is not None:
-            break
+    paint_settings = getattr(tool_settings, PAINT_SETTINGS_BY_MODE[context.mode], None)
+    unified_settings = getattr(paint_settings, "unified_paint_settings", None)
     if unified_settings is None:
         unified_settings = getattr(tool_settings, "unified_paint_settings", None)
     if unified_settings is not None:
@@ -601,7 +586,8 @@ def _active_brush(context):
         scene = getattr(context, "scene", None)
         tool_settings = getattr(scene, "tool_settings", None)
 
-    for settings_name in PAINT_SETTINGS_BY_MODE.get(mode, ()):
+    settings_name = PAINT_SETTINGS_BY_MODE.get(mode)
+    if settings_name is not None:
         paint_settings = getattr(tool_settings, settings_name, None)
         brush = getattr(paint_settings, "brush", None)
         if brush is not None:

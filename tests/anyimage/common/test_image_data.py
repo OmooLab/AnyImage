@@ -24,6 +24,7 @@ class ImageDataTest(unittest.TestCase):
                 frame_start=4,
                 frame_offset=70,
                 frame_duration=12,
+                use_cyclic=False,
             )
         )
 
@@ -36,13 +37,6 @@ class ImageDataTest(unittest.TestCase):
         self.assertEqual(
             self.modules.image.image_user_settings(source_object),
             (4, 70, 12, True),
-        )
-
-
-    def test_image_user_settings_defaults_without_user(self):
-        self.assertEqual(
-            self.modules.image.image_user_settings(SimpleNamespace(image_user=None)),
-            (1, 0, 0, False),
         )
 
 

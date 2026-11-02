@@ -14,6 +14,6 @@ flowchart TD
     G --> H
 ```
 
-`server/jobs/remove_background.py` 读取单张输入并调用 `server/models/background.py`，支持 BiRefNet 和 BEN2。模型前景 Alpha 与源 Alpha 合成。
+`server/jobs/remove_background.py` 读取单张输入，通过 `model_adapter()` 调用 BiRefNet 或 BEN2 的 ONNX 适配器，再将模型前景 Alpha 与源 Alpha 合成。
 
 普通图片与 HDR 都提交当前像素，并通过 `ImageEditTarget` 校验源绑定、颜色解释与像素摘要，结果只影响当前目标，其他对象和纹理保留源图。HDR 使用 `operators/remove_background/hdr.py` 的 `HdrBackgroundInput` 准备分析输入，并将返回 Alpha 应用于提交时的浮点 RGB。Operator 负责临时输入清理与 Undo。

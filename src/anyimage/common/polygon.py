@@ -43,89 +43,23 @@ def dashed_line_segments(vertices, dash_length=4.0, gap_length=4.0, offset=0.0):
     return tuple(segments)
 
 
-def _signed_area(vertices):
-    return (
-        sum(
-            start[0] * end[1] - end[0] * start[1]
-            for start, end in zip(vertices, (*vertices[1:], vertices[0]))
-        )
-        * 0.5
-    )
-
-
 def _triangle_cross(start, middle, end):
     return (middle[0] - start[0]) * (end[1] - start[1]) - (middle[1] - start[1]) * (
         end[0] - start[0]
     )
 
 
-def _point_in_triangle(point, start, middle, end, orientation, epsilon):
-    return all(
-        orientation * cross >= -epsilon
-        for cross in (
-            _triangle_cross(start, middle, point),
-            _triangle_cross(middle, end, point),
-            _triangle_cross(end, start, point),
-        )
-    )
-
-
-def _triangulated_polygon_vertices_python(vertices):
-    vertices = tuple(tuple(float(value) for value in vertex) for vertex in vertices)
-    if len(vertices) < 3:
-        return ()
-    area = _signed_area(vertices)
-    if abs(area) <= 1e-8:
-        return ()
-    orientation = 1.0 if area > 0.0 else -1.0
-    remaining = list(range(len(vertices)))
-    triangles = []
-    epsilon = 1e-8
-    while len(remaining) > 3:
-        for position, current in enumerate(remaining):
-            previous = remaining[position - 1]
-            following = remaining[(position + 1) % len(remaining)]
-            start = vertices[previous]
-            middle = vertices[current]
-            end = vertices[following]
-            if orientation * _triangle_cross(start, middle, end) <= epsilon:
-                continue
-            if any(
-                _point_in_triangle(
-                    vertices[index],
-                    start,
-                    middle,
-                    end,
-                    orientation,
-                    epsilon,
-                )
-                for index in remaining
-                if index not in {previous, current, following}
-            ):
-                continue
-            triangles.extend((start, middle, end))
-            del remaining[position]
-            break
-        else:
-            return ()
-    triangles.extend(vertices[index] for index in remaining)
-    return tuple(triangles)
-
-
 def triangulated_polygon_vertices(vertices):
-    vertices = tuple(tuple(float(value) for value in vertex) for vertex in vertices)
-    try:
-        import mathutils
+    """Tessellate a screen polygon with Blender's geometry implementation."""
+    from mathutils import Vector
+    from mathutils.geometry import tessellate_polygon
 
-        points = [mathutils.Vector((vertex[0], vertex[1], 0.0)) for vertex in vertices]
-        triangles = mathutils.geometry.tessellate_polygon([points])
-        return tuple(
-            (float(point[0]), float(point[1]))
-            for triangle in triangles
-            for point in triangle
-        )
-    except (AttributeError, ImportError, RuntimeError, TypeError, ValueError):
-        return _triangulated_polygon_vertices_python(vertices)
+    points = [Vector((float(x), float(y), 0.0)) for x, y in vertices]
+    return tuple(
+        (float(points[index][0]), float(points[index][1]))
+        for triangle in tessellate_polygon([points])
+        for index in triangle
+    )
 
 
 def _scanline_intervals(edges, sample_y):

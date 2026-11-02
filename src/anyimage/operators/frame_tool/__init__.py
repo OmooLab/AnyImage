@@ -2,6 +2,4 @@
 
 from .operators import FrameImages
 
-CLASSES = (FrameImages,)
-
-__all__ = ("CLASSES", "FrameImages")
+__all__ = ("FrameImages",)

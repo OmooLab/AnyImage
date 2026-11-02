@@ -52,7 +52,7 @@ class AiInputFailuresTest(BlenderTestCase):
         owner.report.assert_called_once_with({"ERROR"}, "setup failed")
 
     def test_depth_and_relief_cleanup_on_nested_failure(self):
-        module = self.plane_geometry
+        module = self.depth_plane_operators
         for plane_type in ("DEPTH", "RELIEF"):
             for failure in (RuntimeError("Error: invalid input\n"), None):
                 with tempfile.TemporaryDirectory() as directory:
@@ -67,7 +67,8 @@ class AiInputFailuresTest(BlenderTestCase):
                         patch.object(module, "invoke_ai_setup_if_needed", return_value=None),
                         patch.object(module, "prepare_material_color_input", return_value=path),
                         patch.object(module, "material_analysis_input", return_value=path),
-                        patch.object(module, "depth_plane_settings", return_value=("model", 5)),
+                        patch.object(module, "addon_preferences", return_value=SimpleNamespace(geometry_resolution_level=5)),
+                        patch.object(module, "configured_geometry_model", return_value="model"),
                         patch.object(module, "configured_max_ai_input_size", return_value=2048),
                         patch.object(module.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_plane_geometry=generate)), create=True),
                     ):

@@ -8,9 +8,15 @@ from pathlib import Path
 import bpy
 
 from .image import (
-    COLOR_NORMALIZED_PROPERTY, cleanup_image_input, image_base_name, image_is_packed, image_rgba,
-    is_animated_image, image_content_state, image_pixels, restore_image_content,
+    COLOR_NORMALIZED_PROPERTY,
+    image_base_name,
+    image_rgba,
+    is_animated_image,
+    image_content_state,
+    image_pixels,
+    restore_image_content,
 )
+from .image_input import cleanup_image_input
 
 
 VIEW_TRANSFORM_COLOR_SPACES = (
@@ -263,12 +269,12 @@ def save_color_png(rgba, path, color_space):
 def prepare_material_color_input(source, bounds=None, rgba=None):
     """Export source bounds with interpretation matching the encoded color file."""
     import numpy as np
-    from .hdr_image import save_hdr_result
+    from .hdr_image import save_hdr_image
 
     require_static_color_image(source)
     width, height = map(int, source.size)
     if (source.is_float and source.source == "FILE" and not source.is_dirty
-            and not image_is_packed(source) and source.alpha_mode == "STRAIGHT"):
+            and not source.packed_files and source.alpha_mode == "STRAIGHT"):
         # Read the encoded float colors without applying a second alpha multiplication.
         reader = source.copy()
         try:
@@ -289,7 +295,7 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
     try:
         if source.is_float:
             # Store float colors directly; the EXR interpretation is applied on load.
-            save_hdr_result(cropped, path)
+            save_hdr_image(cropped, path)
         else:
             save_color_png(cropped, path, source.colorspace_settings.name)
         metadata = {

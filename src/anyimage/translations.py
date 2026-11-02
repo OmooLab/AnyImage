@@ -13,8 +13,7 @@ COMMON = {
     'The source image target is no longer available or has changed': '源图像目标已不可用或已改变',
     'The source image content or settings have changed': '源图像内容或设置已改变',
     'The conversion source image has changed': '源图像已改变',
-    'AnyImage': '任意图！',
-    'AnyImage Base': '任意图！基础版',
+    'Any Image': '任意图！',
     '{gesture}: drag and release; RMB or Esc cancels': '{gesture}：拖动后松开；右键或 Esc 取消',
     'Start': '启动',
     'Error': '错误',
@@ -166,20 +165,13 @@ GEOMETRY = {
 }
 
 
-TRANSLATIONS = {
-    "zh_HANS": {
-        (context, text): translation
-        for group in (
-            COMMON,
-            CLIPBOARD,
-            COLOR,
-            FRAME,
-            RECTIFY,
-            MASK,
-            CUTOUT,
-            GEOMETRY,
-        )
-        for text, translation in group.items()
-        for context in ("*", "Operator", "AnyImage")
-    },
-}
+def build_translations(*groups):
+    """Build a Blender translation catalog from the selected message groups."""
+    return {
+        "zh_HANS": {
+            (context, text): translation
+            for group in groups
+            for text, translation in group.items()
+            for context in ("*", "Operator", "AnyImage")
+        },
+    }

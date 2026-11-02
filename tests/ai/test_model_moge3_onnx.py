@@ -31,7 +31,7 @@ def test_inference_runs_three_refinements_and_preserves_image_dimensions():
     backbone = object()
     refiner = object()
 
-    def run(session, names, inputs, *, release_memory):
+    def run(session, names, inputs, *, release_memory=True):
         calls.append((session, inputs.copy(), release_memory))
         if session is backbone:
             return [

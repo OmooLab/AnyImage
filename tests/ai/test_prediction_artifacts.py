@@ -47,7 +47,7 @@ def test_alpha_resize_retains_threshold_values(tmp_path):
         check_cancelled=lambda: None,
     )
     with (
-        patch.object(artifacts.moge, "infer", return_value=make_frame(np.ones((2, 8)))),
+        patch.object(artifacts, "infer_geometry", return_value=make_frame(np.ones((2, 8)))),
         patch.object(artifacts, "write_depth_texture") as depth,
         patch.object(artifacts, "write_depth_metadata"),
     ):
@@ -77,7 +77,7 @@ def test_source_is_closed_before_cancelled_inference(tmp_path):
 
         with (
             patch.object(artifacts, "open_image", return_value=source),
-            patch.object(artifacts.moge, "infer", side_effect=cancel),
+            patch.object(artifacts, "infer_geometry", side_effect=cancel),
             pytest.raises(RuntimeError, match="cancelled"),
         ):
             artifacts.generate_moge_artifacts(context, {}, path, generate_depth=True)
@@ -103,7 +103,7 @@ def test_artifacts_write_raw_requested_depth_and_preserve_normals(
         check_cancelled=lambda: None,
     )
     with (
-        patch.object(artifacts.moge, "infer", return_value=frame) as infer,
+        patch.object(artifacts, "infer_geometry", return_value=frame) as infer,
         patch.object(
             artifacts, "write_depth_texture",
             return_value=tmp_path / "depth.exr",

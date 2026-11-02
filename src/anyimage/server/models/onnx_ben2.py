@@ -10,12 +10,8 @@ ONNX_PATH = Path("onnx/model_fp16.onnx")
 INPUT_SIZE = (1024, 1024)
 
 
-def model_path(model_directory):
-    return Path(model_directory) / ONNX_PATH
-
-
 def create_session(model_directory, requested_device="auto"):
-    return create_runtime_session(model_path(model_directory), requested_device)
+    return create_runtime_session(Path(model_directory) / ONNX_PATH, requested_device)
 
 
 def preprocess(image):
@@ -30,7 +26,7 @@ def preprocess(image):
     return np.ascontiguousarray(array.transpose(2, 0, 1)[None])
 
 
-def infer_alpha(session, image, *, release_memory=True):
+def infer_alpha(session, image):
     import numpy as np
     from PIL import Image
 
@@ -40,7 +36,6 @@ def infer_alpha(session, image, *, release_memory=True):
         session,
         [output_name],
         {input_name: preprocess(image)},
-        release_memory=release_memory,
     )[0]
     alpha = np.asarray(alpha, dtype=np.float32)
     if (alpha.ndim != 4 or alpha.shape[:2] != (1, 1)

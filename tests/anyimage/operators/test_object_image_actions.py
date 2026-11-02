@@ -5,8 +5,8 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage import image_menu
-from anyimage import ai_menu as menu
+import anyimage
+from anyimage import ai_menus as menu
 from anyimage.common import material as material_data
 from anyimage.common.image_target import (
     ImageEditTarget,
@@ -268,11 +268,11 @@ def test_object_menu_and_operator_polls_use_marked_object():
     context = _context(obj)
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())
 
-    image_menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
-    layout.menu.assert_called_once_with(menu.AnyImageObjectMenu.bl_idname)
+    anyimage.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
+    layout.menu.assert_called_once_with(menu.ObjectMenu.bl_idname)
     layout.menu.reset_mock()
     obj["o_image_object"] = False
-    image_menu.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
+    anyimage.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_not_called()
     obj["o_image_object"] = True
 
@@ -281,7 +281,7 @@ def test_object_menu_and_operator_polls_use_marked_object():
         "anyimage.common.ai.ai_status",
         return_value={"environment_ready": True, "ready": True},
     ):
-        menu.AnyImageObjectMenu.draw(SimpleNamespace(layout=layout), context)
+        menu.ObjectMenu.draw(SimpleNamespace(layout=layout), context)
     identifiers = [call.args[0] for call in layout.operator.call_args_list]
     assert identifiers == [
         "anyimage.bake_mesh",

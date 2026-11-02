@@ -4,14 +4,14 @@
 
 ```bash
 uv sync
-uv run pytest
+uv run --group blender --group ai pytest
 ```
 
 ## 测试组织
 
 | 测试范围 | 文件 |
 | --- | --- |
-| 扩展注册、设置、安装和 Job 交互 | `test_addon_registration.py`、`test_preferences.py`、`test_ai_setup.py`、`test_job_operator.py` |
+| 扩展注册、设置、安装和 Job 交互 | `test_addon_registration.py`、`test_preferences.py`、`test_ai_setup.py`、`test_queued_image_jobs.py` |
 | **重设画框**、**局部显隐**、**透视校正**、**面片**、**立体裁切** | 对应 `test_*_tool.py`、`test_*_operators.py` 与对象、投影、网格测试 |
 | 图像身份、Alpha、材质与 Undo | 图像编辑集成、共享替换、材质适配与 Undo 测试 |
 | Server | `test_job_server.py`、`test_server_jobs.py`、`test_input_validation.py`、`test_geometry_artifacts.py` |
@@ -29,23 +29,24 @@ Blender Stub 共用 `tests/support/blender.py`；Server 和实际 Blender 几何
 | `uv run pack -l -p windows-x64` | 为 Windows x64 同步本地扩展 wheel 与 Manifest |
 | `uv run --group blender omoonodes build` | 从 `nodes/` 构建并校验节点资产库 |
 | `uv run --group blender pytest tests/nodes` | 验证节点行为与保存资产 |
-| `uv run model sync` | 准备、校验并上传模型声明的文件 |
-| `uv run docs -dev` | 本地预览文档 |
-| `uv run docs` | 通过 Mike 发布项目版本并更新 latest |
+| `uv run --group models model sync` | 准备、校验并上传模型声明的文件 |
+| `uv run --group docs docs dev` | 本地预览文档 |
+| `uv run --group docs docs build` | 本地构建当前版本系列并更新 latest |
+| `uv run --group docs docs deploy` | 发布当前版本系列并更新 latest |
 
 节点库生成于 `dist/b45/O_AnyImage/`；测试与打包前，将其中的 `O_AnyImage.blend` 复制到 `src/anyimage/assets/`。完整流程见[节点资产](node-assets.md)。
 
 `tools/pack.py` 从 `pyproject.toml` 读取依赖，按平台与 Blender Python 版本解析 wheel，使用 Blender 提供的 NumPy。产物命名为 `AnyImage.v<version>.<platform>.zip`，写入 `dist/`。本地 BlendJob wheel 内容变化后运行 `uv lock --refresh`，并核对锁文件、Manifest 与打包测试。
 
-`tools/models/cli.py` 根据模型目录选择上游 ONNX 或本地导出流程；`tools/models/exports.py` 处理对应 PyTorch 权重导出。文件校验依据声明大小和 SHA-256，上传使用逐文件复制。`uv run model prepare` 用于本地准备。
+`tools/models/cli.py` 根据模型目录选择上游 ONNX 或本地导出流程；`tools/models/realesrgan_export.py` 将 Real-ESRGAN general WDN 权重导出为 ONNX，MoGe-3、HAT 与 BiRefNet 使用各自的独立导出脚本。文件校验依据声明大小和 SHA-256，上传使用逐文件复制。`uv run --group models model prepare` 用于本地准备。
 
 ## CI 与文档导航
 
 ```mermaid
 flowchart TD
-    A[main push、Pull Request 或手动触发] --> B[test.yml 运行测试]
-    C[v 前缀 Tag] --> D[build.yml 测试、打包并发布 ZIP]
-    E[main 文档路径变化或手动触发] --> F[docs.yml 构建站点并部署到 Cloudflare Workers]
+    A[main push 或 Pull Request] --> B[test.yml 构建节点资产并运行测试]
+    C[v 前缀 Tag] --> D[release.yml 核对版本、打包、测试并校验 ZIP]
+    D --> E[创建包含两个版本扩展包的草稿 Release]
 ```
 
 站点导航由 `mkdocs.yml` 显式维护，页面移动时同步导航和相对链接。节点资产的脚本职责及检查入口见[节点资产](node-assets.md)。

@@ -190,8 +190,8 @@ class CutoutOperatorsTest(BlenderTestCase):
             ),
             patch.object(
                 self.cutout_main,
-                "cutout_geometry_settings",
-                return_value=("MODEL", 5),
+                "configured_geometry_model",
+                return_value="MODEL",
             ),
             patch.object(
                 self.cutout_main,

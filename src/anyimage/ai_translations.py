@@ -65,7 +65,7 @@ PROCESSING = {
 
 
 # 深度与法线
-GEOMETRY = {
+AI_GEOMETRY = {
     'Generate Plane Geometry': '生成面片几何',
     'Depth & Normal Model': '深度与法线模型',
     'Choose the AI model used to generate depth and surface normals.': '选择用于生成深度和表面法线的 AI 模型。',
@@ -154,29 +154,10 @@ BACKGROUND_REMOVAL = {
 
 
 # 立体裁切
-CUTOUT = {
+AI_CUTOUT = {
     'Build the image selection as a Cutout shape': '将图像选区构建为立体裁切形状',
     'Preparing Cutout Selection': '立体裁切选区准备中',
     'Generating Cutout artifacts': '立体裁切数据生成中',
     'Cutout artifacts are ready': '立体裁切数据已就绪',
     'The normal texture is missing; the shape was created without it': '缺少法线贴图，已继续生成物体',
-}
-
-
-TRANSLATIONS = {
-    "zh_HANS": {
-        (context, text): translation
-        for group in (
-            ENVIRONMENT,
-            MODELS,
-            PROCESSING,
-            GEOMETRY,
-            PANORAMA,
-            UPSCALE,
-            BACKGROUND_REMOVAL,
-            CUTOUT,
-        )
-        for text, translation in group.items()
-        for context in ("*", "Operator", "AnyImage")
-    },
 }

@@ -6,14 +6,14 @@
 | --- | --- |
 | `ai.py` | 环境与模型状态、就绪检查、安装和模型下载入口、输入路径校验、`production_device()`、`geometry_job_parameters()` 与安装 UI |
 | `image.py` | `image_rgba()`、Image User 帧设置读取、像素采样与摘要、真实引用检查、结果 Image 和 `replace_empty_image()` |
-| `job_image.py` | 为排队任务创建独立输入快照、从材质颜色文件准备 AI 分析输入，加载产物并通过 `ImageEditTarget` 提交结果 |
+| `image_input.py` | 创建独立输入快照、导出当前像素和清理临时输入文件 |
+| `job_image.py` | 校验排队任务的图像目标、准备 AI 分析输入，加载产物并通过 `ImageEditTarget` 提交结果 |
 | `color_image.py` | 材质颜色文件的准备、清理、颜色空间设置和归一化 |
 | `hdr_image.py` | HDR 分析颜色、EXR 保存和浮点图片创建 |
 | `image_target.py` | Image Empty、带能力标记的 Mesh 与 Shader Image Texture 编辑目标 |
 | `selection.py` | `SelectionPath`、`SelectionMask`、non-zero winding 栅格化与 Alpha 修整 |
 | `viewport.py` | 原生点选、屏幕投影、`ImageGesture`、**套索** / **画笔** / **折线**与 Overlay |
 | `image_plane.py` | 公共矩形网格、坐标变换与基础面片创建 |
-| `depth_plane.py` | 凹凸面和浮雕共用的深度产物导入与对象创建 |
 | `geometry_image.py` | 深度图片和元数据加载、相机坐标与显示范围的尺度换算、深度方向拟合与节点坐标转换 |
 | `color_reference.py` | 参考签名、内容摘要、色板、缩略图及交互资源引用 |
 | `color_match.py`、`color_palette.py`、`color_space.py` | 色板锚点匹配、亮度曲线、代表色提取与颜色转换 |
@@ -28,7 +28,7 @@
 
 业务像素采用 Top-down RGBA，`image_pixels()` 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。`ImageEditTarget` 校验目标绑定、颜色解释与像素摘要后，经 `replace_empty_image()` 或 `replace_texture_image()` 提交。未共享的 Image 原地替换内容；其他 Empty、材质或纹理仍引用源图时，为当前目标使用独立 Image，共享材质也按当前对象隔离。失败时回滚源数据。同一目标的排队任务跟随成功提交更新基线，外部改图后新提交使用新的目标状态。
 
-`prepare_image_input()` 为当前图像准备独立快照：未改动的文件直接复制，Packed、未保存修改和 Generated 图像导出当前像素；`cleanup_image_input()` 与创建方配对。`color_image.py` 的 `prepare_material_color_input()` 准备材质颜色，`job_image.py` 的 `material_analysis_input()` 提供分析输入；**立体裁切**按几何 bounds 裁切。
+`image_input.py` 的 `prepare_image_input()` 为当前图像准备独立快照：未改动的文件直接复制，Packed、未保存修改和 Generated 图像导出当前像素；`cleanup_image_input()` 与创建方配对。`hdr_image.py` 将 HDR 像素映射为分析预览，并复用 `color_space.py` 的 sRGB 编码。`color_image.py` 的 `prepare_material_color_input()` 准备材质颜色，`job_image.py` 的 `material_analysis_input()` 提供分析输入；**立体裁切**按几何 bounds 裁切。
 
 ## 颜色参考生命周期
 
@@ -48,6 +48,8 @@ flowchart TD
     F --> G[SelectionMask values 与 bounds]
     G --> H[局部显隐 Alpha 运算或立体裁切内容轮廓]
 ```
+
+简单多边形预览由 Blender 的 `mathutils.geometry.tessellate_polygon()` 三角化；自交轮廓使用 non-zero winding 扫描线填充。
 
 **画笔**的圆形印记和连接条由 `brush_footprint_polygons()` 生成，供预览与提交共用。拖动时维护屏幕路径与局部 Overlay，提交时生成覆盖值。**局部显隐**、**透视校正**与**立体裁切**的空命中保留 active Image Empty；点中另一对象时完成原生选择。
 

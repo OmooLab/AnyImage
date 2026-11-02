@@ -112,7 +112,6 @@ def infer(
     image,
     resolution_level,
     *,
-    release_memory=True,
     fov_x=None,
     source_valid=None,
     include_points=True,
@@ -130,7 +129,6 @@ def infer(
             ),
             "num_tokens": np.asarray(tokens, dtype=np.int64),
         },
-        release_memory=release_memory,
     )
     for step in range(3):
         if not np.isfinite(coord).all():
@@ -141,7 +139,7 @@ def infer(
             session.refiner,
             ["delta"],
             inputs,
-            release_memory=release_memory and step == 2,
+            release_memory=step == 2,
         )
         coord[..., 2] += delta
         del inputs, delta

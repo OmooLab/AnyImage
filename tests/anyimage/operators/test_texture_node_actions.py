@@ -8,8 +8,8 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage import image_menu
-from anyimage import ai_menu as menu
+import anyimage
+from anyimage import ai_menus as menu
 from anyimage.common import image as images
 from anyimage.common.image_target import ImageEditTarget, active_texture_node
 from anyimage.operators import upscale
@@ -80,7 +80,7 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
         "anyimage.common.ai.ai_status",
         return_value={"environment_ready": True, "ready": True},
     ):
-        menu.AnyImageTextureNodeMenu.draw(SimpleNamespace(layout=layout), context)
+        menu.TextureNodeMenu.draw(SimpleNamespace(layout=layout), context)
     assert layout.operator_context == "INVOKE_DEFAULT"
     assert [call.args[0] for call in layout.operator.call_args_list] == [
         "anyimage.remove_image_background",
@@ -89,11 +89,11 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
         "anyimage.open_ai_environment_settings",
     ]
     assert layout.operator.call_args_list[1].kwargs["text"] == "Upscale (8 × 6)"
-    image_menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
-    layout.menu.assert_called_once_with(menu.AnyImageTextureNodeMenu.bl_idname)
+    anyimage.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+    layout.menu.assert_called_once_with(menu.TextureNodeMenu.bl_idname)
     texture.image = None
     layout.menu.reset_mock()
-    image_menu.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+    anyimage.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_not_called()
 
 

@@ -22,7 +22,7 @@ def preprocess(image, size):
     return np.ascontiguousarray(array.transpose(2, 0, 1)[None])
 
 
-def infer_alpha(session, image, *, release_memory=True):
+def infer_alpha(session, image):
     import numpy as np
     from PIL import Image
 
@@ -32,7 +32,7 @@ def infer_alpha(session, image, *, release_memory=True):
         raise RuntimeError("BiRefNet returned an invalid input contract")
     alpha = np.asarray(run_session(
         session, [session.get_outputs()[0].name],
-        {input_spec.name: preprocess(image, size)}, release_memory=release_memory,
+        {input_spec.name: preprocess(image, size)},
     )[0], dtype=np.float32)
     if (alpha.shape != (1, 1, size, size) or not np.isfinite(alpha).all()
             or alpha.min() < 0 or alpha.max() > 1):

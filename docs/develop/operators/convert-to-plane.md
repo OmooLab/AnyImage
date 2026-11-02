@@ -1,6 +1,6 @@
 # 转为面片、转为凹凸面与转为浮雕
 
-三个转换入口分别位于 `operators/convert_to_plane.py`、`convert_to_depth_plane.py` 与 `convert_to_relief.py`。各入口声明自己的 Operator；`common/image_plane.py` 创建基础矩形网格与面片，`common/depth_plane.py` 复用深度产物导入和对象创建。凹凸面与浮雕指定各自的固定类型，由 `operators/plane_geometry.py` 统一准备输入快照，并通过内部 `GeneratePlaneGeometry` 提交几何 Job。
+普通面片入口位于 `operators/convert_to_plane.py`，通过 `common/image_plane.py` 创建基础矩形网格与面片。凹凸面与浮雕集中在 `operators/depth_plane/`：`operators.py` 定义两个转换入口和内部任务 `GeneratePlaneGeometry`，准备输入快照并提交几何 Job；`object.py` 导入深度产物、创建对象并提交 Undo；`__init__.py` 导出 Operator。两个转换入口分别指定固定的 Depth 或 Relief 类型。
 
 ```mermaid
 flowchart TD

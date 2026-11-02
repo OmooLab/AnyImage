@@ -60,15 +60,6 @@ from .shape import CUTOUT_NODE_GROUP_NAMES, DEPTH_CUTOUT_SHAPES
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
 
-def cutout_geometry_settings(context):
-    preferences = addon_preferences(context)
-    model = configured_geometry_model(context)
-    return (
-        model,
-        int(getattr(preferences, "geometry_resolution_level", 5)),
-    )
-
-
 class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.cutout_selection_to_shape"
     bl_label = "Cutout Selection to Shape"
@@ -135,7 +126,8 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             setup_result = invoke_ai_setup_if_needed(self)
             if setup_result is not None:
                 return setup_result
-            self.model, self.resolution_level = cutout_geometry_settings(context)
+            self.model = configured_geometry_model(context)
+            self.resolution_level = int(getattr(addon_preferences(context), "geometry_resolution_level", 5))
             self.selection_bounds_json = json.dumps(
                 selection_mask.bounds,
                 separators=(",", ":"),

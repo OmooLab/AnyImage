@@ -7,11 +7,17 @@ import tempfile
 import bpy
 import numpy as np
 
-from ...common.image import cleanup_image_input, image_content_signature, image_content_state, image_rgba, is_animated_image, restore_image_content
+from ...common.image import (
+    image_content_signature,
+    image_content_state,
+    image_rgba,
+    is_animated_image,
+    restore_image_content,
+)
+from ...common.image_input import cleanup_image_input
 from ...common.image import has_other_image_user
 from ...common.color_image import save_color_png
-from ...common.hdr_image import create_packed_hdr
-from ...common.job_image import recognition_rgba
+from ...common.hdr_image import build_recognition_rgba, create_packed_hdr_image
 
 
 @dataclass
@@ -38,7 +44,7 @@ class HdrBackgroundInput:
             preview_source = rgba.copy()
             if image.alpha_mode == "NONE":
                 preview_source[..., 3] = 1
-            preview_rgba = recognition_rgba(
+            preview_rgba = build_recognition_rgba(
                 preview_source, associated=image.alpha_mode not in {"CHANNEL_PACKED", "NONE"},
             )
             save_color_png(preview_rgba, path, "sRGB")
@@ -66,7 +72,7 @@ class HdrBackgroundInput:
             rgba[..., 3] = 1
         rgba[..., 3] *= alpha
         with tempfile.TemporaryDirectory(prefix="anyimage-hdr-result-") as directory:
-            result = create_packed_hdr(
+            result = create_packed_hdr_image(
                 rgba, image.name, Path(directory) / "result.exr", alpha_mode="CHANNEL_PACKED",
             )
             original_state = None
@@ -79,7 +85,7 @@ class HdrBackgroundInput:
                     baseline_alpha_mode = image.alpha_mode
                     if baseline_alpha_mode == "NONE":
                         baseline_rgba[..., 3] = 1
-                    baseline = create_packed_hdr(
+                    baseline = create_packed_hdr_image(
                         baseline_rgba, image.name, Path(directory) / "source.exr",
                         alpha_mode="CHANNEL_PACKED" if baseline_alpha_mode == "CHANNEL_PACKED" else "PREMUL",
                     )

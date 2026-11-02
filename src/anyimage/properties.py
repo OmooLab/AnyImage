@@ -294,7 +294,7 @@ def cutout_edge_length_property(*, store_meters=False, **options):
     )
 
 
-class AnyImageSettings(bpy.types.PropertyGroup):
+class SettingsBase(bpy.types.PropertyGroup):
     color_reference: bpy.props.PointerProperty(
         name="Reference",
         type=bpy.types.Image,

@@ -292,6 +292,3 @@ class MatchColorReference(bpy.types.Operator):
         self._preview_texture = None
         self._preview_signature = None
         self._tag_redraw()
-
-
-CLASSES = (MatchColorReference,)

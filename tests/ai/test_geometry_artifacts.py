@@ -158,7 +158,7 @@ class GeometryArtifactsTest(unittest.TestCase):
             with self.subTest(max_size=max_size):
                 outputs = []
                 for source in (first_path, second_path):
-                    with patch.object(artifacts.moge, "infer", return_value=frame) as infer:
+                    with patch.object(artifacts, "infer_geometry", return_value=frame) as infer:
                         artifacts.generate_moge_artifacts(
                             context, {"max_input_size": max_size}, source,
                         )
@@ -201,7 +201,7 @@ class GeometryArtifactsTest(unittest.TestCase):
 
         texture = importlib.import_module("server.geometry.depth_texture")
         with (
-            patch.object(artifacts.moge, "infer", return_value=frame) as infer,
+            patch.object(artifacts, "infer_geometry", return_value=frame) as infer,
             patch.object(texture, "write_float_exr", wraps=texture.write_float_exr) as write,
         ):
             result = artifacts.generate_moge_artifacts(

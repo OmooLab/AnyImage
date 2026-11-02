@@ -1,47 +1,51 @@
-from . import menu
 import bpy
 
 from .common.image_target import image_edit_owner
 from .common.image import owner_image
+from .operators.convert_to_plane import ConvertToPlane
+from .operators.color_match import MatchColorReference
+from .operators.bake_mesh import BakeMesh
 from .operators.ai_setup import OpenAIEnvironmentSettings
 from .operators.convert_to_panorama import ConvertToPanorama
-from .operators.convert_to_depth_plane import ConvertToDepthPlane
-from .operators.convert_to_relief import ConvertToReliefPlane
+from .operators.depth_plane import ConvertToDepthPlane, ConvertToReliefPlane
 from .operators.remove_background import RemoveImageBackground
 from .operators.upscale import UpscaleImage
 from .operators.upscale import upscale_output_size
 
 
-def draw_conversions(layout, context):
-    menu.draw_plane(layout, context)
-    layout.operator(ConvertToDepthPlane.bl_idname, icon="MOD_DISPLACE")
-    layout.operator(ConvertToReliefPlane.bl_idname, icon="MOD_DISPLACE")
-    layout.operator(ConvertToPanorama.bl_idname, icon="SPHERE")
-    layout.separator()
-
-
-class AnyImageImageMenu(menu.AnyImageImageMenu):
+class ImageMenu(bpy.types.Menu):
     bl_idname = "ANYIMAGE_MT_image_context"
-    bl_label = "AnyImage"
+    bl_label = "Any Image"
 
     def draw(self, context):
-        menu.draw_image_menu(self.layout, context, draw_image_actions, draw_conversions)
+        layout = self.layout
+        layout.operator_context = "INVOKE_DEFAULT"
+        layout.operator(ConvertToPlane.bl_idname, icon="IMAGE_PLANE")
+        layout.operator(ConvertToDepthPlane.bl_idname, icon="MOD_DISPLACE")
+        layout.operator(ConvertToReliefPlane.bl_idname, icon="MOD_DISPLACE")
+        layout.operator(ConvertToPanorama.bl_idname, icon="SPHERE")
+        layout.separator()
+        draw_image_actions(layout, context)
 
 
-class AnyImageTextureNodeMenu(menu.AnyImageTextureNodeMenu):
+class TextureNodeMenu(bpy.types.Menu):
     bl_idname = "ANYIMAGE_MT_texture_node_context"
-    bl_label = "AnyImage"
+    bl_label = "Any Image"
 
     def draw(self, context):
         draw_image_actions(self.layout, context)
 
 
-class AnyImageObjectMenu(menu.AnyImageObjectMenu):
+class ObjectMenu(bpy.types.Menu):
     bl_idname = "ANYIMAGE_MT_object_context"
-    bl_label = "AnyImage"
+    bl_label = "Any Image"
 
     def draw(self, context):
-        menu.draw_object_menu(self.layout, context, draw_image_actions)
+        layout = self.layout
+        layout.operator_context = "INVOKE_DEFAULT"
+        layout.operator(BakeMesh.bl_idname, icon="MESH_DATA")
+        layout.separator()
+        draw_image_actions(layout, context)
 
 
 def draw_image_actions(layout, context):
@@ -57,7 +61,7 @@ def draw_image_actions(layout, context):
         text=upscale_menu_label(context),
         icon="FULLSCREEN_ENTER",
     )
-    menu.draw_image_actions(layout, context)
+    layout.operator(MatchColorReference.bl_idname, icon="COLOR")
     layout.separator()
     status = draw_ai_setup(layout)
     if status["ready"]:

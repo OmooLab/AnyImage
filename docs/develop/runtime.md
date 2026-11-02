@@ -19,9 +19,11 @@ flowchart TD
 | `generate_cutout_artifacts` | `jobs/cutout.py` 按请求生成深度和法线 |
 | `generate_panorama_geometry` | `jobs/panorama.py` 生成全景径向深度与对象空间法线 |
 
-`media/` 校验输入图片并限制分析尺寸，Server 只处理静态图片。Job 在阶段边界检查取消，通过 `context.progress()` 返回进度，Operator 清理 Blender 导出的临时输入。
+`media/input.py` 校验输入图片，`media/resolution.py` 限制分析尺寸，Server 处理静态图片。Job 在阶段边界直接调用 BlendJob 的 `context.check_cancelled()`；分块推理将同一回调传入处理循环。进度通过 `context.progress()` 返回，Operator 清理 Blender 导出的临时输入。
 
-`geometry/prediction_artifacts.py` 一次读取源图，分别保留 RGB、Alpha 和原始尺寸；RGB 在内存中缩放后交给 `models/moge.py` 推理，返回统一的 `GeometryFrame`。深度、法线和元数据写入器共享这次预测及缩放到预测尺寸的 Alpha，法线保留源图尺寸。参考深度由 Blender 侧按产物 Alpha 计算，文件协议见 [Job 产物](outputs.md)。
+背景移除与放大的 Job 负责源图读取、模型选择、Alpha 合成和结果保存；`models/onnx_*.py` 负责各模型的输入转换与推理。背景移除先生成一份 Alpha，再按请求保存连续值或与原图 Alpha 相乘写出前景。放大将模型结果缩放为源图的两倍尺寸，并恢复对应尺寸的原图 Alpha。
+
+`geometry/prediction_artifacts.py` 一次读取源图，分别保留 RGB、Alpha 和原始尺寸；RGB 在内存中缩放后交给 `models/geometry.py` 的 `infer_geometry()` 推理，返回统一的 `GeometryFrame`。深度、法线和元数据写入器共享这次预测及缩放到预测尺寸的 Alpha，法线保留源图尺寸。参考深度由 Blender 侧按产物 Alpha 计算，文件协议见 [Job 产物](outputs.md)。
 
 ## 界面状态
 
@@ -49,6 +51,8 @@ BlendJob 自动在状态栏显示第一个正在运行的任务，结束后切�
 | **2倍高清** | Real-ESRGAN WDN、Real-ESRGAN x4plus、HAT Sharper | upscale |
 
 `model_catalog.py` 声明模型 key、Fast/Base/Pro 档位、文件来源、许可、大小和 SHA-256；`model_download.py` 下载并校验。ModelManager 在 Session 创建前校验声明文件，按文件身份缓存校验结果，并按模型 key、路径和设备缓存 Session，切换模型或设备时释放对应类别。Clear Models 或关闭 Server 时释放已加载资源。
+
+模型完成一次图片推理后释放 CUDA 临时内存；分块放大在最后一块释放，MoGe-3 的 Refiner 在第三次细化后释放。
 
 首次安装完成后，`post_setup` 在 Blender 主线程提交模型下载 Job，下载默认 MoGe-2 ViT-S Normal、BiRefNet Lite 与 Real-ESRGAN General WDN x4v3。Storage Root 默认 `~/.anyimage`，保存环境、模型、Job 产物和日志。设置入口见 [AI 环境管理](operators/ai-setup.md)。
 

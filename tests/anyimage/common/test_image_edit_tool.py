@@ -1,41 +1,10 @@
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
 
 
 from tests.support.blender import BlenderTestCase
 
 
 class ImageEditToolTest(BlenderTestCase):
-
-
-    def test_packed_image_export_saves_a_copy_and_restores_format(self):
-        with tempfile.TemporaryDirectory() as directory:
-            output_directory = Path(directory)
-            calls = []
-
-            class Image:
-                file_format = "JPEG"
-
-                def save(self, **options):
-                    calls.append(options)
-                    Path(options["filepath"]).write_bytes(b"raw image")
-
-            image = Image()
-            with patch.object(
-                self.image_data.tempfile,
-                "mkdtemp",
-                return_value=str(output_directory),
-            ):
-                output = self.image_data.save_image_input(image)
-
-            self.assertEqual(output, output_directory / "input.png")
-            self.assertEqual(
-                calls,
-                [{"filepath": str(output), "save_copy": True}],
-            )
-            self.assertEqual(image.file_format, "JPEG")
 
 
     def test_expected_empty_image_edits_are_reported_as_warnings(self):

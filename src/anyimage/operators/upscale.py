@@ -17,7 +17,8 @@ from ..common.ai import (
     require_environment,
     require_model,
 )
-from ..common.image import cleanup_image_input, owner_image
+from ..common.image import owner_image
+from ..common.image_input import cleanup_image_input
 from ..common.image_target import ImageEditTarget, image_edit_owner
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}

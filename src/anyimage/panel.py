@@ -12,7 +12,7 @@ class ServerPanel(bpy.types.Panel):
     bl_idname = "ANYIMAGE_PT_server"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AnyImage"
+    bl_category = "Any Image"
     bl_order = 0
 
     def draw(self, _context):
@@ -61,7 +61,7 @@ class DangerZonePanel(bpy.types.Panel):
     bl_idname = "ANYIMAGE_PT_danger_zone"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "AnyImage"
+    bl_category = "Any Image"
     bl_order = 100
     bl_options = {"DEFAULT_CLOSED"}
 

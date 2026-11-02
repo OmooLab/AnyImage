@@ -66,7 +66,6 @@ def _trace_selection_contours(mask):
     mask = np.asarray(mask, dtype=bool)
     if mask.ndim != 2:
         raise ValueError("Cutout Alpha must be two-dimensional")
-    height, width = mask.shape
     edges = {}
 
     def add_edge(start, end):

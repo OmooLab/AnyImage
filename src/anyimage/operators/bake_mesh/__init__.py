@@ -1,4 +1,3 @@
 from .operators import BakeMesh
 
-CLASSES = (BakeMesh,)
-__all__ = ("BakeMesh", "CLASSES")
+__all__ = ("BakeMesh",)

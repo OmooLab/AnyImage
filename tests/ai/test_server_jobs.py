@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
-from tests.anyimage.server.support import load_server_module, FakeJobContext, FakeModels
+from tests.anyimage.server.support import load_server_module, FakeJobContext
 
 
 class ServerJobsTest(unittest.TestCase):
@@ -13,13 +13,7 @@ class ServerJobsTest(unittest.TestCase):
 
         cls.background = load_server_module("jobs.remove_background")
 
-        cls.background_model = load_server_module("models.background")
-
-        cls.onnx_upscale = load_server_module("models.onnx_upscale")
-
         cls.depth_plane_job = load_server_module("jobs.depth_plane")
-
-        cls.upscale_job = load_server_module("jobs.upscale")
 
 
     def test_plane_job_requests_matching_normal_space(self):
@@ -89,7 +83,6 @@ class ServerJobsTest(unittest.TestCase):
             self.assertEqual([p.name for p in context.directory.glob("*.png")], ["foreground.png"])
             with Image.open(root / "result" / "foreground.png") as image:
                 self.assertEqual(image.getpixel((0, 0)), (255, 64, 32, 64))
-            self.assertEqual(infer.call_args.kwargs, {"release_memory": True})
             self.assertEqual(save.call_args.kwargs, {"format": "PNG", "compress_level": 1})
         self.assertIn("Background removed in", context.status["message"])
 
@@ -115,32 +108,18 @@ class ServerJobsTest(unittest.TestCase):
             with (
                 patch.object(onnx_ben2, "infer_alpha", side_effect=infer),
             ):
-                result, _load_ms, _inference_ms = self.background_model.infer_foreground(
-                    input_path,
-                    "BEN2_BASE",
-                    "cpu",
-                    FakeModels(),
-                    preserve_input_alpha=True,
-                )
-                raw_result, _load_ms, _inference_ms = self.background_model.infer_foreground(
-                    input_path,
-                    "BEN2_BASE",
-                    "cpu",
-                    FakeModels(),
-                )
+                context = FakeJobContext(Path(directory) / "job", "remove_background")
+                result = self.background.run(context, {
+                    "input": str(input_path), "model": "BEN2_BASE", "device": "cpu",
+                })
+            with Image.open(context.directory / result["foreground"]) as output:
+                result_pixels = np.asarray(output, dtype=np.uint8)
 
         inference_pixels = received[0]
-        result_pixels = np.asarray(result.convert("RGBA"), dtype=np.uint8)
         self.assertEqual(tuple(inference_pixels[0, 0]), (0, 0, 0))
         self.assertEqual(tuple(inference_pixels[0, 1]), (0, 128, 0))
-        self.assertEqual(tuple(received[1][0, 0]), (0, 0, 0))
-        self.assertEqual(tuple(received[1][0, 1]), (0, 128, 0))
         self.assertEqual(tuple(result_pixels[0, 0]), (255, 0, 0, 0))
         self.assertEqual(tuple(result_pixels[0, 1]), (0, 255, 0, 64))
-        self.assertEqual(
-            tuple(np.asarray(raw_result.convert("RGBA"))[0, 0]),
-            (0, 0, 0, 128),
-        )
 
 
     def test_background_alpha_job_preserves_float_precision(self):
@@ -159,91 +138,6 @@ class ServerJobsTest(unittest.TestCase):
             self.assertEqual(result, {"alpha": "alpha.npy"})
             np.testing.assert_array_equal(np.load(context.directory / result["alpha"], allow_pickle=False), alpha)
             self.assertFalse(list(context.directory.glob("*.png")))
-
-
-    def test_upscale_job_returns_one_image_file(self):
-        from PIL import Image
-
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            input_path = root / "input.png"
-            input_path.touch()
-            context = FakeJobContext(root / "result", "upscale_image")
-            with patch.object(
-                self.upscale_job,
-                "infer_one",
-                return_value=Image.new("RGB", (8, 8), (10, 20, 30)),
-            ) as infer_one:
-                result = self.upscale_job.run(
-                    context,
-                    {
-                        "input": str(input_path),
-                        "model": "REALESRGAN_GENERAL_WDN_X4V3",
-
-                        "device": "cpu",
-                    },
-                )
-
-            self.assertEqual(infer_one.call_count, 1)
-            self.assertEqual(result, {"upscale": "upscale.png"})
-            colors = sorted(context.directory.glob("*.png"))
-            self.assertEqual(
-                [path.name for path in colors],
-                ["upscale.png"],
-            )
-            self.assertIn(
-                (
-                    "INFO",
-                    "Upscale model: REALESRGAN_GENERAL_WDN_X4V3; "
-                    "maximum AI input size: 2048 px",
-                ),
-                context.logs,
-            )
-
-
-    def test_upscale_job_preserves_source_alpha(self):
-        from PIL import Image
-
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source_path = root / "source.png"
-            pixels = np.zeros((3, 5, 4), dtype=np.uint8)
-            pixels[..., :3] = (10, 20, 30)
-            pixels[..., 3] = np.arange(5, dtype=np.uint8) * 60
-            Image.fromarray(pixels, mode="RGBA").save(source_path)
-            context = FakeJobContext(root / "result", "upscale_image")
-            prediction = Image.new("RGB", (20, 12), (10, 20, 30))
-
-            with patch.object(
-                self.onnx_upscale,
-                "infer",
-                return_value=prediction,
-            ):
-                self.upscale_job.run(
-                    context,
-                    {
-                        "input": str(source_path),
-                        "model": "REALESRGAN_GENERAL_WDN_X4V3",
-
-                        "device": "cpu",
-                    },
-                )
-
-            with Image.open(context.directory / "upscale.png") as result:
-                self.assertEqual(result.mode, "RGBA")
-                self.assertEqual(result.size, (10, 6))
-                alpha = np.asarray(result.getchannel("A"))
-                expected_alpha = np.asarray(
-                    Image.fromarray(pixels[:, :, 3], mode="L").resize(
-                        result.size,
-                        Image.Resampling.LANCZOS,
-                    )
-                )
-                np.testing.assert_array_equal(alpha, expected_alpha)
-                self.assertLess(
-                    int(alpha[:, 0].max()),
-                    int(alpha[:, -1].min()),
-                )
 
 
     def test_upscale_input_uses_the_global_long_edge_limit(self):

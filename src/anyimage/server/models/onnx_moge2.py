@@ -23,7 +23,7 @@ def create_session(model_directory, requested_device="auto"):
 
 
 def infer(
-    session, image, resolution_level, *, release_memory=True,
+    session, image, resolution_level, *,
     fov_x=None, source_valid=None, include_points=True,
 ):
     import numpy as np
@@ -42,7 +42,6 @@ def infer(
         session,
         list(names),
         input_feed,
-        release_memory=release_memory,
     )
     raw_output = dict(zip(names, values))
     raw_output["metric_scale"] = raw_output.pop(scale_name)

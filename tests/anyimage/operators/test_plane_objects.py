@@ -7,7 +7,7 @@ from mathutils import Matrix, Vector
 from anyimage.common import image as image_data
 from anyimage.common import object as object_data
 from anyimage.common.geometry_image import depth_node_direction
-from anyimage.common import depth_plane as plane_object
+from anyimage.operators.depth_plane import object as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from tests.support.image_objects import _depth_image, _depth_metadata, _evaluated_positions
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_plane import ODepthPlane

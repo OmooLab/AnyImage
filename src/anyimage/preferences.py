@@ -53,7 +53,7 @@ def configured_max_frame_resolution(context=None):
     return min(max(value, MIN_FRAME_RESOLUTION), MAX_FRAME_RESOLUTION)
 
 
-class AnyImagePreferences(bpy.types.AddonPreferences):
+class PreferencesBase(bpy.types.AddonPreferences):
     bl_idname = ADDON_PACKAGE
 
     min_cutout_relative_edge_length: bpy.props.FloatProperty(

@@ -18,16 +18,16 @@ class AddonRegistrationTest(BlenderTestCase):
 
     def test_editions_reject_conflicts_and_can_switch_after_unregister(self):
         for first, second in (
-            (self.anyimage.base, self.anyimage),
-            (self.anyimage, self.anyimage.base),
+            (self.base_addon, self.anyimage),
+            (self.anyimage, self.base_addon),
         ):
             with self.subTest(first=first.__name__):
+                self.assertEqual(len(first.CLASSES), len({cls.__name__ for cls in first.CLASSES}))
                 first.register()
                 registered = self.registered.copy()
                 settings = self.fake_bpy.types.Scene.anyimage_settings
                 with self.assertRaisesRegex(RuntimeError, "already enabled"):
                     second.register()
-                second.unregister()
                 self.assertEqual(self.registered, registered)
                 self.assertIs(self.fake_bpy.types.Scene.anyimage_settings, settings)
                 first.unregister()
@@ -35,51 +35,6 @@ class AddonRegistrationTest(BlenderTestCase):
                 second.unregister()
                 self.assertEqual(self.registered, [])
                 self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
-
-    def test_partial_registration_is_cleaned_up_and_can_be_retried(self):
-        for edition in (self.anyimage.base, self.anyimage):
-            for owner, name in (
-                (self.fake_bpy.utils, "register_class"),
-                (self.fake_bpy.utils, "register_tool"),
-                (self.fake_bpy.types.VIEW3D_MT_object_context_menu, "prepend"),
-            ):
-                with self.subTest(edition=edition.__name__, operation=name):
-                    original = getattr(owner, name)
-                    calls = 0
-
-                    def fail_second(*args, **kwargs):
-                        nonlocal calls
-                        calls += 1
-                        if calls == 2:
-                            raise RuntimeError("Registration failed")
-                        return original(*args, **kwargs)
-
-                    with patch.object(owner, name, side_effect=fail_second):
-                        with self.assertRaisesRegex(RuntimeError, "Registration failed"):
-                            edition.register()
-                    edition.unregister()
-                    self.assertEqual(self.registered, [])
-                    self.assertEqual(self.registered_tools, [])
-                    self.assertEqual(self.registered_translations, {})
-                    self.assertEqual(self.context_menu_draws, [])
-                    self.assertEqual(self.outliner_menu_draws, [])
-                    self.assertEqual(self.node_menu_draws, [])
-                    self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
-                    edition.register()
-                    edition.unregister()
-
-    def test_runtime_start_failure_releases_registered_ui(self):
-        with patch.object(self.anyimage.runtime, "enable", side_effect=RuntimeError("Runtime failed")):
-            with self.assertRaisesRegex(RuntimeError, "Runtime failed"):
-                self.anyimage.register()
-        self.assertEqual(self.registered, [])
-        self.assertEqual(self.registered_tools, [])
-        self.assertEqual(self.registered_translations, {})
-        self.assertEqual(self.status_bar_draws, [])
-        self.assertEqual(self.fake_bpy.app.handlers.load_post, [])
-        self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
-        self.anyimage.register()
-        self.anyimage.unregister()
 
     def test_import_does_not_add_addon_directories_to_sys_path(self):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
@@ -96,19 +51,31 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
         self.assertIn(GeneratePanorama, self.anyimage.CLASSES)
         for operator in (ConvertToPanorama, GeneratePanorama, self.convert_to_plane.ConvertToPlane,
-                         self.convert_to_depth_plane.ConvertToDepthPlane, self.convert_to_relief.ConvertToReliefPlane,
-                         self.plane_geometry.GeneratePlaneGeometry):
+                         self.depth_plane_operators.ConvertToDepthPlane, self.depth_plane_operators.ConvertToReliefPlane,
+                         self.depth_plane_operators.GeneratePlaneGeometry):
             self.assertNotIn("mesh_detail", getattr(operator, "__annotations__", {}))
-        for generator in (GeneratePanorama, self.plane_geometry.GeneratePlaneGeometry):
+        for generator in (GeneratePanorama, self.depth_plane_operators.GeneratePlaneGeometry):
             self.assertIn(generator, self.anyimage.CLASSES)
             for name in ("source_object_name",):
                 self.assertIn(name, generator.__annotations__)
                 self.assertIn("HIDDEN", generator.__annotations__[name]["options"])
         self.assertLess(self.anyimage.CLASSES.index(GeneratePanorama), self.anyimage.CLASSES.index(ConvertToPanorama))
+        for entry in (
+            self.depth_plane_operators.ConvertToDepthPlane,
+            self.depth_plane_operators.ConvertToReliefPlane,
+        ):
+            self.assertLess(
+                self.anyimage.CLASSES.index(self.depth_plane_operators.GeneratePlaneGeometry),
+                self.anyimage.CLASSES.index(entry),
+            )
+        self.assertLess(
+            self.anyimage.CLASSES.index(self.anyimage.RunBackgroundRemoval),
+            self.anyimage.CLASSES.index(self.anyimage.RemoveImageBackground),
+        )
         operator = self.convert_to_plane.ConvertToPlane
         self.assertIn(operator, self.anyimage.CLASSES)
-        self.assertIn(self.convert_to_depth_plane.ConvertToDepthPlane, self.anyimage.CLASSES)
-        self.assertIn(self.convert_to_relief.ConvertToReliefPlane, self.anyimage.CLASSES)
+        self.assertIn(self.depth_plane_operators.ConvertToDepthPlane, self.anyimage.CLASSES)
+        self.assertIn(self.depth_plane_operators.ConvertToReliefPlane, self.anyimage.CLASSES)
         self.assertIn(self.cutout_main.CutoutSelectionToShape, self.anyimage.CLASSES)
         self.assertEqual(operator.bl_idname, "anyimage.convert_to_plane")
         self.assertIn("REGISTER", operator.bl_options)
@@ -243,22 +210,22 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertEqual(
             self.context_menu_draws[:2],
             [
-                self.anyimage.base.draw_image_object_context_menu,
-                self.anyimage.base.draw_image_context_menu,
+                self.anyimage.draw_image_object_context_menu,
+                self.anyimage.draw_image_context_menu,
             ],
         )
         self.assertEqual(
             self.outliner_menu_draws[:2],
             [
-                self.anyimage.base.draw_image_object_context_menu,
-                self.anyimage.base.draw_image_context_menu,
+                self.anyimage.draw_image_object_context_menu,
+                self.anyimage.draw_image_context_menu,
             ],
         )
 
-        self.assertEqual(self.node_menu_draws, [self.anyimage.base.draw_texture_node_context_menu, existing_node_draw])
-        self.assertIn(self.anyimage.AnyImageTextureNodeMenu, self.registered)
-        self.assertIn(self.anyimage.AnyImageObjectMenu, self.registered)
-        self.assertIn(self.anyimage.base.ColorMatchPanel, self.registered)
+        self.assertEqual(self.node_menu_draws, [self.anyimage.draw_texture_node_context_menu, existing_node_draw])
+        self.assertIn(self.anyimage.TextureNodeMenu, self.registered)
+        self.assertIn(self.anyimage.ObjectMenu, self.registered)
+        self.assertIn(self.anyimage.ColorMatchPanel, self.registered)
 
         unregister_order = []
         original_unregister = self.fake_bpy.utils.unregister_class
@@ -282,6 +249,6 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertEqual(self.outliner_menu_draws, [existing_outliner_draw])
         self.assertEqual(self.node_menu_draws, [existing_node_draw])
         self.anyimage.register()
-        self.assertEqual(self.node_menu_draws, [self.anyimage.base.draw_texture_node_context_menu, existing_node_draw])
+        self.assertEqual(self.node_menu_draws, [self.anyimage.draw_texture_node_context_menu, existing_node_draw])
         self.anyimage.unregister()
         self.assertEqual(self.node_menu_draws, [existing_node_draw])

@@ -1,4 +1,4 @@
-"""Export official PyTorch super-resolution models to ONNX."""
+"""Export Real-ESRGAN general WDN weights to ONNX."""
 
 import numpy as np
 
@@ -19,12 +19,7 @@ def _require_build_dependencies():
     return onnx, onnxruntime, torch
 
 
-def _load_weights(torch, checkpoint_path, key):
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-    return checkpoint[key]
-
-
-def _validate_export(onnx, onnxruntime, torch, model, sample, destination):
+def _validate_export(onnx, onnxruntime, model, sample, destination):
     onnx.checker.check_model(onnx.load(destination))
     expected = model(sample).detach().numpy()
     session = onnxruntime.InferenceSession(
@@ -33,22 +28,6 @@ def _validate_export(onnx, onnxruntime, torch, model, sample, destination):
     )
     actual = session.run(None, {"input": sample.numpy()})[0]
     np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-5)
-
-
-def _export(torch, model, sample, destination, dynamic_axes=None):
-    model.eval()
-    torch.onnx.export(
-        model,
-        sample,
-        destination,
-        export_params=True,
-        opset_version=OPSET_VERSION,
-        do_constant_folding=True,
-        input_names=["input"],
-        output_names=["output"],
-        dynamic_axes=dynamic_axes,
-        dynamo=False,
-    )
 
 
 def _restore_realesrgan_scope_names(onnx, destination):
@@ -87,23 +66,25 @@ def export_realesrgan_wdn_x4(checkpoint_path, destination):
             )
 
     model = SRVGGNetCompact()
-    model.load_state_dict(_load_weights(torch, checkpoint_path, "params"), strict=True)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    model.load_state_dict(checkpoint["params"], strict=True)
+    model.eval()
     sample = torch.rand(1, 3, 16, 16)
     dynamic_axes = {
         "input": {2: "height", 3: "width"},
         "output": {2: "height4", 3: "width4"},
     }
-    _export(torch, model, sample, destination, dynamic_axes)
+    torch.onnx.export(
+        model,
+        sample,
+        destination,
+        export_params=True,
+        opset_version=OPSET_VERSION,
+        do_constant_folding=True,
+        input_names=["input"],
+        output_names=["output"],
+        dynamic_axes=dynamic_axes,
+        dynamo=False,
+    )
     _restore_realesrgan_scope_names(onnx, destination)
-    _validate_export(onnx, onnxruntime, torch, model, sample, destination)
-
-
-def export_model(exporter, checkpoint_path, destination):
-    exporters = {
-        "realesrgan_wdn_x4": export_realesrgan_wdn_x4,
-    }
-    try:
-        export = exporters[exporter]
-    except KeyError as error:
-        raise ValueError(f"Unknown model exporter: {exporter}") from error
-    export(checkpoint_path, destination)
+    _validate_export(onnx, onnxruntime, model, sample, destination)

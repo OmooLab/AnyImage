@@ -37,12 +37,3 @@ def open_image(path):
     finally:
         if opened is not None:
             opened.close()
-
-
-class JobCancelled(RuntimeError):
-    pass
-
-
-def check_cancelled(cancel_check):
-    if cancel_check is not None and cancel_check():
-        raise JobCancelled("Job cancelled")

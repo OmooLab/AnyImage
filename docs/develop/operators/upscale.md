@@ -12,4 +12,4 @@ flowchart TD
     F --> G[ImageEditTarget 应用结果并提交 Undo]
 ```
 
-`server/models/upscale.py` 处理输入上限和最终尺寸，`onnx_upscale.py` 执行 Real-ESRGAN 与 HAT 模型。ModelManager 管理 Session；Provider 资源错误会释放当前 Session 并返回处理建议。
+`server/jobs/upscale.py` 处理输入上限、最终尺寸与 Alpha，`server/models/onnx_upscale.py` 执行 Real-ESRGAN 与 HAT 模型。ModelManager 管理 Session；Provider 资源错误会释放当前 Session 并返回处理建议。

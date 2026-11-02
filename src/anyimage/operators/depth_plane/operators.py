@@ -2,16 +2,31 @@
 
 import bpy
 
-from ..common.ai import geometry_job_parameters, invoke_ai_setup_if_needed, report_ai_error, require_environment, require_input_path, require_model
-from ..common.color_image import (cleanup_material_color_input, prepare_material_color_input, require_static_color_image)
-from ..common.job_image import material_analysis_input
-from ..preferences import addon_preferences
-from ..ai_preferences import configured_geometry_model, configured_max_ai_input_size
-from ..common.depth_plane import create_depth_plane_from_result
-from ..common.image import require_image_empty, image_content_signature
-from ..runtime import JobOperator
-from ..server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
-from ..server.media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, MAX_MAX_AI_INPUT_SIZE, MIN_MAX_AI_INPUT_SIZE
+from ...ai_preferences import configured_geometry_model, configured_max_ai_input_size
+from ...common.ai import (
+    geometry_job_parameters,
+    invoke_ai_setup_if_needed,
+    report_ai_error,
+    require_environment,
+    require_input_path,
+    require_model,
+)
+from ...common.color_image import (
+    cleanup_material_color_input,
+    prepare_material_color_input,
+    require_static_color_image,
+)
+from ...common.image import image_content_signature, is_image_empty, require_image_empty
+from ...common.job_image import material_analysis_input
+from ...preferences import addon_preferences
+from ...runtime import JobOperator
+from ...server.media.resolution import (
+    DEFAULT_MAX_AI_INPUT_SIZE,
+    MAX_MAX_AI_INPUT_SIZE,
+    MIN_MAX_AI_INPUT_SIZE,
+)
+from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
+from .object import create_depth_plane_from_result
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
 
@@ -60,7 +75,10 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
         }
 
     def response(self, context, result):
-        label = "Convert to Relief" if self.plane_type == "RELIEF" else "Convert to Depth Plane"
+        label = (
+            ConvertToReliefPlane.bl_label if self.plane_type == "RELIEF"
+            else ConvertToDepthPlane.bl_label
+        )
         create_depth_plane_from_result(
             context, result, self, plane_type=self.plane_type, undo_label=label,
         )
@@ -69,14 +87,6 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
     def cleanup(self):
         cleanup_material_color_input(self.color_path)
         self._source_object = self._source_image = self._source_signature = None
-
-
-def depth_plane_settings(context):
-    preferences = addon_preferences(context)
-    return (
-        configured_geometry_model(context),
-        int(getattr(preferences, "geometry_resolution_level", 5)),
-    )
 
 
 def start_depth_conversion(operator, context, plane_type):
@@ -93,14 +103,14 @@ def start_depth_conversion(operator, context, plane_type):
     try:
         color_path = prepare_material_color_input(source_object.data)
         source_path = material_analysis_input(color_path)
-        model, resolution_level = depth_plane_settings(context)
+        preferences = addon_preferences(context)
         result = bpy.ops.anyimage.generate_plane_geometry(
             input_path=str(source_path),
             plane_type=plane_type,
             color_path=str(color_path),
             source_object_name=source_object.name,
-            model=model,
-            resolution_level=resolution_level,
+            model=configured_geometry_model(context),
+            resolution_level=int(getattr(preferences, "geometry_resolution_level", 5)),
             max_input_size=configured_max_ai_input_size(context),
         )
     except (OSError, RuntimeError, ValueError) as error:
@@ -109,4 +119,40 @@ def start_depth_conversion(operator, context, plane_type):
         return {"CANCELLED"}
     if "CANCELLED" in result:
         cleanup_material_color_input(color_path)
-    return {"CANCELLED"} if "CANCELLED" in result else {"FINISHED"}
+        return {"CANCELLED"}
+    return {"FINISHED"}
+
+
+class ConvertToDepthPlane(bpy.types.Operator):
+    bl_idname = "anyimage.convert_to_depth_plane"
+    bl_label = "Convert to Depth Plane"
+    bl_description = (
+        "Use AI-estimated depth to turn the image into a 3D surface "
+        "that follows the source image's perspective."
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        from ...runtime import runtime
+
+        return is_image_empty(context.object) and runtime.can_submit()
+
+    def execute(self, context):
+        return start_depth_conversion(self, context, "DEPTH")
+
+
+class ConvertToReliefPlane(bpy.types.Operator):
+    bl_idname = "anyimage.convert_to_relief_plane"
+    bl_label = "Convert to Relief"
+    bl_description = "Use AI-estimated depth to create a raised relief on a flat base."
+    bl_options = {"REGISTER", "UNDO"}
+
+    @classmethod
+    def poll(cls, context):
+        from ...runtime import runtime
+
+        return is_image_empty(context.object) and runtime.can_submit()
+
+    def execute(self, context):
+        return start_depth_conversion(self, context, "RELIEF")

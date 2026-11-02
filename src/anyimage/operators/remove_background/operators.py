@@ -12,7 +12,7 @@ from ...common.ai import (
     require_model,
 )
 
-from ...common.image import cleanup_image_input
+from ...common.image_input import cleanup_image_input
 from ...common.image_target import ImageEditTarget, image_edit_owner
 from .hdr import HdrBackgroundInput
 

@@ -5,7 +5,7 @@ from tests.support.planes import surface
 
 
 def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surface, monkeypatch):
-    from anyimage.common import depth_plane as conversion
+    from anyimage.operators.depth_plane import object as conversion
     from anyimage.common.image import image_empty_bounds
     from anyimage.common.geometry_image import reference_depth
     from mathutils import Matrix, Vector
@@ -47,7 +47,7 @@ def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surf
 
 
 def test_failed_modifier_initialization_removes_partial_object(surface, monkeypatch):
-    from anyimage.common import depth_plane as conversion
+    from anyimage.operators.depth_plane import object as conversion
 
     obj, _, _, _, image = surface
     monkeypatch.setattr(conversion, "load_node_group", lambda name: obj.modifiers[0].node_group)

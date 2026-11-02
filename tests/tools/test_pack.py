@@ -139,7 +139,7 @@ class ExtensionPackagingTest(unittest.TestCase):
     def test_downloads_both_python_versions_for_each_platform(self):
         pack = load_pack()
         records = {}
-        for platform, config in pack.PLATFORM_CONFIGS.items():
+        for platform, pip_platform in pack.PIP_PLATFORMS.items():
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as directory:
                 destination = Path(directory)
 
@@ -156,8 +156,8 @@ class ExtensionPackagingTest(unittest.TestCase):
                         self.assertNotIn("--constraint", command)
                     for name in (
                         "blendjob-0.1.28-py3-none-any.whl",
-                        f"scipy-1.17.1-{tag}-{tag}-{config.pip_platform}.whl",
-                        f"numpy-2.1.0-{tag}-{tag}-{config.pip_platform}.whl",
+                        f"scipy-1.17.1-{tag}-{tag}-{pip_platform}.whl",
+                        f"numpy-2.1.0-{tag}-{tag}-{pip_platform}.whl",
                     ):
                         (target / name).write_bytes(b"wheel")
 
@@ -175,7 +175,7 @@ class ExtensionPackagingTest(unittest.TestCase):
                     self.assertNotIn(str(pack.SOURCE_DIR / "wheels"), command)
                     self.assertIn(f"--python-version={version}", command)
                     self.assertIn("--implementation=cp", command)
-                    self.assertIn(f"--platform={config.pip_platform}", command)
+                    self.assertIn(f"--platform={pip_platform}", command)
                     self.assertEqual(
                         [value for value in command if value.startswith("numpy")],
                         [numpy_requirement],

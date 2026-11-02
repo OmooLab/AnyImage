@@ -1,12 +1,13 @@
-"""Encode and pack HDR images."""
+"""Encode HDR images and build their recognition previews."""
 
 import bpy
 import numpy as np
 
 from .image import image_rgba
+from .color_space import linear_rgb_to_srgb
 
 
-def save_hdr_result(rgba, path):
+def save_hdr_image(rgba, path):
     """Save associated scene-linear RGBA as ZIP-compressed 32-bit EXR."""
     height, width = rgba.shape[:2]
     image = bpy.data.images.new("AnyImage HDR Result", width=width, height=height,
@@ -29,10 +30,10 @@ def save_hdr_result(rgba, path):
         bpy.data.images.remove(image)
 
 
-def create_packed_hdr(rgba, name, path, *, alpha_mode="PREMUL"):
+def create_packed_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
     """Create a self-contained float image and verify its encoded pixels."""
     result = None
-    save_hdr_result(rgba, path)
+    save_hdr_image(rgba, path)
     try:
         result = bpy.data.images.load(str(path), check_existing=False)
         result.alpha_mode = alpha_mode
@@ -47,3 +48,18 @@ def create_packed_hdr(rgba, name, path, *, alpha_mode="PREMUL"):
         if result is not None:
             bpy.data.images.remove(result)
         raise
+
+
+def build_recognition_rgba(rgba, *, associated=True):
+    """Tone-map scene-linear pixels for sRGB recognition without changing the source."""
+    alpha = rgba[..., 3:4]
+    rgb = rgba[..., :3].astype(np.float64)
+    if associated:
+        rgb = np.divide(rgb, alpha, out=np.zeros_like(rgb), where=alpha > 0)
+    rgb = np.maximum(rgb, 0)
+    luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
+    rgb /= 1 + luminance[..., None]
+    encoded = linear_rgb_to_srgb(rgb)
+    preview = np.ones(rgba.shape, dtype=np.float32)
+    preview[..., :3] = np.clip(encoded, 0, 1) * alpha
+    return preview

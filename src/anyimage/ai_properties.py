@@ -2,10 +2,10 @@
 
 import bpy
 
-from .properties import AnyImageSettings as SharedSettings
+from .properties import SettingsBase
 
 
-class AnyImageSettings(SharedSettings):
+class Settings(SettingsBase):
     cutout_generate_normal: bpy.props.BoolProperty(
         name="Normal Map",
         description=(

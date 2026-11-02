@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import bpy
@@ -5,8 +6,7 @@ import pytest
 
 from anyimage.operators import ai_setup
 from anyimage.operators.remove_background import operators as remove_background
-from anyimage.operators import convert_to_depth_plane as plane, convert_to_relief as relief
-from anyimage.operators import plane_geometry as conversion
+from anyimage.operators.depth_plane import operators as conversion
 
 
 def test_native_server_controls_are_disabled_during_migration():
@@ -32,7 +32,7 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
         inner, outer = remove_background.RunBackgroundRemoval, remove_background.RemoveImageBackground
     else:
         inner = conversion.GeneratePlaneGeometry
-        outer = plane.ConvertToDepthPlane if kind == "depth" else relief.ConvertToReliefPlane
+        outer = conversion.ConvertToDepthPlane if kind == "depth" else conversion.ConvertToReliefPlane
 
     def reject(operator, context):
         operator.report({"ERROR"}, reason)
@@ -48,7 +48,8 @@ def test_nested_native_operator_preserves_plain_error(kind, tmp_path, capfd):
         patch.object(conversion, "invoke_ai_setup_if_needed", return_value=None),
         patch.object(conversion, "prepare_material_color_input", return_value=path),
         patch.object(conversion, "material_analysis_input", return_value=path),
-        patch.object(conversion, "depth_plane_settings", return_value=("model", 5)),
+        patch.object(conversion, "addon_preferences", return_value=SimpleNamespace(geometry_resolution_level=5)),
+        patch.object(conversion, "configured_geometry_model", return_value="model"),
         patch.object(conversion, "configured_max_ai_input_size", return_value=2048),
     ):
         owner = bpy.data.objects.new("Native validation source", None)

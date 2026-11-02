@@ -98,35 +98,5 @@ class Moge2OnnxTest(unittest.TestCase):
         self.assertEqual(inputs["num_tokens"].dtype, np.int64)
         self.assertEqual(inputs["num_tokens"], 3600)
 
-    def test_infer_forwards_memory_release_boundary(self):
-        height, width = 8, 12
-        raw = {
-            "points": np.zeros((1, height, width, 3), dtype=np.float32),
-            "normal": np.zeros((1, height, width, 3), dtype=np.float32),
-            "mask": np.ones((1, height, width), dtype=np.float32),
-            "scale": np.ones((1,), dtype=np.float32),
-        }
-        session = FakeSession(raw)
-
-        with (
-            patch.object(self.moge, "postprocess", return_value={}),
-            patch.object(
-                self.moge,
-                "run_session",
-                side_effect=lambda model, names, feeds, **_options: model.run(
-                    names, feeds
-                ),
-            ) as run,
-        ):
-            self.moge.infer(
-                session,
-                np.zeros((height, width, 3), dtype=np.float32),
-                0,
-                release_memory=False,
-            )
-
-        self.assertFalse(run.call_args.kwargs["release_memory"])
-
-
 if __name__ == "__main__":
     unittest.main()

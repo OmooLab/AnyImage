@@ -1,9 +1,6 @@
 """Shared Blender Image and Image Empty lifecycle helpers."""
 
 import hashlib
-import shutil
-import tempfile
-from pathlib import Path
 
 import bpy
 
@@ -84,48 +81,13 @@ def is_animated_image(image):
 
 def image_user_settings(source_object):
     """Return an image owner's playback settings as a four-item tuple."""
-    image_user = getattr(source_object, "image_user", None)
-    if image_user is None:
-        return 1, 0, 0, False
+    image_user = source_object.image_user
     return (
-        int(getattr(image_user, "frame_start", 1) or 1),
-        int(getattr(image_user, "frame_offset", 0) or 0),
-        int(getattr(image_user, "frame_duration", 0) or 0),
-        bool(getattr(image_user, "use_cyclic", False)),
+        image_user.frame_start,
+        image_user.frame_offset,
+        image_user.frame_duration,
+        image_user.use_cyclic,
     )
-
-
-def image_path(image):
-    filepath_from_user = getattr(image, "filepath_from_user", None)
-    filepath = (
-        filepath_from_user()
-        if callable(filepath_from_user)
-        else getattr(image, "filepath", "")
-    )
-    if not filepath:
-        return Path()
-    return Path(bpy.path.abspath(filepath)).expanduser()
-
-
-def image_is_packed(image):
-    if getattr(image, "packed_file", None) is not None:
-        return True
-    return bool(getattr(image, "packed_files", ()))
-
-
-def cleanup_image_input(path):
-    """Remove a prepared input and its temporary container."""
-    if not path:
-        return
-    path = Path(path)
-    try:
-        if path.is_dir():
-            shutil.rmtree(path, ignore_errors=True)
-        else:
-            path.unlink(missing_ok=True)
-            path.parent.rmdir()
-    except OSError:
-        pass
 
 
 def image_base_name(image):
@@ -172,24 +134,6 @@ def is_color_reference_candidate(image):
         return any(is_image_empty(owner) and owner.data == image for owner in bpy.data.objects)
     except (AttributeError, ReferenceError, TypeError, ValueError):
         return False
-
-
-def save_image_input(image):
-    """Export the current Blender pixels as an independent PNG input."""
-    output_path = Path(tempfile.mkdtemp(prefix="anyimage-input-")) / "input.png"
-    original_file_format = image.file_format
-    try:
-        image.file_format = "PNG"
-        image.save(filepath=str(output_path), save_copy=True)
-    except (OSError, RuntimeError, ValueError) as error:
-        cleanup_image_input(output_path)
-        raise RuntimeError("Unable to export the image") from error
-    finally:
-        image.file_format = original_file_format
-    if not output_path.is_file():
-        cleanup_image_input(output_path)
-        raise RuntimeError("Blender did not export the image")
-    return output_path
 
 
 def create_image_edit_result(source_image, pixels, output_size):
@@ -372,10 +316,10 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
     try:
         source_image = source_object.data
         original_fake_user = source_image.use_fake_user
-        original_blending = getattr(source_object, "use_empty_image_alpha", False)
-        image_user = getattr(source_object, "image_user", None)
-        original_timing = image_user_settings(source_object) if image_user is not None else None
-        original_auto_refresh = getattr(image_user, "use_auto_refresh", False)
+        original_blending = source_object.use_empty_image_alpha
+        image_user = source_object.image_user
+        original_timing = image_user_settings(source_object)
+        original_auto_refresh = image_user.use_auto_refresh
         alignment = (
             empty_display_alignment(
                 source_object,
@@ -414,10 +358,9 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
             source_object.use_empty_image_alpha = original_blending
             if original_alignment is not None:
                 source_object.empty_display_size, source_object.empty_image_offset = original_alignment
-            if original_timing is not None:
-                (image_user.frame_start, image_user.frame_offset,
-                 image_user.frame_duration, image_user.use_cyclic) = original_timing
-                image_user.use_auto_refresh = original_auto_refresh
+            (image_user.frame_start, image_user.frame_offset,
+             image_user.frame_duration, image_user.use_cyclic) = original_timing
+            image_user.use_auto_refresh = original_auto_refresh
             source_image.use_fake_user = original_fake_user
             raise
 

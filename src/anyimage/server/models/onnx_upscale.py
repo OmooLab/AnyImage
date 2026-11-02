@@ -77,7 +77,7 @@ def _pad_source(source, extra_height, extra_width, tile_border):
     )
 
 
-def infer(session, image, cancel_check=None, *, release_memory=True, tile_border=TILE_BORDER):
+def infer(session, image, cancel_check=None, *, tile_border=TILE_BORDER):
     import numpy as np
     from PIL import Image
 
@@ -94,15 +94,14 @@ def infer(session, image, cancel_check=None, *, release_memory=True, tile_border
         core_height = min(core_size, height - top)
         for left in range(0, width, core_size):
             core_width = min(core_size, width - left)
-            if cancel_check is not None and cancel_check():
-                raise RuntimeError("Job cancelled")
+            if cancel_check is not None:
+                cancel_check()
             tile = Image.fromarray(
                 padded[top : top + TILE_SIZE, left : left + TILE_SIZE],
                 mode="RGB",
             )
             final_tile = (
-                release_memory
-                and top + core_size >= height
+                top + core_size >= height
                 and left + core_size >= width
             )
             pixels = _prediction_pixels(

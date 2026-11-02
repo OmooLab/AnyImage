@@ -92,7 +92,7 @@ def test_cutout_pie_uses_two_local_shapes_without_ai(monkeypatch):
         "Flat",
         "Solid",
     ]
-    from anyimage.translations import TRANSLATIONS
+    from anyimage import TRANSLATIONS
 
     catalog = TRANSLATIONS["zh_HANS"]
     assert [catalog[(call[1]["text_ctxt"], call[1]["text"])]

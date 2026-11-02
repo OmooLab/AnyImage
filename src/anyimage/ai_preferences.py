@@ -1,8 +1,8 @@
 from .preferences import (
     ADDON_PACKAGE,
     addon_preferences,
+    PreferencesBase,
 )
-from .preferences import AnyImagePreferences as SharedPreferences
 from pathlib import Path
 import bpy
 import platform
@@ -23,7 +23,6 @@ from .server.model_catalog import (
 
 DEFAULT_STORAGE_ROOT = Path.home() / ".anyimage"
 DEVICE_LABELS = {
-    "cuda": ("CUDA", "NVIDIA CUDA"),
     "directml": ("DirectML", "Windows GPU (DirectML)"),
     "coreml": ("CoreML", "Apple CoreML"),
     "cpu": ("CPU", "CPU"),
@@ -118,7 +117,7 @@ def geometry_model_items(_owner, _context):
     ]
 
 
-class AnyImagePreferences(SharedPreferences):
+class Preferences(PreferencesBase):
     bl_idname = ADDON_PACKAGE
 
     storage_root: bpy.props.StringProperty(

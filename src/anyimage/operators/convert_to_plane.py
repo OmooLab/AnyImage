@@ -40,6 +40,3 @@ class ConvertToPlane(bpy.types.Operator):
                 return {"CANCELLED"}
             raise
         return {"FINISHED"}
-
-
-CLASSES = (ConvertToPlane,)

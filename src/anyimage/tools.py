@@ -70,15 +70,3 @@ class CutoutTool(bpy.types.WorkSpaceTool):
         layout.prop(settings, "cutout_edge_length")
         layout.prop(settings, "cutout_fine_outline")
         layout.prop(settings, "cutout_alpha_threshold")
-
-
-def tool_definitions(cutout_tool=CutoutTool):
-    return (
-        (cutout_tool, {"separator": True, "group": True}),
-        (FrameTool, {"after": {cutout_tool.bl_idname}, "separator": False}),
-        (MaskTool, {"after": {FrameTool.bl_idname}, "separator": False}),
-        (RectifyTool, {"after": {MaskTool.bl_idname}, "separator": False}),
-    )
-
-
-TOOLS = tool_definitions()

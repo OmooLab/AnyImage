@@ -181,9 +181,3 @@ class UnloadModels(bpy.types.Operator):
     def execute(self, _context):
         runtime.clear_resource("model_manager")
         return {"FINISHED"}
-
-
-CLASSES = (
-    SetupAIServer, OpenAIEnvironmentSettings,
-    DownloadModel, DownloadRequiredModels, UnloadModels,
-)

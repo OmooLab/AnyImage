@@ -1,6 +1,6 @@
 # 重设画框
 
-`operators/frame_tool/operators.py` 定义 `FrameImages`。`projection.py` 负责视图投影、交叠和结果平面定位，`compositing.py` 负责像素深度排序与边界覆盖采样，`__init__.py` 导出 Operator 及注册清单。`tools.py` 定义对应的 `FrameTool`。**重设画框**将选中的静态 Image Empty 按当前视图合成为一张图片。
+`operators/frame_tool/operators.py` 定义 `FrameImages`。`projection.py` 负责视图投影、交叠和结果平面定位，`compositing.py` 负责像素深度排序与边界覆盖采样，`__init__.py` 导出 Operator。`tools.py` 定义对应的 `FrameTool`。**重设画框**将选中的静态 Image Empty 按当前视图合成为一张图片。
 
 ```mermaid
 flowchart TD

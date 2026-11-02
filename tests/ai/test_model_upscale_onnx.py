@@ -1,8 +1,9 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import numpy as np
 from PIL import Image
+from blendjob.server import JobCancelled
 
 
 from server.models import onnx_upscale
@@ -101,22 +102,17 @@ class UpscaleOnnxTest(unittest.TestCase):
         self.assertEqual(releases, [False, False, False, False, False, True])
         self.assertEqual(session.feeds["input"].shape, (1, 3, 256, 256))
 
-    def test_non_final_image_does_not_release_its_final_tile(self):
-        releases = []
+    def test_cancellation_stops_before_the_next_tile(self):
         session = FakeSession()
-
-        def run(model, output_names, feeds, *, release_memory):
-            releases.append(release_memory)
-            return model.run(output_names, feeds)
-
-        with patch.object(onnx_upscale, "run_session", side_effect=run):
+        cancel = Mock(side_effect=[None, JobCancelled("Job cancelled")])
+        with (
+            patch.object(session, "run", wraps=session.run) as run,
+            self.assertRaises(JobCancelled),
+        ):
             onnx_upscale.infer(
-                session,
-                Image.new("RGB", (449, 225), (1, 2, 3)),
-                release_memory=False,
+                session, Image.new("RGB", (449, 225)), cancel_check=cancel,
             )
-
-        self.assertEqual(releases, [False] * 6)
+        self.assertEqual(run.call_count, 1)
 
     def test_provider_unicode_error_uses_shared_runtime_error(self):
         class InvalidProviderSession(FakeSession):

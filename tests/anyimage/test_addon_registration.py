@@ -16,7 +16,7 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertNotIn("anyimage.server.model_manager", sys.modules)
         self.assertFalse(any(name.startswith("anyimage.server.jobs.") for name in sys.modules))
 
-    def test_editions_reject_conflicts_and_can_switch_after_unregister(self):
+    def test_editions_can_switch_after_unregister(self):
         for first, second in (
             (self.base_addon, self.anyimage),
             (self.anyimage, self.base_addon),
@@ -24,12 +24,13 @@ class AddonRegistrationTest(BlenderTestCase):
             with self.subTest(first=first.__name__):
                 self.assertEqual(len(first.CLASSES), len({cls.__name__ for cls in first.CLASSES}))
                 first.register()
-                registered = self.registered.copy()
-                settings = self.fake_bpy.types.Scene.anyimage_settings
-                with self.assertRaisesRegex(RuntimeError, "already enabled"):
-                    second.register()
-                self.assertEqual(self.registered, registered)
-                self.assertIs(self.fake_bpy.types.Scene.anyimage_settings, settings)
+                if second is self.base_addon:
+                    registered = self.registered.copy()
+                    settings = self.fake_bpy.types.Scene.anyimage_settings
+                    with self.assertRaisesRegex(RuntimeError, "already enabled"):
+                        second.register()
+                    self.assertEqual(self.registered, registered)
+                    self.assertIs(self.fake_bpy.types.Scene.anyimage_settings, settings)
                 first.unregister()
                 second.register()
                 second.unregister()

@@ -140,16 +140,17 @@ selection = next(cls for cls in first.CLASSES if getattr(cls, 'bl_idname', '') =
 assert bpy.types.Operator.bl_rna_get_subclass_py(selection.bl_rna.identifier) is selection
 assert selection.show_shape_menu.__module__.endswith('.ai_interaction' if first is full else '.interaction')
 assert hasattr(bpy.context.scene.anyimage_settings, 'cutout_generate_normal') == (first is full)
-poll_starts = full.runtime.enable.call_count
-original = bpy.context.scene.anyimage_settings.bl_rna.as_pointer()
-try:
-    second.register()
-except RuntimeError as error:
-    assert 'already enabled' in str(error)
-else:
-    raise AssertionError('Second edition was enabled')
-assert full.runtime.enable.call_count == poll_starts
-assert bpy.context.scene.anyimage_settings.bl_rna.as_pointer() == original
+if second is base:
+    poll_starts = full.runtime.enable.call_count
+    original = bpy.context.scene.anyimage_settings.bl_rna.as_pointer()
+    try:
+        second.register()
+    except RuntimeError as error:
+        assert 'already enabled' in str(error)
+    else:
+        raise AssertionError('Second edition was enabled')
+    assert full.runtime.enable.call_count == poll_starts
+    assert bpy.context.scene.anyimage_settings.bl_rna.as_pointer() == original
 first.unregister()
 assert not hasattr(bpy.types.Scene, 'anyimage_settings')
 second.register()

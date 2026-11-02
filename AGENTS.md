@@ -87,7 +87,7 @@ uv run --group models model sync
   - Panel 如 `ANYIMAGE_PT_server`
   - 公共 Property 如 `Scene.anyimage_settings`
 - Operator 自身 Property 不加项目前缀，使用业务名称，如 `input_path`、`process_res`、`resolution_level`
-- 扩展包名使用 Manifest 中的真实名称、版本和平台，例如 `AnyImage.v0.11.2.windows-x64.zip`；节点组名称沿用资产中的 `O DA3 Depth Plane`、`O MoGe2 Surface` 等既有名称
+- 产品显示名使用 `Any Image`；文件名中的品牌名使用去掉空格的大驼峰 `AnyImage`，不写成 `Any_Image`。扩展包名为 `AnyImage.v<version>.<platform>.zip`，基础版为 `AnyImage_Base.v<version>.<platform>.zip`；打包、校验和发布流程保持一致。节点组名称沿用资产中的 `O DA3 Depth Plane`、`O MoGe2 Surface` 等既有名称
 
 ## 文档规范
 

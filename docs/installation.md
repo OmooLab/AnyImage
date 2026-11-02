@@ -11,7 +11,7 @@
 
 按住下方按钮，将它拖到 Blender 窗口中。
 
-第一次拖入时，Blender 会询问是否添加 AnyImage 扩展仓库。确认后，再拖入一次即可安装。
+第一次拖入时，Blender 会询问是否添加 Any Image 扩展仓库。确认后，再拖入一次即可安装。
 
 --8<-- "docs/includes/install.html"
 

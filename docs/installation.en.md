@@ -11,7 +11,7 @@
 
 Drag the button below into the Blender window.
 
-On the first drag, Blender asks you to add the AnyImage extension repository. Confirm, then drag the button in again to install.
+On the first drag, Blender asks you to add the Any Image extension repository. Confirm, then drag the button in again to install.
 
 --8<-- "docs/includes/install.html"
 

@@ -1,8 +1,8 @@
-"""AnyImage Job Server without Blender dependencies."""
+"""Any Image Job Server without Blender dependencies."""
 
 from blendjob import JobServer
 
-server = JobServer("AnyImage Job Server")
+server = JobServer("Any Image Job Server")
 
 
 def _run_model_job(handler, context, parameters):

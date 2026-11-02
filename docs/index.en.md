@@ -1,10 +1,10 @@
-# 🚪 AnyImage
+# 🚪 Any Image
 
-**IMAGE IS ALL YOU NEED**. AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
+**IMAGE IS ALL YOU NEED**. Any Image makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
 
 ![cover](assets/cover.png)
 
-<iframe class="anyimage-video" src="https://player.bilibili.com/player.html?bvid=BV1dsaP6WEqA&amp;page=1&amp;autoplay=0" title="AnyImage: cut images into 3D shapes offline" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<iframe class="anyimage-video" src="https://player.bilibili.com/player.html?bvid=BV1dsaP6WEqA&amp;page=1&amp;autoplay=0" title="Any Image: cut images into 3D shapes offline" loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
 
 ## Skip the download. Just paste!
 
@@ -34,4 +34,4 @@ Remove backgrounds and upscale images by 2× right on your computer, with no per
 
 ## Installation
 
-[Install AnyImage](installation.md)
+[Install Any Image](installation.md)

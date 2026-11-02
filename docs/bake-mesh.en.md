@@ -4,7 +4,7 @@ Ready to move vertices or change the topology of a shape made from an image? **B
 
 ## How to use it
 
-Finish adjusting the shape and material, select the model in **Object Mode**, then right-click and choose **AnyImage > Bake Mesh**. Once it finishes, press **Tab** to enter Edit Mode and continue editing the mesh.
+Finish adjusting the shape and material, select the model in **Object Mode**, then right-click and choose **Any Image > Bake Mesh**. Once it finishes, press **Tab** to enter Edit Mode and continue editing the mesh.
 
 Supported shapes include **Plane**, **Depth Plane**, **Relief**, **Panorama**, and the Cutout shapes **Solid**, **Depth Solid**, and **Depth Symmetry**.
 

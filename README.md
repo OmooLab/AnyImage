@@ -1,8 +1,8 @@
 [中文文档](https://docs.omoolab.xyz/anyimage/latest/)
 
-# 🚪 AnyImage
+# 🚪 Any Image
 
-**IMAGE IS ALL YOU NEED**. AnyImage makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
+**IMAGE IS ALL YOU NEED**. Any Image makes images a starting point for creating in Blender. Model from references, add textures, and piece together scenes.
 
 ![cover](docs/assets/cover.png)
 
@@ -34,4 +34,4 @@ Remove backgrounds and upscale images by 2× right on your computer, with no per
 
 ## Installation
 
-[Install AnyImage](https://docs.omoolab.xyz/anyimage/latest/en/installation/)
+[Install Any Image](https://docs.omoolab.xyz/anyimage/latest/en/installation/)

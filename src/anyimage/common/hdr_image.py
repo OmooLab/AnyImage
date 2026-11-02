@@ -10,14 +10,14 @@ from .color_space import linear_rgb_to_srgb
 def save_hdr_image(rgba, path):
     """Save associated scene-linear RGBA as ZIP-compressed 32-bit EXR."""
     height, width = rgba.shape[:2]
-    image = bpy.data.images.new("AnyImage HDR Result", width=width, height=height,
+    image = bpy.data.images.new("Any Image HDR Result", width=width, height=height,
                                 alpha=True, float_buffer=True)
     scene = None
     try:
         image.alpha_mode = "PREMUL"
         image.colorspace_settings.name = "Linear Rec.709"
         image.pixels.foreach_set(np.flipud(rgba).ravel())
-        scene = bpy.data.scenes.new("AnyImage HDR Export")
+        scene = bpy.data.scenes.new("Any Image HDR Export")
         settings = scene.render.image_settings
         settings.file_format = "OPEN_EXR"
         settings.color_mode = "RGBA"

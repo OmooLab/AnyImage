@@ -2,7 +2,7 @@
 
 Turn an entire reference image into a textured mesh. Choose a plane, depth plane, relief, or panorama to suit your scene.
 
-Select a still reference image (Image Empty), right-click to open **AnyImage**, and choose one of the conversions below. After conversion, you can keep adjusting the shape in its modifiers.
+Select a still reference image (Image Empty), right-click to open **Any Image**, and choose one of the conversions below. After conversion, you can keep adjusting the shape in its modifiers.
 
 ## Convert to Plane
 

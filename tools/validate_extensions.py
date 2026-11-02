@@ -19,7 +19,7 @@ def validate_archives(paths):
         "project"
     ]["version"]
     source_manifest = tomllib.loads((SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))
-    name = source_manifest["name"].replace(" ", "_")
+    name = source_manifest["name"].replace(" ", "")
     validator = Path(bpy.utils.system_resource("SCRIPTS")) / "addons_core/bl_pkg/cli/blender_ext.py"
     asset_digest = None
     for path in paths:
@@ -68,7 +68,7 @@ def main():
     version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))[
         "project"
     ]["version"]
-    name = tomllib.loads((SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))["name"].replace(" ", "_")
+    name = tomllib.loads((SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))["name"].replace(" ", "")
     paths = args.archives or [
         DIST_DIR
         / f"{name}{'_Base' if edition == 'base' else ''}.v{version}.{platform}.zip"

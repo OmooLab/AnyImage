@@ -1,6 +1,6 @@
 # 移除背景
 
-`operators/remove_background/operators.py` 从 Image Empty、AnyImage 图片 Mesh 或当前 Shader Image Texture 准备输入。`RemoveImageBackground` 提供操作入口与 AI 设置检查，`RunBackgroundRemoval` 准备输入、提交 Job 并应用结果。
+`operators/remove_background/operators.py` 从 Image Empty、Any Image 图片 Mesh 或当前 Shader Image Texture 准备输入。`RemoveImageBackground` 提供操作入口与 AI 设置检查，`RunBackgroundRemoval` 准备输入、提交 Job 并应用结果。
 
 ```mermaid
 flowchart TD

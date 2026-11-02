@@ -126,7 +126,7 @@ class SetupAIServer(bpy.types.Operator):
 class OpenAIEnvironmentSettings(bpy.types.Operator):
     bl_idname = "anyimage.open_ai_environment_settings"
     bl_label = "Settings"
-    bl_description = "Open the AnyImage add-on preferences"
+    bl_description = "Open the Any Image add-on preferences"
 
     def execute(self, context):
         result = bpy.ops.screen.userpref_show("INVOKE_DEFAULT", section="ADDONS")

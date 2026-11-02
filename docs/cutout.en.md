@@ -40,7 +40,7 @@ AI estimates the image's depth and uses it to create a symmetrical shape. Try a 
 
 *Left: the crocodile reference. Right: Depth Symmetry.*
 
-Depth Solid and Depth Symmetry require the full edition's AI features. Complete AI setup from the **AnyImage** context menu, then make a selection again to see both options.
+Depth Solid and Depth Symmetry require the full edition's AI features. Complete AI setup from the **Any Image** context menu, then make a selection again to see both options.
 
 ## Refine the outline
 

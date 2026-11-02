@@ -1,12 +1,12 @@
 # AI Tools
 
-Remove an image's background or enlarge a small texture directly in Blender. Both tools support reference images, image models created by AnyImage, and image textures in materials.
+Remove an image's background or enlarge a small texture directly in Blender. Both tools support reference images, image models created by Any Image, and image textures in materials.
 
 On first use, follow the **Set Up AI Server** prompts to download the required environment and models. Once setup is complete, run the tool again. Images are processed locally, so you can work offline.
 
 ## Select an image
 
-In the 3D View, select a reference image or image model and open the **AnyImage** context menu. For a material texture, select an **Image Texture** node with an image in the Shader Editor, then open the context menu. Both workflows use still images.
+In the 3D View, select a reference image or image model and open the **Any Image** context menu. For a material texture, select an **Image Texture** node with an image in the Shader Editor, then open the context menu. Both workflows use still images.
 
 ## Remove Background
 

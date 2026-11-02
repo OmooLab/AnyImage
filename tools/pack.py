@@ -191,7 +191,7 @@ def _build_extension(platform, wheels, edition="full"):
     wheels = extension_wheels(wheels)
     manifest_text = manifest_for_platform(platform, wheels, edition)
     manifest = tomllib.loads(manifest_text)
-    name = manifest['name'].replace(' ', '_') + ('_Base' if edition == 'base' else '')
+    name = manifest['name'].replace(' ', '') + ('_Base' if edition == 'base' else '')
     output_path = DIST_DIR / (
         f"{name}.v{manifest['version']}.{platform}.zip"
     )

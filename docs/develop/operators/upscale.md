@@ -1,6 +1,6 @@
 # 2倍高清
 
-`operators/upscale.py` 从 Image Empty、AnyImage 图片 Mesh 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于**处理分辨率上限**。
+`operators/upscale.py` 从 Image Empty、Any Image 图片 Mesh 或当前 Shader Image Texture 生成 2× 结果，源图长边必须小于**处理分辨率上限**。
 
 ```mermaid
 flowchart TD

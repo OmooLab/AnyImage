@@ -4,13 +4,13 @@ Images in your scene have different colors? Pick one as a reference and bring th
 
 ## Choose a reference image
 
-Press **N** in the 3D View to open the sidebar, then go to **AnyImage > Color Match**. Select a reference from the image gallery. The palette below shows its main colors.
+Press **N** in the 3D View to open the sidebar, then go to **Any Image > Color Match**. Select a reference from the image gallery. The palette below shows its main colors.
 
 <!-- TODO: Landscape screenshot showing the reference image and palette. -->
 
 ## Match a target image
 
-Select the reference image object or AnyImage image model you want to adjust, then right-click and choose **AnyImage > Match Color Reference**. For a material texture, select an **Image Texture** node with an image in the Shader Editor, then run the tool from the context menu.
+Select the reference image object or Any Image image model you want to adjust, then right-click and choose **Any Image > Match Color Reference**. For a material texture, select an **Image Texture** node with an image in the Shader Editor, then run the tool from the context menu.
 
 The reference and target must be different still images. Once the preview appears:
 

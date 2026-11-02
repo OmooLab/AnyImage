@@ -27,7 +27,7 @@ flowchart TD
 
 ## 界面状态
 
-AnyImage 通过 `runtime.state()` 读取统一状态，通过 `runtime.draw_server_controls(layout, setup_operator=SetupAIServer.bl_idname)` 绘制服务器状态与控制按钮。具体状态为 `UNAVAILABLE`、`INSTALLING`、`MIGRATING`、`OFFLINE`、`STARTING`、`IDLE`、`PROCESSING`、`STOPPING`、`ERROR`。Job 完成即释放处理状态。服务器启停或控制异常使用 `ERROR`，普通 Job 失败后回到空闲。
+Any Image 通过 `runtime.state()` 读取统一状态，通过 `runtime.draw_server_controls(layout, setup_operator=SetupAIServer.bl_idname)` 绘制服务器状态与控制按钮。具体状态为 `UNAVAILABLE`、`INSTALLING`、`MIGRATING`、`OFFLINE`、`STARTING`、`IDLE`、`PROCESSING`、`STOPPING`、`ERROR`。Job 完成即释放处理状态。服务器启停或控制异常使用 `ERROR`，普通 Job 失败后回到空闲。
 
 业务 Operator 继承 `JobOperator`，任务按钮使用 `runtime.can_submit()`。服务器停止、启动中、空闲或处理中都可以继续提交。安装和卸载分别判断 `UNAVAILABLE` 与 `IDLE`，未安装时保留配置引导。
 
@@ -36,11 +36,11 @@ row.enabled = runtime.can_submit()
 runtime.draw_jobs(layout)
 ```
 
-BlendJob 自动在状态栏显示第一个正在运行的任务，结束后切换到下一个。`runtime.draw_jobs(layout)` 可放在任意布局，AnyImage 将完整任务列表放在服务器侧边栏，每行显示进度译文和取消按钮，任务结束后移除。排队、定向取消、停止和迁移都由 BlendJob 管理；迁移自动取消全部任务，等待清理并停止服务后搬移目录。
+BlendJob 自动在状态栏显示第一个正在运行的任务，结束后切换到下一个。`runtime.draw_jobs(layout)` 可放在任意布局，Any Image 将完整任务列表放在服务器侧边栏，每行显示进度译文和取消按钮，任务结束后移除。排队、定向取消、停止和迁移都由 BlendJob 管理；迁移自动取消全部任务，等待清理并停止服务后搬移目录。
 
 每次调用捕获自己的目标、参数和输入快照，结果按提交顺序应用。同一图像可以连续提交，后一次结果覆盖前一次；目标删除或被用户改绑时拒绝应用。各任务独立清理临时文件。
 
-模型状态直接读取 `runtime.resource("model_manager")`，由 AnyImage 绘制已加载模型和卸载入口。
+模型状态直接读取 `runtime.resource("model_manager")`，由 Any Image 绘制已加载模型和卸载入口。
 
 ## 模型与缓存
 

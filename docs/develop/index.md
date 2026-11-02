@@ -1,6 +1,6 @@
 # 开发文档总览
 
-AnyImage 在 Blender 主线程处理交互、像素编辑和数据创建，通过 BlendJob 把模型推理交给独立 Job Server。
+Any Image 在 Blender 主线程处理交互、像素编辑和数据创建，通过 BlendJob 把模型推理交给独立 Job Server。
 
 | 主题 | 对应职责 |
 | --- | --- |

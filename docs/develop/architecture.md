@@ -40,6 +40,6 @@ MoGe-2 与 MoGe-3 输出统一为 `GeometryFrame`：包含 Depth、Validity、In
 
 ## 对象与模型状态
 
-AnyImage 创建的图片 Mesh 通过 `o_image_object` 提供对象图片操作。Bake 成功后固化网格并移除该标记，结果成为普通 Mesh；Undo 恢复原节点栈和能力。Shader Editor 的贴图节点继续按活动编辑树解析目标。
+Any Image 创建的图片 Mesh 通过 `o_image_object` 提供对象图片操作。Bake 成功后固化网格并移除该标记，结果成为普通 Mesh；Undo 恢复原节点栈和能力。Shader Editor 的贴图节点继续按活动编辑树解析目标。
 
 `common/ai.py` 统一读取模型安装状态和 Runtime 快照；模型枚举直接读取静态目录，同一次 UI 绘制复用一份状态。服务端在创建 Session 前校验文件内容，并以模型 key 发布状态；档位统一来自模型目录。流程见 [Runtime](runtime.md)。

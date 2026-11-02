@@ -77,7 +77,7 @@ def production_device():
 
 def require_environment():
     if not runtime.is_ready():
-        raise RuntimeError("Install the AnyImage Environment first")
+        raise RuntimeError("Install the Any Image Environment first")
 
 
 def invoke_ai_setup_if_needed(operator):

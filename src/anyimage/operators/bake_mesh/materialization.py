@@ -158,9 +158,9 @@ def material_inputs(obj, modifiers):
 def bake_context(mesh, material, matrix):
     """Isolate baking and release resources even when scene setup fails."""
     with ExitStack() as cleanup:
-        scene = bpy.data.scenes.new("AnyImage mesh bake")
+        scene = bpy.data.scenes.new("Any Image mesh bake")
         cleanup.callback(bpy.data.scenes.remove, scene)
-        obj = bpy.data.objects.new("AnyImage mesh bake", mesh)
+        obj = bpy.data.objects.new("Any Image mesh bake", mesh)
         cleanup.callback(bpy.data.objects.remove, obj, do_unlink=True)
         obj.matrix_world = matrix
         scene.collection.objects.link(obj)

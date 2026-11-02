@@ -57,7 +57,7 @@ jobs:
         run: |
           archives=()
           for platform in windows-x64 macos-arm64 linux-x64; do
-            for name in "Any_Image" "Any_Image_Base"; do
+            for name in "AnyImage" "AnyImage_Base"; do
               archives+=("dist/${name}.v${{ needs.check_version.outputs.version }}.${platform}.zip")
             done
           done

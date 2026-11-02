@@ -110,7 +110,7 @@ MENUS = (
 def register():
     if hasattr(bpy.types.Scene, "anyimage_settings"):
         raise RuntimeError(
-            "Another AnyImage edition is already enabled. Disable it before enabling this edition."
+            "Another Any Image edition is already enabled. Disable it before enabling this edition."
         )
     bpy.app.translations.register(__package__, TRANSLATIONS)
     for cls in CLASSES:

@@ -54,25 +54,6 @@ def test_periodic_fusion_removes_view_scale_offsets():
     np.testing.assert_allclose(sampled[0], sampled[1], atol=1e-6)
 
 
-def test_normal_fusion_rotates_views_rejects_invalid_samples_and_preserves_seam():
-    bases = geometry.camera_bases()
-    expected = np.array((0.2, -0.4, 0.7))
-    expected /= np.linalg.norm(expected)
-    normals = [np.broadcast_to(expected @ basis.T, (32, 32, 3)).copy() * (i + 1)
-               for i, basis in enumerate(bases)]
-    masks = np.ones((12, 32, 32), bool)
-    for normal, mask in zip(normals, masks):
-        normal[:4, :4] = np.nan
-        normal[4:8, :4] = 0
-        normal[8:12, :4] = -expected
-        mask[8:12, :4] = False
-    merged = geometry.merge_object_normals(normals, masks, bases, 1024, 512)
-    np.testing.assert_allclose(merged, np.broadcast_to(expected * (-1, 1, 1), merged.shape), atol=1e-6)
-    empty = geometry.merge_object_normals(normals, np.zeros_like(masks), bases, 64, 32)
-    np.testing.assert_allclose(empty, -geometry.panorama_directions(64, 32) * (-1, 1, 1), atol=1e-6)
-
-
-
 @pytest.fixture
 def panorama_job(tmp_path, monkeypatch):
     source = tmp_path / "source.png"
@@ -84,7 +65,7 @@ def panorama_job(tmp_path, monkeypatch):
         calls.append((color, level, options))
         rays = geometry.view_rays(color.shape[0])
         points = rays / np.linalg.norm(rays, axis=-1, keepdims=True) * 3
-        return {"points": points, "normal": -points / 3, "mask": np.ones(color.shape[:2])}
+        return {"points": points, "mask": np.ones(color.shape[:2])}
 
     monkeypatch.setattr(onnx, "infer", infer)
     write = job.write_float_exr
@@ -104,19 +85,32 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     assert 0 < len(calls) < 12
     assert all(level == 3 and opts["fov_x"] == 90 for _, level, opts in calls)
     assert all(np.all(color[~opts["source_valid"]] == 0) for color, _, opts in calls)
-    assert {path.name for path in context.directory.iterdir()} == {"depth.exr", "depth.json", "object-normal.png"}
+    assert result == {"depth": "depth.exr", "depth_metadata": "depth.json"}
+    assert {path.name for path in context.directory.iterdir()} == {"depth.exr", "depth.json"}
     alpha = pixels[0][..., 3]
     assert pixels[0].shape == image.shape
     assert not alpha[:24].any()
     assert np.all(alpha <= image[..., 3] / 255 + 1e-7)
     assert np.any(np.isclose(alpha, 128 / 255))
     np.testing.assert_allclose(pixels[0][..., 0], pixels[0][..., 2])
-    encoded = np.asarray(Image.open(context.directory / result["object_normal"])).astype(float) / 255 * 2 - 1
-    np.testing.assert_allclose(encoded[alpha > 0.9], (-geometry.panorama_directions(64, 32) * (-1, 1, 1))[alpha > 0.9], atol=0.015)
     metadata = json.loads((context.directory / result["depth_metadata"]).read_text())
     assert metadata["projection"] == "equirectangular"
     assert metadata["image_size"] == [64, 32]
     assert set(metadata) == {"projection", "image_size"}
+
+
+def test_job_writes_final_fused_depth_and_validity(panorama_job, monkeypatch):
+    source, context, parameters, _, pixels = panorama_job
+    Image.new("RGBA", (64, 32), (255, 255, 255, 255)).save(source)
+    expected = np.array((.2, -.3, 1.0))
+    expected /= np.linalg.norm(expected)
+    facing = geometry.panorama_directions(64, 32) @ expected
+    valid = facing < -.2
+    distance = (-3 / np.minimum(facing, -.01)).astype(np.float32)
+    monkeypatch.setattr(job, "merge_distances", lambda *args, **kwargs: (distance, valid))
+    job.run(context, parameters)
+    np.testing.assert_array_equal(pixels[0][..., 0], distance)
+    np.testing.assert_array_equal(pixels[0][..., 3], valid)
 
 
 def test_full_resolution_fusion_preserves_detail_and_periodic_alignment():
@@ -164,17 +158,17 @@ def test_refinement_handles_partial_sky_coverage_and_cancellation():
     assert checks == 5
 
 
-@pytest.mark.parametrize("kind", ["transparent", "invalid_model", "wrong_ratio", "cancel", "normal_merge"])
+@pytest.mark.parametrize("kind", ["transparent", "invalid_model", "wrong_ratio", "cancel", "metadata"])
 def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind):
     source, context, parameters, calls, _ = panorama_job
     Image.new("RGBA", (64 if kind != "wrong_ratio" else 32, 32),
               (255, 255, 255, 0 if kind == "transparent" else 255)).save(source)
     if kind == "invalid_model":
-        monkeypatch.setattr(onnx, "infer", lambda *a, **k: {"points": np.ones((32, 32, 3)), "normal": np.zeros((32, 32, 3)), "mask": np.zeros((32, 32))})
-    if kind == "normal_merge":
-        def fail_merge(*args, **kwargs):
-            raise RuntimeError("Failed normal fusion")
-        monkeypatch.setattr(job, "merge_object_normals", fail_merge)
+        monkeypatch.setattr(onnx, "infer", lambda *a, **k: {"points": np.ones((32, 32, 3)), "mask": np.zeros((32, 32))})
+    if kind == "metadata":
+        def fail_metadata(*args, **kwargs):
+            raise RuntimeError("Failed metadata serialization")
+        monkeypatch.setattr(job, "json", SimpleNamespace(dumps=fail_metadata))
     if kind == "cancel":
         count = [0]
         def cancel():
@@ -184,7 +178,6 @@ def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind)
         context.check_cancelled = cancel
     with pytest.raises((ValueError, RuntimeError)):
         job.run(context, parameters)
-    assert not list(context.directory.glob("depth.*"))
-    assert not (context.directory / "object-normal.png").exists()
+    assert not list(context.directory.iterdir())
     if kind == "transparent":
         assert not calls

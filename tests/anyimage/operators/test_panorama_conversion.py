@@ -117,8 +117,7 @@ def artifacts(tmp_path, source):
     rgba[..., :3] = 3
     write_float_exr(rgba, tmp_path / "depth.exr")
     (tmp_path / "depth.json").write_text(json.dumps({"projection": "equirectangular", "image_size": [32, 16]}))
-    Image.new("RGB", (32, 16), (128, 128, 255)).save(tmp_path / "normal.png")
-    result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / {"depth": "depth.exr", "depth_metadata": "depth.json", "object_normal": "normal.png"}[key])
+    result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / {"depth": "depth.exr", "depth_metadata": "depth.json"}[key])
     operator = SimpleNamespace(source_object_name=source.name, _source_object=source,
                                _source_image=source.data, _source_signature=image_content_signature(source.data),
                                color_path=str(prepare_material_color_input(source.data)))
@@ -126,7 +125,7 @@ def artifacts(tmp_path, source):
     cleanup_material_color_input(operator.color_path)
 
 
-def test_result_replaces_source_with_zero_rotation_and_object_normal_material(source, artifacts, monkeypatch):
+def test_result_replaces_source_with_zero_rotation_and_geometry_normal_material(source, artifacts, monkeypatch):
     result, operator = artifacts
     from anyimage.common.node import load_node_group
     saved = load_node_group("O Depth Panorama")
@@ -158,7 +157,7 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     layer = next(n for n in nodes if n.type == "GROUP")
     shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
     assert layer.node_tree.name == "O Texture to Layer"
-    assert layer.inputs["Object Space"].default_value
+    assert not layer.inputs["Object Space"].default_value
     assert shader.inputs["Emission Strength"].default_value == 1.0
     assert not shader.inputs["Emission Strength"].is_linked
     assert layer.inputs["Roughness Scale"].default_value == 1
@@ -175,13 +174,14 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     assert background.inputs["Color"].links[0].from_node == environment
     assert color.colorspace_settings.name == "AgX Base sRGB"
     assert color.alpha_mode == "STRAIGHT"
-    normal = layer.inputs["Normal Texture"].links[0].from_node
-    assert normal.image.colorspace_settings.is_data and normal.image.packed_file
+    assert not layer.inputs["Normal Texture"].is_linked
+    assert [n.image for n in nodes if n.type == "TEX_IMAGE"] == [color]
     assert all(n.extension == "REPEAT" for n in nodes if n.type == "TEX_IMAGE")
     assert shader.inputs["Normal"].links[0].from_node == layer
     assert shader.inputs["Emission Color"].links[0].from_socket == layer.outputs["Emission"]
     assert bpy.context.view_layer.objects.active == obj
-    assert all(image.packed_file for image in bpy.data.images if image.name.endswith(("_color.png", "_depth.exr", "_normal.png")))
+    assert not any(image.name.endswith("_normal.png") for image in bpy.data.images)
+    assert all(image.packed_file for image in bpy.data.images if image.name.endswith(("_color.png", "_depth.exr")))
     graph = bpy.context.evaluated_depsgraph_get()
     mesh = obj.evaluated_get(graph).to_mesh()
     try:
@@ -229,15 +229,13 @@ def test_panorama_preserves_hdr_pixels_color_space_and_alpha(source, artifacts, 
     np.testing.assert_allclose(restored.pixels[:], rgba.ravel(), atol=1e-6)
 
 
-@pytest.mark.parametrize("failure", ["modifier", "normal_size", "depth_size", "stale", "replaced_image", "world", "finalize"])
+@pytest.mark.parametrize("failure", ["modifier", "depth_size", "stale", "replaced_image", "world", "finalize"])
 def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, monkeypatch, failure):
     result, operator = artifacts
     previous_world = bpy.data.worlds.new("Existing World")
     bpy.context.scene.world = previous_world
     before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials", "worlds")}
-    if failure == "normal_size":
-        Image.new("RGB", (4, 4)).save(result.file("object_normal"))
-    elif failure == "modifier":
+    if failure == "modifier":
         monkeypatch.setattr(conversion, "set_modifier_input", Mock(side_effect=RuntimeError("Failed modifier")))
     elif failure == "finalize":
         monkeypatch.setattr(conversion, "finalize_object_result", Mock(side_effect=RuntimeError("Failed finalize")))

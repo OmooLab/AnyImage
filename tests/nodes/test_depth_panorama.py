@@ -15,31 +15,6 @@ def free_edges(faces):
     return sum(count == 1 for count in edges.values())
 
 
-def test_panorama_object_normals_match_evaluated_mesh_coordinates():
-    from tests.anyimage.server.support import load_server_module
-
-    geometry = load_server_module("geometry.panorama")
-    bases = geometry.camera_bases()
-    rays = geometry.view_rays(64)
-    camera_normals = -rays / np.linalg.norm(rays, axis=-1, keepdims=True)
-    texture = geometry.merge_object_normals(
-        [camera_normals] * len(bases), np.ones((12, 64, 64), bool), bases, 512, 256,
-    )
-    # Include the PNG quantization used by the job.
-    texture = np.rint((texture + 1) * 127.5) / 127.5 - 1
-    obj, _ = panorama(subdivide=3)
-    evaluated_obj = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    mesh = evaluated_obj.to_mesh()
-    try:
-        uv = np.array([item.uv[:] for item in mesh.uv_layers["UVMap"].data])
-        actual = geometry.sample_panorama(texture, geometry.uv_directions(uv[:, 0], 1 - uv[:, 1]))
-        positions = np.array([mesh.vertices[loop.vertex_index].co[:] for loop in mesh.loops])
-        expected = -positions / np.linalg.norm(positions, axis=-1, keepdims=True)
-        np.testing.assert_allclose(actual, expected, atol=.012)
-    finally:
-        evaluated_obj.to_mesh_clear()
-
-
 @pytest.mark.parametrize("subdivide", [0, 1, 4])
 def test_quad_sphere_topology_and_radial_endpoints(subdivide):
     obj, set_value = panorama(subdivide=subdivide)

@@ -17,7 +17,7 @@ flowchart TD
 | `upscale_image` | `jobs/upscale.py` 生成 2× 图像 |
 | `generate_depth_plane_geometry` | `jobs/depth_plane.py` 生成深度、元数据和法线 |
 | `generate_cutout_artifacts` | `jobs/cutout.py` 按请求生成深度和法线 |
-| `generate_panorama_geometry` | `jobs/panorama.py` 生成全景径向深度与对象空间法线 |
+| `generate_panorama_geometry` | `jobs/panorama.py` 生成全景径向深度与元数据 |
 
 `media/input.py` 校验输入图片，`media/resolution.py` 限制分析尺寸，Server 处理静态图片。Job 在阶段边界直接调用 BlendJob 的 `context.check_cancelled()`；分块推理将同一回调传入处理循环。进度通过 `context.progress()` 返回，Operator 清理 Blender 导出的临时输入。
 

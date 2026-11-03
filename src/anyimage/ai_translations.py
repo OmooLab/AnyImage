@@ -106,7 +106,6 @@ PANORAMA = {
     'Preparing panorama conversion': '全景转换准备中',
     'Generating panorama view {index}/{total}': '全景视角生成中 {index}/{total}',
     'Merging panorama depth maps': '全景深度图合并中',
-    'Merging panorama normal maps': '全景法线图合并中',
     'Panorama conversion data is ready': '全景转换数据已就绪',
     'Panorama is ready': '全景已就绪',
 }

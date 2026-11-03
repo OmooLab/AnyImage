@@ -36,14 +36,13 @@ def image_object(request):
     color.colorspace_settings.name = "Non-Color"
     color.pixels.foreach_set(np.linspace(0, 1, 128 * 64 * 4, dtype=np.float32))
     normal = None
-    if kind in {"DEPTH", "RELIEF", "PANORAMA"}:
+    if kind in {"DEPTH", "RELIEF"}:
         normal = bpy.data.images.new("Normal", width=128, height=64, alpha=True, float_buffer=True)
         normal.colorspace_settings.name = "Non-Color"
         normal.pixels.foreach_set(np.tile(np.array([.7, .6, .95, 1], np.float32), 128 * 64))
         normal.pack()
     if kind == "PANORAMA":
-        material = create_image_material(color, color, normal_image=normal,
-                                         normal_space="OBJECT", texture_extension="REPEAT", emission_strength=1.0)
+        material = create_image_material(color, color, texture_extension="REPEAT", emission_strength=1.0)
     else:
         material = create_image_material(color, color, normal_image=normal,
                                          normal_space="OBJECT" if kind == "DEPTH" else "TANGENT")
@@ -89,7 +88,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert obj.active_material == material
     remaining = {i.name: i.as_pointer() for i in bpy.data.images}
     assert all(images[name] == identity for name, identity in remaining.items() if name in images)
-    assert set(remaining) - set(images) == {"Color_roughness.png"} | ({"Color_normal.exr"} if kind == "PLANE" else set()) | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
+    assert set(remaining) - set(images) == {"Color_roughness.png"} | ({"Color_normal.exr"} if normal is None else set()) | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
     assert set(images) - set(remaining) == ({"Radial Depth"} if kind == "PANORAMA" else {"Camera"} if kind != "PLANE" else set())
     actual = image_pixels(color).reshape(-1, 4)
     expected = expected_color.reshape(-1, 4)
@@ -106,13 +105,11 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert actual_faces == final_faces
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
     assert list(obj.data.uv_layers.keys()) == ["UVMap"]
+    assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal", "Emission"] + (["Emission"] if kind == "PANORAMA" else [])
     if normal is not None:
-        assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal", "Emission"] + (["Emission"] if kind == "PANORAMA" else [])
         assert tuple(normal.size) == (128, 64)
         node = next(n for n in material.node_tree.nodes if n.type == "NORMAL_MAP")
         assert node.space == "TANGENT" and node.inputs["Strength"].default_value == 1
-    else:
-        assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal", "Emission"]
     bpy.context.scene.frame_set(2)
     assert trailing[0].strength == pytest.approx(.6)
 

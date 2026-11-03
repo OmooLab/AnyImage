@@ -8,7 +8,7 @@ Server 将结果写入 Job 目录，返回以相对文件名为值的字典。Bl
 | `upscale_image` | `upscale.png` | 图像替换 |
 | `generate_depth_plane_geometry` | `depth.exr`、`depth.json` 和法线 | Depth / **浮雕** |
 | `generate_cutout_artifacts` | 按请求提供深度、元数据和法线 | **立体裁切** |
-| `generate_panorama_geometry` | `depth.exr`、`depth.json`、`object-normal.png` | **立体全景** |
+| `generate_panorama_geometry` | `depth.exr`、`depth.json` | **立体全景** |
 
 ## 深度与法线协议
 
@@ -21,8 +21,8 @@ Server 将结果写入 Job 目录，返回以相对文件名为值的字典。Bl
 
 | 功能 | 法线空间 |
 | --- | --- |
-| 普通面片、未请求 AI 法线的裁切 | 网格法线与颜色 Bump |
-| 各种带 AI 法线的裁切、凹凸面、立体全景 | Object Space |
+| 普通面片、未请求 AI 法线的裁切、立体全景 | 网格法线与颜色 Bump |
+| 各种带 AI 法线的裁切、凹凸面 | Object Space |
 | 浮雕 | 按平面编码的 Tangent Space |
 | Bake Mesh 生成的法线贴图 | 根据最终网格与 UV 烘焙的 Tangent Space |
 
@@ -36,9 +36,9 @@ flowchart TD
     D --> F[Blender 加载并 Pack]
 ```
 
-参考深度由 `common/geometry_image.py` 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。**凹凸面**使用对象空间法线，**浮雕**使用切线空间法线。
+参考深度由 `common/geometry_image.py` 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。**凹凸面**使用对象空间法线，**浮雕**使用切线空间法线，法线 PNG 均以 Non-Color 加载。
 
-**立体全景**的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 `projection: equirectangular` 和 `image_size`。各透视视图的法线先转换至全景坐标并融合，再匹配全景网格的本地坐标编码为 `object-normal.png`。法线 PNG 均以 Non-Color 加载。
+**立体全景**的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 `projection: equirectangular` 和 `image_size`。材质使用全景颜色、网格法线与颜色 Bump。
 
 ## 颜色与图像编辑
 

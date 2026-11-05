@@ -5,7 +5,7 @@ from contextlib import ExitStack, contextmanager
 import bpy
 import numpy as np
 
-from ...common.color_image import require_static_color_image
+from ...common.color_image import create_normalized_color_image, require_static_color_image
 from ...common.image import create_image_edit_result, image_content_state, image_pixels, replace_image_content, restore_image_content
 from ...common.image import has_other_image_user
 from ...common.image_target import is_image_object, material_has_other_object_user, object_color_texture
@@ -371,7 +371,6 @@ def materialize_mesh_and_textures(context, obj):
         images.append(final_color)
         if baked_alpha is not None and final_color.alpha_mode == "NONE":
             final_color.alpha_mode = "STRAIGHT"
-        updates.insert(0, (color.name, source_color, source_color_state, final_color))
         del pixels
         constant_emitters = [name for name, strength in emission_strengths.items() if name not in emission_images and strength > 0]
         if constant_emitters:
@@ -381,6 +380,9 @@ def materialize_mesh_and_textures(context, obj):
             for name in constant_emitters:
                 emission_images[name] = emission_image
                 emission_strengths[name] *= strength_scale
+        normalized_color = create_normalized_color_image(final_color)
+        images.append(normalized_color)
+        updates.insert(0, (color.name, source_color, source_color_state, normalized_color))
         mesh.uv_layers.remove(mesh.uv_layers[SOURCE_UV])
         mesh.uv_layers[TARGET_UV].name = "UVMap"
         mesh.uv_layers.active = mesh.uv_layers["UVMap"]

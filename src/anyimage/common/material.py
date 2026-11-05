@@ -24,7 +24,7 @@ def create_image_material(
     panorama=False,
 ):
     material_image = color_images.configure_material_color_image(
-        color_image, scene, panorama=panorama,
+        color_image, scene,
     )
     if material_image.source == "GENERATED" or material_image.is_dirty:
         material_image.pack()
@@ -64,7 +64,7 @@ def create_image_material(
         else:
             # Use the complete source in the same color interpretation as the crop.
             with color_images.material_color_image(source_image) as reference:
-                color_images.configure_material_color_image(reference, scene, panorama=panorama)
+                color_images.configure_material_color_image(reference, scene)
                 threshold = color_images.estimate_highlight_threshold(reference, panorama=panorama)
         material_inputs.inputs["Highlight Threshold"].default_value = threshold
         if normal_space not in {"TANGENT", "OBJECT"}:

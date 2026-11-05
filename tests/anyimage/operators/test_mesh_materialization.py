@@ -77,8 +77,8 @@ def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     images = [n.image for n in result.materials[0].node_tree.nodes if n.type == "TEX_IMAGE"]
     assert all(i.packed_file is not None for i in images)
     assert all(tuple(i.size) == (64, 128) for i in images)
-    assert max(images[0].pixels[:]) > 1
-    assert images[0].colorspace_settings.name == "Non-Color" and images[0].is_float
+    assert max(images[0].pixels[:]) <= 1
+    assert images[0].colorspace_settings.name == "sRGB" and not images[0].is_float
     assert all(bpy.data.images[name].as_pointer() == pointer for name, pointer in source_images.items())
     assert images[:2] == source_textures and len(images) == 3
     assert {image.name for image in images[2:]} == {"Color_roughness.png"}
@@ -380,7 +380,8 @@ def test_single_region_without_normal_or_bump_preserves_user_attributes(cutout):
     assert any(n.type == "NEW_GEOMETRY" for n in result.materials[0].node_tree.nodes)
 
 
-def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch):
+@pytest.mark.parametrize("failure", ["bake_material_output", "create_normalized_color_image"])
+def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch, failure):
     from anyimage.operators.bake_mesh import materialization
 
     trailing = add_post_bake_modifiers(cutout)
@@ -391,7 +392,7 @@ def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch):
     images = [n.image for n in material.node_tree.nodes if n.type == "TEX_IMAGE"]
     def fail(*args, **kwargs):
         raise RuntimeError("Injected bake failure")
-    monkeypatch.setattr(materialization, "bake_material_output", fail)
+    monkeypatch.setattr(materialization, failure, fail)
     with pytest.raises(RuntimeError, match="Injected"):
         materialize_mesh_and_textures(bpy.context, cutout)
     assert cutout.data == source and tuple(cutout.modifiers)[1:] == trailing
@@ -492,10 +493,12 @@ def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed, s
 
 
 @pytest.mark.parametrize("bump", [0, -10])
-def test_conversion_preserves_original_fixed_light_appearance(cutout, tmp_path, bump):
+def test_conversion_preserves_normalized_fixed_light_appearance(cutout, tmp_path, bump):
     layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
     layer.inputs["Bump Scale"].default_value = bump
     layer.inputs["Normal Scale"].default_value = .6
+    color = layer.inputs["Color Texture"].links[0].from_node
+    color.image = color_images.create_normalized_color_image(color.image)
     before = render_material(cutout, tmp_path / "lit-before.exr", (0, -1, 0), lighting=True)
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     cutout.modifiers.clear()
@@ -826,6 +829,8 @@ def test_emission_uses_strength_and_independent_color_copy(cutout, tmp_path, str
         other = cutout.copy()
         bpy.context.collection.objects.link(other)
         other.hide_render = True
+    original_color = image_pixels(layer.inputs["Color Texture"].links[0].from_node.image).reshape(64, 64, 4)
+    expected_emission = np.concatenate([original_color[:, ::-1], original_color], axis=0).reshape(-1, 4)[:, :3]
     before = (render_material(cutout, tmp_path / "emission-before.exr", (0, -1, 0), channel="Emission")
               if strength == .5 and not shared else None)
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
@@ -846,7 +851,7 @@ def test_emission_uses_strength_and_independent_color_copy(cutout, tmp_path, str
         assert image.colorspace_settings.name == "sRGB" and not image.is_float
         assert bytes(image.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
         restored = srgb_to_linear_rgb(image_pixels(image).reshape(-1, 4)[:, :3]) * 2
-        np.testing.assert_allclose(restored, image_pixels(color.image).reshape(-1, 4)[:, :3], atol=.02)
+        np.testing.assert_allclose(restored, expected_emission, atol=.02)
         if before is not None:
             after = render_material(cutout, tmp_path / "emission-after.exr", (0, -1, 0), channel="Emission")
             np.testing.assert_allclose(after[..., :3], before[..., :3], atol=.02, rtol=.01)
@@ -910,11 +915,10 @@ def test_glb_export_preserves_specular_and_emission_policy(cutout, tmp_path, str
     assert shader.inputs["Emission Strength"].default_value == strength * 2
 
 
-@pytest.mark.parametrize("panorama", [False, True])
-def test_bake_preserves_surface_and_panorama_color_interpretation(cutout, tmp_path, panorama):
-    from scipy.ndimage import binary_erosion
+def test_bake_normalizes_inverse_color(cutout):
+    from anyimage.common.color_space import normalize_color_rgba
+    from anyimage.common.image import COLOR_NORMALIZED_PROPERTY, image_rgba
 
-    bpy.context.scene.view_settings.view_transform = "AgX"
     tree = cutout.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
     image = bpy.data.images.new("Business color", width=64, height=64, alpha=True)
@@ -922,20 +926,20 @@ def test_bake_preserves_surface_and_panorama_color_interpretation(cutout, tmp_pa
     rgba[..., 0] = np.linspace(.1, .9, 64)
     rgba[..., 1:3] = (.4, .6)
     image.pixels.foreach_set(rgba.ravel())
-    color_images.configure_material_color_image(image, bpy.context.scene, panorama=panorama)
-    expected_space = image.colorspace_settings.name
+    color_images.configure_material_color_image(image, bpy.context.scene)
+    assert image.colorspace_settings.name == "AgX Base sRGB"
+    expected = normalize_color_rgba(color_images.decode_color_image(image, "AgX Base sRGB"))
     layer.inputs["Color Texture"].links[0].from_node.image = image
-    before, coverage = render_material(cutout, tmp_path / "color-before.exr", (0, -1, 0),
-                                       channel="Base Color", with_uv_coverage=True)
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
-    cutout.modifiers.clear()
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
     baked_color = shader.inputs["Base Color"].links[0].from_node.image
-    assert baked_color.colorspace_settings.name == expected_space
+    assert baked_color.colorspace_settings.name == "sRGB" and not baked_color.is_float
+    assert baked_color[COLOR_NORMALIZED_PROPERTY]
+    assert bytes(baked_color.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
+    actual = image_rgba(baked_color)
+    np.testing.assert_allclose(actual[..., :3], np.concatenate([expected, expected[:, ::-1]])[..., :3], atol=1 / 255)
     baked_color.reload()
-    after = render_material(cutout, tmp_path / "color-after.exr", (0, -1, 0), channel="Base Color")
-    visible = binary_erosion(coverage == 1, iterations=3)
-    np.testing.assert_allclose(after[visible, :3], before[visible, :3], atol=.01)
+    np.testing.assert_array_equal(image_rgba(baked_color), actual)
 
 
 @pytest.mark.parametrize("scale,contrast", [(.5, -1), (1, .6)])
@@ -993,11 +997,11 @@ def test_eevee_transparent_surface_preserves_merged_alpha(cutout, tmp_path, alph
         tree.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
         shader.inputs["Emission Strength"].default_value = .7
     before = render_material(cutout, tmp_path / "lit-before.exr", (0, -1, 0),
-                             lighting=True, engine=render_engine)
+                             channel="Alpha", engine=render_engine)
     cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
     cutout.modifiers.clear()
     after = render_material(cutout, tmp_path / "lit-after.exr", (0, -1, 0),
-                            lighting=True, engine=render_engine)
+                            channel="Alpha", engine=render_engine)
     # Eight-bit alpha quantization changes individual Eevee dither samples.
     error = np.abs(after[24:40, 24:40, :3] - before[24:40, 24:40, :3])
     assert np.quantile(error, .95) < .02

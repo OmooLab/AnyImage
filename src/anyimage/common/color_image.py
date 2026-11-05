@@ -12,9 +12,7 @@ from .image import (
     image_base_name,
     image_rgba,
     is_animated_image,
-    image_content_state,
     image_pixels,
-    restore_image_content,
 )
 from .image_input import cleanup_image_input
 
@@ -43,16 +41,13 @@ def material_color_space_name(scene):
     return "sRGB"
 
 
-def configure_material_color_image(image, scene=None, *, panorama=False):
-    """Preserve HDR, reverse panorama colors, and normalize surface colors."""
+def configure_material_color_image(image, scene=None):
+    """Preserve HDR and interpret byte colors through the inverse view transform."""
     if getattr(image, "is_float", False):
-        return image
-    if image.get(COLOR_NORMALIZED_PROPERTY) and not panorama:
         return image
     if scene is None:
         scene = getattr(bpy.context, "scene", None)
     preferred = material_color_space_name(scene)
-    normalize = not panorama and preferred != "sRGB"
     pixels = (
         image_pixels(image)
         if getattr(image, "source", None) == "GENERATED"
@@ -62,7 +57,6 @@ def configure_material_color_image(image, scene=None, *, panorama=False):
     settings = image.colorspace_settings
     original_space = settings.name
     original_alpha = image.alpha_mode
-    original_content = image_content_state(image) if normalize else None
     try:
         for color_space in dict.fromkeys((preferred, "sRGB")):
             try:
@@ -73,30 +67,13 @@ def configure_material_color_image(image, scene=None, *, panorama=False):
                 break
         else:
             raise RuntimeError("Unable to configure the material color space")
-        if normalize and settings.name != "sRGB":
-            import numpy as np
-            from .color_space import normalize_color_rgba
-
-            if pixels is not None:
-                image.pixels.foreach_set(pixels)
-            rgba = normalize_color_rgba(decode_color_image(image, settings.name))
-            settings.name = "sRGB"
-            image.alpha_mode = "PREMUL"
-            image.pixels.foreach_set(np.flipud(rgba).ravel())
-            image.update()
-            image.pack()
-            image[COLOR_NORMALIZED_PROPERTY] = True
-            return image
         image.alpha_mode = color_alpha_mode(settings.name)
         if pixels is not None:
             image.pixels.foreach_set(pixels)
             image.update()
-        if panorama and COLOR_NORMALIZED_PROPERTY in image:
+        if COLOR_NORMALIZED_PROPERTY in image:
             del image[COLOR_NORMALIZED_PROPERTY]
     except Exception:
-        if original_content is not None:
-            restore_image_content(image, original_content)
-            raise
         settings.name = original_space
         image.alpha_mode = original_alpha
         if pixels is not None:

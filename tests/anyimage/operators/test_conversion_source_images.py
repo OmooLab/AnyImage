@@ -88,11 +88,11 @@ def test_conversion_selects_source_by_empty_identity(source, monkeypatch, entry,
     assert color.name == "Source_color.png"
     assert color.filepath_raw != original.filepath_raw
     assert original.name == name and original.filepath_raw == path
-    assert color.colorspace_settings.name == "sRGB" and color.alpha_mode == "PREMUL"
+    assert color.colorspace_settings.name == "AgX Base sRGB" and color.alpha_mode == "STRAIGHT"
     assert original.alpha_mode == "STRAIGHT"
     np.testing.assert_array_equal(images.image_pixels(original), before)
-    assert color[images.COLOR_NORMALIZED_PROPERTY]
-    np.testing.assert_allclose(images.image_pixels(color)[3::4], before[3::4], atol=1 / 255)
+    assert not color.get(images.COLOR_NORMALIZED_PROPERTY)
+    np.testing.assert_allclose(images.image_pixels(color), before, atol=1 / 255)
     if sharing == "material":
         existing = bpy.data.materials["Existing"]
         assert next(n.image for n in existing.node_tree.nodes if n.type == "TEX_IMAGE") == original
@@ -177,14 +177,16 @@ def test_plane_undo_redo_restores_image_configuration(source, monkeypatch, share
         bpy.ops.ed.undo_push(message="Before Plane")
         assert bpy.ops.anyimage.convert_to_plane("EXEC_DEFAULT", True) == {"FINISHED"}
         color_name = "Source_color.png"
-        assert bpy.data.images[color_name].alpha_mode == "PREMUL"
+        assert bpy.data.images[color_name].alpha_mode == "STRAIGHT"
+        assert bpy.data.images[color_name].colorspace_settings.name == "AgX Base sRGB"
         assert bpy.ops.ed.undo() == {"FINISHED"}
         assert bpy.data.objects["Source"].type == "EMPTY"
         assert bpy.data.images[original_name].alpha_mode == "STRAIGHT"
         np.testing.assert_allclose(images.image_pixels(bpy.data.images[original_name]), expected, atol=1 / 255)
         assert bpy.ops.ed.redo() == {"FINISHED"}
         assert bpy.data.objects["Source"].type == "MESH"
-        assert bpy.data.images[color_name].alpha_mode == "PREMUL"
+        assert bpy.data.images[color_name].alpha_mode == "STRAIGHT"
+        assert bpy.data.images[color_name].colorspace_settings.name == "AgX Base sRGB"
     finally:
         bpy.utils.unregister_class(operators.ConvertToPlane)
 

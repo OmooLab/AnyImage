@@ -9,7 +9,7 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.common.image import COLOR_NORMALIZED_PROPERTY, image_pixels
+from anyimage.common.image import image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.operators.bake_mesh import BakeMesh, materialization, materials
 from anyimage.operators.bake_mesh.textures import create_emission_color_image
@@ -25,12 +25,14 @@ def image_object():
     OTextureToLayer.create_group()
     image = bpy.data.images.new("Panorama color", width=128, height=64, alpha=True)
     image.colorspace_settings.name = "sRGB"
-    image[COLOR_NORMALIZED_PROPERTY] = True
     pixels = np.ones((64, 128, 4), np.float32)
     pixels[..., 1] = .5 + .3 * np.sin(2 * np.pi * (np.arange(128) + .5) / 128)
     pixels[..., 2] = (.2 + .3 * (np.arange(64) + .5) / 64)[:, None]
     image.pixels.foreach_set(pixels.ravel())
-    material = create_image_material(image, image, texture_extension="REPEAT", emission_strength=1)
+    material = create_image_material(
+        image, image, texture_extension="REPEAT", emission_strength=1,
+        scene=SimpleNamespace(view_settings=SimpleNamespace(view_transform="Standard")),
+    )
     # A user-authored strength graph remains bakeable alongside geometry attributes.
     nodes, links = material.node_tree.nodes, material.node_tree.links
     shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")

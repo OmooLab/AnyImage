@@ -74,7 +74,17 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     images = {i.name: i.as_pointer() for i in bpy.data.images}
     color_pixels = image_pixels(color).copy()
     expected_color = color_pixels
-    bake = Mock(wraps=materialization.bake_material_output)
+    bake_output = materialization.bake_material_output
+    baked_alpha = None
+
+    def capture_bake(*args):
+        nonlocal baked_alpha
+        result = bake_output(*args)
+        if args[3] == "Alpha":
+            baked_alpha = image_pixels(result).reshape(-1, 4)[:, 0].copy()
+        return result
+
+    bake = Mock(side_effect=capture_bake)
     monkeypatch.setattr(materialization, "bake_material_output", bake)
     assert BakeMesh.poll(bpy.context)
     operator = SimpleNamespace(report=Mock())
@@ -91,12 +101,16 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert set(remaining) - set(images) == {"Color_roughness.png"} | ({"Color_normal.exr"} if normal is None else set()) | ({"Color_emissioncolor.png"} if kind == "PANORAMA" else set())
     assert set(images) - set(remaining) == ({"Radial Depth"} if kind == "PANORAMA" else {"Camera"} if kind != "PLANE" else set())
     actual = image_pixels(color).reshape(-1, 4)
-    expected = expected_color.reshape(-1, 4)
-    visible = (actual[:, 3] > 0) & (expected[:, 3] > 0)
-    assert visible.any()
-    np.testing.assert_allclose(actual[visible, :3] / actual[visible, 3:4],
-                               expected[visible, :3] / expected[visible, 3:4], atol=1 / 255)
-    assert color.colorspace_settings.name == "Non-Color" and color.is_float
+    from anyimage.common.color_space import normalize_color_rgba
+    from anyimage.common.image import COLOR_NORMALIZED_PROPERTY
+
+    expected = expected_color.reshape(-1, 4).copy()
+    factor = np.divide(baked_alpha, expected[:, 3], out=np.zeros_like(baked_alpha), where=expected[:, 3] > 0)
+    expected[:, :3] *= factor[:, None]
+    expected[:, 3] = baked_alpha
+    np.testing.assert_allclose(actual, normalize_color_rgba(expected), atol=1 / 255)
+    assert color.colorspace_settings.name == "sRGB" and not color.is_float
+    assert color[COLOR_NORMALIZED_PROPERTY]
     np.testing.assert_array_equal([v.co[:] for v in obj.data.vertices], positions)
     np.testing.assert_array_equal([v.uv[:] for v in obj.data.uv_layers["UVMap"].data], uv)
     assert [tuple(p.vertices) for p in obj.data.polygons] == faces

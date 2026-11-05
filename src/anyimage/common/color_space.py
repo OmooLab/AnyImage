@@ -53,12 +53,14 @@ def srgb_to_linear_rgb(rgb):
 
 
 def normalize_color_rgba(rgba):
-    """Encode linear RGBA as sRGB with per-channel cap 4 and gamma 0.75."""
+    """Encode linear RGBA with cap 4, gamma 0.65 and a highlight lift curve."""
     result = np.asarray(rgba, dtype=np.float32).copy()
     if not np.isfinite(result).all():
         raise ValueError("Color normalization requires finite RGBA values")
     normalized = np.clip(result[..., :3], 0, 4) / 4
-    result[..., :3] = linear_rgb_to_srgb(normalized ** 0.75)
+    brightness = normalized ** 0.65
+    brightness = brightness / (brightness + (1 - brightness) ** 2.5)
+    result[..., :3] = linear_rgb_to_srgb(brightness)
     return result
 
 

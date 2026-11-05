@@ -33,12 +33,12 @@ def color_texture(result):
     return next(node.image for node in result.node_tree.nodes if node.type == "TEX_IMAGE")
 
 
-@pytest.mark.parametrize("panorama,view,space", [
-    (False, "AgX", "AgX Base sRGB"),
-    (True, "AgX", "AgX Base sRGB"),
-    (True, "Unknown", "sRGB"),
+@pytest.mark.parametrize("view,space", [
+    *color_images.VIEW_TRANSFORM_COLOR_SPACES,
+    ("Standard", "sRGB"),
+    ("Unknown", "sRGB"),
 ])
-def test_color_space_and_alpha_follow_business(color_data, panorama, view, space):
+def test_color_space_and_alpha_follow_business(color_data, view, space):
     image = bpy.data.images.new("Material policy", width=2, height=1, alpha=True)
     expected = np.array([0.2, 0.4, 0.8, 0.25, 0.6, 0.3, 0.1, 0], dtype=np.float32)
     image.pixels.foreach_set(expected)
@@ -49,38 +49,32 @@ def test_color_space_and_alpha_follow_business(color_data, panorama, view, space
         space = "sRGB"
     image.colorspace_settings.name = "sRGB"
     image.pixels.foreach_set(expected)
-    result = color_images.configure_material_color_image(image, view_scene(view), panorama=panorama)
-    selected = space if panorama else "sRGB"
-    assert result.colorspace_settings.name == selected
-    assert result.alpha_mode == ("PREMUL" if selected == "sRGB" else "STRAIGHT")
-    if not panorama and space != "sRGB":
-        assert result[images.COLOR_NORMALIZED_PROPERTY]
-        assert not np.allclose(images.image_pixels(result), expected, atol=1 / 255)
-        np.testing.assert_allclose(images.image_pixels(result)[3::4], expected[3::4], atol=1 / 255)
-    else:
-        np.testing.assert_allclose(images.image_pixels(result), expected, atol=1 / 255)
+    result = color_images.configure_material_color_image(image, view_scene(view))
+    assert result.colorspace_settings.name == space
+    assert result.alpha_mode == ("PREMUL" if space == "sRGB" else "STRAIGHT")
+    assert not result.get(images.COLOR_NORMALIZED_PROPERTY)
+    np.testing.assert_allclose(images.image_pixels(result), expected, atol=1 / 255)
 
 
-@pytest.mark.parametrize("panorama", [False, True])
-def test_linear_hdr_is_unchanged_for_both_material_roles(color_data, panorama):
+def test_linear_hdr_is_unchanged(color_data):
     image = bpy.data.images.new("Linear HDR", width=2, height=1, alpha=True, float_buffer=True)
     image.colorspace_settings.name = "Linear Rec.709"
     image.alpha_mode = "PREMUL"
     pixels = np.array([8, 2, .5, .25, 12, 3, 1, 0], np.float32)
     image.pixels.foreach_set(pixels)
-    result = color_images.configure_material_color_image(image, view_scene("AgX"), panorama=panorama)
+    result = color_images.configure_material_color_image(image, view_scene("AgX"))
     assert result == image and result.is_float
     assert result.colorspace_settings.name == "Linear Rec.709"
     assert result.alpha_mode == "PREMUL"
     np.testing.assert_array_equal(images.image_pixels(result), pixels)
 
 
-def test_panorama_reverses_previously_normalized_srgb(color_data):
+def test_material_reverses_previously_normalized_srgb(color_data):
     image = bpy.data.images.new("Normalized source", width=1, height=1, alpha=True)
     image.pixels.foreach_set([.8, .6, .2, .5])
     image[images.COLOR_NORMALIZED_PROPERTY] = True
     before = images.image_pixels(image)
-    color_images.configure_material_color_image(image, view_scene("AgX"), panorama=True)
+    color_images.configure_material_color_image(image, view_scene("AgX"))
     assert image.colorspace_settings.name == "AgX Base sRGB"
     assert not image.get(images.COLOR_NORMALIZED_PROPERTY)
     np.testing.assert_array_equal(images.image_pixels(image), before)
@@ -106,10 +100,12 @@ def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, k
     owner = bpy.data.objects.new("Color source owner", None)
     owner.empty_display_type = "IMAGE"
     owner.data = source
-    result = color_images.configure_material_color_image(source, view_scene("AgX"), panorama=True)
+    result = color_images.configure_material_color_image(source, view_scene("AgX"))
     assert result == source
     np.testing.assert_allclose(images.image_pixels(result), before, atol=1 / 255)
     expected = images.image_pixels(result)
+    color_images.configure_material_color_image(result, view_scene("AgX"))
+    np.testing.assert_array_equal(images.image_pixels(result), expected)
     if result.packed_file is None or result.is_dirty:
         result.pack()
     selected = (result.colorspace_settings.name, result.alpha_mode)
@@ -148,8 +144,8 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
     color = color_image(source, (0, 0, 2, 2), images.image_rgba(source))
     first = material.create_image_material(source, color, shadeless=shadeless, scene=scene, **data_textures)
     original_color = color_texture(first)
-    assert original_color.colorspace_settings.name == "sRGB"
-    assert original_color.alpha_mode == "PREMUL"
+    assert original_color.colorspace_settings.name == "AgX Base sRGB"
+    assert original_color.alpha_mode == "STRAIGHT"
     before_repeat = images.image_pixels(original_color)
     second = material.create_image_material(source, original_color, shadeless=shadeless, scene=scene)
     new_color = color_texture(second)
@@ -159,8 +155,8 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
     assert source.colorspace_settings.name == "sRGB"
     assert source.alpha_mode == "STRAIGHT"
     np.testing.assert_allclose(images.image_pixels(source), before, atol=1 / 255)
-    assert new_color[images.COLOR_NORMALIZED_PROPERTY]
-    np.testing.assert_allclose(images.image_pixels(new_color)[3::4], before[3::4], atol=1 / 255)
+    assert not new_color.get(images.COLOR_NORMALIZED_PROPERTY)
+    np.testing.assert_allclose(images.image_pixels(new_color), before, atol=1 / 255)
     for key, image in data_textures.items():
         space, alpha, pixels = data_states[key]
         assert image.colorspace_settings.name == space

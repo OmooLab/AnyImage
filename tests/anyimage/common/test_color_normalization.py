@@ -75,13 +75,13 @@ def test_inverse_decode_matches_cycles_with_hidden_colors(source, space):
     )
 
 
-def test_normalization_clamps_channels_independently_before_gamma_and_encoding():
+def test_normalization_preserves_alpha_and_input_with_bounded_rgb():
     rgba = np.array([[6, 2, 1, .5], [4, 4, 4, 1], [-1, 0, 100, 0]], dtype=np.float32)
+    original = rgba.copy()
     result = normalize_color_rgba(rgba)
-    expected = [[1, .5 ** .75, .25 ** .75], [1, 1, 1], [0, 0, 1]]
-    np.testing.assert_allclose(srgb_to_linear_rgb(result[:, :3]), expected, atol=2e-7)
+    assert np.min(result[..., :3]) >= 0 and np.max(result[..., :3]) <= 1
     np.testing.assert_array_equal(result[:, 3], rgba[:, 3])
-    np.testing.assert_array_equal(rgba[0], [6, 2, 1, .5])
+    np.testing.assert_array_equal(rgba, original)
 
 
 def test_normalization_is_independent_of_surrounding_pixels_and_crop():
@@ -94,75 +94,33 @@ def test_normalization_is_independent_of_surrounding_pixels_and_crop():
 @pytest.mark.parametrize("rgba,expected", [
     ([[0, 0, 0, 1]], [[0, 0, 0]]),
     ([[-2, -1, 0, 1]], [[0, 0, 0]]),
-    ([[.2, .1, .05, .5]], [[.05 ** .75, .025 ** .75, .0125 ** .75]]),
-    ([[2, .5, -1, 0]], [[.5 ** .75, .125 ** .75, 0]]),
+    ([[.25, .25, .25, .5]], [[0.205615783986] * 3]),
+    ([[4, 8, 16, 0]], [[1, 1, 1]]),
 ])
-def test_normalization_handles_degenerate_ranges(rgba, expected):
+def test_normalization_maps_neutral_brightness_and_handles_black(rgba, expected):
     result = normalize_color_rgba(rgba)
     np.testing.assert_allclose(srgb_to_linear_rgb(result[:, :3]), expected, atol=2e-7)
     np.testing.assert_array_equal(result[:, 3], np.asarray(rgba)[:, 3])
+
+
+def test_normalization_lifts_highlights_with_a_bounded_monotonic_curve():
+    values = np.array([0, .01, .1, .5, .839, 1], np.float32)
+    # Supply scene-linear values whose gamma result equals the curve input.
+    levels = 4 * values ** (1 / .65)
+    rgba = np.column_stack((levels, levels, levels, np.ones_like(levels)))
+    linear = srgb_to_linear_rgb(normalize_color_rgba(rgba)[:, :3])[:, 0]
+    assert np.all(np.diff(linear) > 0)
+    assert np.min(linear) >= 0 and np.max(linear) <= 1
+    assert linear[1] == pytest.approx(.01, abs=.0003)
+    assert linear[3] == pytest.approx(.738796125, abs=2e-7)
+    assert linear[4] == pytest.approx(.98776, abs=.0001)
+    assert np.all(linear[1:-1] > values[1:-1])
 
 
 @pytest.mark.parametrize("value", [np.nan, np.inf, -np.inf])
 def test_nonfinite_pixels_are_rejected(value):
     with pytest.raises(ValueError, match="finite"):
         normalize_color_rgba([[value, 0, 0, 1]])
-
-
-@pytest.mark.parametrize("kind", ["generated", "file", "packed", "dirty"])
-def test_normalization_is_in_place_and_survives_reload(source, kind, tmp_path, monkeypatch):
-    if kind == "file":
-        path = tmp_path / "source.png"
-        Image.fromarray(np.uint8(np.rint(images.image_rgba(source) * 255))).save(path)
-        source = bpy.data.images.load(str(path), check_existing=False)
-    elif kind in {"packed", "dirty"}:
-        source.pack()
-        source.reload()
-        if kind == "dirty":
-            source.pixels[0] = .7
-    before = images.image_rgba(source)
-    expected = normalize_color_rgba(color_image.decode_color_image(source, "AgX Base sRGB"))
-    identity = (source.as_pointer(), source.name, tuple(source.size), source.filepath_raw)
-    resources = (set(bpy.data.images), set(bpy.data.scenes))
-    scene = bpy.context.scene
-    scene.view_settings.view_transform = "AgX"
-    scene.view_settings.exposure = 2
-    assert color_image.configure_material_color_image(source, scene) == source
-    assert (source.as_pointer(), source.name, tuple(source.size), source.filepath_raw) == identity
-    assert (set(bpy.data.images), set(bpy.data.scenes)) == resources
-    assert scene.view_settings.exposure == 2
-    result = images.image_rgba(source)
-    np.testing.assert_array_equal(result[..., 3], before[..., 3])
-    np.testing.assert_allclose(result, expected, atol=1 / 255)
-    assert source.colorspace_settings.name == "sRGB"
-    assert source.alpha_mode == "PREMUL"
-    assert source[images.COLOR_NORMALIZED_PROPERTY]
-    assert not np.allclose(result[..., :3], before[..., :3])
-    # Repeated calls preserve the normalized domain.
-    for _ in range(2):
-        color_image.configure_material_color_image(source, scene)
-        np.testing.assert_array_equal(images.image_rgba(source), result)
-    library = tmp_path / "normalized.blend"
-    bpy.data.libraries.write(str(library), {source})
-    with bpy.data.libraries.load(str(library)) as (_, loaded):
-        loaded.images = [source.name]
-    restored = loaded.images[0]
-    np.testing.assert_array_equal(images.image_rgba(restored), result)
-    assert restored[images.COLOR_NORMALIZED_PROPERTY]
-    with color_image.material_color_image(restored) as copied:
-        assert copied[images.COLOR_NORMALIZED_PROPERTY]
-        color_image.configure_material_color_image(copied, scene)
-        np.testing.assert_array_equal(images.image_rgba(copied), result)
-
-    # Verify the stored sRGB interpretation through an independent texture sample.
-    opaque = result.copy()
-    opaque[..., 3] = 1
-    restored.pixels.foreach_set(np.flipud(opaque).ravel())
-    restored.update()
-    np.testing.assert_allclose(
-        bake_texture_colors(restored), srgb_to_linear_rgb(result[..., :3]),
-        rtol=5e-3, atol=1e-4,
-    )
 
 
 def test_edits_preserve_state_and_fresh_replacement_clears_it(source, tmp_path):
@@ -191,7 +149,7 @@ def test_failed_decode_restores_content_and_releases_resources(source, monkeypat
 
     monkeypatch.setattr(color_image.tempfile, "TemporaryDirectory", fail)
     with pytest.raises(RuntimeError, match="Decode failed"):
-        color_image.configure_material_color_image(source, bpy.context.scene)
+        color_image.decode_color_image(source, "AgX Base sRGB")
     np.testing.assert_array_equal(images.image_pixels(source), before)
     assert source.colorspace_settings.name == "sRGB"
     assert bytes(source.packed_file.data) == packed

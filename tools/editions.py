@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-EDITIONS = ("full", "base")
+EDITIONS = ("full", "lite")
 AI_PATHS = (
     "ai_menus.py",
     "ai_preferences.py",
@@ -42,13 +42,13 @@ def edition_sources(source, edition):
             continue
         if path.suffix.startswith(".blend") and path.suffix != ".blend":
             continue
-        if edition == "base":
-            if relative == Path("__init_base__.py"):
+        if edition == "lite":
+            if relative == Path("__init_lite__.py"):
                 continue
             if any(relative == Path(name) or Path(name) in relative.parents for name in AI_PATHS):
                 continue
             if relative == Path("__init__.py"):
-                path = source / "__init_base__.py"
+                path = source / "__init_lite__.py"
         files[relative] = path
     files[Path("LICENSE")] = source.parents[1] / "LICENSE"
     for path in files.values():

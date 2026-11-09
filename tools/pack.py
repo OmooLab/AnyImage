@@ -46,7 +46,7 @@ def project_dependencies(edition="full"):
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
     dependencies = config["project"].get("dependencies", [])
-    excluded = config.get("tool", {}).get("anyimage", {}).get("full-only-dependencies", []) if edition == "base" else []
+    excluded = config.get("tool", {}).get("anyimage", {}).get("full-only-dependencies", []) if edition == "lite" else []
     return [item for item in dependencies if re.split(r"[\s\[<>=!~;@]", item, maxsplit=1)[0] not in excluded]
 
 
@@ -157,7 +157,7 @@ def manifest_for_platform(platform, wheels, edition="full"):
     text = (SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8")
     version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     text = re.sub(r'^version = .*$', f'version = "{version}"', text, flags=re.MULTILINE)
-    if edition == "base":
+    if edition == "lite":
         text = re.sub(r'^tagline = .*$', 'tagline = "Lite edition for image editing and modeling in Blender"', text, flags=re.MULTILINE)
         text = re.sub(r'^network = .*\n', '', text, flags=re.MULTILINE)
         text = re.sub(r'^files = .*$', 'files = "Read source and clipboard images, and save image edits"', text, flags=re.MULTILINE)
@@ -192,7 +192,7 @@ def _build_extension(platform, wheels, edition="full"):
     wheels = extension_wheels(wheels)
     manifest_text = manifest_for_platform(platform, wheels, edition)
     manifest = tomllib.loads(manifest_text)
-    name = manifest['name'].replace(' ', '') + ('_Base' if edition == 'base' else '')
+    name = manifest['name'].replace(' ', '') + ('_Lite' if edition == 'lite' else '')
     output_path = DIST_DIR / (
         f"{name}.v{manifest['version']}.{platform}.zip"
     )
@@ -236,8 +236,8 @@ def main(argv=None):
     )
     parser.add_argument("--edition", choices=EDITIONS, help="Build only one edition; defaults to both")
     args = parser.parse_args(argv)
-    if args.local and args.edition == "base":
-        parser.error("--local supports full only; install the assembled Base archive for testing")
+    if args.local and args.edition == "lite":
+        parser.error("--local supports full only; install the assembled Lite archive for testing")
     if args.local:
         platform = args.platform or current_platform()
         wheels = prepare_local_dependencies(platform)

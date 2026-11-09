@@ -25,8 +25,8 @@ def validate_archives(paths):
     for path in paths:
         with ZipFile(path) as archive:
             manifest = tomllib.loads(archive.read("blender_manifest.toml").decode())
-            edition = "base" if path.name.startswith(f"{name}_Base.v") else "full"
-            archive_name = name + ("_Base" if edition == "base" else "")
+            edition = "lite" if path.name.startswith(f"{name}_Lite.v") else "full"
+            archive_name = name + ("_Lite" if edition == "lite" else "")
             (platform,) = manifest["platforms"]
             if (
                 manifest["id"] != source_manifest["id"]
@@ -48,12 +48,12 @@ def validate_archives(paths):
             for relative, source in sources.items():
                 if archive.read(relative.as_posix()) != source.read_bytes():
                     raise ValueError(f"Stale source in archive: {path}: {relative}")
-            if edition == "base":
+            if edition == "lite":
                 if "network" in manifest.get("permissions", {}) or any(
                     Path(wheel).name.lower().startswith(("blendjob-", "onnx", "torch-"))
                     for wheel in manifest["wheels"]
                 ):
-                    raise ValueError(f"AI dependency or permission in Base: {path}")
+                    raise ValueError(f"AI dependency or permission in Lite: {path}")
             digest = hashlib.sha256(archive.read("assets/O_AnyImage.blend")).digest()
             if asset_digest is not None and digest != asset_digest:
                 raise ValueError("Edition node assets differ")
@@ -71,7 +71,7 @@ def main():
     name = tomllib.loads((SOURCE_DIR / "blender_manifest.toml").read_text(encoding="utf-8"))["name"].replace(" ", "")
     paths = args.archives or [
         DIST_DIR
-        / f"{name}{'_Base' if edition == 'base' else ''}.v{version}.{platform}.zip"
+        / f"{name}{'_Lite' if edition == 'lite' else ''}.v{version}.{platform}.zip"
         for platform in PLATFORMS
         for edition in EDITIONS
     ]

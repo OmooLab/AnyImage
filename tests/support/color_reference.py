@@ -49,14 +49,14 @@ def isolate_reference_cache():
 @pytest.fixture
 def registered_color_reference():
     try:
-        bpy.utils.register_class(properties.SettingsBase)
+        bpy.utils.register_class(properties.SettingsLite)
         registered_settings = True
     except (RuntimeError, ValueError):
         registered_settings = False
     added_scene_property = not hasattr(bpy.types.Scene, "anyimage_settings")
     if added_scene_property:
         bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(
-            type=properties.SettingsBase,
+            type=properties.SettingsLite,
         )
     registered_operators = []
     for operator in (MatchColorReference,):
@@ -73,4 +73,4 @@ def registered_color_reference():
     if added_scene_property:
         del bpy.types.Scene.anyimage_settings
     if registered_settings:
-        bpy.utils.unregister_class(properties.SettingsBase)
+        bpy.utils.unregister_class(properties.SettingsLite)

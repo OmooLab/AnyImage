@@ -42,7 +42,7 @@ class RecordingLayout:
 
 class PreferencesTest(BlenderTestCase):
     def test_base_preferences_draw_only_tool_settings(self):
-        preferences = self.anyimage.preferences.PreferencesBase()
+        preferences = self.anyimage.preferences.PreferencesLite()
         preferences.layout = RecordingLayout([])
         preferences.draw(None)
         self.assertEqual(preferences.layout.properties, [

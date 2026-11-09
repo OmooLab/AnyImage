@@ -16,23 +16,23 @@ from tools.editions import AI_PATHS, edition_sources
 
 def test_editions_share_every_non_entry_source():
     full = edition_sources(pack.SOURCE_DIR, "full")
-    base = edition_sources(pack.SOURCE_DIR, "base")
-    for relative, source in base.items():
+    lite = edition_sources(pack.SOURCE_DIR, "lite")
+    for relative, source in lite.items():
         if relative == Path("__init__.py"):
-            assert source == pack.SOURCE_DIR / "__init_base__.py"
+            assert source == pack.SOURCE_DIR / "__init_lite__.py"
             continue
         assert source == full[relative], relative
-    assert full[Path("__init_base__.py")] == pack.SOURCE_DIR / "__init_base__.py"
-    assert list(pack.SOURCE_DIR.rglob("__init_base__.py")) == [pack.SOURCE_DIR / "__init_base__.py"]
+    assert full[Path("__init_lite__.py")] == pack.SOURCE_DIR / "__init_lite__.py"
+    assert list(pack.SOURCE_DIR.rglob("__init_lite__.py")) == [pack.SOURCE_DIR / "__init_lite__.py"]
     assert not (pack.SOURCE_DIR / "registration.py").exists()
 
 
-def test_base_contents_and_dependencies(tmp_path):
+def test_lite_contents_and_dependencies(tmp_path):
     with patch.object(pack, "DIST_DIR", tmp_path):
         full = pack._build_extension("windows-x64", [], "full")
-        base = pack._build_extension("windows-x64", [], "base")
-    assert full != base
-    with ZipFile(base) as archive, ZipFile(full) as other:
+        lite = pack._build_extension("windows-x64", [], "lite")
+    assert full != lite
+    with ZipFile(lite) as archive, ZipFile(full) as other:
         full_manifest = tomllib.loads(other.read("blender_manifest.toml").decode())
         assert full_manifest["id"] == "anyimage"
         assert full_manifest["name"] == "Any Image"
@@ -49,19 +49,19 @@ def test_base_contents_and_dependencies(tmp_path):
             for name in archive.namelist()
             for excluded in AI_PATHS
         )
-        assert not any("__init_base__" in name for name in archive.namelist())
-    requirements = pack.project_dependencies("base")
+        assert not any("__init_lite__" in name for name in archive.namelist())
+    requirements = pack.project_dependencies("lite")
     assert all(not item.startswith("blendjob") for item in requirements)
     assert any(item.startswith("pillow") for item in requirements)
     assert any(item.startswith("scipy") for item in requirements)
     with patch.object(validate_extensions, "subprocess") as validator_process:
-        validate_extensions.validate_archives([full, base])
+        validate_extensions.validate_archives([full, lite])
     assert validator_process.run.call_count == 2
 
 
-@pytest.mark.parametrize("first", ["full", "base"])
+@pytest.mark.parametrize("first", ["full", "lite"])
 def test_artifacts_register_and_switch_without_interference(tmp_path, first):
-    for edition, repository in (("full", "first_repo"), ("base", "second_repo")):
+    for edition, repository in (("full", "first_repo"), ("lite", "second_repo")):
         with patch.object(pack, "DIST_DIR", tmp_path):
             archive_path = pack._build_extension("windows-x64", [], edition)
         repository_path = tmp_path / repository
@@ -97,21 +97,21 @@ sys.addaudithook(audit_readonly_package)
 class RejectAI(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname.split('.')[0] in {'blendjob', 'onnxruntime', 'torch', 'server'} or '.server' in fullname or fullname.endswith('.runtime'):
-            raise AssertionError(f'Base imported AI code: {fullname}')
+            raise AssertionError(f'Lite imported AI code: {fullname}')
 
 blocker = RejectAI()
 sys.meta_path.insert(0, blocker)
-base = importlib.import_module('second_repo.anyimage')
+lite = importlib.import_module('second_repo.anyimage')
 bpy.context.preferences.system.use_online_access = False
-base.register()
+lite.register()
 settings = bpy.context.scene.anyimage_settings
 assert settings.cutout_edge_length > 0
 assert not hasattr(settings, 'cutout_generate_normal')
-assert not hasattr(base.PreferencesBase, 'storage_root')
+assert not hasattr(lite.PreferencesLite, 'storage_root')
 assert 'blendjob' not in sys.modules
-image = bpy.data.images.new('Base source', width=4, height=4, alpha=True)
+image = bpy.data.images.new('Lite source', width=4, height=4, alpha=True)
 image.pixels.foreach_set(np.ones(4 * 4 * 4, dtype=np.float32))
-source = bpy.data.objects.new('Base source', None)
+source = bpy.data.objects.new('Lite source', None)
 source.empty_display_type = 'IMAGE'
 source.data = image
 bpy.context.collection.objects.link(source)
@@ -128,13 +128,13 @@ bpy.context.view_layer.objects.active = result
 assert bpy.ops.anyimage.bake_mesh() == {'FINISHED'}
 bpy.context.view_layer.objects.active = source
 assert bpy.ops.anyimage.convert_to_plane() == {'FINISHED'}
-base.unregister()
+lite.unregister()
 sys.meta_path.remove(blocker)
 full = importlib.import_module('first_repo.anyimage')
 # The bpy wheel has no application event loop. Test real RNA registration while
 # replacing the server polling timer, whose lifecycle has separate unit coverage.
 full.runtime.enable = Mock()
-first, second = (full, base) if sys.argv[1] == 'full' else (base, full)
+first, second = (full, lite) if sys.argv[1] == 'full' else (lite, full)
 first.register()
 selection = next(cls for cls in first.CLASSES if getattr(cls, 'bl_idname', '') == 'anyimage.select_cutout_selection')
 assert bpy.types.Operator.bl_rna_get_subclass_py(selection.bl_rna.identifier) is selection
@@ -175,17 +175,17 @@ def test_pack_selects_editions_and_platforms():
         patch.object(pack, "build_all", return_value=[]) as build,
     ):
         pack.main(["--platform", "windows-x64"])
-        build.assert_called_once_with(("full", "base"), ("windows-x64",))
+        build.assert_called_once_with(("full", "lite"), ("windows-x64",))
     with (
         patch.object(pack.subprocess, "run"),
         patch.object(pack, "build_all", return_value=[]) as build,
     ):
-        pack.main(["--edition", "base"])
-        build.assert_called_once_with(("base",), pack.PLATFORMS)
+        pack.main(["--edition", "lite"])
+        build.assert_called_once_with(("lite",), pack.PLATFORMS)
     with pytest.raises(SystemExit):
-        pack.main(["--local", "--edition", "base"])
+        pack.main(["--local", "--edition", "lite"])
 
 
 def test_base_source_list_rejects_missing_files(tmp_path):
     with pytest.raises(RuntimeError, match="Missing edition source"):
-        edition_sources(tmp_path, "base")
+        edition_sources(tmp_path, "lite")

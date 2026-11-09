@@ -89,7 +89,7 @@ class ExtensionPackagingTest(unittest.TestCase):
             )["version"]
             self.assertEqual(
                 {path.name for path in output_paths},
-                {f"{name}.v{version}.{platform}.zip" for platform in pack.PLATFORMS for name in ("AnyImage", "AnyImage_Base")},
+                {f"{name}.v{version}.{platform}.zip" for platform in pack.PLATFORMS for name in ("AnyImage", "AnyImage_Lite")},
             )
             for output_path in output_paths:
                 platform = output_path.stem.split(".")[-1]
@@ -100,16 +100,16 @@ class ExtensionPackagingTest(unittest.TestCase):
                 self.assertIn("__init__.py", names)
                 self.assertIn("blender_manifest.toml", names)
                 archive_manifest = tomllib.loads(manifest)
-                self.assertEqual("Lite edition" in archive_manifest["tagline"], output_path.name.startswith("AnyImage_Base"))
+                self.assertEqual("Lite edition" in archive_manifest["tagline"], output_path.name.startswith("AnyImage_Lite"))
                 permissions = archive_manifest["permissions"]
                 self.assertEqual(permissions["clipboard"], "Paste images from the system clipboard")
                 self.assertIn("files", permissions)
-                self.assertEqual("network" in permissions, not output_path.name.startswith("AnyImage_Base"))
+                self.assertEqual("network" in permissions, not output_path.name.startswith("AnyImage_Lite"))
                 self.assertIn("assets/O_AnyImage.blend", names)
                 self.assertNotIn("assets/O_AnyImage.blend1", names)
                 self.assertEqual(
                     "wheels/blendjob-0.1.28-py3-none-any.whl" in names,
-                    not output_path.name.startswith("AnyImage_Base"),
+                    not output_path.name.startswith("AnyImage_Lite"),
                 )
                 self.assertNotIn("anyimage/__init__.py", names)
                 self.assertIn(f'platforms = ["{platform}"]', manifest)

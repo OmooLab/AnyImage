@@ -20,10 +20,10 @@ class TranslationsTest(BlenderTestCase):
             self.assertEqual(builtin.get(key, catalog.get(key)), expected)
 
     def test_base_messages_are_available_in_both_editions(self):
-        base = self.base_addon.TRANSLATIONS["zh_HANS"]
+        lite = self.lite_addon.TRANSLATIONS["zh_HANS"]
         full = self.anyimage.TRANSLATIONS["zh_HANS"]
-        self.assertLess(base.items(), full.items())
-        self.assertNotIn(("*", "Set Up AI Server"), base)
+        self.assertLess(lite.items(), full.items())
+        self.assertNotIn(("*", "Set Up AI Server"), lite)
         self.assertEqual(full[("*", "Set Up AI Server")], "设置 AI 服务器")
         for message in (
             "Frame: drag a rectangle to merge selected Image Empties; RMB or Esc cancels",
@@ -31,7 +31,7 @@ class TranslationsTest(BlenderTestCase):
             "click points; click start, double-click, or Enter to finish; Backspace removes",
             "Exclude areas below this opacity from the Cutout outline. Higher values exclude more semi-transparent edges.",
         ):
-            self.assertIn(("*", message), base)
+            self.assertIn(("*", message), lite)
 
     def test_sidebar_translates_on_each_draw_without_changing_job_data(self):
         runtime = self.runtime.runtime

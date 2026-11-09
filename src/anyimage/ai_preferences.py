@@ -1,7 +1,7 @@
 from .preferences import (
     ADDON_PACKAGE,
     addon_preferences,
-    PreferencesBase,
+    PreferencesLite,
 )
 from pathlib import Path
 import bpy
@@ -117,7 +117,7 @@ def geometry_model_items(_owner, _context):
     ]
 
 
-class Preferences(PreferencesBase):
+class Preferences(PreferencesLite):
     bl_idname = ADDON_PACKAGE
 
     storage_root: bpy.props.StringProperty(

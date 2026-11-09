@@ -128,7 +128,7 @@ class BlenderTestCase(unittest.TestCase):
         sys.path.insert(0, str(SOURCE_ROOT))
         cls.paths_before_import = tuple(sys.path)
         cls.anyimage = importlib.import_module("anyimage")
-        cls.base_addon = importlib.import_module("anyimage.__init_base__")
+        cls.lite_addon = importlib.import_module("anyimage.__init_lite__")
         cls.tools = importlib.import_module("anyimage.tools")
         cls.keymaps = importlib.import_module("anyimage.keymaps")
         cls.runtime = importlib.import_module("anyimage.runtime")

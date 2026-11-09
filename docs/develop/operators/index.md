@@ -16,4 +16,4 @@
 | BlendJob 内置 Operator | [Job 文件清理](job-files.md) |
 | `operators/upscale.py` | [**2倍高清**](upscale.md) |
 
-单文件功能按业务命名；复杂功能包在 `operators.py` 定义 Operator 和入口协调逻辑，其余模块承载具体实现。包的 `__init__.py` 导出实际使用的类型；扩展的 `__init__.py` 与 `__init_base__.py` 分别直接导入并在 `CLASSES` 中逐项列出本版的注册类型。交互式工具的 WorkspaceTool 统一定义和注册于 `tools.py`。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。
+单文件功能按业务命名；复杂功能包在 `operators.py` 定义 Operator 和入口协调逻辑，其余模块承载具体实现。包的 `__init__.py` 导出实际使用的类型；扩展的 `__init__.py` 与 `__init_lite__.py` 分别直接导入并在 `CLASSES` 中逐项列出本版的注册类型。交互式工具的 WorkspaceTool 统一定义和注册于 `tools.py`。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。

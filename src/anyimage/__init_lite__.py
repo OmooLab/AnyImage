@@ -1,10 +1,10 @@
-"""Register and unregister the base edition."""
+"""Register and unregister the Lite edition."""
 
 import bpy
 
 from . import keymaps
-from .preferences import PreferencesBase
-from .properties import SettingsBase, register_color_references, unregister_color_references
+from .preferences import PreferencesLite
+from .properties import SettingsLite, register_color_references, unregister_color_references
 
 from .operators.clipboard_image import PasteClipboardImage
 from .operators.bake_mesh import BakeMesh
@@ -15,7 +15,7 @@ from .operators.frame_tool import FrameImages
 from .operators.mask_tool import EditImageAlpha
 from .operators.rectify_tool import RectifyImagePerspective
 
-from .menus import ImageMenuBase, ObjectMenuBase, TextureNodeMenuBase
+from .menus import ImageMenuLite, ObjectMenuLite, TextureNodeMenuLite
 from .color_panel import ColorMatchPanel
 from .common.image import is_image_empty
 from .common.image_target import is_image_object, active_texture_node
@@ -46,8 +46,8 @@ TRANSLATIONS = build_translations(
 
 CLASSES = (
     # Settings
-    PreferencesBase,
-    SettingsBase,
+    PreferencesLite,
+    SettingsLite,
 
     # Operators
     PasteClipboardImage,
@@ -61,9 +61,9 @@ CLASSES = (
     RectifyImagePerspective,
 
     # Menus
-    ImageMenuBase,
-    ObjectMenuBase,
-    TextureNodeMenuBase,
+    ImageMenuLite,
+    ObjectMenuLite,
+    TextureNodeMenuLite,
 
     # Panels
     ColorMatchPanel,
@@ -80,21 +80,21 @@ TOOLS = (
 def draw_image_context_menu(self, context):
     if not is_image_empty(context.object):
         return
-    self.layout.menu(ImageMenuBase.bl_idname)
+    self.layout.menu(ImageMenuLite.bl_idname)
     self.layout.separator()
 
 
 def draw_image_object_context_menu(self, context):
     if not is_image_object(getattr(context, "object", None)):
         return
-    self.layout.menu(ObjectMenuBase.bl_idname)
+    self.layout.menu(ObjectMenuLite.bl_idname)
     self.layout.separator()
 
 
 def draw_texture_node_context_menu(self, context):
     if active_texture_node(context) is None:
         return
-    self.layout.menu(TextureNodeMenuBase.bl_idname)
+    self.layout.menu(TextureNodeMenuLite.bl_idname)
     self.layout.separator()
 
 
@@ -111,7 +111,7 @@ def register():
     bpy.app.translations.register(__package__, TRANSLATIONS)
     for cls in CLASSES:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=SettingsBase)
+    bpy.types.Scene.anyimage_settings = bpy.props.PointerProperty(type=SettingsLite)
     for tool, options in TOOLS:
         bpy.utils.register_tool(tool, **options)
     for menu, draw in MENUS:

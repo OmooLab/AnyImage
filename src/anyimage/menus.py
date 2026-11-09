@@ -4,7 +4,7 @@ from .operators.color_match import MatchColorReference
 from .operators.bake_mesh import BakeMesh
 
 
-class ImageMenuBase(bpy.types.Menu):
+class ImageMenuLite(bpy.types.Menu):
     bl_idname = "ANYIMAGE_MT_image_context"
     bl_label = "Any Image"
 
@@ -15,7 +15,7 @@ class ImageMenuBase(bpy.types.Menu):
         layout.operator(MatchColorReference.bl_idname, icon="COLOR")
 
 
-class TextureNodeMenuBase(bpy.types.Menu):
+class TextureNodeMenuLite(bpy.types.Menu):
     bl_idname = "ANYIMAGE_MT_texture_node_context"
     bl_label = "Any Image"
 
@@ -24,7 +24,7 @@ class TextureNodeMenuBase(bpy.types.Menu):
         self.layout.operator(MatchColorReference.bl_idname, icon="COLOR")
 
 
-class ObjectMenuBase(bpy.types.Menu):
+class ObjectMenuLite(bpy.types.Menu):
     bl_idname = "ANYIMAGE_MT_object_context"
     bl_label = "Any Image"
 

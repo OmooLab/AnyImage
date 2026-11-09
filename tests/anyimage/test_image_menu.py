@@ -6,11 +6,11 @@ from tests.support.blender import BlenderTestCase
 class ImageMenuTest(BlenderTestCase):
     def test_base_menus_keep_local_actions_and_shared_product_label(self):
         for base_type, full_type, expected in (
-            (self.base_addon.ImageMenuBase, self.anyimage.ImageMenu,
+            (self.lite_addon.ImageMenuLite, self.anyimage.ImageMenu,
              ["anyimage.convert_to_plane", "anyimage.match_color_reference"]),
-            (self.base_addon.ObjectMenuBase, self.anyimage.ObjectMenu,
+            (self.lite_addon.ObjectMenuLite, self.anyimage.ObjectMenu,
              ["anyimage.bake_mesh", "anyimage.match_color_reference"]),
-            (self.base_addon.TextureNodeMenuBase, self.anyimage.TextureNodeMenu,
+            (self.lite_addon.TextureNodeMenuLite, self.anyimage.TextureNodeMenu,
              ["anyimage.match_color_reference"]),
         ):
             with self.subTest(menu=base_type.__name__):

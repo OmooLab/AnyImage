@@ -18,8 +18,8 @@ class AddonRegistrationTest(BlenderTestCase):
 
     def test_editions_can_switch_after_unregister(self):
         for first, second in (
-            (self.base_addon, self.anyimage),
-            (self.anyimage, self.base_addon),
+            (self.lite_addon, self.anyimage),
+            (self.anyimage, self.lite_addon),
         ):
             with self.subTest(first=first.__name__):
                 self.assertEqual(len(first.CLASSES), len({cls.__name__ for cls in first.CLASSES}))

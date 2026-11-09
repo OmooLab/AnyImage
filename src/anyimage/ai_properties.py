@@ -1,11 +1,11 @@
-"""AI-only Scene properties extending the base edition."""
+"""AI-only Scene properties extending the Lite edition."""
 
 import bpy
 
-from .properties import SettingsBase
+from .properties import SettingsLite
 
 
-class Settings(SettingsBase):
+class Settings(SettingsLite):
     cutout_generate_normal: bpy.props.BoolProperty(
         name="Normal Map",
         description=(

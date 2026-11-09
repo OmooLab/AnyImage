@@ -107,16 +107,16 @@ uv run --group models model sync
 
 - Operator Class 使用动宾结构，如 `ConvertToDepthPlane`、`RemoveImageBackground`
 - Menu、Panel、AddonPreferences、PropertyGroup 分别使用实际类型后缀，如 `ImageMenu`、`ServerPanel`、`Preferences`、`Settings`
-- 偏好设置类分别命名为 `PreferencesBase` 和 `Preferences`，直接导入真实类名，不使用旧名或别名。
-- 场景设置类分别命名为 `SettingsBase` 和 `Settings`，直接导入真实类名；公共属性仍使用 `Scene.anyimage_settings`。
-- 菜单类按职责命名为 `ImageMenu`、`ObjectMenu`、`TextureNodeMenu`；基础版使用 `Base` 后缀，独立定义，不继承完整版或反向继承。菜单挂接函数放在两个入口。对外显示的产品名称统一为 `Any Image`。
+- 偏好设置类分别命名为 `PreferencesLite` 和 `Preferences`，直接导入真实类名，不使用旧名或别名。
+- 场景设置类分别命名为 `SettingsLite` 和 `Settings`，直接导入真实类名；公共属性仍使用 `Scene.anyimage_settings`。
+- 菜单类按职责命名为 `ImageMenu`、`ObjectMenu`、`TextureNodeMenu`；Lite 版使用 `Lite` 后缀，独立定义，不继承完整版或反向继承。菜单挂接函数放在两个入口。对外显示的产品名称统一为 `Any Image`。
 - `bl_idname` 使用 `anyimage` 项目前缀：
   - Operator 如 `anyimage.convert_to_depth_plane`
   - Menu 如 `ANYIMAGE_MT_image_context`
   - Panel 如 `ANYIMAGE_PT_server`
   - 公共 Property 如 `Scene.anyimage_settings`
 - Operator 自身 Property 不加项目前缀，使用业务名称，如 `input_path`、`process_res`、`resolution_level`
-- 产品显示名使用 `Any Image`；文件名中的品牌名使用去掉空格的大驼峰 `AnyImage`，不写成 `Any_Image`。扩展包名为 `AnyImage.v<version>.<platform>.zip`，基础版为 `AnyImage_Base.v<version>.<platform>.zip`；打包、校验和发布流程保持一致。节点组名称沿用资产中的 `O DA3 Depth Plane`、`O MoGe2 Surface` 等既有名称
+- 产品显示名使用 `Any Image`；文件名中的品牌名使用去掉空格的大驼峰 `AnyImage`，不写成 `Any_Image`。扩展包名为 `AnyImage.v<version>.<platform>.zip`，Lite 版为 `AnyImage_Lite.v<version>.<platform>.zip`；打包、校验和发布流程保持一致。节点组名称沿用资产中的 `O DA3 Depth Plane`、`O MoGe2 Surface` 等既有名称
 
 ## 文档规范
 
@@ -135,7 +135,7 @@ uv run --group models model sync
 - `bpy.ops` 执行调用保持原生命名空间写法；外部依赖或运行时动态生成且无可引用类型的 Operator 使用字符串 ID
 - Job 参数使用可序列化的普通字典；Blender 数据只能在主线程的 Operator 响应阶段读写
 - 新增或修改 Blender 类型时同步检查 `src/anyimage/__init__.py` 的注册与逆序注销，并补充对应测试
-- `__init__.py` 与 `__init_base__.py` 的注册和注销流程有意重复，分别在各自入口直接实现和维护；不得抽成共享注册类、注册函数、Mixin 或生命周期框架（如 `AnyImageRegistration`）。公共类型可按业务模块导出复用。
+- `__init__.py` 与 `__init_lite__.py` 的注册和注销流程有意重复，分别在各自入口直接实现和维护；不得抽成共享注册类、注册函数、Mixin 或生命周期框架（如 `AnyImageRegistration`）。公共类型可按业务模块导出复用。
 - 两个入口分别直接导入并在 `CLASSES` 中逐项列出本版的全部静态注册类型，按设置、Operator、Menu、Panel 分组，保持必要注册顺序。不得使用 `base.CLASSES`、`*XXX_CLASSES`、替换映射或动态收集；下级模块不再维护 `CLASSES`。注册直接遍历 `CLASSES`、`TOOLS`、`MENUS`，注销反序遍历同一清单；不维护 `_registered`、`_registered_*` 状态，不添加失败回滚。BlendJob 的动态类型仍由 Runtime 注册。
 - `TOOLS`、`MENUS` 也分别在两个入口显式汇总，由入口选择 AI 或非 AI 类型；下级模块只定义类型，不提供注册清单或清单生成函数。
 - 翻译模块提供分组数据，`translations.py` 提供 `build_translations()`；两个入口显式选择本版分组并构建 `TRANSLATIONS`。

@@ -10,6 +10,7 @@ from PIL import Image
 from tests.anyimage.server.support import FakeJobContext, load_server_module
 
 geometry = load_server_module("geometry.panorama")
+relief = load_server_module("geometry.panorama_relief")
 onnx = load_server_module("models.onnx_moge2")
 job = load_server_module("jobs.panorama")
 
@@ -18,6 +19,45 @@ def test_panorama_projection_preserves_asymmetric_source_pixels():
     image = np.arange(32 * 64, dtype=float).reshape(32, 64)
     sampled = geometry.sample_panorama(image, geometry.panorama_directions(64, 32))
     np.testing.assert_allclose(sampled, image, atol=1e-9)
+
+
+def test_camera_normals_preserve_oblique_plane_and_ignore_invalid_samples():
+    bases = geometry.camera_bases()
+    expected = np.array((.2, -.3, .9))
+    expected /= np.linalg.norm(expected)
+    normals = [np.broadcast_to(expected @ basis.T, (64, 64, 3)).copy() for basis in bases]
+    normals += [normal.copy() for normal in normals]
+    bases = bases * 2
+    masks = np.ones((24, 64, 64), bool)
+    normals[0][:8] = np.nan
+    normals[1][:8] = 0
+    normals[2][:32] = (100, -500, 800)
+    masks[2, :32] = False
+    merged = geometry.merge_normals(normals, masks, bases, 128, 64)
+    np.testing.assert_allclose(merged, np.broadcast_to(expected * (-1, 1, 1), merged.shape), atol=1e-6)
+
+
+def test_panorama_relief_corrects_bias_and_preserves_periodic_detail():
+    width, height = 1024, 512
+    directions = geometry.panorama_directions(width, height) * (-1, 1, 1)
+    reference = -directions
+    tangent = np.cross((0, 0, 1), reference)
+    tangent /= np.linalg.norm(tangent, axis=-1, keepdims=True)
+    phase = 2 * np.pi * 180 * (np.arange(width) + .5) / width
+    detail = .08 * np.sin(phase)
+    native = .8 * reference + .6 * np.cross(reference, tangent) + detail[None, :, None] * tangent
+    native = (native / np.linalg.norm(native, axis=-1, keepdims=True)).astype(np.float32)
+    valid = np.zeros((height, width), bool)
+    valid[height // 4:3 * height // 4] = True
+    corrected, coverage = relief.refine_panorama_normals(np.full(valid.shape, 3, np.float32), native, valid)
+    middle = slice(3 * height // 8, 5 * height // 8)
+    np.testing.assert_allclose(np.linalg.norm(corrected, axis=-1), 1, atol=2e-6)
+    assert np.min(np.sum(corrected[middle] * reference[middle], axis=-1)) > .98
+    corrected_detail = np.sum(corrected[middle] * tangent[middle], axis=-1)
+    recovery = np.mean(corrected_detail * detail) / np.mean(detail ** 2)
+    assert recovery > .3
+    np.testing.assert_allclose(corrected_detail[:, :128], corrected_detail[:, 256:384], atol=.008)
+    assert not coverage[height // 4 - 1:height // 4 + 1].any()
 
 
 def test_known_fov_recovers_shift_metric_and_excludes_invisible_points():
@@ -65,13 +105,13 @@ def panorama_job(tmp_path, monkeypatch):
         calls.append((color, level, options))
         rays = geometry.view_rays(color.shape[0])
         points = rays / np.linalg.norm(rays, axis=-1, keepdims=True) * 3
-        return {"points": points, "mask": np.ones(color.shape[:2])}
+        return {"points": points, "normal": -points / 3, "mask": np.ones(color.shape[:2])}
 
     monkeypatch.setattr(onnx, "infer", infer)
     write = job.write_float_exr
     monkeypatch.setattr(job, "write_float_exr", lambda rgba, path: (pixels.append(rgba.copy()), write(rgba, path))[1])
     parameters = {"input": str(source), "model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 3,
-                  "max_input_size": 32}
+                  "max_input_size": 128}
     return source, context, parameters, calls, pixels
 
 
@@ -80,13 +120,15 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     image = np.full((32, 64, 4), 255, np.uint8)
     image[:24, :, 3] = 0
     image[26:28, :, 3] = 128
-    Image.fromarray(image).save(source)
+    Image.fromarray(image.repeat(2, axis=0).repeat(2, axis=1)).save(source)
+    parameters["max_input_size"] = 65
     result = job.run(context, parameters)
     assert 0 < len(calls) < 12
     assert all(level == 3 and opts["fov_x"] == 90 for _, level, opts in calls)
     assert all(np.all(color[~opts["source_valid"]] == 0) for color, _, opts in calls)
-    assert result == {"depth": "depth.exr", "depth_metadata": "depth.json"}
-    assert {path.name for path in context.directory.iterdir()} == {"depth.exr", "depth.json"}
+    assert result == {"depth": "depth.exr", "depth_metadata": "depth.json", "object_normal": "object-normal.png",
+                      "normal_coverage": "normal-coverage.png"}
+    assert {path.name for path in context.directory.iterdir()} == set(result.values())
     alpha = pixels[0][..., 3]
     assert pixels[0].shape == image.shape
     assert not alpha[:24].any()
@@ -97,20 +139,36 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     assert metadata["projection"] == "equirectangular"
     assert metadata["image_size"] == [64, 32]
     assert set(metadata) == {"projection", "image_size"}
+    for key in ("object_normal", "normal_coverage"):
+        with Image.open(context.directory / result[key]) as texture:
+            assert texture.size == (64, 32)
 
 
-def test_job_writes_final_fused_depth_and_validity(panorama_job, monkeypatch):
+def test_job_writes_fused_depth_and_object_normals(panorama_job, monkeypatch):
     source, context, parameters, _, pixels = panorama_job
-    Image.new("RGBA", (64, 32), (255, 255, 255, 255)).save(source)
+    width, height = 70, 35
+    Image.new("RGBA", (width, height), (255, 255, 255, 255)).save(source)
     expected = np.array((.2, -.3, 1.0))
     expected /= np.linalg.norm(expected)
-    facing = geometry.panorama_directions(64, 32) @ expected
+    directions = geometry.panorama_directions(width, height)
+    facing = directions @ expected
     valid = facing < -.2
     distance = (-3 / np.minimum(facing, -.01)).astype(np.float32)
     monkeypatch.setattr(job, "merge_distances", lambda *args, **kwargs: (distance, valid))
     job.run(context, parameters)
     np.testing.assert_array_equal(pixels[0][..., 0], distance)
     np.testing.assert_array_equal(pixels[0][..., 3], valid)
+    with Image.open(context.directory / "object-normal.png") as image:
+        assert image.mode == "RGB"
+        normal = np.asarray(image).astype(float) / 127.5 - 1
+    inward = -directions * (-1, 1, 1)
+    np.testing.assert_allclose(normal[~valid], inward[~valid], atol=1 / 255 + 1e-6)
+    interior = facing < -.4
+    interior[[0, -1]] = False
+    expected_normal = expected * (-1, 1, 1)
+    samples = normal[interior]
+    samples /= np.linalg.norm(samples, axis=-1, keepdims=True)
+    assert np.min(samples @ expected_normal) > np.cos(np.deg2rad(2))
 
 
 def test_full_resolution_fusion_preserves_detail_and_periodic_alignment():
@@ -164,7 +222,11 @@ def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind)
     Image.new("RGBA", (64 if kind != "wrong_ratio" else 32, 32),
               (255, 255, 255, 0 if kind == "transparent" else 255)).save(source)
     if kind == "invalid_model":
-        monkeypatch.setattr(onnx, "infer", lambda *a, **k: {"points": np.ones((32, 32, 3)), "mask": np.zeros((32, 32))})
+        def invalid_prediction(session, color, level, **options):
+            return {"points": np.ones_like(color), "normal": np.zeros_like(color),
+                    "mask": np.zeros(color.shape[:2])}
+
+        monkeypatch.setattr(onnx, "infer", invalid_prediction)
     if kind == "metadata":
         def fail_metadata(*args, **kwargs):
             raise RuntimeError("Failed metadata serialization")

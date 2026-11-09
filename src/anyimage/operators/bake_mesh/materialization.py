@@ -1,10 +1,11 @@
 """Materialize static geometry and update existing images and material inputs."""
 
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 
 import bpy
 import numpy as np
 
+from ...common.bake import BAKE_MARGIN, bake_context
 from ...common.color_image import create_normalized_color_image, require_static_color_image
 from ...common.image import create_image_edit_result, image_content_state, image_pixels, replace_image_content, restore_image_content
 from ...common.image import has_other_image_user
@@ -18,7 +19,6 @@ from .materials import emission_shaders, remove_unused_material_nodes, static_ma
 
 SOURCE_UV = "_anyimage_source_uv"
 TARGET_UV = "_anyimage_target_uv"
-MARGIN = 4
 SINGLE_REGION_GROUPS = frozenset({
     IMAGE_PLANE_NODE_GROUP_NAME, "O Depth Plane", "O Depth Relief",
     "O Depth Panorama",
@@ -154,35 +154,6 @@ def material_inputs(obj, modifiers):
     return material, layer, color, normal, channels, emission_strengths
 
 
-@contextmanager
-def bake_context(mesh, material, matrix):
-    """Isolate baking and release resources even when scene setup fails."""
-    with ExitStack() as cleanup:
-        scene = bpy.data.scenes.new("Any Image mesh bake")
-        cleanup.callback(bpy.data.scenes.remove, scene)
-        obj = bpy.data.objects.new("Any Image mesh bake", mesh)
-        cleanup.callback(bpy.data.objects.remove, obj, do_unlink=True)
-        obj.matrix_world = matrix
-        scene.collection.objects.link(obj)
-        mesh.materials.clear()
-        mesh.materials.append(material)
-        layer = scene.view_layers[0]
-        layer.objects.active = obj
-        obj.select_set(True, view_layer=layer)
-        scene.render.engine = "CYCLES"
-        scene.cycles.device = "CPU"
-        scene.cycles.samples = 1
-        scene.cycles.use_denoising = False
-        window = bpy.context.window
-        if window:
-            cleanup.callback(setattr, window, "scene", window.scene)
-            window.scene = scene
-        with bpy.context.temp_override(scene=scene, view_layer=layer, object=obj,
-                                       active_object=obj, selected_objects=[obj],
-                                       selected_editable_objects=[obj]):
-            yield scene, obj
-
-
 def build_layout(mesh, *, single_region=False):
     """Scale and offset source UVs into regular surface tiles."""
     regions = np.zeros(len(mesh.polygons), dtype=np.int32)
@@ -271,7 +242,7 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
         target.image = image
         nodes.active = target
         result = bpy.ops.object.bake(type="NORMAL" if is_normal else "EMIT", normal_space="TANGENT", normal_r="POS_X", normal_g="POS_Y", normal_b="POS_Z",
-                                     use_selected_to_active=False, uv_layer=TARGET_UV, margin=MARGIN, margin_type="EXTEND")
+                                     use_selected_to_active=False, uv_layer=TARGET_UV, margin=BAKE_MARGIN, margin_type="EXTEND")
         if result != {"FINISHED"}:
             raise RuntimeError(f"{output_name} baking was cancelled")
         image.pack()

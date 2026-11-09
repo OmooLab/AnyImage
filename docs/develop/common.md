@@ -21,6 +21,7 @@
 | `projective_image.py` | 透视变换与预乘 Alpha 插值 |
 | `polygon.py` | 屏幕多边形、**画笔**轮廓、扫描线区间和预览网格 |
 | `material.py` | `O Texture to Layer`、Normal、Alpha、**无光照**与全景材质 |
+| `bake.py` | `bake_context()` 创建隔离的 Cycles 烘焙场景并清理临时对象 |
 | `object.py` | Modifier 输入设置与结果对象激活、源对象替换 |
 | `node.py` | `node_asset_path()` 与 `load_node_group()` |
 

@@ -117,7 +117,13 @@ def artifacts(tmp_path, source):
     rgba[..., :3] = 3
     write_float_exr(rgba, tmp_path / "depth.exr")
     (tmp_path / "depth.json").write_text(json.dumps({"projection": "equirectangular", "image_size": [32, 16]}))
-    result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / {"depth": "depth.exr", "depth_metadata": "depth.json"}[key])
+    Image.new("RGB", (32, 16), (128, 128, 255)).save(tmp_path / "object-normal.png")
+    coverage = Image.new("L", (32, 16), 0)
+    coverage.paste(255, (0, 0, 8, 16))
+    coverage.save(tmp_path / "normal-coverage.png")
+    files = {"depth": "depth.exr", "depth_metadata": "depth.json", "object_normal": "object-normal.png",
+             "normal_coverage": "normal-coverage.png"}
+    result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / files[key])
     operator = SimpleNamespace(source_object_name=source.name, _source_object=source,
                                _source_image=source.data, _source_signature=image_content_signature(source.data),
                                color_path=str(prepare_material_color_input(source.data)))
@@ -125,7 +131,7 @@ def artifacts(tmp_path, source):
     cleanup_material_color_input(operator.color_path)
 
 
-def test_result_replaces_source_with_zero_rotation_and_geometry_normal_material(source, artifacts, monkeypatch):
+def test_result_replaces_source_with_zero_rotation_and_object_normal_material(source, artifacts, monkeypatch):
     result, operator = artifacts
     from anyimage.common.node import load_node_group
     saved = load_node_group("O Depth Panorama")
@@ -157,7 +163,7 @@ def test_result_replaces_source_with_zero_rotation_and_geometry_normal_material(
     layer = next(n for n in nodes if n.type == "GROUP")
     shader = next(n for n in nodes if n.type == "BSDF_PRINCIPLED")
     assert layer.node_tree.name == "O Texture to Layer"
-    assert not layer.inputs["Object Space"].default_value
+    assert layer.inputs["Object Space"].default_value
     assert shader.inputs["Emission Strength"].default_value == 1.0
     assert not shader.inputs["Emission Strength"].is_linked
     assert layer.inputs["Roughness Scale"].default_value == 1
@@ -174,13 +180,14 @@ def test_result_replaces_source_with_zero_rotation_and_geometry_normal_material(
     assert background.inputs["Color"].links[0].from_node == environment
     assert color.colorspace_settings.name == "AgX Base sRGB"
     assert color.alpha_mode == "STRAIGHT"
-    assert not layer.inputs["Normal Texture"].is_linked
-    assert [n.image for n in nodes if n.type == "TEX_IMAGE"] == [color]
+    normal = layer.inputs["Normal Texture"].links[0].from_node.image
+    assert normal.colorspace_settings.is_data and normal.packed_file
+    assert [n.image for n in nodes if n.type == "TEX_IMAGE"] == [color, normal]
     assert all(n.extension == "REPEAT" for n in nodes if n.type == "TEX_IMAGE")
-    assert shader.inputs["Normal"].links[0].from_node == layer
+    assert shader.inputs["Normal"].links[0].from_socket == layer.outputs["Normal"]
     assert shader.inputs["Emission Color"].links[0].from_socket == layer.outputs["Emission"]
     assert bpy.context.view_layer.objects.active == obj
-    assert not any(image.name.endswith("_normal.png") for image in bpy.data.images)
+    assert normal.name.endswith("_normal.png")
     assert all(image.packed_file for image in bpy.data.images if image.name.endswith(("_color.png", "_depth.exr")))
     graph = bpy.context.evaluated_depsgraph_get()
     mesh = obj.evaluated_get(graph).to_mesh()
@@ -301,13 +308,14 @@ def test_depth_mask_default_removes_background_dome(source, artifacts, monkeypat
     assert get_modifier_input(modifier, identifier) is True
     bend = modifier_input_identifier(modifier.node_group, "Horizon Bend")
     assert get_modifier_input(modifier, bend) == pytest.approx(-0.1)
-    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
-    mesh = evaluated.to_mesh()
-    try:
-        positions = np.empty(len(mesh.vertices) * 3)
-        mesh.vertices.foreach_get("co", positions)
-        radii = np.linalg.norm(positions.reshape(-1, 3), axis=1)
-        assert np.isclose(radii, 3, atol=0.01).any()
-        assert not np.isclose(radii, 500, atol=0.01).any()
-    finally:
-        evaluated.to_mesh_clear()
+    mesh = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
+    positions = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
+    mesh.vertices.foreach_get("co", positions)
+    radii = np.linalg.norm(positions.reshape(-1, 3), axis=1)
+    assert np.isclose(radii, 3, atol=0.01).any()
+    assert not np.isclose(radii, 500, atol=0.01).any()
+    layer = next(node for node in obj.active_material.node_tree.nodes if node.type == "GROUP")
+    image = layer.inputs["Normal Texture"].links[0].from_node.image
+    normal = np.asarray(image.pixels[:]).reshape(16, 32, 4)
+    np.testing.assert_allclose(normal[12, 16, :3], (128 / 255, 128 / 255, 1), atol=1e-6)
+    assert normal[6, 16, 0] < .06

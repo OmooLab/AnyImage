@@ -32,6 +32,8 @@ Start with a **2:1 equirectangular panorama** and turn it into a surrounding sce
 
 **Depth Scale** adjusts the depth variation. At **0**, the result is a spherical panorama whose size is controlled by **Dome Radius**. Images with other aspect ratios are center-cropped to 2:1 first.
 
+**Maximum AI Input Size** in Preferences caps the width of the depth and normal textures. The default is **2048**. The material has separate **Normal Scale** and **Bump Scale** controls.
+
 ## Keep working with the result
 
 Depth Plane, Relief, and Panorama require the full edition's AI features. On first use, follow the prompts to set up the environment and models.

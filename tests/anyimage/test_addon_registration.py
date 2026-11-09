@@ -24,13 +24,6 @@ class AddonRegistrationTest(BlenderTestCase):
             with self.subTest(first=first.__name__):
                 self.assertEqual(len(first.CLASSES), len({cls.__name__ for cls in first.CLASSES}))
                 first.register()
-                if second is self.base_addon:
-                    registered = self.registered.copy()
-                    settings = self.fake_bpy.types.Scene.anyimage_settings
-                    with self.assertRaisesRegex(RuntimeError, "already enabled"):
-                        second.register()
-                    self.assertEqual(self.registered, registered)
-                    self.assertIs(self.fake_bpy.types.Scene.anyimage_settings, settings)
                 first.unregister()
                 second.register()
                 second.unregister()

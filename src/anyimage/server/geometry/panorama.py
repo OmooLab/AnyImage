@@ -52,6 +52,59 @@ def sample_panorama(image, directions, *, order=1):
                                     mode="nearest") for c in range(image.shape[2])], -1)
 
 
+def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel_check=None):
+    """Rotate camera normals and blend them in panorama object coordinates."""
+    from scipy.ndimage import map_coordinates
+
+    fields = []
+    for normal, mask, basis in zip(normals, masks, bases):
+        if not mask.any():
+            continue
+        normal = np.asarray(normal, dtype=np.float32)
+        length = np.linalg.norm(normal, axis=-1)
+        valid = mask & np.isfinite(length) & (length > 1e-8)
+        unit = np.zeros_like(normal)
+        np.divide(normal, length[..., None], out=unit, where=valid[..., None])
+        basis = np.asarray(basis, dtype=np.float32)
+        fields.append((unit @ basis, basis))
+    result = np.empty((height, width, 3), np.float32)
+    tile_height = max(1, 65536 // width)
+    columns = (np.arange(width, dtype=np.float32) + .5) / width
+    for start in range(0, height, tile_height):
+        if cancel_check is not None:
+            cancel_check()
+        stop = min(start + tile_height, height)
+        u, v = np.meshgrid(columns, (np.arange(start, stop, dtype=np.float32) + .5) / height)
+        directions = uv_directions(u, v)
+        active = np.ones(directions.shape[:2], dtype=bool) if coverage is None else coverage[start:stop]
+        visible = directions[active]
+        total = np.zeros_like(visible)
+        for field, basis in fields:
+            rays = visible @ basis.T
+            edge = np.maximum(abs(rays[:, 0]), abs(rays[:, 1]))
+            inside = edge < rays[:, 2]
+            if not inside.any():
+                continue
+            forward = rays[inside, 2]
+            projected = rays[inside, :2] / forward[:, None]
+            coords = ((projected[:, 1] + 1) * field.shape[0] / 2 - .5,
+                      (projected[:, 0] + 1) * field.shape[1] / 2 - .5)
+            weight = forward ** 4 * np.clip((1 - edge[inside] / forward) / .2, 0, 1)
+            # Invalid normals are already zero before interpolation.
+            sampled = np.stack([map_coordinates(field[..., c], coords, order=1,
+                                                mode="nearest") for c in range(3)], axis=-1)
+            total[inside] += sampled * weight[..., None]
+        length = np.linalg.norm(total, axis=-1, keepdims=True)
+        merged = -visible
+        np.divide(total, length, out=merged, where=length > 1e-8)
+        directions *= -1
+        directions[active] = merged
+        # Mesh UV longitude is pi - theta; its vertical axis remains +Z.
+        directions[..., 0] *= -1
+        result[start:stop] = directions
+    return result
+
+
 def warp_log_distances(log_distances, masks, bases, width, height, *, directions=None):
     from scipy.ndimage import map_coordinates
 

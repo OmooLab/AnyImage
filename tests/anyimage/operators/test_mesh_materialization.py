@@ -589,7 +589,7 @@ def test_conversion_bakes_strength_and_preserves_other_settings(cutout, tmp_path
 
 
 def test_bake_context_setup_failure_releases_scene_and_object(cutout):
-    from anyimage.operators.bake_mesh.materialization import bake_context
+    from anyimage.common.bake import bake_context
 
     scene = bpy.context.window.scene
     counts = (len(bpy.data.scenes), len(bpy.data.objects))

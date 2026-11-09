@@ -158,6 +158,7 @@ def manifest_for_platform(platform, wheels, edition="full"):
     version = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
     text = re.sub(r'^version = .*$', f'version = "{version}"', text, flags=re.MULTILINE)
     if edition == "base":
+        text = re.sub(r'^tagline = .*$', 'tagline = "Lite edition for image editing and modeling in Blender"', text, flags=re.MULTILINE)
         text = re.sub(r'^network = .*\n', '', text, flags=re.MULTILINE)
         text = re.sub(r'^files = .*$', 'files = "Read source and clipboard images, and save image edits"', text, flags=re.MULTILINE)
     lines = text.splitlines()

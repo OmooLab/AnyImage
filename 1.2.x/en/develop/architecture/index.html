@@ -1676,8 +1676,8 @@
 </thead>
 <tbody>
 <tr>
-<td><code>__init_base__.py</code>、<code>__init__.py</code></td>
-<td>基础版与完整版的类型、工具、菜单、快捷键注册，以及完整版 Runtime 生命周期</td>
+<td><code>__init_lite__.py</code>、<code>__init__.py</code></td>
+<td>Lite 版与完整版的类型、工具、菜单、快捷键注册，以及完整版 Runtime 生命周期</td>
 </tr>
 <tr>
 <td><code>menus.py</code>、<code>ai_menus.py</code>、<code>panel.py</code></td>
@@ -1714,7 +1714,7 @@
 </tbody>
 </table>
 <h2 id="_2">注册与配置</h2>
-<p><code>__init_base__.py</code> 与 <code>__init__.py</code> 分别直接导入本版的类型，在各自的 <code>CLASSES</code> 中按设置、Operator、Menu、Panel 逐项列出，并各自直接遍历静态清单注册，注销时反序遍历同一清单。生成任务类型先于对应操作入口注册。完整版从公共与 AI 翻译目录组合译文。</p>
+<p><code>__init_lite__.py</code> 与 <code>__init__.py</code> 分别直接导入本版的类型，在各自的 <code>CLASSES</code> 中按设置、Operator、Menu、Panel 逐项列出，并各自直接遍历静态清单注册，注销时反序遍历同一清单。生成任务类型先于对应操作入口注册。完整版从公共与 AI 翻译目录组合译文。</p>
 <p>顶层入口注册类型后，通过 <code>tools.py</code> 组织 WorkspaceTool，通过 <code>keymaps.py</code> 注册快捷键。注销时关闭 Runtime、清理参考资源、快捷键、菜单、Scene 属性和工具，最后按 <code>CLASSES</code> 逆序注销类型。公共设置与 AI 设置分别在 <code>preferences.py</code>、<code>ai_preferences.py</code> 定义，均通过 <code>addon_preferences()</code> 读取。基础文件只依赖基础能力，AI 文件在其上扩展。</p>
 <p><strong>处理分辨率上限</strong> 限制模型分析输入和<strong>2倍高清</strong>可提交源图的长边；<strong>画框分辨率上限</strong> 限制<strong>重设画框</strong>输出长边；<strong>最小相对边长</strong> 与 <strong>边界扩展</strong> 控制<strong>立体裁切</strong>的网格密度和轮廓边界采样。</p>
 <h2 id="_3">执行边界</h2>

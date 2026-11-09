@@ -1608,7 +1608,7 @@
 </tr>
 </tbody>
 </table>
-<p>单文件功能按业务命名；复杂功能包在 <code>operators.py</code> 定义 Operator 和入口协调逻辑，其余模块承载具体实现。包的 <code>__init__.py</code> 导出实际使用的类型；扩展的 <code>__init__.py</code> 与 <code>__init_base__.py</code> 分别直接导入并在 <code>CLASSES</code> 中逐项列出本版的注册类型。交互式工具的 WorkspaceTool 统一定义和注册于 <code>tools.py</code>。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。</p>
+<p>单文件功能按业务命名；复杂功能包在 <code>operators.py</code> 定义 Operator 和入口协调逻辑，其余模块承载具体实现。包的 <code>__init__.py</code> 导出实际使用的类型；扩展的 <code>__init__.py</code> 与 <code>__init_lite__.py</code> 分别直接导入并在 <code>CLASSES</code> 中逐项列出本版的注册类型。交互式工具的 WorkspaceTool 统一定义和注册于 <code>tools.py</code>。AI Operator 使用普通字典提交任务，并在主线程响应中读取文件和修改 Blender 数据。</p>
 
 
 

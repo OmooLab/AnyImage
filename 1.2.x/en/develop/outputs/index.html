@@ -1679,7 +1679,7 @@
 </tr>
 <tr>
 <td><code>generate_panorama_geometry</code></td>
-<td><code>depth.exr</code>、<code>depth.json</code></td>
+<td><code>depth.exr</code>、<code>depth.json</code>、<code>object-normal.png</code>、<code>normal-coverage.png</code></td>
 <td><strong>立体全景</strong></td>
 </tr>
 </tbody>
@@ -1709,6 +1709,10 @@
 <td><code>object_normal</code></td>
 <td><code>object-normal.png</code>，对象空间法线</td>
 </tr>
+<tr>
+<td><code>normal_coverage</code></td>
+<td><code>normal-coverage.png</code>，全景地形烘焙时使用的灰度权重</td>
+</tr>
 </tbody>
 </table>
 <table>
@@ -1720,11 +1724,11 @@
 </thead>
 <tbody>
 <tr>
-<td>普通面片、未请求 AI 法线的裁切、立体全景</td>
+<td>普通面片、未请求 AI 法线的裁切</td>
 <td>网格法线与颜色 Bump</td>
 </tr>
 <tr>
-<td>各种带 AI 法线的裁切、凹凸面</td>
+<td>各种带 AI 法线的裁切、凹凸面、立体全景</td>
 <td>Object Space</td>
 </tr>
 <tr>
@@ -1745,7 +1749,7 @@
     E --&gt; D
     D --&gt; F[Blender 加载并 Pack]</code></pre>
 <p>参考深度由 <code>common/geometry_image.py</code> 从产物计算：先按 Alpha 阈值和有限正深度筛选样本，剔除超过样本中位数 1.1 倍的远处背景，再取 95 分位数；无可用样本时返回基准值。加载后设置 Non-Color 和 CHANNEL_PACKED。<strong>凹凸面</strong>使用对象空间法线，<strong>浮雕</strong>使用切线空间法线，法线 PNG 均以 Non-Color 加载。</p>
-<p><strong>立体全景</strong>的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性；元数据包含 <code>projection: equirectangular</code> 和 <code>image_size</code>。材质使用全景颜色、网格法线与颜色 Bump。</p>
+<p><strong>立体全景</strong>的 EXR RGB 保存径向距离，Alpha 保存源 Alpha 与融合有效性的乘积。元数据包含 <code>projection: equirectangular</code> 和 <code>image_size</code>。Blender 用灰度权重烘焙地形法线，再与天空的球面法线合成一张 RGB 贴图。</p>
 <h2 id="_2">颜色与图像编辑</h2>
 <p><code>common/color_image.py</code> 为<strong>面片</strong>、<strong>立体全景</strong>和<strong>立体裁切</strong>准备独立的材质颜色，<code>common/job_image.py</code> 从颜色文件准备 AI 分析输入。<strong>立体裁切</strong>使用 Selection bounds 内的源图；网格创建时组合源 Alpha 与 SelectionMask。颜色分辨率与分析尺寸分别处理。</p>
 <p><code>ImageEditTarget</code> 统一 Image Empty 和 Shader Image Texture 的编辑目标及共享引用。HDR 去背景通过 <code>HdrBackgroundInput</code> 保留 Blender 浮点 RGB，并应用 Server 返回的连续 Alpha。</p>

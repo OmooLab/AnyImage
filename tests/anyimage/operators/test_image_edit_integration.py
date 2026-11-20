@@ -1,6 +1,8 @@
 from types import SimpleNamespace
+from unittest.mock import Mock
 import bpy
 import numpy as np
+import pytest
 from mathutils import Matrix
 
 
@@ -9,6 +11,45 @@ from anyimage.common.selection import SelectionMask
 from anyimage.common.color_space import srgb_to_linear_rgb, linear_rgb_to_srgb
 from anyimage.operators import mask_tool as edit_mask
 from anyimage.operators.frame_tool import operators as edit_frame
+
+
+@pytest.mark.parametrize("remove_source", [False, True], ids=["rename", "delete"])
+def test_frame_drag_keeps_original_sources_when_name_is_reused(monkeypatch, remove_source):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = bpy.data.images.new("Frame", width=2, height=2)
+
+    def image_empty(name):
+        obj = bpy.data.objects.new(name, None)
+        obj.empty_display_type = "IMAGE"
+        obj.data = image
+        bpy.context.collection.objects.link(obj)
+        return obj
+
+    active, original = image_empty("Active"), image_empty("Other")
+    context = SimpleNamespace(
+        active_object=active, selected_objects=(active, original),
+        area=Mock(), region=Mock(), workspace=SimpleNamespace(status_text_set=Mock()),
+        window_manager=Mock(),
+    )
+    operator = SimpleNamespace(_draw_overlay=Mock(), _finish=Mock(), report=Mock())
+    monkeypatch.setattr(bpy.types.SpaceView3D, "draw_handler_add", Mock())
+    composite = Mock()
+    monkeypatch.setattr(edit_frame, "apply_frame", composite)
+    press = SimpleNamespace(mouse_region_x=0, mouse_region_y=0)
+    assert edit_frame.FrameImages.invoke(operator, context, press) == {"RUNNING_MODAL"}
+    if remove_source:
+        bpy.data.objects.remove(original, do_unlink=True)
+    else:
+        original.name = "Renamed"
+    image_empty("Other")
+    release = SimpleNamespace(type="LEFTMOUSE", value="RELEASE", mouse_region_x=10, mouse_region_y=10)
+    result = edit_frame.FrameImages.modal(operator, context, release)
+    if remove_source:
+        assert result == {"CANCELLED"}
+        composite.assert_not_called()
+    else:
+        assert result == {"FINISHED"}
+        assert composite.call_args.args[1] == (original, active)
 
 
 def apply_frame(monkeypatch, objects, frame, size):

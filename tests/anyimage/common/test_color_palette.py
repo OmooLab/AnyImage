@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from anyimage.common.color_palette import extract_reference_palette, _merge_palette_colors
+from anyimage.common.color_match import prepare_color_reference
+from anyimage.common.color_palette import extract_color_palette, _merge_palette_colors
 
 
 def _rgba(rgb, alpha=1.0):
@@ -15,7 +16,8 @@ def test_palette_keeps_a_thin_saturated_accent(row):
     rgb = np.full((1024, 1024, 3), 0.3, dtype=np.float32)
     rgb[row:row + 2, 200:800] = (1.0, 0.0, 0.0)
 
-    colors, weights = extract_reference_palette(_rgba(rgb))
+    reference = prepare_color_reference(_rgba(rgb))
+    colors, weights = reference.colors, reference.weights
 
     assert np.min(np.linalg.norm(colors - (1.0, 0.0, 0.0), axis=1)) < 0.02
     np.testing.assert_allclose(weights.sum(), 1.0)
@@ -26,7 +28,8 @@ def test_palette_weights_follow_visible_area():
     rgba[:, 8:, :3] = (0.01, 0.02, 0.9)
     rgba[:, 8:, 3] = 0.25
 
-    colors, weights = extract_reference_palette(rgba)
+    reference = prepare_color_reference(rgba)
+    colors, weights = reference.colors, reference.weights
 
     assert weights[np.argmax(colors[:, 0])] == pytest.approx(0.8, abs=0.02)
 
@@ -34,13 +37,8 @@ def test_palette_weights_follow_visible_area():
 @pytest.mark.parametrize("levels,start,end", [(16, 0.1, 0.8), (256, 0.0, 1.0)])
 def test_neutral_reference_does_not_produce_a_fallback_hue(levels, start, end):
     rgb = np.broadcast_to(np.linspace(start, end, levels)[None, :, None], (16, levels, 3))
-    colors, _weights = extract_reference_palette(_rgba(rgb))
+    colors, _weights = extract_color_palette(rgb.reshape(-1, 3))
     assert np.max(np.ptp(colors, axis=1)) < 0.005
-
-
-def test_palette_rejects_fully_transparent_reference():
-    with pytest.raises(ValueError, match="no visible pixels"):
-        extract_reference_palette(_rgba(np.ones((2, 2, 3)), alpha=0.0))
 
 
 def test_reference_palette_ignores_transparency_and_is_deterministic():
@@ -49,14 +47,14 @@ def test_reference_palette_ignores_transparency_and_is_deterministic():
         [[1.0, 0.0]],
     )
 
-    first_colors, first_weights = extract_reference_palette(reference)
-    second_colors, second_weights = extract_reference_palette(reference)
+    first = prepare_color_reference(reference)
+    second = prepare_color_reference(reference)
 
-    np.testing.assert_array_equal(first_colors, second_colors)
-    np.testing.assert_array_equal(first_weights, second_weights)
-    assert first_colors.shape == (1, 3)
-    np.testing.assert_allclose(first_colors[0], reference[0, 0, :3], atol=0.005)
-    np.testing.assert_array_equal(first_weights, (1.0,))
+    np.testing.assert_array_equal(first.colors, second.colors)
+    np.testing.assert_array_equal(first.weights, second.weights)
+    assert first.colors.shape == (1, 3)
+    np.testing.assert_allclose(first.colors[0], reference[0, 0, :3], atol=0.005)
+    np.testing.assert_array_equal(first.weights, (1.0,))
 
 
 def test_palette_selects_distinct_colors_close_to_source():
@@ -73,7 +71,7 @@ def test_palette_selects_distinct_colors_close_to_source():
     ):
         rgb[:, index * 20 : (index + 1) * 20] = color
 
-    colors, weights = extract_reference_palette(_rgba(rgb))
+    colors, weights = extract_color_palette(rgb.reshape(-1, 3))
 
     assert 3 <= len(colors) <= 4
     np.testing.assert_allclose(weights.sum(), 1.0, atol=1e-6)

@@ -33,6 +33,53 @@ def shader_editor(texture):
         yield bpy.context
 
 
+def test_set_color_reference_from_texture(shader_editor):
+    from anyimage.operators.color_match import SetColorReference
+
+    node = active_texture_node(shader_editor)
+    settings = SimpleNamespace(color_reference=None)
+    context = SimpleNamespace(space_data=shader_editor.space_data,
+                              scene=SimpleNamespace(anyimage_settings=settings))
+    assert SetColorReference.poll(context)
+    assert SetColorReference.execute(None, context) == {"FINISHED"}
+    assert settings.color_reference == node.image
+    assert images.is_color_reference_candidate(node.image)
+
+
+@pytest.mark.parametrize("node_type", ["ShaderNodeTexEnvironment", "ShaderNodeTexImage"])
+def test_world_texture_menu_and_result(texture, node_type, tmp_path):
+    world = bpy.data.worlds.new("Texture world")
+    world.use_nodes = True
+    bpy.context.scene.world = world
+    node = world.node_tree.nodes.new(node_type)
+    world.node_tree.nodes.active = node
+    node.image = texture.image
+    context = texture_context(node)
+    context.space_data.shader_type = "WORLD"
+    context.space_data.id = world
+    assert active_texture_node(context) == node
+    layout = Mock()
+    anyimage.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
+    layout.menu.assert_called_once_with(menu.TextureNodeMenu.bl_idname)
+    write_result(tmp_path)
+    apply_image_result(ImageEditTarget.capture(context), tmp_path / "foreground.png")
+    assert tuple(node.image.size) == (8, 6)
+    assert tuple(texture.image.size) == (4, 3)
+
+
+def test_shader_editor_edits_the_shared_material(shader_editor, tmp_path):
+    obj = shader_editor.object
+    material = obj.active_material
+    other = obj.copy()
+    bpy.context.collection.objects.link(other)
+    node = active_texture_node(shader_editor)
+
+    apply_image_result(ImageEditTarget.capture(shader_editor), write_result(tmp_path))
+
+    assert obj.active_material == other.active_material == material
+    assert tuple(node.image.size) == (8, 6)
+
+
 def test_shader_editor_pin_and_shared_group_target(shader_editor, tmp_path):
     context = shader_editor
     node = active_texture_node(context)
@@ -85,6 +132,7 @@ def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
     assert [call.args[0] for call in layout.operator.call_args_list] == [
         "anyimage.remove_image_background",
         "anyimage.upscale_image",
+        "anyimage.set_color_reference",
         "anyimage.match_color_reference",
         "anyimage.open_ai_environment_settings",
     ]
@@ -185,7 +233,7 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
         with ExitStack() as stack:
             for name in ("require_environment", "require_model"):
                 stack.enter_context(patch.object(module, name))
-            stack.enter_context(patch.object(module, "production_device", return_value="CPU"))
+            stack.enter_context(patch.object(module, "configured_device", return_value="cpu"))
             stack.enter_context(patch.object(runtime, "server", server))
             stack.enter_context(patch.object(runtime, "enable"))
             stack.enter_context(patch.object(runtime._config, "environment_ready", return_value=True))

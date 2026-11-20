@@ -291,14 +291,6 @@ class CutoutOperatorsTest(BlenderTestCase):
             patch.object(self.cutout_main, "require_environment"),
             patch.object(self.cutout_main, "require_model") as require_model,
             patch.object(self.cutout_main, "require_input_path", return_value=Path("input.png")),
-            patch.object(
-                self.cutout_main, "production_device", return_value="CPU"
-            ),
-            patch.object(
-                self.cutout_main,
-                "geometry_job_parameters",
-                return_value={"model": operator.model, "resolution_level": 5},
-            ),
         ):
             for shape in ("FLAT", "SOLID", "DEPTH_SOLID", "DEPTH_SYMMETRY"):
                 for enabled in (False, True):
@@ -308,12 +300,18 @@ class CutoutOperatorsTest(BlenderTestCase):
                         require_model.reset_mock()
                         parameters = operator.request(context)
                         depth = shape in {"DEPTH_SOLID", "DEPTH_SYMMETRY"}
+                        self.assertEqual(parameters["input"], "input.png")
+                        self.assertEqual(parameters["device"], "cuda")
+                        self.assertEqual(parameters["max_input_size"], 2048)
                         self.assertEqual(parameters["generate_depth"], depth)
                         self.assertEqual(parameters["generate_normal"], depth or enabled)
                         self.assertNotIn("alpha_threshold", parameters)
                         if depth or enabled:
+                            self.assertEqual(parameters["model"], operator.model)
+                            self.assertEqual(parameters["resolution_level"], 5)
                             require_model.assert_called_once_with(operator.model)
                         else:
+                            self.assertNotIn("model", parameters)
                             require_model.assert_not_called()
 
 
@@ -387,7 +385,6 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.alpha_threshold = 0.25
         operator.fine_outline = False
         operator.source_object_name = "Source"
-        operator.selection_bounds_json = "[10,20,14,23]"
         operator.input_path = __file__
         operator.color_path = __file__
         operator.shape = "FLAT"

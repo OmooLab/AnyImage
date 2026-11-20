@@ -97,6 +97,4 @@ def test_byte_reference_is_encoded_once_and_palette_is_linear():
     reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.5, .2, .1, 1)))
     prepared = reference_cache.get_color_reference(reference)
     pixels = image_rgba(reference)[0, 0, :3]
-    from anyimage.common.color_space import linear_rgb_to_oklab
-    np.testing.assert_allclose(prepared.transfer.anchors, linear_rgb_to_oklab(prepared.colors), atol=1e-6)
-    np.testing.assert_allclose(prepared.colors[0], srgb_to_linear_rgb(pixels), atol=.005)
+    np.testing.assert_allclose(prepared.transfer.colors[0], srgb_to_linear_rgb(pixels), atol=.005)

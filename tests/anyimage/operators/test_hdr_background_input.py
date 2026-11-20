@@ -22,7 +22,7 @@ def test_recognition_preview_preserves_byte_rounding_at_half_step():
         0.9160183072090149, 0.9861790537834167,
     ]]], dtype=np.float32)
 
-    preview = build_recognition_rgba(rgba)
+    preview = build_recognition_rgba(rgba, "PREMUL")
 
     np.testing.assert_array_equal(
         np.rint(preview * 255).astype(np.uint8), [[[1, 3, 237, 255]]],
@@ -172,7 +172,7 @@ def test_hdr_preview_is_fixed_and_preserves_source(hdr_texture):
         with Image.open(first.path) as a, Image.open(second.path) as b:
             np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
         np.testing.assert_array_equal(image_rgba(image), before)
-        np.testing.assert_array_equal(build_recognition_rgba(np.zeros((1, 1, 4), np.float32)), [[[0, 0, 0, 1]]])
+        np.testing.assert_array_equal(build_recognition_rgba(np.zeros((1, 1, 4), np.float32), "PREMUL"), [[[0, 0, 0, 1]]])
     finally:
         cleanup_image_input(first.path)
         cleanup_image_input(second.path)

@@ -6,7 +6,15 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial import cKDTree
 
-from anyimage.operators.cutout_tool import geometry as g
+from anyimage.operators.cutout_tool.contours import (
+    contour_area,
+    contours_for_component,
+    extract_selection_contours,
+    points_inside_contours,
+    resample_closed_contour,
+    separate_contour_contacts,
+    valid_contours,
+)
 from anyimage.operators.cutout_tool.balloon import poisson_balloon_profile
 from anyimage.operators.cutout_tool import mesh
 from anyimage.operators.cutout_tool import tangle
@@ -57,7 +65,7 @@ def test_support_splits_shared_chords_and_preserves_boundary_and_area():
     faces = np.array(((0, 1, 2), (0, 2, 3)))
     p, f = mesh.support_mesh(points, faces)
     assert len(p) == 5 and len(f) == 4
-    assert_supported(p, f, g.boundary_vertices_from_faces(len(p), f), [None])
+    assert_supported(p, f, mesh.boundary_vertices_from_faces(len(p), f), [None])
     triangles = p[f]
     assert np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]).sum() == pytest.approx(80)
     np.testing.assert_array_equal(p[:4], points)
@@ -70,7 +78,7 @@ def test_support_adds_one_sample_to_isolated_triangle_and_is_idempotent():
     faces = np.array(((0, 1, 2),))
     p, f = mesh.support_mesh(points, faces)
     assert len(p) == 4 and len(f) == 3
-    assert_supported(p, f, g.boundary_vertices_from_faces(len(p), f), [None])
+    assert_supported(p, f, mesh.boundary_vertices_from_faces(len(p), f), [None])
     again_p, again_f = mesh.support_mesh(p, f)
     np.testing.assert_array_equal(p, again_p)
     np.testing.assert_array_equal(f, again_f)
@@ -170,7 +178,7 @@ def test_fine_comb_hole_and_one_pixel_bridge(spacing):
     points, faces, _boundary, components, _mask = result
     assert len(components) == 1
     assert not np.any(
-        g.points_inside_contours(
+        points_inside_contours(
             points[faces].mean(axis=1),
             [np.asarray(((140, 65), (150, 65), (150, 90), (140, 90)))],
         )
@@ -183,26 +191,28 @@ def test_fine_cleanup_uses_threshold_and_preserves_input_and_largest_island():
     alpha[12, 20:45] = 0.5
     alpha[32:34, 50:52] = 1
     original = alpha.copy()
-    filtered = mesh.filter_alpha(alpha, 0.3)
-    assert filtered[12, 44] == 0.5 and filtered[32, 50] == 0
+    low = mesh.build_mesh(alpha, 32, 0.3)
+    high = mesh.build_mesh(alpha, 32, 0.9)
+    assert low[-1][12, 44] and not low[-1][32, 50]
+    assert high[-1][32, 50] and not high[-1][12, 44]
     np.testing.assert_array_equal(alpha, original)
-    assert_supported(*mesh.build_mesh(alpha, 32, 0.3)[:4])
-    assert_supported(*mesh.build_mesh(alpha, 32, 0.9)[:4])
+    assert_supported(*low[:4])
+    assert_supported(*high[:4])
     with pytest.raises(ValueError, match="no visible"):
         mesh.build_mesh(np.zeros((10, 10)), 32, 0.9)
 
 
 def test_higher_detail_recovers_curve_instead_of_splitting_low_edges():
     yy, xx = np.mgrid[:240, :240]
-    alpha = ((xx - 120) ** 2 + (yy - 120) ** 2 < 92**2).astype(float)
-    reference = g.extract_selection_contours(alpha, max_resolution=240, threshold=0.9)
-    source = g.resample_closed_contour(np.asarray(reference.components[0][0]), 0.5)
+    mask = (xx - 120) ** 2 + (yy - 120) ** 2 < 92**2
+    component = extract_selection_contours(mask)[0]
+    source = resample_closed_contour(np.asarray(component[0]), 0.5)
     errors = []
     for spacing in (32, 8, 4):
-        contours = mesh.contours_for_component(reference.components[0], spacing)
-        sampled = g.resample_closed_contour(contours[0], 0.5)
+        contours = contours_for_component(component, spacing)
+        sampled = resample_closed_contour(contours[0], 0.5)
         forward = boundary_distance(source, contours)
-        backward = boundary_distance(sampled, [np.asarray(reference.components[0][0])])
+        backward = boundary_distance(sampled, [np.asarray(component[0])])
         errors.append(max(np.percentile(forward, 95), np.percentile(backward, 95)))
     assert errors[1] < errors[0]
     assert errors[2] <= errors[1] + 0.1
@@ -210,10 +220,10 @@ def test_higher_detail_recovers_curve_instead_of_splitting_low_edges():
 
 def test_fine_outline_softens_pixel_steps_in_normalized_coordinates():
     yy, xx = np.mgrid[:120, :120]
-    alpha = ((xx - 60)**2 + (yy - 60)**2 < 45**2).astype(float)
-    source = np.asarray(g.extract_selection_contours(alpha, max_resolution=120).components[0][0])
+    mask = (xx - 60)**2 + (yy - 60)**2 < 45**2
+    source = np.asarray(extract_selection_contours(mask)[0][0])
     transform = np.diag((8., 12.))
-    contours = mesh.contours_for_component([source @ transform], 32, pixel_transform=transform)
+    contours = contours_for_component([source @ transform], 32, pixel_transform=transform)
     smoothed = contours[0] @ np.linalg.inv(transform)
 
     def turning(points):
@@ -224,7 +234,7 @@ def test_fine_outline_softens_pixel_steps_in_normalized_coordinates():
 
     assert turning(smoothed) < turning(source) * .5
     assert boundary_distance(smoothed, [source]).max() < 1
-    assert abs(g.contour_area(smoothed) / g.contour_area(source) - 1) < .02
+    assert abs(contour_area(smoothed) / contour_area(source) - 1) < .02
 
 
 @pytest.mark.parametrize("offset", [0, 4096, 16384])
@@ -232,7 +242,7 @@ def test_cdt_collinear_outline_samples_do_not_become_sliver_faces(offset):
     contour = np.asarray(((0.0, 0.0), (240.0, 0.0), (240.0, 160.0), (0.0, 160.0)))
     contour = contour @ np.asarray(((0.763, -0.646), (0.646, 0.763)))
     contour += np.asarray((420.123456, 540.234567)) + offset
-    contours = [g.resample_closed_contour(contour, 16)]
+    contours = [resample_closed_contour(contour, 16)]
     points, faces = mesh.triangulate(contours, 16)
     triangles = points[faces]
     area = abs(
@@ -242,8 +252,8 @@ def test_cdt_collinear_outline_samples_do_not_become_sliver_faces(offset):
         np.sum((triangles - np.roll(triangles, 1, axis=1)) ** 2, axis=2), axis=1
     )
     assert np.min(area / longest_squared) > 1e-4
-    assert area.sum() / 2 == pytest.approx(abs(g.contour_area(contour)), rel=1e-9)
-    boundary = g.boundary_vertices_from_faces(len(points), faces)
+    assert area.sum() / 2 == pytest.approx(abs(contour_area(contour)), rel=1e-9)
+    boundary = mesh.boundary_vertices_from_faces(len(points), faces)
     np.testing.assert_allclose(
         boundary_distance(points[boundary], [contour]), 0, atol=1e-9
     )
@@ -253,12 +263,12 @@ def test_cdt_collinear_outline_samples_do_not_become_sliver_faces(offset):
 
 def test_contour_validation_requires_separation_of_pixel_contacts():
     crossing = np.asarray(((0, 0), (4, 4), (0, 4), (4, 0)))
-    assert not mesh.valid_contours([crossing])
+    assert not valid_contours([crossing])
     touching = np.asarray(
         ((0, 0), (2, 0), (2, 2), (4, 2), (4, 4), (2, 4), (2, 2), (0, 2))
     )
-    assert not mesh.valid_contours([touching])
-    assert mesh.valid_contours(mesh.separate_contour_contacts([touching.astype(float)]))
+    assert not valid_contours([touching])
+    assert valid_contours(separate_contour_contacts([touching.astype(float)]))
 
 
 @pytest.mark.parametrize("fine_outline", [False, True])

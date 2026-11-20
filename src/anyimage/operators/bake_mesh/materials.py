@@ -84,9 +84,9 @@ def arrange_material_textures(material):
 
 def connect_static_outputs(links, layer, sources):
     """Reconnect every consumer of the original image-layer outputs."""
-    for output in layer.outputs:
-        for link in tuple(output.links):
-            links.new(sources[output.name], link.to_socket)
+    for name, source in sources.items():
+        for link in tuple(layer.outputs[name].links):
+            links.new(source, link.to_socket)
 
 
 @contextmanager

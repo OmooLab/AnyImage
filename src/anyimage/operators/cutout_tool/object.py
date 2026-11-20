@@ -3,18 +3,17 @@
 import bpy
 
 from ...common.geometry_image import (
-    DEPTH_LIMIT_MEDIAN_FACTOR,
+    depth_limit_preset,
     depth_node_direction,
     depth_uniform_scale,
     fit_symmetry_depth_direction,
-    median_depth,
-    reference_depth,
+    reference_and_median_depth,
 )
+from ...common.image_plane import build_image_plane_matrix
 from ...common.material import create_image_material
 from ...common.node import load_node_group
 from ...common.object import (
     finalize_object_result,
-    blender_frame_rotation,
     modifier_input_identifier,
     set_modifier_input,
 )
@@ -29,12 +28,9 @@ from .boundary_padding import pad_cutout_images
 from ...preferences import DEFAULT_CUTOUT_BOUNDARY_PADDING
 
 
-def create_cutout_mesh_object(context, source_object, content_bounds, base_shape, material):
+def create_cutout_mesh_object(context, source_object, bounds, base_shape, material):
     import numpy as np
-    from mathutils import Matrix
 
-    bounds = crop_plane_bounds(source_object, content_bounds, tuple(source_object.data.size))
-    crop_center = ((bounds[0] + bounds[1]) * 0.5, (bounds[2] + bounds[3]) * 0.5)
     source_name = source_object.name
     mesh = bpy.data.meshes.new(source_name)
     mesh_object = None
@@ -53,11 +49,7 @@ def create_cutout_mesh_object(context, source_object, content_bounds, base_shape
         mesh.update()
         mesh_object = bpy.data.objects.new(source_name, mesh)
         context.collection.objects.link(mesh_object)
-        mesh_object.matrix_world = (
-            source_object.matrix_world
-            @ Matrix.Translation((*crop_center, 0.0))
-            @ blender_frame_rotation().inverted()
-        )
+        mesh_object.matrix_world = build_image_plane_matrix(source_object.matrix_world, bounds)
         mesh_object["o_image_object"] = True
         return mesh_object
     except Exception:
@@ -127,8 +119,7 @@ def create_shape_object(
                 raise ValueError("Depth Shape requires a Depth texture and metadata")
             front_size = depth_metadata["image_size"]
             reference_mask = build_reference_mask(content_values, front_size)
-            model_reference = reference_depth(depth_image, reference_mask)
-            model_median = median_depth(depth_image, reference_mask)
+            model_reference, model_median = reference_and_median_depth(depth_image, reference_mask)
             uniform_scale = depth_uniform_scale(
                 source_object,
                 depth_metadata,
@@ -136,10 +127,7 @@ def create_shape_object(
                 bounds,
             )
             depth_reference = model_reference * uniform_scale
-            depth_limit = max(
-                (DEPTH_LIMIT_MEDIAN_FACTOR * model_median - model_reference) * uniform_scale,
-                0.0,
-            )
+            depth_limit = depth_limit_preset(model_median, model_reference, uniform_scale)
             if shape == "DEPTH_SYMMETRY":
                 depth_direction = depth_node_direction(
                     fit_symmetry_depth_direction(
@@ -151,7 +139,7 @@ def create_shape_object(
                 )
 
         mesh_object = create_cutout_mesh_object(
-            context, source_object, content_bounds, base_shape, material
+            context, source_object, bounds, base_shape, material
         )
         mesh = mesh_object.data
         if shape == "DEPTH_SYMMETRY":

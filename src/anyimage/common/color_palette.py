@@ -9,22 +9,9 @@ from .color_space import linear_rgb_to_oklab, linear_rgb_to_srgb, srgb_to_linear
 _PALETTE_MERGE_DISTANCE = 0.06
 
 
-def extract_reference_palette(rgba):
-    """Return up to four prominent linear RGB colors and assigned area weights."""
-    rgba = np.asarray(rgba, dtype=np.float32)
-    if rgba.ndim != 3 or rgba.shape[-1] != 4:
-        raise ValueError("The color reference requires RGBA pixels")
-    pixels = rgba.reshape((-1, 4))
-    if not len(pixels) or not np.isfinite(pixels).all():
-        raise ValueError("The color reference requires finite RGBA pixels")
-    alpha = np.clip(pixels[:, 3], 0.0, 1.0)
-    cumulative = np.cumsum(alpha, dtype=np.float64)
-    if cumulative[-1] <= 1e-8:
-        raise ValueError("The color reference contains no visible pixels")
-    count = min(len(pixels), 16_384)
-    positions = (np.arange(count) + 0.5) * (cumulative[-1] / count)
-    rgb = np.clip(pixels[np.searchsorted(cumulative, positions), :3], 0.0, 1.0)
-    srgb = linear_rgb_to_srgb(rgb)
+def extract_color_palette(rgb):
+    """Return prominent display colors and area weights from linear RGB samples."""
+    srgb = linear_rgb_to_srgb(np.clip(rgb, 0.0, 1.0))
     channels = np.rint(srgb * 255).astype(np.uint32)
     if np.all(channels == channels[:, :1]):
         levels, counts = np.unique(channels[:, 0], return_counts=True)

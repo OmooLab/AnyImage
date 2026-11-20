@@ -127,6 +127,15 @@ for shape in ('FLAT', 'SOLID'):
 bpy.context.view_layer.objects.active = result
 assert bpy.ops.anyimage.bake_mesh() == {'FINISHED'}
 bpy.context.view_layer.objects.active = source
+plane_source = source.copy()
+bpy.context.collection.objects.link(plane_source)
+assert bpy.ops.anyimage.convert_to_world() == {'FINISHED'}
+world = bpy.context.scene.world
+assert world.name == image.name
+texture = next(node for node in world.node_tree.nodes if node.type == 'TEX_ENVIRONMENT')
+assert tuple(texture.image.size) == (4, 2)
+assert bpy.data.objects.get('Lite source') is None
+bpy.context.view_layer.objects.active = plane_source
 assert bpy.ops.anyimage.convert_to_plane() == {'FINISHED'}
 lite.unregister()
 sys.meta_path.remove(blocker)

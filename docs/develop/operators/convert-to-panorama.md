@@ -1,6 +1,6 @@
 # 转为立体全景
 
-`operators/convert_to_panorama/` 将静态等距柱状 Image Empty 转换为径向深度表面，提交前裁剪出最大居中 2:1 区域。`operators.py` 提交任务，`object.py` 导入对象，`normal.py` 烘焙地形法线，`world.py` 创建环境光照。
+`operators/convert_to_panorama/` 将静态等距柱状 Image Empty 转换为径向深度表面，提交前裁剪出最大居中 2:1 区域。`operators.py` 提交任务，`object.py` 导入对象，`normal.py` 烘焙地形法线，`common/world.py` 为立体全景和独立的“转为世界环境”操作创建环境光照。
 
 ```mermaid
 flowchart TD

@@ -18,7 +18,7 @@ def test_saved_parameter_interfaces_match_definitions():
 
     parameters = {
         "O Plane": {"Subdivide"},
-        "O Depth Plane": {"Subdivide", "Thickness", "Depth Split", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
+        "O Depth Plane": {"Subdivide", "Thickness", "Depth Split", "Depth Limit", "Depth Mask", "Mask Threshold", "Boundary Smooth"},
         "O Depth Relief": {"Subdivide", "Thickness", "Depth Direction", "Depth Offset"},
         "O Cutout": {"Thickness"},
         "O Depth Cutout": {"Thickness", "Depth Split", "Boundary Smooth", "Rear Smooth", "Normal Bias", "Front Inflation", "Depth Limit"},
@@ -63,6 +63,10 @@ def test_saved_parameter_interfaces_match_definitions():
                 assert not limit.parent.name
                 assert limit.min_value == -1.0
                 assert inputs.index(limit) == inputs.index(split) + 1
+            elif group.name == "O Texture to Layer":
+                controls = {item.name: item for item in inputs}
+                for name in ("Color Texture", "Alpha Texture", "Normal Texture"):
+                    assert controls[name].hide_value, name
             elif group.name == "O World Vector":
                 assert [item.name for item in inputs] == ["Rotation", "Blur", "Horizon Bend"]
                 assert inputs[0].subtype == "EULER"

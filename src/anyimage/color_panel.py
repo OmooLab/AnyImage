@@ -23,19 +23,12 @@ class ColorMatchPanel(bpy.types.Panel):
             scale_popup=5.0,
         )
         row = self.layout.row(align=True)
-        palette_count = min(
-            settings.color_reference_palette_count,
-            len(COLOR_REFERENCE_PALETTE_PROPERTIES),
-        )
-        count = palette_count or 1
-        display_weights = [
-            max(getattr(settings, COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES[index]), 0.0) ** 0.5
-            if palette_count
-            else 1.0
-            for index in range(count)
-        ]
-        display_total = sum(display_weights) or 1.0
-        for index in range(count):
+        weights = [
+            getattr(settings, name) ** 0.5
+            for name in COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES[:settings.color_reference_palette_count]
+        ] or [1.0]
+        total = sum(weights) or 1.0
+        for name, weight in zip(COLOR_REFERENCE_PALETTE_PROPERTIES, weights):
             cell = row.row(align=True)
-            cell.scale_x = max(display_weights[index] / display_total * count, 0.1)
-            cell.prop(settings, COLOR_REFERENCE_PALETTE_PROPERTIES[index], text="")
+            cell.scale_x = max(weight / total * len(weights), 0.1)
+            cell.prop(settings, name, text="")

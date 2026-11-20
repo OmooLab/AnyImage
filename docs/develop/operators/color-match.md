@@ -1,7 +1,7 @@
 # 色彩匹配
 
-`operators/color_match.py` 实现 `MatchColorReference`，读取当前 Scene 参考并处理 Image Empty、Any Image 图片 Mesh 或活动 Image Texture。参考画廊和色板由 `properties.py` 同步，参考数据由 `common/color_reference.py` 准备。
+`SetColorReference` 将选中对象或着色器纹理节点的静态图片设为当前场景的参考图。`properties.py` 同步参考画廊和色板，`common/color_reference.py` 准备参考图的颜色数据。
 
-匹配以线性 Rec.709 像素计算色板锚点色度迁移与独立亮度分位曲线。交互使用代理像素、固定 sRGB GPU 浮层和刷新节流；确认时复用代理映射处理全分辨率 RGB，并保留 Alpha。参考与目标的身份、解释设置及实际内容在提交前校验。
+`MatchColorReference` 在线性 Rec.709 空间匹配色度和亮度。拖动鼠标时，目标对象或纹理节点显示降采样的临时图片。对象与其他物体共用材质时，预览使用独立材质。
 
-结果通过 `ImageEditTarget.commit()` 提交，保留共享图片隔离与 Undo。确认、取消和失败释放纹理、timer、handler、目标像素与参考交互引用。
+取消会恢复原图。确认时先恢复原绑定，校验目标和参考图，再用预览的映射处理全分辨率 RGB，保留 Alpha。结果通过 `ImageEditTarget.commit()` 提交，支持撤销。

@@ -41,12 +41,7 @@ class HdrBackgroundInput:
             raise RuntimeError("HDR image contains invalid color or alpha values")
         path = Path(tempfile.mkdtemp(prefix="anyimage-hdr-")) / "input.png"
         try:
-            preview_source = rgba.copy()
-            if image.alpha_mode == "NONE":
-                preview_source[..., 3] = 1
-            preview_rgba = build_recognition_rgba(
-                preview_source, associated=image.alpha_mode not in {"CHANNEL_PACKED", "NONE"},
-            )
+            preview_rgba = build_recognition_rgba(rgba, image.alpha_mode)
             save_color_png(preview_rgba, path, "sRGB")
         except Exception:
             cleanup_image_input(path)

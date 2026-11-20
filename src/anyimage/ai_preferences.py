@@ -62,6 +62,10 @@ def _configured_model(context, property_name, models, default):
     return model
 
 
+def configured_device():
+    return getattr(addon_preferences(), "device", "AUTO").lower()
+
+
 def configured_geometry_model(context=None):
     return _configured_model(context, "geometry_model", MOGE_MODELS, DEFAULT_GEOMETRY_MODEL_KEY)
 

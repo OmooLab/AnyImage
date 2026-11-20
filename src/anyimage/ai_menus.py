@@ -3,7 +3,8 @@ import bpy
 from .common.image_target import image_edit_owner
 from .common.image import owner_image
 from .operators.convert_to_plane import ConvertToPlane
-from .operators.color_match import MatchColorReference
+from .operators.convert_to_world import ConvertToWorld
+from .operators.color_match import MatchColorReference, SetColorReference
 from .operators.bake_mesh import BakeMesh
 from .operators.ai_setup import OpenAIEnvironmentSettings
 from .operators.convert_to_panorama import ConvertToPanorama
@@ -24,6 +25,7 @@ class ImageMenu(bpy.types.Menu):
         layout.operator(ConvertToDepthPlane.bl_idname, icon="MOD_DISPLACE")
         layout.operator(ConvertToReliefPlane.bl_idname, icon="MOD_DISPLACE")
         layout.operator(ConvertToPanorama.bl_idname, icon="SPHERE")
+        layout.operator(ConvertToWorld.bl_idname, icon="WORLD")
         layout.separator()
         draw_image_actions(layout, context)
 
@@ -61,6 +63,7 @@ def draw_image_actions(layout, context):
         text=upscale_menu_label(context),
         icon="FULLSCREEN_ENTER",
     )
+    layout.operator(SetColorReference.bl_idname, icon="EYEDROPPER")
     layout.operator(MatchColorReference.bl_idname, icon="COLOR")
     layout.separator()
     status = draw_ai_setup(layout)

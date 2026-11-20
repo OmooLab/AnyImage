@@ -158,9 +158,6 @@ def material_inputs(obj, modifiers):
         raise ValueError("Bake Mesh requires an existing Normal image for static normals")
     if normal is not None and normal.image == color.image:
         raise ValueError("Bake Mesh requires separate Color and Normal images")
-    channels = tuple(name for name in ("Roughness", "Alpha", "Normal", "Emission")
-                     if layer.outputs[name].is_linked and (
-                         name != "Normal" or normal is not None or layer.inputs["Bump Scale"].default_value))
     emitters = emission_shaders(layer, color)
     emission_strengths = {}
     for shader in emitters:
@@ -170,12 +167,16 @@ def material_inputs(obj, modifiers):
             None if strength.is_linked or (transformed and strength.default_value != 0)
             else strength.default_value
         )
-    if "Emission" not in channels and any(strength is None for strength in emission_strengths.values()):
-        channels += ("Emission",)
+    channels = [name for name in ("Roughness", "Alpha") if layer.outputs[name].is_linked]
+    if layer.outputs["Normal"].is_linked and (normal is not None or layer.inputs["Bump Scale"].default_value):
+        channels.append("Normal")
+    if any(link.to_node not in emitters or link.to_socket.name != "Emission Color"
+           for link in layer.outputs["Emission"].links):
+        channels.append("Emission")
     for node in (color, normal):
         if node is None:
             continue
-        if single_region and not channels:
+        if single_region and not channels and None not in emission_strengths.values():
             continue
         if node.image.source not in {"FILE", "GENERATED"} or min(node.image.size) < 1:
             raise ValueError("Bake Mesh requires loaded static images")
@@ -193,15 +194,6 @@ def material_inputs(obj, modifiers):
 
 def build_layout(mesh, *, single_region=False):
     """Scale and offset source UVs into regular surface tiles."""
-    regions = np.zeros(len(mesh.polygons), dtype=np.int32)
-    if not single_region:
-        attribute = mesh.attributes.get(IMAGE_REGION_ATTRIBUTE_NAME)
-        if attribute is None or attribute.domain != "FACE" or attribute.data_type != "INT":
-            raise ValueError("This Cutout lacks surface regions; recreate it from the source image")
-        attribute.data.foreach_get("value", regions)
-    values = sorted(set(regions.tolist()))
-    if not values or not set(values) <= {0, 1, 2, 3}:
-        raise ValueError("The Cutout has no supported surface regions")
     if SOURCE_UV in mesh.uv_layers or TARGET_UV in mesh.uv_layers:
         raise ValueError("The mesh contains reserved mesh bake UV names")
     original = mesh.uv_layers.get("UVMap")
@@ -215,6 +207,18 @@ def build_layout(mesh, *, single_region=False):
     target = mesh.uv_layers.new(name=TARGET_UV)
     mesh.uv_layers.active = target
     target.active_render = True
+    if single_region:
+        target.data.foreach_set("uv", source_uv.ravel())
+        mesh.update()
+        return ((0,),)
+    attribute = mesh.attributes.get(IMAGE_REGION_ATTRIBUTE_NAME)
+    if attribute is None or attribute.domain != "FACE" or attribute.data_type != "INT":
+        raise ValueError("This Cutout lacks surface regions; recreate it from the source image")
+    regions = np.empty(len(mesh.polygons), dtype=np.int32)
+    attribute.data.foreach_get("value", regions)
+    values = sorted(set(regions.tolist()))
+    if not values or not set(values) <= {0, 1, 2, 3}:
+        raise ValueError("The Cutout has no supported surface regions")
     bodies = sorted({region // 2 for region in values})
     sides = sorted({region % 2 for region in values}, reverse=True)
     columns, rows = len(bodies), len(sides)
@@ -262,7 +266,7 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
         output = next(node for node in nodes if node.type == "OUTPUT_MATERIAL" and node.is_active_output)
         shader = nodes.new("ShaderNodeBsdfDiffuse" if is_normal else "ShaderNodeEmission")
         created.append(shader)
-        if output_name == "Emission" and emitter_name is not None:
+        if emitter_name is not None:
             emitter = nodes[emitter_name]
             source = emitter.inputs["Emission Color"].links[0].from_socket
             strength = emitter.inputs["Emission Strength"]
@@ -282,7 +286,6 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
                                      use_selected_to_active=False, uv_layer=TARGET_UV, margin=BAKE_MARGIN, margin_type="EXTEND")
         if result != {"FINISHED"}:
             raise RuntimeError(f"{output_name} baking was cancelled")
-        image.pack()
         return image
     except Exception:
         if image is not None:
@@ -299,13 +302,12 @@ def bake_material_output(material, layer_name, size, output_name, emitter_name=N
         bpy.data.node_groups.remove(group)
 
 
-def materialize_mesh_and_textures(context, obj):
+def materialize_mesh_and_textures(context, obj, modifiers):
     """Return a static mesh and update source textures and material inputs.
 
     Keep the object mesh and modifiers unchanged for the operator to assign.
     Restore source images and material inputs if materialization fails.
     """
-    modifiers = mesh_bake_modifiers(obj)
     material, layer, color, normal, channels, emission_strengths = material_inputs(obj, modifiers)
     single_region = modifiers[0].node_group.name in SINGLE_REGION_GROUPS
     mesh = None
@@ -334,50 +336,52 @@ def materialize_mesh_and_textures(context, obj):
         size = tuple(int(v) * count for v, count in zip(size, grid))
         pixels = build_color_tiles(source_color, tiles)
         source_color_state = image_content_state(source_color)
-        baked_alpha = None
-        if channels:
+        if channels or None in emission_strengths.values():
             bake_material = material.copy()
             with bake_context(mesh, bake_material, obj.matrix_world):
                 color_size = tuple(int(v) * count for v, count in zip(source_color.size, grid))
                 for channel in channels:
-                    if channel == "Emission":
-                        if layer.outputs["Emission"].is_linked:
-                            image = bake_material_output(bake_material, layer.name, color_size, channel)
-                            image.name = f"{material.name}_emission.exr"
-                            images.append(image)
-                            output_images[channel] = image
-                        for name, strength in emission_strengths.items():
-                            if strength is not None:
-                                continue
-                            linear_emission = bake_material_output(bake_material, layer.name, color_size, channel, name)
-                            try:
-                                image, emission_strengths[name] = create_emission_color_image(linear_emission)
-                            finally:
-                                bpy.data.images.remove(linear_emission)
-                            images.append(image)
-                            image.name = f"{material.name}_emissioncolor.png"
-                            emission_images[name] = image
-                        continue
                     image = bake_material_output(bake_material, layer.name, size if channel == "Normal" else color_size, channel)
-                    images.append(image)
                     if channel == "Alpha":
-                        baked_alpha = image_pixels(image).reshape(-1, 4)[:, 0]
-                    elif channel == "Normal":
+                        try:
+                            merge_color_alpha(pixels, image_pixels(image).reshape(-1, 4)[:, 0], source_color)
+                        finally:
+                            bpy.data.images.remove(image)
+                        continue
+                    images.append(image)
+                    image.pack()
+                    if channel == "Normal":
                         static_normal = image
                         if normal is not None:
                             updates.append((normal.name, source_normal, image_content_state(source_normal), image))
                         else:
                             image.name = f"{material.name}_normal.exr"
                     else:
-                        image.name = f"{material.name}_{channel.lower()}.png"
+                        extension = "exr" if channel == "Emission" else "png"
+                        image.name = f"{material.name}_{channel.lower()}.{extension}"
                         output_images[channel] = image
+                for name, strength in emission_strengths.items():
+                    if strength is not None:
+                        continue
+                    shader = material.node_tree.nodes[name]
+                    shader_strength = shader.inputs["Emission Strength"]
+                    if ("Emission" in output_images and not shader_strength.is_linked and shader_strength.default_value == 1
+                            and shader.inputs["Emission Color"].links[0].from_socket == layer.outputs["Emission"]):
+                        image, emission_strengths[name] = create_emission_color_image(output_images["Emission"])
+                    else:
+                        linear_emission = bake_material_output(bake_material, layer.name, color_size, "Emission", name)
+                        try:
+                            image, emission_strengths[name] = create_emission_color_image(linear_emission)
+                        finally:
+                            bpy.data.images.remove(linear_emission)
+                    images.append(image)
+                    image.name = f"{material.name}_emissioncolor.png"
+                    emission_images[name] = image
             bpy.data.materials.remove(bake_material)
             bake_material = None
-        if baked_alpha is not None:
-            merge_color_alpha(pixels, baked_alpha, source_color)
-        final_color = create_image_edit_result(source_color, pixels.ravel(), (pixels.shape[1], pixels.shape[0]))
+        final_color = create_image_edit_result(source_color, pixels.ravel(), (pixels.shape[1], pixels.shape[0]), pack=False)
         images.append(final_color)
-        if baked_alpha is not None and final_color.alpha_mode == "NONE":
+        if "Alpha" in channels and final_color.alpha_mode == "NONE":
             final_color.alpha_mode = "STRAIGHT"
         del pixels
         constant_emitters = [name for name, strength in emission_strengths.items() if name not in emission_images and strength > 0]

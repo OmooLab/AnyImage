@@ -5,8 +5,7 @@ from typing import NamedTuple
 import bpy
 import numpy as np
 
-from .color_match import prepare_color_reference, resize_rgba_proxy
-from .color_palette import extract_reference_palette
+from .color_match import ColorReference, prepare_color_reference, resize_rgba_proxy
 from .color_space import image_rgba_to_linear, linear_rgb_to_srgb
 from .image import image_rgba, is_color_reference_candidate, pixel_digest
 
@@ -15,24 +14,19 @@ class PreparedReference(NamedTuple):
     image: object
     content_digest: bytes
     metadata: tuple
-    transfer: object
-    colors: np.ndarray
-    weights: np.ndarray
+    transfer: ColorReference
 
 
 _references = {}
-_retained = {}
 _previews = None
 
 
-def color_reference_preview_icon(image, *, prepare=False):
-    """Return a prepared preview detached from Image dependency graph updates."""
-    key = str(image.as_pointer())
-    if prepare and (_previews is None or key not in _previews):
+def color_reference_preview_icon(image):
+    """Return the gallery icon, preparing it on first use."""
+    key = str(image.session_uid)
+    if _previews is None or key not in _previews:
         _prepare_reference_preview(image, image_rgba_to_linear(image, image_rgba(image)))
-    if _previews is not None and key in _previews:
-        return _previews[key].icon_id
-    return 0
+    return _previews[key].icon_id
 
 
 def _prepare_reference_preview(image, linear):
@@ -41,7 +35,7 @@ def _prepare_reference_preview(image, linear):
     global _previews
     if _previews is None:
         _previews = previews.new()
-    key = str(image.as_pointer())
+    key = str(image.session_uid)
     preview = _previews[key] if key in _previews else _previews.new(key)
     premultiplied = linear.copy()
     premultiplied[..., 3] = np.clip(premultiplied[..., 3], 0.0, 1.0)
@@ -57,41 +51,25 @@ def _prepare_reference_preview(image, linear):
 
 def invalidate_color_reference(image):
     """Release derived reference data after a known image content replacement."""
-    _references.pop(image.as_pointer(), None)
-    key = str(image.as_pointer())
+    key = str(image.session_uid)
+    _references.pop(key, None)
     if _previews is not None and key in _previews:
         del _previews[key]
 
 
-def release_unused_color_references(images):
+def release_unused_color_references(candidates):
     """Keep selected reference data and gallery candidate previews."""
-    keys = {image.as_pointer() for image in images if image is not None} | set(_retained)
-    for key in tuple(_references):
-        if key not in keys:
-            _references.pop(key)
-    preview_keys = {str(key) for key in keys} | {
-        str(image.as_pointer()) for image in bpy.data.images if is_color_reference_candidate(image)
-    }
+    selected = set()
+    for scene in bpy.data.scenes:
+        settings = getattr(scene, "anyimage_settings", None)
+        if settings is not None and settings.color_reference is not None:
+            selected.add(str(settings.color_reference.session_uid))
+    for key in _references.keys() - selected:
+        del _references[key]
     if _previews is not None:
-        for key in tuple(_previews):
-            if key not in preview_keys:
-                del _previews[key]
-
-
-def retain_color_reference(image):
-    """Keep the selected reference resources for one active interaction."""
-    key = image.as_pointer()
-    _retained[key] = _retained.get(key, 0) + 1
-    return key
-
-
-def release_color_reference(key):
-    """End one interaction's resource ownership."""
-    count = _retained.get(key, 0)
-    if count <= 1:
-        _retained.pop(key, None)
-    else:
-        _retained[key] = count - 1
+        keep = selected.union(str(image.session_uid) for image in candidates)
+        for key in _previews.keys() - keep:
+            del _previews[key]
 
 
 def _metadata(image):
@@ -101,7 +79,7 @@ def _metadata(image):
 
 def get_color_reference(image, *, refresh=False):
     """Reuse prepared data, optionally checking the current pixel buffer."""
-    key = image.as_pointer()
+    key = str(image.session_uid)
     if not is_color_reference_candidate(image):
         invalidate_color_reference(image)
         raise ValueError("The color reference is no longer available")
@@ -109,7 +87,6 @@ def get_color_reference(image, *, refresh=False):
     metadata = _metadata(image)
     if cached is not None and cached.image == image and cached.metadata == metadata and not refresh:
         return cached
-    _references.pop(key, None)
     try:
         rgba = image_rgba(image)
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
@@ -117,14 +94,12 @@ def get_color_reference(image, *, refresh=False):
         raise
     content_digest = pixel_digest(rgba)
     if cached is not None and cached.image == image and cached.metadata == metadata and cached.content_digest == content_digest:
-        _references[key] = cached
         return cached
     invalidate_color_reference(image)
     linear = image_rgba_to_linear(image, rgba)
-    colors, weights = extract_reference_palette(linear)
-    transfer = prepare_color_reference(linear, colors, weights)
+    transfer = prepare_color_reference(linear)
     _prepare_reference_preview(image, linear)
-    cached = PreparedReference(image, content_digest, metadata, transfer, colors, weights)
+    cached = PreparedReference(image, content_digest, metadata, transfer)
     _references[key] = cached
     return cached
 
@@ -133,7 +108,6 @@ def clear_color_references():
     """Release all reference resources at a global data lifecycle boundary."""
     global _previews
     _references.clear()
-    _retained.clear()
     if _previews is not None:
         from bpy.utils import previews
 

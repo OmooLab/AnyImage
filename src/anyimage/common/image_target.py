@@ -7,9 +7,11 @@ from weakref import WeakValueDictionary
 import bpy
 
 from .image import (
+    TEMPORARY_IMAGE_PREVIEW_PROPERTY,
     image_content_state,
     image_content_signature,
     has_other_image_user,
+    image_pixels,
     owner_image,
     image_user_settings,
     is_animated_image,
@@ -21,27 +23,21 @@ from .image import (
 _image_targets = WeakValueDictionary()
 
 
-def require_conversion_source(operator):
-    """Validate the live object and image captured before conversion."""
-    try:
-        source = operator._source_object
-        if (is_image_empty(source) and source.data == operator._source_image
-                and image_content_signature(source.data) == operator._source_signature):
-            return source
-    except ReferenceError:
-        pass
-    raise RuntimeError("The conversion source image has changed")
-
-
 def active_texture_node(context):
-    """Return the editable image texture in the current material edit tree."""
+    """Return the editable texture in the current material or World shader tree."""
     space = getattr(context, "space_data", None)
     if (
         getattr(space, "type", None) != "NODE_EDITOR"
         or getattr(space, "tree_type", None) != "ShaderNodeTree"
-        or getattr(space, "shader_type", None) != "OBJECT"
-        or not isinstance(getattr(space, "id", None), bpy.types.Material)
     ):
+        return None
+    shader = getattr(space, "shader_type", None)
+    owner = getattr(space, "id", None)
+    if shader == "WORLD" and isinstance(owner, bpy.types.World):
+        types = {"ShaderNodeTexEnvironment", "ShaderNodeTexImage"}
+    elif shader == "OBJECT" and isinstance(owner, bpy.types.Material):
+        types = {"ShaderNodeTexImage"}
+    else:
         return None
     tree = space.edit_tree
     if tree is None or not tree.is_editable:
@@ -49,7 +45,7 @@ def active_texture_node(context):
     node = tree.nodes.active
     if (
         node is None
-        or node.bl_idname != "ShaderNodeTexImage"
+        or node.bl_idname not in types
         or node.image is None
         or not node.image.is_editable
     ):
@@ -122,14 +118,17 @@ def object_image_texture(obj):
 
 def image_edit_owner(context):
     """Resolve the editor's image owner without falling back across editors."""
-    if getattr(getattr(context, "space_data", None), "type", None) == "NODE_EDITOR":
-        return active_texture_node(context)
-    if getattr(getattr(context, "space_data", None), "type", None) == "OUTLINER":
+    editor = getattr(getattr(context, "space_data", None), "type", None)
+    if editor == "OUTLINER":
         return None
-    owner = getattr(context, "object", None)
-    if is_image_empty(owner):
-        return owner
-    return object_image_texture(owner)
+    if editor == "NODE_EDITOR":
+        owner = active_texture_node(context)
+    else:
+        obj = getattr(context, "object", None)
+        owner = obj if is_image_empty(obj) else object_image_texture(obj)
+    if owner is not None and owner_image(owner).get(TEMPORARY_IMAGE_PREVIEW_PROPERTY):
+        return None
+    return owner
 
 
 def replace_texture_image(node, result_image):
@@ -178,16 +177,22 @@ class ImageEditTarget:
     @classmethod
     def capture(cls, context):
         """Share the live binding across pending edits of the same target."""
+        target, _ = cls.capture_with_pixels(context)
+        return target
+
+    @classmethod
+    def capture_with_pixels(cls, context):
+        """Return the target and the Blender-order pixels used for its signature."""
         owner = image_edit_owner(context)
         if owner is None:
-            raise RuntimeError("Select an Image Empty or a material Image Texture")
+            raise RuntimeError("Select an Image Empty or a shader texture with an image")
         image = owner_image(owner)
         if is_animated_image(image):
             raise RuntimeError("Only still images are supported")
         tree = None if is_image_empty(owner) else owner.id_data
-        object_owner = getattr(context, "object", None)
-        if tree is None or object_image_texture(object_owner) != owner:
-            object_owner = None
+        object_owner = None
+        if tree is not None and getattr(getattr(context, "space_data", None), "type", None) != "NODE_EDITOR":
+            object_owner = context.object
         material_slot = object_owner.active_material_index if object_owner is not None else -1
         material = object_owner.active_material if object_owner is not None else None
         identity = ""
@@ -197,14 +202,14 @@ class ImageEditTarget:
                 identity = uuid4().hex
                 owner["anyimage_identity"] = identity
         key = (object_owner or owner).as_pointer()
-        signature = image_content_signature(image)
-        target = _image_targets.get(key)
-        if target is None or (
-            target.owner, target.image, target.material, target.node_identity, target.material_slot,
-        ) != (owner, image, material, identity, material_slot) or target.content_signature != signature:
-            target = cls(owner, image, tree, identity, object_owner, material, material_slot, signature)
-            _image_targets[key] = target
-        return target
+        pixels = image_pixels(image)
+        target = cls(owner, image, tree, identity, object_owner, material, material_slot,
+                     image_content_signature(image, pixels))
+        pending = _image_targets.get(key)
+        if pending == target:
+            return pending, pixels
+        _image_targets[key] = target
+        return target, pixels
 
     def validate_binding(self):
         """Reject a removed owner or a changed image assignment."""
@@ -257,13 +262,8 @@ class ImageEditTarget:
             self.object_owner,
         ):
             image = self._commit_isolated_material(result_image)
-            self.material = self.object_owner.material_slots[self.material_slot].material
-            self.tree = self.material.node_tree
-
         else:
             image = replace_texture_image(self.owner, result_image)
-        if self.object_owner is not None:
-            self.owner = object_image_texture(self.object_owner)
         # Pending edits of the same owner follow only our successful replacements.
         self.image = image
         self.content_signature = image_content_signature(image)
@@ -272,32 +272,26 @@ class ImageEditTarget:
     def _commit_isolated_material(self, result_image):
         """Copy a shared material before committing this object's Color result."""
         slot = self.object_owner.material_slots[self.material_slot]
-        source_material = self.material
-        copied_material = None
-        owns_result = True
+        original_link = slot.link
+        material = None
         try:
-            copied_material = source_material.copy()
-            slot.material = copied_material
-            copied_node = next(
-                (
-                    node
-                    for node in copied_material.node_tree.nodes
-                    if node.get("anyimage_identity") == self.node_identity
-                ),
-                None,
-            )
-            if copied_node is None or copied_node.image != self.image:
-                raise RuntimeError("Unable to isolate the object image material")
-            owns_result = False
-            return replace_texture_image(copied_node, result_image)
+            material = self.material.copy()
+            node = material.node_tree.nodes[self.owner.name]
+            node.image = result_image
+            if self.object_owner.data.users > 1:
+                slot.link = "OBJECT"
+            slot.material = material
         except Exception:
-            slot.material = source_material
-            if copied_material is not None and copied_material.users == 0:
-                bpy.data.materials.remove(copied_material)
+            slot.material = self.material
+            slot.link = original_link
+            if material is not None:
+                bpy.data.materials.remove(material)
+            bpy.data.images.remove(result_image)
             raise
-        finally:
-            if owns_result:
-                bpy.data.images.remove(result_image)
+        self.material = material
+        self.tree = material.node_tree
+        self.owner = node
+        return result_image
 
 
 def material_has_other_object_user(material, target):

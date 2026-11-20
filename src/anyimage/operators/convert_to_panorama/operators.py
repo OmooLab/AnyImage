@@ -3,6 +3,7 @@
 import bpy
 
 from ...common.ai import geometry_job_parameters, invoke_ai_setup_if_needed, report_ai_error, require_environment, require_input_path, require_model
+from ...common.panorama import panorama_crop_bounds, report_panorama_crop
 from ...common.job_image import material_analysis_input
 from ...common.image import is_image_empty, is_animated_image, require_image_empty, image_content_signature
 from ...common.color_image import prepare_material_color_input, cleanup_material_color_input
@@ -15,18 +16,6 @@ from ...server.media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, MAX_MAX_AI_INP
 from .object import create_panorama_from_result
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
-
-
-def panorama_crop_bounds(width, height):
-    """Return the largest centered integer-pixel 2:1 bounds."""
-    width, height = int(width), int(height)
-    crop_height = min(height, width // 2)
-    crop_width = crop_height * 2
-    if crop_width <= 0 or crop_height <= 0:
-        raise ValueError("Panorama conversion requires an image at least 2 x 1 pixels")
-    left = (width - crop_width) // 2
-    top = (height - crop_height) // 2
-    return left, top, left + crop_width, top + crop_height
 
 
 class GeneratePanorama(JobOperator, bpy.types.Operator):
@@ -98,12 +87,7 @@ class ConvertToPanorama(bpy.types.Operator):
         setup = invoke_ai_setup_if_needed(self)
         if setup is not None:
             return setup
-        crop_width = bounds[2] - bounds[0]
-        crop_height = bounds[3] - bounds[1]
-        if (crop_width, crop_height) != (width, height):
-            self.report({"WARNING"}, bpy.app.translations.pgettext_rpt(
-                "Panorama input cropped from {width} x {height} to {crop_width} x {crop_height}"
-            ).format(width=width, height=height, crop_width=crop_width, crop_height=crop_height))
+        report_panorama_crop(self, image.size, bounds)
         color_path = None
         try:
             preferences = addon_preferences(context)

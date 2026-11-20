@@ -10,7 +10,7 @@ from anyimage.common import color_image as color_images
 from anyimage.common.image import image_content_state, image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures, PROTOCOL_ATTRIBUTES
+from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures, mesh_bake_modifiers, PROTOCOL_ATTRIBUTES
 from anyimage.operators.bake_mesh import BakeMesh
 from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout import OCutout
 from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
@@ -65,7 +65,7 @@ def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     for image in source_textures:
         image.filepath_raw = "//" + image.name + ".exr"
     source_images = {image.name: image.as_pointer() for image in bpy.data.images}
-    result = materialize_mesh_and_textures(bpy.context, cutout)
+    result = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert result is not None
     assert cutout.data == source_mesh and len(cutout.modifiers) == 1
     assert result.materials[0] == source_material
@@ -133,7 +133,7 @@ def test_static_normal_matches_shader_after_attributes_are_removed(cutout, tmp_p
     layer.inputs["Bump Scale"].default_value = bump
     directions = ((0, -1, 0), (0, 1, 0), (1, -.2, 0))
     before = [render_material(cutout, tmp_path / f"before-{i}.exr", d, with_uv_coverage=True) for i, d in enumerate(directions)]
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     after = [render_material(cutout, tmp_path / f"after-{i}.exr", d, with_uv_coverage=True) for i, d in enumerate(directions)]
     for direction, (original, source_coverage), (static, target_coverage) in zip(directions, before, after):
@@ -177,7 +177,7 @@ def test_depth_symmetry_materializes_regions_and_normals(symmetry, tmp_path, thi
     final_geometry = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
     directions = ((1, 0, 0), (-1, 0, 0))
     before = [render_material(obj, tmp_path / f"s-before-{i}.exr", d) for i, d in enumerate(directions)]
-    result = materialize_mesh_and_textures(bpy.context, obj)
+    result = materialize_mesh_and_textures(bpy.context, obj, mesh_bake_modifiers(obj))
     np.testing.assert_allclose(mesh_geometry(result)[0], prefix_geometry[0], atol=1e-6)
     assert mesh_geometry(result)[1] == prefix_geometry[1]
     assert not set(result.attributes.keys()) & PROTOCOL_ATTRIBUTES
@@ -340,7 +340,7 @@ def test_disk_normal_is_replaced_and_packed_in_place(cutout, tmp_path, monkeypat
         return result
 
     monkeypatch.setattr(materialization, "bake_material_output", capture_bake)
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     assert node.image.as_pointer() == identity and image.name == name
     assert image.filepath_raw == str(path) and path.read_bytes() == disk_content
@@ -370,7 +370,7 @@ def test_single_region_without_normal_or_bump_preserves_user_attributes(cutout):
     nodes.remove(layer.inputs["Normal Texture"].links[0].from_node)
     cutout.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
-    result = materialize_mesh_and_textures(bpy.context, cutout)
+    result = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert "o_user_data" in result.attributes
     assert "UserUV" in result.uv_layers
     assert all(tuple(item.uv) == (.25, .25) for item in result.uv_layers["UserUV"].data)
@@ -394,7 +394,7 @@ def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch, fai
         raise RuntimeError("Injected bake failure")
     monkeypatch.setattr(materialization, failure, fail)
     with pytest.raises(RuntimeError, match="Injected"):
-        materialize_mesh_and_textures(bpy.context, cutout)
+        materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert cutout.data == source and tuple(cutout.modifiers)[1:] == trailing
     assert [(m.show_viewport, m.show_render) for m in trailing] == states
     assert cutout["o_image_object"] is True
@@ -474,7 +474,7 @@ def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed, s
 
     monkeypatch.setattr(materialization, "replace_image_content", fail_second_write)
     with pytest.raises(RuntimeError, match="Injected image write"):
-        materialize_mesh_and_textures(bpy.context, cutout)
+        materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert node_ids == {n.as_pointer() for n in tree.nodes}
     assert connections == {(link.from_socket.as_pointer(), link.to_socket.as_pointer()) for link in tree.links}
     assert layer.inputs["Object Space"].default_value is True
@@ -500,7 +500,7 @@ def test_conversion_preserves_normalized_fixed_light_appearance(cutout, tmp_path
     color = layer.inputs["Color Texture"].links[0].from_node
     color.image = color_images.create_normalized_color_image(color.image)
     before = render_material(cutout, tmp_path / "lit-before.exr", (0, -1, 0), lighting=True)
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     after = render_material(cutout, tmp_path / "lit-after.exr", (0, -1, 0), lighting=True)
     from scipy.ndimage import binary_erosion
@@ -572,7 +572,7 @@ def test_conversion_bakes_strength_and_preserves_other_settings(cutout, tmp_path
     shader.id_data.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     shader.inputs["Emission Strength"].default_value = .3
     before = render_material(cutout, tmp_path / "strength-before.exr", (0, -1, 0), with_uv_coverage=True)
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     after = render_material(cutout, tmp_path / "strength-after.exr", (0, -1, 0), with_uv_coverage=True)
     from scipy.ndimage import binary_erosion
@@ -668,7 +668,7 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
     bake = Mock(side_effect=AssertionError("Unsupported input must not reach baking"))
     monkeypatch.setattr(materialization, "bake_material_output", bake)
     with pytest.raises(ValueError):
-        materialize_mesh_and_textures(bpy.context, cutout)
+        materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     bake.assert_not_called()
     assert cutout.data == source and cutout.active_material == material
     assert list(cutout.modifiers) == modifiers
@@ -682,7 +682,7 @@ def test_bump_without_source_normal_creates_static_map(cutout, tmp_path, bump):
     tree.nodes.remove(layer.inputs["Normal Texture"].links[0].from_node)
     layer.inputs["Bump Scale"].default_value = bump
     before = render_material(cutout, tmp_path / "bump-before.exr", (0, -1, 0), with_uv_coverage=True)
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     after = render_material(cutout, tmp_path / "bump-after.exr", (0, -1, 0), with_uv_coverage=True)
     from scipy.ndimage import binary_erosion
@@ -732,7 +732,7 @@ def test_flattened_outputs_preserve_original_shader_values_and_consumers(cutout,
     channels = ("Roughness", "Alpha", "Emission")
     before = {channel: render_material(cutout, tmp_path / f"{i}-before.exr", (0, -1, 0), channel=channel,
                                       with_uv_coverage=True) for i, channel in enumerate(channels)}
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     for i, channel in enumerate(channels):
         after = render_material(cutout, tmp_path / f"{i}-after.exr", (0, -1, 0), channel=channel)
@@ -786,7 +786,7 @@ def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch,
             return bake(*args)
         monkeypatch.setattr(materialization, "bake_material_output", fail)
     with pytest.raises(RuntimeError, match="Injected"):
-        materialize_mesh_and_textures(bpy.context, cutout)
+        materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert cutout.data == source and cutout["o_image_object"]
     assert nodes == {n.as_pointer() for n in tree.nodes}
     assert positions == {n.name: (tuple(n.location), n.width) for n in tree.nodes}
@@ -811,9 +811,29 @@ def test_unused_bake_outputs_skip_cycles(cutout, monkeypatch, emission_strength)
     shader.inputs["Emission Strength"].default_value = emission_strength
     monkeypatch.setattr(materialization, "bake_context", Mock(side_effect=AssertionError("Unexpected Cycles scene")))
     image_count = len(bpy.data.images)
-    result = materialize_mesh_and_textures(bpy.context, cutout)
+    result = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert len(bpy.data.images) == image_count + bool(emission_strength)
     assert not any(n.type in {"NORMAL_MAP", "GROUP"} for n in result.materials[0].node_tree.nodes)
+
+
+def test_layer_emission_used_by_two_shader_inputs(cutout):
+    from anyimage.common.color_space import srgb_to_linear_rgb
+
+    tree = cutout.active_material.node_tree
+    layer = next(n for n in tree.nodes if n.type == "GROUP")
+    shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    layer.inputs["Highlight Threshold"].default_value = .03
+    tree.links.new(layer.outputs["Emission"], shader.inputs["Metallic"])
+    shader.inputs["Emission Strength"].default_value = 1
+
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
+    raw = shader.inputs["Metallic"].links[0].from_node.image
+    encoded = shader.inputs["Emission Color"].links[0].from_node.image
+    expected = image_pixels(raw).reshape(-1, 4)[:, :3]
+    strength = shader.inputs["Emission Strength"].default_value
+    assert raw.is_float and raw.packed_file and expected.max() > 1
+    actual = srgb_to_linear_rgb(image_pixels(encoded).reshape(-1, 4)[:, :3]) * strength
+    np.testing.assert_allclose(actual, expected, atol=.02)
 
 
 @pytest.mark.parametrize("strength", [0, .5, 1, 2])
@@ -833,7 +853,7 @@ def test_emission_uses_strength_and_independent_color_copy(cutout, tmp_path, str
     expected_emission = np.concatenate([original_color[:, ::-1], original_color], axis=0).reshape(-1, 4)[:, :3]
     before = (render_material(cutout, tmp_path / "emission-before.exr", (0, -1, 0), channel="Emission")
               if strength == .5 and not shared else None)
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     tree = cutout.active_material.node_tree
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
@@ -868,7 +888,7 @@ def test_emission_uses_strength_and_independent_color_copy(cutout, tmp_path, str
 def test_texture_rows_follow_principled_input_order(cutout):
     shader = next(n for n in cutout.active_material.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
     shader.inputs["Emission Strength"].default_value = 2
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     ordered = []
     for name in ("Base Color", "Roughness", "Normal", "Emission Color"):
         source = shader.inputs[name].links[0].from_node
@@ -893,7 +913,7 @@ def test_glb_export_preserves_specular_and_emission_policy(cutout, tmp_path, str
     layer = next(n for n in shader.id_data.nodes if n.type == "GROUP")
     shader.id_data.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
     shader.inputs["Emission Strength"].default_value = strength
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     path = tmp_path / "baked.glb"
     assert bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True) == {"FINISHED"}
@@ -930,7 +950,7 @@ def test_bake_normalizes_inverse_color(cutout):
     assert image.colorspace_settings.name == "AgX Base sRGB"
     expected = normalize_color_rgba(color_images.decode_color_image(image, "AgX Base sRGB"))
     layer.inputs["Color Texture"].links[0].from_node.image = image
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
     baked_color = shader.inputs["Base Color"].links[0].from_node.image
     assert baked_color.colorspace_settings.name == "sRGB" and not baked_color.is_float
@@ -959,7 +979,7 @@ def test_scalar_bakes_preserve_layer_controls_in_both_engines(cutout, tmp_path, 
     channels = ("Roughness", "Alpha")
     before = {channel: render_material(cutout, tmp_path / f"{channel}-before.exr", (0, -1, 0),
                                         channel=channel, engine=render_engine) for channel in channels}
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     for channel in channels:
         after = render_material(cutout, tmp_path / f"{channel}-after.exr", (0, -1, 0),
@@ -998,7 +1018,7 @@ def test_eevee_transparent_surface_preserves_merged_alpha(cutout, tmp_path, alph
         shader.inputs["Emission Strength"].default_value = .7
     before = render_material(cutout, tmp_path / "lit-before.exr", (0, -1, 0),
                              channel="Alpha", engine=render_engine)
-    cutout.data = materialize_mesh_and_textures(bpy.context, cutout)
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     cutout.modifiers.clear()
     after = render_material(cutout, tmp_path / "lit-after.exr", (0, -1, 0),
                             channel="Alpha", engine=render_engine)

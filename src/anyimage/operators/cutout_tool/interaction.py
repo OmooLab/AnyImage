@@ -19,7 +19,6 @@ def open_shape_pie(
     *,
     gesture="LASSO",
     buttons=CUTOUT_SHAPE_BUTTONS,
-    labels=CUTOUT_SHAPE_LABELS,
     create_button=create_shape_button,
 ):
     settings = context.scene.anyimage_settings
@@ -35,7 +34,7 @@ def open_shape_pie(
     def draw(menu, _context):
         pie = menu.layout.menu_pie()
         for shape, icon in buttons:
-            operator = create_button(pie, shape, labels[shape], icon)
+            operator = create_button(pie, shape, CUTOUT_SHAPE_LABELS[shape], icon)
             operator.shape = shape
             for name, value in parameters.items():
                 setattr(operator, name, value)

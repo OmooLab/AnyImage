@@ -15,8 +15,8 @@ from anyimage.common.geometry_image import (
     fit_depth_direction,
     fit_symmetry_depth_direction,
     load_depth_metadata,
-    median_depth,
-    reference_depth,
+    depth_plane_limit_preset,
+    reference_and_median_depth,
 )
 from tests.support.image_objects import _depth_image
 
@@ -74,10 +74,10 @@ def test_base_plane_fit_is_stable_for_a_slender_diagonal_domain():
 def test_reference_depth_uses_the_upper_depth_percentile():
     depth = np.linspace(1.0, 1.2, 400, dtype=np.float32).reshape(20, 20)
 
-    reference = reference_depth(_camera_depth_image(depth))
+    reference, median = reference_and_median_depth(_camera_depth_image(depth))
 
     assert reference == pytest.approx(float(np.percentile(depth, 95.0)))
-    assert reference > float(np.median(depth))
+    assert median == pytest.approx(float(np.median(depth)))
 
 
 def test_reference_depth_filters_invalid_and_soft_alpha_pixels():
@@ -89,7 +89,7 @@ def test_reference_depth_filters_invalid_and_soft_alpha_pixels():
         ((1.0, 1.0, 1.0, 0.0, 0.9), (1.0, 1.0, 1.0, 1.0, 0.6)),
     )
 
-    reference = reference_depth(_camera_depth_image(depth, alpha))
+    reference, _ = reference_and_median_depth(_camera_depth_image(depth, alpha))
 
     assert reference == pytest.approx(
         float(np.percentile(np.asarray((1.0, 1.05, 1.1, 1.15, 1.2)), 95.0))
@@ -101,10 +101,12 @@ def test_reference_depth_narrows_its_domain_to_the_mask():
     image = _camera_depth_image(depth)
     mask = np.asarray(((False, False, True, True),))
 
-    assert reference_depth(image) == pytest.approx(
+    reference, _ = reference_and_median_depth(image)
+    selected_reference, _ = reference_and_median_depth(image, mask)
+    assert reference == pytest.approx(
         float(np.percentile(depth, 95.0))
     )
-    assert reference_depth(image, mask) == pytest.approx(
+    assert selected_reference == pytest.approx(
         float(np.percentile(np.asarray((1.1, 1.15)), 95.0))
     )
 
@@ -112,7 +114,7 @@ def test_reference_depth_narrows_its_domain_to_the_mask():
 def test_reference_depth_ignores_a_distant_tail():
     depth = np.asarray(((2.0, 4.0, 6.0, 1000.0),), dtype=np.float32)
 
-    reference = reference_depth(_camera_depth_image(depth))
+    reference, _ = reference_and_median_depth(_camera_depth_image(depth))
 
     assert reference == pytest.approx(
         float(np.percentile(np.asarray((2.0, 4.0)), 95.0))
@@ -122,7 +124,7 @@ def test_reference_depth_ignores_a_distant_tail():
 def test_reference_depth_follows_the_content_scale_when_everything_is_far():
     depth = np.asarray(((9.4, 10.6, 11.6, 13.0),), dtype=np.float32)
 
-    reference = reference_depth(_camera_depth_image(depth))
+    reference, _ = reference_and_median_depth(_camera_depth_image(depth))
 
     assert reference == pytest.approx(
         float(np.percentile(np.asarray((9.4, 10.6, 11.6)), 95.0))
@@ -135,7 +137,7 @@ def test_reference_depth_falls_back_to_the_baseline_without_a_selection():
         np.zeros((2, 2), dtype=np.float32),
     )
 
-    assert reference_depth(transparent) == pytest.approx(REFERENCE_DEPTH_BASELINE)
+    assert reference_and_median_depth(transparent) == (REFERENCE_DEPTH_BASELINE, REFERENCE_DEPTH_BASELINE)
 
 
 def test_median_depth_uses_the_reference_validity_and_selection_domain():
@@ -143,15 +145,24 @@ def test_median_depth_uses_the_reference_validity_and_selection_domain():
     alpha = np.asarray(((1.0, 1.0, 1.0, 1.0),), dtype=np.float32)
     image = _camera_depth_image(depth, alpha)
 
-    assert median_depth(image) == pytest.approx(3.0)
-    assert median_depth(image, ((False, True, True, True),)) == pytest.approx(4.0)
+    _, median = reference_and_median_depth(image)
+    _, selected_median = reference_and_median_depth(image, ((False, True, True, True),))
+    assert median == pytest.approx(3.0)
+    assert selected_median == pytest.approx(4.0)
+
+
+def test_depth_plane_limit_keeps_far_background_and_trims_isolated_outliers():
+    depth = np.ones((20, 50), dtype=np.float32)
+    depth[-2:] = 11.0
+    depth[-1, -1] = 1000.0
+    assert depth_plane_limit_preset(_camera_depth_image(depth), 1.0, 2.0) == pytest.approx(20.0)
 
 
 def test_median_depth_falls_back_without_usable_selected_depth():
     image = _camera_depth_image(((2.0, 4.0),), ((1.0, 0.0),))
 
-    assert median_depth(image, ((False, True),)) == pytest.approx(
-        REFERENCE_DEPTH_BASELINE
+    assert reference_and_median_depth(image, ((False, True),)) == (
+        REFERENCE_DEPTH_BASELINE, REFERENCE_DEPTH_BASELINE,
     )
 
 

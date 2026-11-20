@@ -54,11 +54,11 @@ def test_reference_edit_refreshes_detached_preview_and_palette_without_reselecti
     from anyimage.common.image import image_content_state, restore_image_content
     result = create_clipboard_image("Edited reference", np.full((6, 8, 4), (0.1, 0.7, 0.2, .25)))
     restore_image_content(reference, image_content_state(result))
-    assert str(reference.as_pointer()) in reference_cache._previews
+    assert str(reference.session_uid) in reference_cache._previews
     refreshed = reference_cache.get_color_reference(reference)
     np.testing.assert_allclose(image_rgba(refreshed.image)[..., :3], np.broadcast_to((.1, .7, .2), (6, 8, 3)), atol=1/255)
     np.testing.assert_allclose(image_rgba(refreshed.image)[..., 3], .25, atol=1/255)
-    preview = reference_cache._previews[str(reference.as_pointer())]
+    preview = reference_cache._previews[str(reference.session_uid)]
     np.testing.assert_allclose(np.asarray(preview.image_pixels_float).reshape(-1, 4)[:, 3], .25, atol=1/255)
     settings = bpy.context.scene.anyimage_settings
     np.testing.assert_allclose(settings.color_reference_palette_0, srgb_to_linear_rgb((.1, .7, .2)), atol=.005)
@@ -118,11 +118,11 @@ def test_reference_reload_and_lifecycle_invalidate_cache(tmp_path, registered_co
             properties.restore_color_references(None)
             current = reference_cache.get_color_reference(reference)
             assert current is not second
-            assert str(reference.as_pointer()) in reference_cache._previews
+            assert str(reference.session_uid) in reference_cache._previews
             second = current
     finally:
         properties.unregister_color_references()
-    assert reference_cache.color_reference_preview_icon(reference) == 0
+    assert reference_cache._previews is None
 
 
 def test_undo_redo_rebuilds_selected_preview_from_restored_pixels(registered_color_reference):
@@ -143,7 +143,7 @@ def test_undo_redo_rebuilds_selected_preview_from_restored_pixels(registered_col
             current = bpy.context.scene.anyimage_settings.color_reference
             prepared = reference_cache.get_color_reference(current)
             np.testing.assert_allclose(image_rgba(prepared.image)[..., 3], alpha, atol=1/255)
-            preview = reference_cache._previews[str(current.as_pointer())]
+            preview = reference_cache._previews[str(current.session_uid)]
             np.testing.assert_allclose(np.asarray(preview.image_pixels_float).reshape(-1, 4)[:, 3], alpha, atol=1/255)
             items = properties.color_reference_items(None, None)
             assert next(item[3] for item in items if item[1] == current.name) == preview.icon_id
@@ -162,7 +162,7 @@ def test_failed_reference_preparation_does_not_keep_old_pixels(registered_color_
     assert settings.color_reference_palette_count == 0
     with pytest.raises(ValueError, match="no visible"):
         reference_cache.get_color_reference(reference)
-    assert reference_cache.color_reference_preview_icon(reference) == 0
+    assert str(reference.session_uid) not in reference_cache._previews
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -180,9 +180,10 @@ def test_scene_clear_preserves_other_scene_reference(shared, registered_color_re
     assert settings.color_reference == first
     assert reference_cache.get_color_reference(first) is prepared
     assert reference_cache.color_reference_preview_icon(first) == icon
-    assert settings.color_reference_palette_count == len(prepared.colors)
+    assert settings.color_reference_palette_count == len(prepared.transfer.colors)
     if not shared:
-        assert reference_cache.color_reference_preview_icon(second) == 0
+        assert str(second.session_uid) not in reference_cache._references
+        assert str(second.session_uid) in reference_cache._previews
     bpy.data.scenes.remove(other)
 
 
@@ -193,12 +194,9 @@ def test_replaced_references_release_palette_data_and_keep_candidate_icons(regis
     for index in range(4):
         image = create_clipboard_image(f"Reference {index}", np.full((256, 256, 4), (.2 + index * .1, .3, .4, 1)))
         settings.color_reference = image
-        prepared = reference_cache.get_color_reference(image)
-        assert not hasattr(prepared, "rgba")
-        assert len(prepared.content_digest) == 32
-        assert len(reference_cache._references) == 1
+        assert set(reference_cache._references) == {str(image.session_uid)}
         if previous is not None:
-            assert str(previous.as_pointer()) in reference_cache._previews
+            assert str(previous.session_uid) in reference_cache._previews
         previous = image
     settings.color_reference = None
     assert not reference_cache._references
@@ -214,10 +212,10 @@ def test_gallery_preserves_edited_alpha_before_selection(registered_color_refere
     edited = create_clipboard_image("Alpha result", np.full((4, 4, 4), (.7, .2, .1, .25)))
     restore_image_content(reference, image_content_state(edited))
     bpy.data.images.remove(edited)
-    with patch.object(reference_cache, "extract_reference_palette", side_effect=AssertionError("Gallery must only prepare previews")):
+    with patch.object(reference_cache, "prepare_color_reference", side_effect=AssertionError("Gallery must only prepare previews")):
         items = properties.color_reference_items(None, None)
         assert properties.color_reference_items(None, None) is items
-    key = str(reference.as_pointer())
+    key = str(reference.session_uid)
     preview = reference_cache._previews[key]
     assert next(item[3] for item in items if item[1] == reference.name) == preview.icon_id
     for prefix in ("image", "icon"):

@@ -104,7 +104,6 @@ PANORAMA = {
     'Turn a still panoramic image into a surrounding 3D surface using AI-estimated depth.': '使用 AI 估计的深度，将静态全景图像转换为环绕的三维表面。',
     'Panorama conversion requires a static image': '全景转换需要静态图像',
     'Not enough memory to prepare the HDR image': '内存不足，无法准备 HDR 图像',
-    'Panorama input cropped from {width} x {height} to {crop_width} x {crop_height}': '全景输入已从 {width} x {height} 裁剪为 {crop_width} x {crop_height}',
     'Preparing panorama conversion': '全景转换准备中',
     'Generating panorama view {index}/{total}': '全景视角生成中 {index}/{total}',
     'Merging panorama depth maps': '全景深度图合并中',

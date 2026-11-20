@@ -2,10 +2,7 @@
 
 import math
 
-from ...common.selection import (
-    clip_polygon_halfplanes,
-    trim_pixels_to_alpha,
-)
+from ...common.selection import ImageEditWarning, clip_polygon_halfplanes
 from ...common.projective_image import projective_output_size, warp_projective_pixels
 
 
@@ -120,6 +117,30 @@ def perspective_placement_bounds(quad, output_size, trim_bounds):
     )
 
 
+def _trim_pixels_to_alpha(pixels, output_size):
+    """Trim Blender-order RGBA pixels to their nonzero Alpha bounds."""
+    import numpy as np
+
+    width, height = output_size
+    rgba = np.flipud(
+        np.asarray(pixels, dtype=np.float32).reshape((height, width, 4))
+    )
+    visible_y, visible_x = np.nonzero(rgba[:, :, 3] > 0.0)
+    if not len(visible_x):
+        raise ImageEditWarning("The edit contains no visible image pixels")
+    content_left = int(visible_x.min())
+    content_top = int(visible_y.min())
+    content_right = int(visible_x.max()) + 1
+    content_bottom = int(visible_y.max()) + 1
+    output = rgba[content_top:content_bottom, content_left:content_right].copy()
+    return np.flipud(output).ravel(), (
+        content_left,
+        content_top,
+        content_right,
+        content_bottom,
+    )
+
+
 def extract_perspective_pixels(
     source_pixels,
     source_size,
@@ -130,7 +151,7 @@ def extract_perspective_pixels(
     pixels = warp_projective_pixels(
         source_pixels, source_size, quad, output_size
     )
-    pixels, trim_bounds = trim_pixels_to_alpha(pixels, (0, 0, *output_size))
+    pixels, trim_bounds = _trim_pixels_to_alpha(pixels, output_size)
     trimmed_size = (
         trim_bounds[2] - trim_bounds[0],
         trim_bounds[3] - trim_bounds[1],

@@ -1,13 +1,12 @@
 from ...common.job_image import prepare_target_input, apply_image_result
 import bpy
 
-from ...ai_preferences import configured_background_model
+from ...ai_preferences import configured_background_model, configured_device
 from ...runtime import JobOperator
 from ...common.ai import (
     require_input_path,
     report_ai_error,
     invoke_ai_setup_if_needed,
-    production_device,
     require_environment,
     require_model,
 )
@@ -82,7 +81,7 @@ class RunBackgroundRemoval(JobOperator, bpy.types.Operator):
         parameters = {
             "input": str(require_input_path(self.input_path)),
             "model": model,
-            "device": production_device().lower(),
+            "device": configured_device(),
         }
         if getattr(self, "_hdr_input", None) is not None:
             parameters["output_kind"] = "alpha"

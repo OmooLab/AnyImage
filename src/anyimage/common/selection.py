@@ -207,32 +207,6 @@ def rasterize_selection_path(
     return SelectionMask(mask, canvas_bounds)
 
 
-def trim_pixels_to_alpha(pixels, bounds):
-    """Trim Blender-order RGBA pixels to their nonzero Alpha bounds."""
-    import numpy as np
-
-    left, top, right, bottom = bounds
-    width = right - left
-    height = bottom - top
-    rgba = np.flipud(
-        np.asarray(pixels, dtype=np.float32).reshape((height, width, 4))
-    )
-    visible_y, visible_x = np.nonzero(rgba[:, :, 3] > 0.0)
-    if not len(visible_x):
-        raise ImageEditWarning("The edit contains no visible image pixels")
-    content_left = int(visible_x.min())
-    content_top = int(visible_y.min())
-    content_right = int(visible_x.max()) + 1
-    content_bottom = int(visible_y.max()) + 1
-    output = rgba[content_top:content_bottom, content_left:content_right].copy()
-    return np.flipud(output).ravel(), (
-        left + content_left,
-        top + content_top,
-        left + content_right,
-        top + content_bottom,
-    )
-
-
 def rasterize_selection_union(image_size, paths, *, antialias=False):
     """Rasterize a geometric union on one local canvas before antialiasing."""
     import numpy as np

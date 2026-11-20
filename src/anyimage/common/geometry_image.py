@@ -112,34 +112,35 @@ def _selected_depth_values(image, mask=None):
     return depth[usable]
 
 
-def median_depth(image, mask=None):
-    """Return the median valid camera depth inside an optional selection."""
+def reference_and_median_depth(image, mask=None):
+    """Return the near-field 95th percentile and the median of all selected depths."""
     import numpy as np
 
     values = _selected_depth_values(image, mask)
     if not values.size:
-        return REFERENCE_DEPTH_BASELINE
-    return float(np.median(values))
+        return REFERENCE_DEPTH_BASELINE, REFERENCE_DEPTH_BASELINE
+    median = float(np.median(values))
+    near = values[values <= REFERENCE_DEPTH_RANGE_FACTOR * median]
+    return float(np.percentile(near, REFERENCE_DEPTH_PERCENTILE)), median
 
 
-def reference_depth(image, mask=None):
-    """Return the upper-percentile camera depth of a loaded Depth texture.
+def depth_limit_preset(model_median, model_reference, uniform_scale):
+    """Return the far clipping distance behind the reference plane."""
+    return max((DEPTH_LIMIT_MEDIAN_FACTOR * model_median - model_reference) * uniform_scale, 0.0)
 
-    Distances are in model meters. Samples farther than
-    ``REFERENCE_DEPTH_RANGE_FACTOR`` times the median are dropped so a distant
-    background cannot push the reference plane, and with it the whole
-    reconstruction scale, out to the far field. A selection without usable
-    samples returns ``REFERENCE_DEPTH_BASELINE``.
-    """
+
+def depth_plane_limit_preset(image, model_reference, uniform_scale):
+    """Keep the far scene while trimming the most distant depth outliers."""
     import numpy as np
 
-    values = _selected_depth_values(image, mask)
+    values = _selected_depth_values(image)
     if not values.size:
-        return REFERENCE_DEPTH_BASELINE
-    near = values[
-        values <= REFERENCE_DEPTH_RANGE_FACTOR * float(np.median(values))
-    ]
-    return float(np.percentile(near, REFERENCE_DEPTH_PERCENTILE))
+        return depth_limit_preset(REFERENCE_DEPTH_BASELINE, model_reference, uniform_scale)
+    median, far_depth = np.percentile(values, (50, 99.5))
+    return max(
+        depth_limit_preset(median, model_reference, uniform_scale),
+        (far_depth - model_reference) * uniform_scale,
+    )
 
 
 def _weighted_depth_plane(coordinates, values, weights):

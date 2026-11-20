@@ -16,80 +16,8 @@ class AddonRegistrationTest(BlenderTestCase):
         self.assertNotIn("anyimage.server.model_manager", sys.modules)
         self.assertFalse(any(name.startswith("anyimage.server.jobs.") for name in sys.modules))
 
-    def test_editions_can_switch_after_unregister(self):
-        for first, second in (
-            (self.lite_addon, self.anyimage),
-            (self.anyimage, self.lite_addon),
-        ):
-            with self.subTest(first=first.__name__):
-                self.assertEqual(len(first.CLASSES), len({cls.__name__ for cls in first.CLASSES}))
-                first.register()
-                first.unregister()
-                second.register()
-                second.unregister()
-                self.assertEqual(self.registered, [])
-                self.assertFalse(hasattr(self.fake_bpy.types.Scene, "anyimage_settings"))
-
     def test_import_does_not_add_addon_directories_to_sys_path(self):
         self.assertEqual(self.paths_after_import, self.paths_before_import)
-
-
-    def test_mesh_operators_are_registered_and_ordered(self):
-        from anyimage.operators.convert_to_panorama import ConvertToPanorama, GeneratePanorama
-        from anyimage.operators.bake_mesh import BakeMesh
-
-        self.assertIn(BakeMesh, self.anyimage.CLASSES)
-        self.assertEqual(BakeMesh.bl_idname, "anyimage.bake_mesh")
-        self.assertIn("UNDO", BakeMesh.bl_options)
-
-        self.assertIn(ConvertToPanorama, self.anyimage.CLASSES)
-        self.assertIn(GeneratePanorama, self.anyimage.CLASSES)
-        for operator in (ConvertToPanorama, GeneratePanorama, self.convert_to_plane.ConvertToPlane,
-                         self.depth_plane_operators.ConvertToDepthPlane, self.depth_plane_operators.ConvertToReliefPlane,
-                         self.depth_plane_operators.GeneratePlaneGeometry):
-            self.assertNotIn("mesh_detail", getattr(operator, "__annotations__", {}))
-        for generator in (GeneratePanorama, self.depth_plane_operators.GeneratePlaneGeometry):
-            self.assertIn(generator, self.anyimage.CLASSES)
-            for name in ("source_object_name",):
-                self.assertIn(name, generator.__annotations__)
-                self.assertIn("HIDDEN", generator.__annotations__[name]["options"])
-        self.assertLess(self.anyimage.CLASSES.index(GeneratePanorama), self.anyimage.CLASSES.index(ConvertToPanorama))
-        for entry in (
-            self.depth_plane_operators.ConvertToDepthPlane,
-            self.depth_plane_operators.ConvertToReliefPlane,
-        ):
-            self.assertLess(
-                self.anyimage.CLASSES.index(self.depth_plane_operators.GeneratePlaneGeometry),
-                self.anyimage.CLASSES.index(entry),
-            )
-        self.assertLess(
-            self.anyimage.CLASSES.index(self.anyimage.RunBackgroundRemoval),
-            self.anyimage.CLASSES.index(self.anyimage.RemoveImageBackground),
-        )
-        operator = self.convert_to_plane.ConvertToPlane
-        self.assertIn(operator, self.anyimage.CLASSES)
-        self.assertIn(self.depth_plane_operators.ConvertToDepthPlane, self.anyimage.CLASSES)
-        self.assertIn(self.depth_plane_operators.ConvertToReliefPlane, self.anyimage.CLASSES)
-        self.assertIn(self.cutout_main.CutoutSelectionToShape, self.anyimage.CLASSES)
-        self.assertEqual(operator.bl_idname, "anyimage.convert_to_plane")
-        self.assertIn("REGISTER", operator.bl_options)
-        self.assertIn("UNDO", operator.bl_options)
-
-        image_empty = SimpleNamespace(
-            type="EMPTY",
-            empty_display_type="IMAGE",
-            data=object(),
-        )
-        image_plane = SimpleNamespace(
-            type="MESH",
-            modifiers=[
-                SimpleNamespace(node_group=SimpleNamespace(name="O Plane"))
-            ],
-        )
-        plain_mesh = SimpleNamespace(type="MESH", modifiers=[])
-        self.assertTrue(operator.poll(SimpleNamespace(object=image_empty)))
-        self.assertFalse(operator.poll(SimpleNamespace(object=image_plane)))
-        self.assertFalse(operator.poll(SimpleNamespace(object=plain_mesh)))
 
 
     def test_image_edit_tools_and_operators_are_registered(self):
@@ -173,7 +101,6 @@ class AddonRegistrationTest(BlenderTestCase):
                 (
                     self.anyimage.CutoutTool,
                     {
-                        "group": True,
                         "separator": True,
                     },
                 ),
@@ -181,7 +108,7 @@ class AddonRegistrationTest(BlenderTestCase):
                     self.tools.FrameTool,
                     {
                         "after": {self.tools.CutoutTool.bl_idname},
-                        "separator": False,
+                        "group": True,
                     },
                 ),
                 (

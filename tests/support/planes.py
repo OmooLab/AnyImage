@@ -60,6 +60,8 @@ def create_surface(plane_type):
         set_value("Boundary Smooth", 0)
     if "Depth Split" in inputs:
         set_value("Depth Split", 0.0)
+    if "Depth Limit" in inputs:
+        set_value("Depth Limit", 1e9)
     return obj, set_value, plane, inputs, image
 
 

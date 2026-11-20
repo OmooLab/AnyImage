@@ -3,21 +3,22 @@
 import bpy
 
 from ...common.image import image_empty_bounds
-from ...common.image_target import require_conversion_source
 from ...common.geometry_image import (
+    depth_plane_limit_preset,
     depth_node_direction,
     depth_uniform_scale,
     fit_image_depth_direction,
     load_depth_metadata,
     load_depth_result_image,
     load_normal_result_image,
-    reference_depth,
+    reference_and_median_depth,
 )
 from ...common.material import create_image_material
 from ...common.color_image import material_color_image
 from ...common.object import (
     finalize_object_result,
     modifier_input_identifier,
+    require_conversion_source,
     set_modifier_input,
 )
 from ...common.node import load_node_group
@@ -56,7 +57,7 @@ def create_depth_plane_object(
         modifier = plane.modifiers.new(name=node_group.name, type="NODES")
         modifier.node_group = node_group
         modifier.show_group_selector = False
-        model_reference = reference_depth(depth_image)
+        model_reference, _ = reference_and_median_depth(depth_image)
         uniform_scale = depth_uniform_scale(
             source_object,
             depth_metadata,
@@ -68,7 +69,9 @@ def create_depth_plane_object(
             ("Uniform Scale", uniform_scale),
             ("Depth Image", depth_image),
         ]
-        if plane_type == "RELIEF":
+        if plane_type == "DEPTH":
+            inputs.append(("Depth Limit", depth_plane_limit_preset(depth_image, model_reference, uniform_scale)))
+        else:
             depth_direction = depth_node_direction(
                 fit_image_depth_direction(
                     depth_image,

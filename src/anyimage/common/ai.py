@@ -4,6 +4,7 @@ import bpy
 
 from ..server.media.input import validate_input_path
 
+from ..ai_preferences import configured_device
 from ..preferences import addon_preferences
 from ..runtime import runtime
 from ..server import model_catalog as shared_model_catalog
@@ -56,12 +57,6 @@ def draw_ai_setup(layout, status=None):
     return status
 
 
-def draw_ai_property(layout, owner, name, status):
-    row = layout.row()
-    row.enabled = status["ready"]
-    row.prop(owner, name)
-
-
 def require_input_path(value):
     return validate_input_path(bpy.path.abspath(value))
 
@@ -69,10 +64,6 @@ def require_input_path(value):
 def report_ai_error(operator, error):
     """Report the underlying reason from a nested Blender operator."""
     operator.report({"ERROR"}, str(error).removeprefix("Error: ").strip())
-
-
-def production_device():
-    return getattr(addon_preferences(), "device", "AUTO")
 
 
 def require_environment():
@@ -107,7 +98,7 @@ def geometry_job_parameters(path, model, resolution_level):
         "input": str(path),
         "model": model,
         "resolution_level": int(resolution_level),
-        "device": production_device().lower(),
+        "device": configured_device(),
     }
     if model == "MOGE3_VITL":
         parameters["refine_steps"] = int(getattr(addon_preferences(), "geometry_refine_steps", 1))

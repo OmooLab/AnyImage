@@ -35,6 +35,8 @@ def build_color_tiles(image, tiles):
     """Copy tiles with rear and mirrored horizontal flips composed together."""
     width, height = image.size
     pixels = image_pixels(image).reshape(height, width, 4)
+    if tiles == ((0,),):
+        return pixels
     result = np.zeros((height * len(tiles), width * len(tiles[0]), 4), dtype=pixels.dtype)
     for y, row in enumerate(tiles):
         for x, region in enumerate(row):

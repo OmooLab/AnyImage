@@ -149,8 +149,6 @@ class FrameToolTest(BlenderTestCase):
             operator.cancel(context)
 
         self.assertEqual(result, {"RUNNING_MODAL"})
-        self.assertEqual(operator._active_name, "Active")
-        self.assertEqual(operator._source_names, ("Other", "Active"))
         self.assertEqual(operator._start, (-20.0, 300.0))
         modal_handler_add.assert_called_once_with(operator)
         space.draw_handler_remove.assert_called_once_with("handle", "WINDOW")

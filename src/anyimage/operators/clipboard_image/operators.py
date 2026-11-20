@@ -1,7 +1,6 @@
 import bpy
 
 from .actions import (
-    BrushPreviewError,
     acquire_packed_image,
     paste_image,
     paste_location,
@@ -9,6 +8,7 @@ from .actions import (
     replace_pasted_image,
     target_for_context,
 )
+from .brush import BrushPreviewError
 from .clipboard import (
     ClipboardImageError,
     ClipboardImageUnavailable,
@@ -23,9 +23,6 @@ class PasteClipboardImage(bpy.types.Operator):
     bl_description = "Paste and pack the clipboard image for the current editor"
     bl_options = {"REGISTER", "UNDO"}
 
-    paste_target: bpy.props.StringProperty(
-        options={"HIDDEN", "SKIP_SAVE"},
-    )
     location: bpy.props.FloatVectorProperty(
         size=3,
         options={"HIDDEN", "SKIP_SAVE"},
@@ -34,28 +31,22 @@ class PasteClipboardImage(bpy.types.Operator):
         default=False,
         options={"HIDDEN", "SKIP_SAVE"},
     )
+
     @classmethod
     def poll(cls, context):
         if not clipboard_image_supported():
             return False
         return target_for_context(context) is not None
 
-    def execute(self, context):
-        return self._paste(context)
-
     def invoke(self, context, event):
-        self.paste_target = target_for_context(context) or ""
         location = paste_location(context, event)
         if location is not None:
             values = tuple(location)
             self.location = (*values, 0.0)[:3]
             self.location_set = True
-        return self._paste(context, event)
+        return self.execute(context)
 
-    def _paste(self, context, event=None):
-        if not self.paste_target:
-            self.paste_target = target_for_context(context) or ""
-
+    def execute(self, context):
         try:
             image_data, suffix = read_clipboard_image()
         except ClipboardImageUnavailable:
@@ -74,17 +65,7 @@ class PasteClipboardImage(bpy.types.Operator):
             if replacement is not None:
                 replace_pasted_image(context, replacement, image)
             else:
-                location = None
-                if self.location_set:
-                    location = self.location
-                    if self.paste_target == "NODE":
-                        location = location[:2]
-                paste_image(
-                    context,
-                    image,
-                    event,
-                    location=location,
-                )
+                paste_image(context, image, self.location if self.location_set else None)
             paste_succeeded = True
         except BrushPreviewError as error:
             self.report({"WARNING"}, str(error))

@@ -15,6 +15,7 @@ class ODepthPlane(CustomGeometryGroup):
         thickness = tree.inputs.float("Thickness", 0.0, description="Add shell thickness inward from the depth surface. Zero keeps a single surface.", min_value=0.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         depth_scale = tree.inputs.float("Depth Scale", 1.0, min_value=0.0, max_value=2.0, structure_type="SINGLE", force_non_field=True)
         depth_split = tree.inputs.float("Depth Split", 0.1, description="Split the mesh where depth changes abruptly. Scaled by Depth Scale: a flat projection stays whole, higher values detect smaller depth jumps.", min_value=0.0, max_value=1.0, structure_type="SINGLE", subtype="FACTOR", force_non_field=True)
+        depth_limit = tree.inputs.float("Depth Limit", 1.0, description="Remove faces whose center lies beyond this distance behind the reference plane.", min_value=-1.0, structure_type="SINGLE", subtype="DISTANCE", force_non_field=True)
         depth_mask = tree.inputs.boolean("Depth Mask", True, description="Remove mesh areas marked invalid by the depth mask.", structure_type="SINGLE", force_non_field=True)
         with tree.inputs.panel("Options", default_closed=True):
             boundary_smooth = tree.inputs.integer("Boundary Smooth", 4, description="Smooth depth and geometry near cut edges while preserving the original image border. Zero disables boundary smoothing.", min_value=0, max_value=16, structure_type="SINGLE", force_non_field=True)
@@ -91,6 +92,7 @@ class ODepthPlane(CustomGeometryGroup):
         mix_1 = depth_scale.mix.vector(g.Position(), g.CombineXYZ(x=vector.x, y=math_5, z=vector.y * -1.0))
         remove_named_attribute = (
             ((depth_split > 0.0) & (depth_scale > 0.0)).switch.geometry(switch, delete_geometry)
+            >> g.DeleteGeometry.face(selection=(evaluate_on_domain_1.o.value.z * uniform_scale - reference_depth) * depth_scale > depth_limit)
             >> g.SetPosition(position=g.CombineXYZ(x=mix_1.x, y=math_5, z=mix_1.z))
             >> g.RemoveNamedAttribute(name="_o_depth_*", pattern_mode="Wildcard")
         )

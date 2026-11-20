@@ -7,12 +7,16 @@ import bpy
 
 from ...common.color_image import material_color_image
 from ...common.geometry_image import load_depth_result_image, normal_data_name
-from ...common.image_target import require_conversion_source
 from ...common.material import create_image_material
 from ...common.node import load_node_group
-from ...common.object import finalize_object_result, modifier_input_identifier, set_modifier_input
+from ...common.object import (
+    finalize_object_result,
+    modifier_input_identifier,
+    require_conversion_source,
+    set_modifier_input,
+)
+from ...common.panorama import create_panorama_world
 from .normal import bake_panorama_normal
-from .world import create_panorama_world
 
 
 def load_panorama_metadata(path):
@@ -71,7 +75,7 @@ def create_panorama_from_result(context, result, operator):
             relief = None
             set_modifier_input(modifier, horizon_bend, -0.1)
             obj.update_tag(refresh={"DATA"})
-            world = create_panorama_world(obj, source.data, color)
+            world = create_panorama_world(source.data, color, panorama_object=obj)
             context.scene.world = world
             finalize_object_result(context, source, obj)
     except Exception:

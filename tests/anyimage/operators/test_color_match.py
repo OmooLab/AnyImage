@@ -1,5 +1,5 @@
 from types import MethodType, SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import bpy
 import numpy as np
@@ -43,7 +43,8 @@ def _modal_operator():
         _PREVIEW_INTERVAL=MatchColorReference._PREVIEW_INTERVAL,
     )
     for name in (
-        "_preview_pixels",
+        "_update_preview",
+        "_restore_preview",
         "_commit",
         "_add_preview_handler",
         "_tag_redraw",
@@ -56,6 +57,7 @@ def _modal_operator():
 def _modal_context(owner, reference):
     context = _context(owner, reference)
     context.area = SimpleNamespace(tag_redraw=Mock())
+    context.workspace = Mock()
     context.window = None
     context.window_manager = SimpleNamespace(
         modal_handler_add=Mock(), event_timer_add=Mock(return_value=object()), event_timer_remove=Mock(),
@@ -71,33 +73,6 @@ def _event(event_type, *, x=100, y=100, value="PRESS", shift=False):
         mouse_y=y,
         shift=shift,
     )
-
-
-@pytest.fixture(autouse=True)
-def preview_texture_without_graphics_context():
-    with patch.object(color_match, "create_preview_texture", side_effect=lambda rgba: SimpleNamespace(
-        width=rgba.shape[1], height=rgba.shape[0], rgba=rgba.copy(),
-    )):
-        yield
-
-
-def test_match_checks_reference_pixels_and_reuses_prepared_data(registered_color_reference):
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference_cache.clear_color_references()
-    reference = create_clipboard_image("Cached reference", np.full((8, 8, 4), (0.7, 0.2, 0.1, 1.0)))
-    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.1, 0.2, 0.6, 1.0)))
-    owner = create_image_empty("Owner", source)
-    context = _modal_context(owner, reference)
-    with patch.object(reference_cache, "image_rgba", wraps=reference_cache.image_rgba) as read_reference:
-        bpy.context.scene.anyimage_settings.color_reference = reference
-        assert read_reference.call_count == 1
-        for _ in range(2):
-            operator, reports = _modal_operator()
-            assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
-            MatchColorReference.modal(operator, context, _event("ESC"))
-            assert not reports
-        assert read_reference.call_count == 3
-    bpy.context.scene.anyimage_settings.color_reference = None
 
 
 def test_match_rejects_missing_same_or_animated_images():
@@ -136,10 +111,10 @@ def test_match_transforms_all_rgb_and_preserves_target_alpha():
 
 
 @pytest.mark.parametrize("space", ["sRGB", "AgX Base sRGB", "Non-Color"])
-def test_match_preview_and_commit_ignore_color_space_and_preserve_settings(space):
+def test_match_preview_and_full_size_result_preserve_color_settings(space):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    source = create_clipboard_image("Target_color", np.full((4, 4, 4), (.1, .2, .6, .5)))
+    source = create_clipboard_image("Target_color", np.full((8, 1024, 4), (.1, .2, .6, .5)))
     source.colorspace_settings.name = space
     source.alpha_mode = "CHANNEL_PACKED"
     reference.colorspace_settings.name = space
@@ -153,37 +128,15 @@ def test_match_preview_and_commit_ignore_color_space_and_preserve_settings(space
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
-    np.testing.assert_allclose(operator._preview_texture.rgba, expected_linear, atol=1e-6)
+    preview = image_rgba(owner.data)
+    assert preview.shape[1] < before.shape[1]
+    np.testing.assert_allclose(preview[0, 0], linear_rgba_to_image(source, expected_linear)[0, 0], atol=1 / 255)
     assert (source.colorspace_settings.name, source.alpha_mode) == (space, "CHANNEL_PACKED")
     np.testing.assert_array_equal(image_rgba(source), before)
     assert MatchColorReference.modal(operator, context, _event("RET")) == {"FINISHED"}
     assert (owner.data.colorspace_settings.name, owner.data.alpha_mode) == (space, "CHANNEL_PACKED")
     np.testing.assert_allclose(image_rgba(owner.data), linear_rgba_to_image(source, expected_linear), atol=1 / 255)
     assert not reports
-
-
-@pytest.mark.parametrize("phase", ["initialize", "refresh"])
-def test_preview_texture_failure_preserves_source_and_cleans_resources(phase):
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    source = create_clipboard_image("Target", np.full((4, 4, 4), (.1, .2, .6, 1)))
-    owner = create_image_empty("Owner", source)
-    context = _modal_context(owner, reference)
-    operator, reports = _modal_operator()
-    before = image_rgba(source)
-    if phase == "refresh":
-        assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
-        operator._last_preview_time = 0
-    with patch.object(color_match, "create_preview_texture", side_effect=RuntimeError("GPU failed")):
-        if phase == "initialize":
-            result = MatchColorReference.invoke(operator, context, _event("LEFTMOUSE"))
-        else:
-            result = MatchColorReference.modal(operator, context, _event("MOUSEMOVE", x=200))
-    assert result == {"CANCELLED"}
-    assert operator._preview_texture is None and operator._timer is None and operator._handle is None
-    assert owner.data == source
-    np.testing.assert_array_equal(image_rgba(source), before)
-    assert reports
 
 
 def test_match_isolates_an_image_shared_with_another_empty():
@@ -240,30 +193,6 @@ def test_repeated_match_keeps_one_isolated_working_image():
     assert second.data == source
 
 
-def test_match_rejects_a_target_changed_during_processing():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (0.7, 0.3, 0.1, 1.0)))
-    source = create_clipboard_image("Source", np.full((4, 4, 4), (0.1, 0.2, 0.6, 1.0)))
-    replacement = create_clipboard_image("Replacement", np.full((4, 4, 4), (0.2, 0.2, 0.2, 1.0)))
-    owner = create_image_empty("Owner", source)
-    context = _context(owner, reference)
-    reports = []
-
-    def change_target(_reference, target, **_options):
-        owner.data = replacement
-        return build_color_match(_reference, target, **_options)
-
-    with patch.object(color_match, "build_color_match", side_effect=change_target):
-        result = MatchColorReference.execute(
-            SimpleNamespace(report=lambda level, message: reports.append((level, message))),
-            context,
-        )
-
-    assert result == {"CANCELLED"}
-    assert owner.data == replacement
-    assert any("no longer available" in message for _level, message in reports)
-
-
 def test_modal_match_updates_controls_and_cancels_cleanly():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
@@ -273,8 +202,10 @@ def test_modal_match_updates_controls_and_cancels_cleanly():
     operator, reports = _modal_operator()
 
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
-    images_before = tuple(bpy.data.images)
-    assert owner.data == source
+    images_before = tuple(image for image in bpy.data.images if image != owner.data)
+    context.workspace.status_text_set.assert_called_once_with(color_match.draw_match_status)
+    assert owner.data == operator._preview_image
+    assert not MatchColorReference.poll(context)
     assert operator._color == pytest.approx(0.5)
     assert operator._lightness == pytest.approx(0.0)
     operator._last_preview_time = 0.0
@@ -295,50 +226,13 @@ def test_modal_match_updates_controls_and_cancels_cleanly():
 
     assert MatchColorReference.modal(operator, context, _event("ESC")) == {"CANCELLED"}
     assert owner.data == source
-    assert operator._preview_texture is None
+    assert operator._preview_image is None
+    context.workspace.status_text_set.assert_called_with(None)
     assert tuple(bpy.data.images) == images_before
     assert not reports
 
 
-def test_modal_match_throttles_preview_updates():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_clipboard_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
-    owner = create_image_empty("Owner", source)
-    context = _modal_context(owner, reference)
-    operator, _reports = _modal_operator()
-    MatchColorReference.invoke(operator, context, _event("LEFTMOUSE"))
-    with (
-        patch.object(
-            color_match.time,
-            "perf_counter",
-            return_value=operator._last_preview_time,
-        ),
-        patch.object(color_match, "create_preview_texture") as update,
-    ):
-        MatchColorReference.modal(
-            operator,
-            context,
-            _event("MOUSEMOVE", x=120, y=120, value="NOTHING"),
-        )
-
-    update.assert_not_called()
-    operator._last_preview_time = 0
-    with (
-        patch.object(color_match, "build_color_match") as build,
-        patch.object(color_match, "create_preview_texture") as update,
-    ):
-        MatchColorReference.modal(operator, context, _event("TIMER", value="NOTHING"))
-        update.assert_called_once()
-        build.assert_not_called()
-    with patch.object(color_match, "create_preview_texture") as update:
-        MatchColorReference.modal(operator, context, _event("MOUSEMOVE", x=120, y=120))
-        update.assert_not_called()
-    MatchColorReference.modal(operator, context, _event("ESC"))
-    context.window_manager.event_timer_remove.assert_called_once()
-
-
-@pytest.mark.parametrize("changed", ["reference", "target", "binding", "color_space", "alpha_mode", "queued_commit"])
+@pytest.mark.parametrize("changed", ["reference", "target", "binding", "color_space", "alpha_mode"])
 def test_modal_rejects_external_changes_and_releases_snapshots(changed):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
@@ -347,19 +241,8 @@ def test_modal_rejects_external_changes_and_releases_snapshots(changed):
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
-    images_before = tuple(bpy.data.images)
-    if changed == "queued_commit":
-        from anyimage.common.image import create_image_edit_result
-        from anyimage.common.image_target import ImageEditTarget
-
-        pending_target = ImageEditTarget.capture(context)
-        assert pending_target is operator._target
-        result = create_image_edit_result(
-            target, np.tile(np.array([0.4, 0.5, 0.1, 1.0], np.float32), 16), (4, 4),
-        )
-        pending_target.commit(result)
-        pending_target.validate()
-    elif changed == "color_space":
+    images_before = tuple(image for image in bpy.data.images if image != operator._preview_image)
+    if changed == "color_space":
         target.colorspace_settings.name = "Non-Color"
     elif changed == "alpha_mode":
         target.alpha_mode = "CHANNEL_PACKED"
@@ -369,12 +252,12 @@ def test_modal_rejects_external_changes_and_releases_snapshots(changed):
         image = reference if changed == "reference" else target
         image.pixels.foreach_set(np.tile(np.asarray((.4, .5, .1, 1), dtype=np.float32), 16))
         image.update()
-    before = image_rgba(owner.data)
+    before = image_rgba(reference if changed == "binding" else target)
     assert MatchColorReference.modal(operator, context, _event("RET")) == {"CANCELLED"}
     np.testing.assert_array_equal(image_rgba(owner.data), before)
-    assert operator._preview_texture is None
+    assert operator._preview_image is None
+    context.workspace.status_text_set.assert_called_with(None)
     assert tuple(bpy.data.images) == images_before
-    assert operator._reference is None and operator._target_rgba is None
     assert reports
 
 
@@ -389,33 +272,9 @@ def test_zero_controls_confirmation_preserves_image_identity_and_pixels():
     MatchColorReference.invoke(operator, context, _event("LEFTMOUSE"))
     operator._color = 0
     operator._lightness = 0
-    with patch.object(color_match, "build_color_match") as build:
-        assert MatchColorReference.modal(operator, context, _event("RET")) == {"FINISHED"}
-        build.assert_not_called()
+    assert MatchColorReference.modal(operator, context, _event("RET")) == {"FINISHED"}
     assert owner.data == target
     np.testing.assert_array_equal(image_rgba(target), before)
-    assert not reports
-
-
-def test_modal_match_confirms_one_full_resolution_result():
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_clipboard_image("Reference", np.full((8, 8, 4), (0.7, 0.25, 0.08, 1.0)))
-    source = create_clipboard_image("Target", np.full((8, 8, 4), (0.08, 0.2, 0.55, 1.0)))
-    owner = create_image_empty("Owner", source)
-    context = _modal_context(owner, reference)
-    operator, reports = _modal_operator()
-    before = image_rgba(source).copy()
-
-    assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
-    images_before = tuple(bpy.data.images)
-    assert owner.data == source
-    operator._color = 0.25
-
-    assert MatchColorReference.modal(operator, context, _event("RET")) == {"FINISHED"}
-    assert tuple(owner.data.size) == (8, 8)
-    assert not np.allclose(image_rgba(owner.data)[..., :3], before[..., :3], atol=1 / 255)
-    assert operator._preview_texture is None
-    assert tuple(bpy.data.images) == images_before
     assert not reports
 
 
@@ -445,6 +304,21 @@ def test_match_undo_redo_restores_pixels_and_keeps_reference(registered_color_re
     np.testing.assert_allclose(image_rgba(owner.data), after, atol=1 / 255)
 
 
+def test_cancel_after_preview_image_is_removed():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
+    source = create_clipboard_image("Source", np.full((4, 4, 4), (.1, .2, .7, 1)))
+    owner = create_image_empty("Owner", source)
+    context = _modal_context(owner, reference)
+    operator, _ = _modal_operator()
+    assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
+    bpy.data.images.remove(owner.data)
+
+    assert MatchColorReference.modal(operator, context, _event("ESC")) == {"CANCELLED"}
+    assert owner.data == source
+    context.window_manager.event_timer_remove.assert_called_once()
+
+
 def test_deleted_reference_cancels_and_releases_interaction_resources():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .2, .1, 1)))
@@ -454,6 +328,39 @@ def test_deleted_reference_cancels_and_releases_interaction_resources():
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
     bpy.data.images.remove(reference)
     assert MatchColorReference.modal(operator, context, _event("RET")) == {"CANCELLED"}
-    assert operator._timer is None and operator._preview_texture is None
-    assert not reference_cache._retained
+    assert operator._timer is None and operator._preview_image is None
+    assert context.object.data == target
     assert reports
+
+
+@pytest.mark.parametrize("node_type", ["ShaderNodeTexEnvironment", "ShaderNodeTexImage"])
+def test_world_preview_updates_before_confirmation(node_type):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.8, .1, .1, 1)))
+    source = create_clipboard_image("Source", np.full((4, 4, 4), (.1, .2, .7, 1)))
+    world = bpy.data.worlds.new("Preview World")
+    bpy.context.scene.world = world
+    world.use_nodes = True
+    tree = world.node_tree
+    node = tree.nodes.new(node_type)
+    node.image = source
+    tree.nodes.active = node
+    tree.links.new(node.outputs["Color"], tree.nodes["Background"].inputs["Color"])
+    context = _modal_context(None, reference)
+    context.space_data = SimpleNamespace(type="NODE_EDITOR", tree_type="ShaderNodeTree",
+                                         shader_type="WORLD", id=world, edit_tree=tree)
+    viewport = SimpleNamespace(type="VIEW_3D", tag_redraw=Mock())
+    context.window_manager.windows = [SimpleNamespace(screen=SimpleNamespace(areas=[viewport]))]
+    operator, reports = _modal_operator()
+    assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
+    before = image_rgba(node.image).copy()
+    operator._last_preview_time = 0
+    viewport.tag_redraw.reset_mock()
+    assert MatchColorReference.modal(operator, context, _event("MOUSEMOVE", x=275)) == {"RUNNING_MODAL"}
+    bpy.context.view_layer.update()
+    evaluated = world.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    assert not np.allclose(image_rgba(evaluated.node_tree.nodes[node.name].image), before)
+    viewport.tag_redraw.assert_called_once()
+    assert MatchColorReference.modal(operator, context, _event("ESC")) == {"CANCELLED"}
+    assert node.image == source
+    assert not reports

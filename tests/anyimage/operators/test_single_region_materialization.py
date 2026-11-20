@@ -119,7 +119,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     assert actual_faces == final_faces
     assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
     assert list(obj.data.uv_layers.keys()) == ["UVMap"]
-    assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal", "Emission"] + (["Emission"] if kind == "PANORAMA" else [])
+    assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal"] + (["Emission"] if kind == "PANORAMA" else [])
     if normal is not None:
         assert tuple(normal.size) == (128, 64)
         node = next(n for n in material.node_tree.nodes if n.type == "NORMAL_MAP")
@@ -164,7 +164,7 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     layer.inputs["Normal Scale"].default_value = strength
     direction = (0, -.2, 0) if kind == "PANORAMA" else (0, -1, 0)
     before = render_material(obj, tmp_path / "before.exr", direction, with_uv_coverage=True)
-    obj.data = materialization.materialize_mesh_and_textures(bpy.context, obj)
+    obj.data = materialization.materialize_mesh_and_textures(bpy.context, obj, materialization.mesh_bake_modifiers(obj))
     obj.modifiers.clear()
     after = render_material(obj, tmp_path / "after.exr", direction, with_uv_coverage=True)
     np.testing.assert_array_equal(before[1], after[1])

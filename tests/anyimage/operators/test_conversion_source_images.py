@@ -11,7 +11,6 @@ from anyimage.common import image as images, material
 from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
 from anyimage.operators import convert_to_plane as operators
 from anyimage.operators.depth_plane import object as conversion
-from anyimage.common import image_plane
 
 
 @pytest.fixture
@@ -116,9 +115,7 @@ def test_conversion_failure_restores_image_and_releases_resources(source, monkey
     if failure == "material":
         monkeypatch.setattr(material, "load_node_group", fail)
     elif failure == "finalize":
-        monkeypatch.setattr(image_plane, "finalize_object_result", fail)
-    elif entry == "PLANE":
-        monkeypatch.setattr(image_plane, "add_image_plane_processing", fail)
+        monkeypatch.setattr(operators, "finalize_object_result", fail)
     else:
         monkeypatch.setattr(conversion, "set_modifier_input", fail)
     with pytest.raises(RuntimeError, match="Conversion failed"):
@@ -192,7 +189,7 @@ def test_plane_undo_redo_restores_image_configuration(source, monkeypatch, share
 
 
 def test_conversion_source_survives_object_and_image_renaming(source):
-    from anyimage.common.image_target import require_conversion_source
+    from anyimage.common.object import require_conversion_source
 
     operator = SimpleNamespace(_source_object=source, _source_image=source.data, _source_signature=images.image_content_signature(source.data))
     source.name = "Renamed source"
@@ -202,7 +199,7 @@ def test_conversion_source_survives_object_and_image_renaming(source):
 
 @pytest.mark.parametrize("change", ["pixels", "size", "color_space"])
 def test_conversion_rejects_in_place_source_edits(source, change):
-    from anyimage.common.image_target import require_conversion_source
+    from anyimage.common.object import require_conversion_source
 
     operator = SimpleNamespace(
         _source_object=source, _source_image=source.data,

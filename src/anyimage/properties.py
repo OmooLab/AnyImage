@@ -8,8 +8,8 @@ from .common.color_reference import (
 )
 from .common.image import image_content_handlers, is_color_reference_candidate
 
+# Blender requires Python to keep dynamic enum strings alive.
 _COLOR_REFERENCE_ITEMS = []
-_COLOR_REFERENCE_ITEMS_KEY = None
 COLOR_REFERENCE_PALETTE_SIZE = 4
 COLOR_REFERENCE_PALETTE_PROPERTIES = tuple(
     f"color_reference_palette_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
@@ -23,48 +23,21 @@ def color_reference_candidates():
     return [image for image in bpy.data.images if is_color_reference_candidate(image)]
 
 
-def invalidate_color_reference_items():
-    """Rebuild gallery icons after their runtime previews have been released."""
-    global _COLOR_REFERENCE_ITEMS_KEY
-    _COLOR_REFERENCE_ITEMS_KEY = None
-
-
 def color_reference_items(_settings, _context):
-    global _COLOR_REFERENCE_ITEMS, _COLOR_REFERENCE_ITEMS_KEY
+    global _COLOR_REFERENCE_ITEMS
     candidates = color_reference_candidates()
-    release_unused_color_references(
-        getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
-        for scene in bpy.data.scenes
-    )
-    key = (
-        bpy.app.translations.locale,
-        bpy.context.preferences.view.use_translate_tooltips,
-        tuple(
-            (image.session_uid, image.name, tuple(image.size), color_reference_preview_icon(image))
-            for image in candidates
-        ),
-    )
-    if key == _COLOR_REFERENCE_ITEMS_KEY:
-        return _COLOR_REFERENCE_ITEMS
+    release_unused_color_references(candidates)
+    tooltip = bpy.app.translations.pgettext_tip("Use {name} as the color reference")
     items = [("NONE", "None", "No color reference", "X", 0)]
     for index, image in enumerate(candidates, start=1):
         try:
-            icon = color_reference_preview_icon(image, prepare=True)
+            icon = color_reference_preview_icon(image)
         except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
             icon = "IMAGE_DATA"
-        items.append(
-            (
-                str(image.as_pointer()),
-                image.name,
-                bpy.app.translations.pgettext_tip("Use {name} as the color reference").format(
-                    name=image.name
-                ),
-                icon,
-                index,
-            )
-        )
-    _COLOR_REFERENCE_ITEMS = items
-    _COLOR_REFERENCE_ITEMS_KEY = key
+        name = image.name
+        items.append((str(image.as_pointer()), name, tooltip.format(name=name), icon, index))
+    if items != _COLOR_REFERENCE_ITEMS:
+        _COLOR_REFERENCE_ITEMS = items
     return _COLOR_REFERENCE_ITEMS
 
 
@@ -83,22 +56,17 @@ def set_color_reference_choice(settings, value):
         settings.color_reference = reference
 
 
-def update_color_reference_palette(settings, _context, *, refresh=True):
+def _set_reference_palette(settings, *, refresh=False):
     """Refresh the explanatory palette for the selected reference Image."""
     reference = settings.color_reference
     try:
         if reference:
             prepared = get_color_reference(reference, refresh=refresh)
-            colors, weights = prepared.colors, prepared.weights
+            colors, weights = prepared.transfer.colors, prepared.transfer.weights
         else:
             colors, weights = (), ()
     except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
         colors, weights = (), ()
-    release_unused_color_references(
-        getattr(getattr(scene, "anyimage_settings", None), "color_reference", None)
-        for scene in bpy.data.scenes
-    )
-    invalidate_color_reference_items()
     settings.color_reference_palette_count = len(colors)
     for index, name in enumerate(COLOR_REFERENCE_PALETTE_PROPERTIES):
         color = tuple(colors[index]) if index < len(colors) else (0.0, 0.0, 0.0)
@@ -107,24 +75,27 @@ def update_color_reference_palette(settings, _context, *, refresh=True):
         setattr(settings, name, float(weights[index]) if index < len(weights) else 0.0)
 
 
+def update_color_reference_palette(settings, _context):
+    _set_reference_palette(settings, refresh=True)
+    release_unused_color_references(color_reference_candidates())
+
+
 def refresh_edited_color_reference(image):
     """Synchronize scenes using an edited reference image."""
     invalidate_color_reference(image)
-    invalidate_color_reference_items()
     for scene in bpy.data.scenes:
         settings = getattr(scene, "anyimage_settings", None)
         if settings is not None and settings.color_reference == image:
-            update_color_reference_palette(settings, None, refresh=False)
+            _set_reference_palette(settings)
 
 
 def restore_color_references(*_args):
     """Rebuild scene reference presentation after Blender restores data."""
     clear_color_references()
-    invalidate_color_reference_items()
     for scene in bpy.data.scenes:
         settings = getattr(scene, "anyimage_settings", None)
         if settings is not None:
-            update_color_reference_palette(settings, None, refresh=False)
+            _set_reference_palette(settings)
 
 
 def register_color_references():
@@ -151,7 +122,6 @@ def unregister_color_references():
     if refresh_edited_color_reference in image_content_handlers:
         image_content_handlers.remove(refresh_edited_color_reference)
     clear_color_references()
-    invalidate_color_reference_items()
 
 
 def color_reference_palette_property():

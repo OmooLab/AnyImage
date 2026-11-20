@@ -203,7 +203,7 @@ class PreferencesTest(BlenderTestCase):
             patch.object(self.depth_plane_operators, "require_environment"),
             patch.object(self.depth_plane_operators, "require_model"),
             patch.object(self.depth_plane_operators, "require_input_path", return_value=Path("input.png")),
-            patch.object(self.ai, "production_device", return_value="CPU"),
+            patch.object(self.ai, "configured_device", return_value="cpu"),
         ):
             parameters = operator.request(context)
 

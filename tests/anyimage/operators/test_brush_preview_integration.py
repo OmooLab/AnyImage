@@ -2,8 +2,9 @@ import bpy
 import numpy as np
 from types import SimpleNamespace
 
+from anyimage.operators.clipboard_image.brush import set_brush_preview
 from anyimage.operators.clipboard_image.actions import (
-    ClipboardImageTarget, _set_brush_preview, replace_pasted_image,
+    ClipboardImageTarget, replace_pasted_image,
 )
 
 
@@ -22,7 +23,7 @@ def test_packed_brush_replacement_updates_preview_and_survives_reopen(tmp_path):
     texture.image = image
     brush.texture = texture
     try:
-        _set_brush_preview(bpy.context, brush, image)
+        set_brush_preview(bpy.context, brush, image)
         assert tuple(brush.preview.image_size) == (80, 40)
         preview = np.array(brush.preview.image_pixels_float[:]).reshape(40, 80, 4)
         assert np.allclose(preview[:, :40, 0], 1.0, atol=1 / 255)

@@ -1,8 +1,7 @@
 from ..common.job_image import prepare_target_input, apply_image_result
 import bpy
 
-from ..ai_preferences import configured_max_ai_input_size
-from ..ai_preferences import configured_upscale_model
+from ..ai_preferences import configured_device, configured_max_ai_input_size, configured_upscale_model
 from ..server.model_catalog import UPSCALE_MODELS
 from ..server.media.resolution import (
     DEFAULT_MAX_AI_INPUT_SIZE,
@@ -13,7 +12,6 @@ from ..runtime import JobOperator
 from ..common.ai import (
     require_input_path,
     invoke_ai_setup_if_needed,
-    production_device,
     require_environment,
     require_model,
 )
@@ -116,7 +114,7 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
         return {
             "input": str(require_input_path(self.input_path)),
             "model": self.model,
-            "device": production_device().lower(),
+            "device": configured_device(),
             "max_input_size": int(self.max_input_size),
         }
 

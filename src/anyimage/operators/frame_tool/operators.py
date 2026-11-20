@@ -77,7 +77,7 @@ def selected_frame_sources(context):
         if is_animated_image(source.data):
             raise ValueError("Frame only supports still images")
     return tuple(
-        sorted(sources, key=lambda source: (source is active, source.name))
+        sorted(sources, key=lambda source: (source == active, source.name))
     )
 
 
@@ -93,7 +93,7 @@ def apply_frame(context, source_objects, frame_quad):
             context.region,
             view3d,
             view3d.view_matrix,
-            active=source is active,
+            active=source == active,
         )
         for source in source_objects
     )
@@ -137,7 +137,7 @@ def apply_frame(context, source_objects, frame_quad):
         active.empty_image_offset = old_offset
         raise
     for source in source_objects:
-        if source is not active:
+        if source != active:
             bpy.data.objects.remove(source, do_unlink=True)
     return active
 
@@ -148,8 +148,7 @@ class FrameImages(bpy.types.Operator):
     bl_description = "Draw a rectangle to combine selected images into one image from the current view."
     bl_options = {"UNDO"}
 
-    _active_name = ""
-    _source_names = ()
+    _sources = ()
     _start = None
     _cursor = None
     _handle = None
@@ -170,6 +169,7 @@ class FrameImages(bpy.types.Operator):
         draw_dashed_line((*frame, frame[0]))
 
     def _finish(self, context):
+        self._sources = ()
         if self._handle is not None:
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, "WINDOW")
             self._handle = None
@@ -182,12 +182,10 @@ class FrameImages(bpy.types.Operator):
 
     def invoke(self, context, event):
         try:
-            sources = selected_frame_sources(context)
+            self._sources = selected_frame_sources(context)
         except (TypeError, ValueError) as error:
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
-        self._active_name = context.active_object.name
-        self._source_names = tuple(source.name for source in sources)
         point = (float(event.mouse_region_x), float(event.mouse_region_y))
         self._start = point
         self._cursor = point
@@ -231,21 +229,18 @@ class FrameImages(bpy.types.Operator):
                 self._finish(context)
                 return {"CANCELLED"}
             try:
-                active = bpy.data.objects.get(self._active_name)
-                sources = tuple(
-                    bpy.data.objects.get(name) for name in self._source_names
-                )
-                if (
-                    not is_image_empty(active)
-                    or any(not is_image_empty(source) for source in sources)
-                    or context.active_object is not active
+                if context.active_object != self._sources[-1] or any(
+                    not is_image_empty(source) for source in self._sources
                 ):
                     raise ValueError("The selected Image Empties changed during Frame")
-                apply_frame(context, sources, frame)
+                apply_frame(context, self._sources, frame)
+            except ReferenceError:
+                self.report({"ERROR"}, "The selected Image Empties changed during Frame")
+                return {"CANCELLED"}
             except (RuntimeError, TypeError, ValueError) as error:
                 report_image_edit_exception(self, error)
-                self._finish(context)
                 return {"CANCELLED"}
-            self._finish(context)
+            finally:
+                self._finish(context)
             return {"FINISHED"}
         return {"PASS_THROUGH"}

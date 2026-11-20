@@ -7,7 +7,7 @@ from scipy import ndimage
 from scipy.interpolate import PchipInterpolator
 from scipy.optimize import linprog
 
-from .color_palette import extract_reference_palette
+from .color_palette import extract_color_palette
 from .color_space import linear_rgb_to_oklab, oklab_to_linear_rgb
 
 COLOR_LIMITS = (0.0, 1.0)
@@ -18,9 +18,9 @@ _QUANTILES = np.asarray((0.0, 0.02, 0.08, 0.2, 0.5, 0.8, 0.92, 0.98, 1.0))
 
 
 class ColorReference(NamedTuple):
-    """Keep perceptual palette anchors, area weights and lightness quantiles."""
+    """Keep linear palette colors, area weights and lightness quantiles."""
 
-    anchors: np.ndarray
+    colors: np.ndarray
     weights: np.ndarray
     lightness: np.ndarray
 
@@ -54,17 +54,8 @@ def resize_rgba_proxy(rgba, max_size=PREVIEW_MAX_SIZE):
     ).astype(np.float32, copy=False)
 
 
-def _weighted_quantiles(values, weights):
-    valid = weights > 0
-    values, weights = values[valid], weights[valid]
-    order = np.argsort(values)
-    values, weights = values[order], weights[order]
-    cumulative = (np.cumsum(weights) - 0.5 * weights) / weights.sum()
-    return np.interp(_QUANTILES, cumulative, values)
-
-
-def prepare_color_reference(rgba, colors, weights):
-    """Prepare visible reference lightness using the displayed palette anchors."""
+def prepare_color_reference(rgba):
+    """Sample by opacity once for both the display palette and HDR lightness."""
     pixels = _require_rgba(rgba).reshape(-1, 4)
     alpha = np.clip(pixels[:, 3], 0.0, 1.0)
     cumulative = np.cumsum(alpha, dtype=np.float64)
@@ -73,20 +64,22 @@ def prepare_color_reference(rgba, colors, weights):
     count = min(len(pixels), _ANALYSIS_SAMPLES)
     positions = (np.arange(count) + 0.5) * cumulative[-1] / count
     samples = pixels[np.searchsorted(cumulative, positions), :3]
+    colors, weights = extract_color_palette(samples)
     lightness = linear_rgb_to_oklab(samples)[:, 0]
     return ColorReference(
-        linear_rgb_to_oklab(colors), np.asarray(weights, dtype=np.float64),
-        _weighted_quantiles(lightness, np.ones(count)),
+        colors, weights.astype(np.float64),
+        np.quantile(lightness, _QUANTILES, method="hazen"),
     )
 
 
 def _transport_palette(anchors, weights, reference):
-    count, reference_count = len(anchors), len(reference.anchors)
+    reference_anchors = linear_rgb_to_oklab(reference.colors)
+    count, reference_count = len(anchors), len(reference_anchors)
     weights = np.asarray(weights, dtype=np.float64)
     weights /= weights.sum()
     reference_weights = reference.weights / reference.weights.sum()
     source_chroma = anchors[:, 1:]
-    reference_chroma = reference.anchors[:, 1:]
+    reference_chroma = reference_anchors[:, 1:]
     source_mean = weights @ source_chroma
     reference_mean = reference_weights @ reference_chroma
     cost = np.sum(
@@ -94,7 +87,7 @@ def _transport_palette(anchors, weights, reference):
          - (reference_chroma - reference_mean)[None, :, :]) ** 2, axis=2,
     )
     source_rank = np.argsort(np.argsort(anchors[:, 0])) / max(count - 1, 1)
-    reference_rank = np.argsort(np.argsort(reference.anchors[:, 0])) / max(reference_count - 1, 1)
+    reference_rank = np.argsort(np.argsort(reference_anchors[:, 0])) / max(reference_count - 1, 1)
     cost += 0.015 * (source_rank[:, None] - reference_rank[None, :]) ** 2
     equalities = np.concatenate((
         np.repeat(np.eye(count), reference_count, axis=1),
@@ -115,16 +108,14 @@ def build_color_match(reference, target_rgba, *, target_float=False, prepared_ma
     """Prepare palette chroma and the original nine-point lightness curve once."""
     rgba = _require_rgba(target_rgba)
     if prepared_match is None:
-        samples = rgba.reshape(-1, 4)
-        indices = np.linspace(0, len(samples) - 1, min(len(samples), _ANALYSIS_SAMPLES), dtype=np.intp)
-        samples = samples[indices].copy()
-        samples[:, 3] = 1.0
-        colors, weights = extract_reference_palette(samples.reshape(1, -1, 4))
+        pixels = rgba.reshape(-1, 4)
+        indices = np.linspace(0, len(pixels) - 1, min(len(pixels), _ANALYSIS_SAMPLES), dtype=np.intp)
+        samples = pixels[indices, :3]
+        colors, weights = extract_color_palette(samples)
         anchors = linear_rgb_to_oklab(colors)
         delta = _transport_palette(anchors, weights, reference)
-        source_quantiles = _weighted_quantiles(
-            linear_rgb_to_oklab(samples[:, :3])[:, 0], np.ones(len(samples)),
-        )
+        lightness = linear_rgb_to_oklab(samples)[:, 0]
+        source_quantiles = np.quantile(lightness, _QUANTILES, method="hazen")
     else:
         anchors = prepared_match.anchors
         delta = prepared_match.anchor_delta

@@ -63,7 +63,7 @@ class RectifyToolTest(BlenderTestCase):
                 owner = SimpleNamespace(data=image, name="Source")
                 operator = self.rectify.RectifyImagePerspective()
                 operator.source_object_name = "Source"
-                operator.source_matrix_data = "matrix"
+                operator._source_matrix = object()
                 operator._points = list(quad[:3])
                 operator._phase = "POINTS"
                 operator._area_pointer = operator._region_pointer = 0
@@ -83,7 +83,6 @@ class RectifyToolTest(BlenderTestCase):
                     patch.object(self.rectify, "active_view3d_tool_id", return_value=None),
                     patch.object(self.rectify, "drawing_in_region", return_value=True),
                     patch.object(self.rectify, "require_conversion_source", return_value=owner),
-                    patch.object(self.rectify, "deserialize_matrix"),
                     patch.object(self.rectify, "image_empty_bounds"),
                     patch.object(self.rectify, "screen_path_to_image_pixels", return_value=quad),
                     patch.object(self.rectify, "image_pixels", return_value=source_pixels),

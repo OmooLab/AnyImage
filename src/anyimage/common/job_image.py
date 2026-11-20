@@ -48,12 +48,7 @@ def material_analysis_input(color_path):
         return path
     image = load_material_color_image(path)
     try:
-        rgba = image_rgba(image)
-        if image.alpha_mode == "NONE":
-            rgba[..., 3] = 1
-        preview = build_recognition_rgba(
-            rgba, associated=image.alpha_mode not in {"CHANNEL_PACKED", "NONE"}
-        )
+        preview = build_recognition_rgba(image_rgba(image), image.alpha_mode)
         output = path.parent / "analysis.png"
         save_color_png(preview, output, "sRGB")
         return output

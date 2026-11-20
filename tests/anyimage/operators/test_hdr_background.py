@@ -122,7 +122,7 @@ def test_hdr_request_uses_alpha_output_and_current_still(hdr_texture):
                                _image_target=SimpleNamespace())
     context = SimpleNamespace(scene=SimpleNamespace(anyimage_settings=SimpleNamespace()))
     try:
-        with patch.object(operators, "require_environment"), patch.object(operators, "require_model"), patch.object(operators, "production_device", return_value="CPU"):
+        with patch.object(operators, "require_environment"), patch.object(operators, "require_model"), patch.object(operators, "configured_device", return_value="cpu"):
             parameters = operation.request(operator, context)
         assert parameters["output_kind"] == "alpha"
         assert "start_frame" not in parameters and "video_frames" not in parameters

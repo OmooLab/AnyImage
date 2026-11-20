@@ -6,7 +6,7 @@ import pytest
 from mathutils import Euler, Vector
 
 from anyimage.common.image import image_rgba
-from anyimage.operators.convert_to_panorama.world import create_panorama_world
+from anyimage.common.panorama import create_panorama_world
 
 
 @pytest.mark.parametrize("image_name, world_name", [("Sunset.exr", "Sunset"), ("Sunset.png.001", "Sunset.001")])
@@ -15,9 +15,9 @@ def test_world_uses_source_image_name(image_name, world_name):
     obj = bpy.data.objects.new("Empty.001", None)
     source = bpy.data.images.new(image_name, width=4, height=2)
     color = bpy.data.images.new("Processed color", width=4, height=2)
-    world = create_panorama_world(obj, source, color)
+    world = create_panorama_world(source, color, panorama_object=obj)
     assert world.name == world_name
-    assert create_panorama_world(obj, source, color) != world
+    assert create_panorama_world(source, color, panorama_object=obj) != world
 
 
 def test_environment_tracks_world_rotation_without_translation_or_scale(tmp_path):
@@ -34,7 +34,7 @@ def test_environment_tracks_world_rotation_without_translation_or_scale(tmp_path
     image.pixels.foreach_set(rgba.ravel())
     image.pack()
     scene = bpy.context.scene
-    scene.world = create_panorama_world(obj, image, image)
+    scene.world = create_panorama_world(image, image, panorama_object=obj)
     vector = next(node for node in scene.world.node_tree.nodes
                   if node.type == "GROUP" and node.node_tree.name == "O World Vector")
     assert vector.inputs["Horizon Bend"].default_value == pytest.approx(-0.1)

@@ -28,7 +28,7 @@ class BakeMesh(bpy.types.Operator):
                         image = get_modifier_input(modifier, socket.identifier)
                         if image is not None:
                             depth_images.add(image)
-            mesh = materialize_mesh_and_textures(context, obj)
+            mesh = materialize_mesh_and_textures(context, obj, modifiers)
         except (RuntimeError, ValueError, TypeError, MemoryError, ReferenceError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}

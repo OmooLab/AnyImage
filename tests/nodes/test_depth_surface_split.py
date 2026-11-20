@@ -9,6 +9,19 @@ import pytest
 from tests.support.depth_surface import evaluated, surface
 
 
+def test_depth_plane_limit_clips_faces_by_scaled_center_depth():
+    from tests.support.planes import create_surface, evaluated as plane_mesh
+
+    obj, set_value, *_ = create_surface("DEPTH")
+    full_count = len(plane_mesh(obj)[1])
+    set_value("Depth Limit", 0.0)
+    assert len(plane_mesh(obj)[1]) == full_count
+    set_value("Depth Scale", 1.0)
+    assert 0 < len(plane_mesh(obj)[1]) < full_count
+    set_value("Depth Limit", -1.0)
+    assert not plane_mesh(obj)[1]
+
+
 def test_depth_plane_face_sampling_keeps_full_image_uv():
     from tests.support.planes import create_surface
 

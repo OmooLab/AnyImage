@@ -18,6 +18,13 @@ from .selection import ImageEditWarning, SelectionPath
 MIN_PATH_DISTANCE = 2.0
 
 
+def redraw_area(context):
+    area = getattr(context, "area", None)
+    tag_redraw = getattr(area, "tag_redraw", None)
+    if tag_redraw is not None:
+        tag_redraw()
+
+
 def image_edit_selection_keymap(*, deselect_on_empty=True):
     return (
         (

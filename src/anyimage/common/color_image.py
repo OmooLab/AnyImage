@@ -88,11 +88,12 @@ def create_normalized_color_image(image):
     import numpy as np
     from .color_space import normalize_color_rgba
 
-    rgba = image_rgba(image)
-    if not np.isfinite(rgba).all():
-        raise ValueError("Color normalization requires finite RGBA values")
     if not image.get(COLOR_NORMALIZED_PROPERTY) and (image.is_float or image.colorspace_settings.name != "sRGB"):
         rgba = normalize_color_rgba(decode_color_image(image, image.colorspace_settings.name))
+    else:
+        rgba = image_rgba(image)
+        if not np.isfinite(rgba).all():
+            raise ValueError("Color normalization requires finite RGBA values")
     result = bpy.data.images.new(image.name, width=image.size[0], height=image.size[1], alpha=True)
     try:
         result.colorspace_settings.name = "sRGB"

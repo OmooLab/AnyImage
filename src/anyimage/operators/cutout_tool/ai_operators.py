@@ -1,7 +1,5 @@
 """Convert one image Selection into a Cutout Shape."""
 
-import json
-
 import bpy
 
 from ...preferences import (
@@ -11,7 +9,7 @@ from ...preferences import (
     addon_preferences,
     configured_cutout_boundary_padding,
 )
-from ...ai_preferences import configured_geometry_model, configured_max_ai_input_size
+from ...ai_preferences import configured_device, configured_geometry_model, configured_max_ai_input_size
 from ...properties import (
     cutout_alpha_threshold_property,
     cutout_fine_outline_property,
@@ -28,13 +26,12 @@ from ...common.job_image import material_analysis_input
 from ...common.ai import (
     invoke_ai_setup_if_needed,
     geometry_job_parameters,
-    production_device,
     require_environment,
     require_input_path,
     require_model,
 )
 from ...common.image import image_content_signature, image_rgba, require_image_empty, is_animated_image
-from ...common.image_target import require_conversion_source
+from ...common.object import require_conversion_source
 from ...common.geometry_image import (
     load_depth_metadata,
     load_depth_result_image,
@@ -72,7 +69,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     color_path: bpy.props.StringProperty(options=_HIDDEN)
     source_object_name: bpy.props.StringProperty(options=_HIDDEN)
     selection_path_json: bpy.props.StringProperty(options=_HIDDEN)
-    selection_bounds_json: bpy.props.StringProperty(options=_HIDDEN)
     shape: bpy.props.StringProperty(default="SOLID", options=_HIDDEN)
     gesture: bpy.props.StringProperty(default="LASSO", options=_HIDDEN)
     edge_length: cutout_edge_length_property(options=_HIDDEN)
@@ -128,10 +124,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 return setup_result
             self.model = configured_geometry_model(context)
             self.resolution_level = int(getattr(addon_preferences(context), "geometry_resolution_level", 3))
-            self.selection_bounds_json = json.dumps(
-                selection_mask.bounds,
-                separators=(",", ":"),
-            )
             self._selection_mask = selection_mask
             self.color_path = str(prepare_material_color_input(
                 source_object.data,
@@ -158,35 +150,27 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         generate_normal = generate_depth or self.generate_normal
         if generate_normal:
             require_model(self.model)
-        parameters = {
-            "input": str(source_path),
-            "device": production_device().lower(),
+            parameters = geometry_job_parameters(source_path, self.model, self.resolution_level)
+        else:
+            parameters = {"input": str(source_path), "device": configured_device()}
+        return {
+            **parameters,
             "generate_depth": generate_depth,
             "generate_normal": generate_normal,
             "max_input_size": int(self.max_ai_input_size),
         }
-        if generate_normal:
-            parameters.update(
-                geometry_job_parameters(
-                    source_path,
-                    self.model,
-                    self.resolution_level,
-                )
-            )
-        return parameters
 
     def response(self, context, result):
         source_object = require_conversion_source(self)
-        source_bounds = tuple(json.loads(self.selection_bounds_json))
+        selection_mask = getattr(self, "_selection_mask", None)
+        if selection_mask is None:
+            raise RuntimeError("The Cutout Selection is no longer available")
         color_image = load_material_color_image(self.color_path)
         value = result.value if isinstance(result.value, dict) else {}
         normal_image = None
         depth_image = None
         normal_missing = False
         try:
-            selection_mask = getattr(self, "_selection_mask", None)
-            if selection_mask is None:
-                raise RuntimeError("The Cutout Selection is no longer available")
             content_values = cutout_content_values(
                 image_rgba(color_image)[..., 3],
                 selection_mask.values,
@@ -214,7 +198,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 self.shape,
                 self.edge_length,
                 content_values,
-                source_bounds,
+                selection_mask.bounds,
                 depth_image=depth_image,
                 depth_metadata=depth_metadata,
                 normal_image=normal_image,
@@ -239,6 +223,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
 
     def cleanup(self):
         cleanup_material_color_input(self.color_path)
+        self._selection_mask = None
         self._source_object = None
         self._source_image = None
         self._source_signature = None

@@ -5,10 +5,8 @@ from anyimage.common.object import (
     set_modifier_input,
 )
 
-from anyimage.common.image_plane import (
-    add_image_plane_processing,
-    create_image_plane_mesh,
-)
+from anyimage.common.image_plane import create_image_plane_mesh
+from anyimage.common.node import load_node_group
 
 
 def evaluated_mesh(obj):
@@ -25,8 +23,9 @@ def test_saved_image_plane_evaluation():
     mesh.materials.append(material)
     obj = bpy.data.objects.new("Image Plane", mesh)
     bpy.context.scene.collection.objects.link(obj)
-    modifier = add_image_plane_processing(obj)
-    group = modifier.node_group
+    group = load_node_group("O Plane")
+    modifier = obj.modifiers.new(name=group.name, type="NODES")
+    modifier.node_group = group
     assert group.name == "O Plane"
     assert group.is_modifier
     inputs = {

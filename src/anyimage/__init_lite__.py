@@ -8,8 +8,9 @@ from .properties import SettingsLite, register_color_references, unregister_colo
 
 from .operators.clipboard_image import PasteClipboardImage
 from .operators.bake_mesh import BakeMesh
-from .operators.color_match import MatchColorReference
+from .operators.color_match import MatchColorReference, SetColorReference
 from .operators.convert_to_plane import ConvertToPlane
+from .operators.convert_to_world import ConvertToWorld
 from .operators.cutout_tool import CreateCutoutShape, SelectCutoutSelection
 from .operators.frame_tool import FrameImages
 from .operators.mask_tool import EditImageAlpha
@@ -52,8 +53,10 @@ CLASSES = (
     # Operators
     PasteClipboardImage,
     BakeMesh,
+    SetColorReference,
     MatchColorReference,
     ConvertToPlane,
+    ConvertToWorld,
     CreateCutoutShape,
     SelectCutoutSelection,
     FrameImages,
@@ -70,8 +73,8 @@ CLASSES = (
 )
 
 TOOLS = (
-    (CutoutTool, {"separator": True, "group": True}),
-    (FrameTool, {"after": {CutoutTool.bl_idname}, "separator": False}),
+    (CutoutTool, {"separator": True}),
+    (FrameTool, {"after": {CutoutTool.bl_idname}, "group": True}),
     (MaskTool, {"after": {FrameTool.bl_idname}, "separator": False}),
     (RectifyTool, {"after": {MaskTool.bl_idname}, "separator": False}),
 )

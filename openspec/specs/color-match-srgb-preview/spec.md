@@ -1,7 +1,7 @@
 # color-match-srgb-preview Specification
 
 ## Purpose
-统一颜色匹配预览的固定 sRGB 像素解释，明确叠加层显示方式、确认后原始图片解释设置的保留，以及预览资源的模态生命周期。
+规定参考图和目标图的像素解释。用户在目标对象或纹理节点上调整色彩与亮度时，临时图片显示匹配效果，确认后以原尺寸和原色彩设置提交结果。
 
 ## Requirements
 
@@ -21,21 +21,17 @@ Match Color SHALL 将 byte 图片当前业务 RGB 按 sRGB 解码到 linear Rec.
 - **WHEN** 系统准备参考图标、色板和迁移数据
 - **THEN** 三者采用同一像素解释，参考原有设置和内容保持不变
 
-### Requirement: The overlay displays fixed sRGB pixels
+### Requirement: Match Color previews the target in place
 
-Match Color 浮层 SHALL 将匹配后的 linear Rec.709 RGB 编码为 sRGB 并限制在显示范围，使用独立 GPU 纹理显示。显示 SHALL 与目标及参考的 Image color space 名称解耦，保留代理宽高比、方向、透明呈现与现有刷新限制。
+Match Color SHALL 在目标上显示临时图片，保留原图的宽高比、像素方向、色彩空间和 Alpha 模式。编辑器和视图按当前显示设置呈现预览。
 
-#### Scenario: A material color image is previewed
-- **WHEN** 用户对具有材质 color space 设置的 `_color` 图片启动 Match Color
-- **THEN** 浮层按固定 sRGB 显示匹配结果，目标设置与绑定保持原状态
+#### Scenario: An object uses a shared material
+- **WHEN** 从对象入口调整共享材质中的颜色
+- **THEN** 只有该对象显示临时预览，其他对象继续使用原材质
 
-#### Scenario: The OCIO configuration has no sRGB entry
-- **WHEN** 用户的 OCIO 配置没有名为 `sRGB` 的色彩空间
-- **THEN** 预览直接显示已编码的 sRGB 纹理，正常启动与刷新
-
-#### Scenario: An asymmetric transparent image is previewed
-- **WHEN** 预览图片包含不对称图案、透明及半透明像素
-- **THEN** 浮层方向正确，透明区域与半透明边缘采用一致的 Alpha 混合
+#### Scenario: A shader texture is previewed
+- **WHEN** 从着色器编辑器调整活动纹理节点
+- **THEN** 该节点显示预览，使用该节点的材质或世界环境同步显示结果
 
 ### Requirement: Confirmation preserves the original image interpretation settings
 
@@ -55,12 +51,12 @@ Match Color SHALL 将 byte 结果 RGB 编码为 sRGB，将 float 结果 RGB 保�
 
 ### Requirement: Preview resources follow the modal lifetime
 
-系统 SHALL 在确认、取消、初始化失败与刷新失败时释放该次预览的 GPU 纹理引用、绘制 handler 和 timer。预览 SHALL 保留源图状态，重复刷新 SHALL 保持资源数量有界。
+系统 SHALL 在确认、取消、初始化失败与刷新失败时释放临时图片、为对象预览创建的材质、绘制回调和定时器。预览期间 SHALL 保留源图像素。
 
 #### Scenario: A preview is cancelled or fails
 - **WHEN** 用户取消操作，或预览初始化、刷新发生异常
-- **THEN** 源图像素、color space、Alpha 模式与绑定保持原状态，预览资源被释放
+- **THEN** 恢复仍属于这次预览的绑定，保留源图内容和用户重新指定的绑定
 
 #### Scenario: A preview refreshes repeatedly
 - **WHEN** 用户连续调整预览
-- **THEN** 旧纹理随替换被释放，结束后没有残留预览资源
+- **THEN** 复用同一张临时图片刷新像素，结束后释放预览资源

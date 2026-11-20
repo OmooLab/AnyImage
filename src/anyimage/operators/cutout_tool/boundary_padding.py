@@ -161,17 +161,16 @@ def pad_cutout_images(
     if padding <= 0.0:
         return
     color = image_rgba_buffer(color_image)
-    color_mapping = build_boundary_mapping(
+    mapping = build_boundary_mapping(
         content_values, alpha_threshold, padding, color.shape[:2]
     )
-    write_image_rgba_buffer(color_image, apply_boundary_mapping(color, color_mapping))
+    write_image_rgba_buffer(color_image, apply_boundary_mapping(color, mapping))
     if depth_image is None:
         return
     depth = image_rgba_buffer(depth_image)
-    depth_mapping = build_boundary_mapping(
-        content_values, alpha_threshold, padding, depth.shape[:2]
-    )
+    if depth.shape[:2] != mapping.target.shape:
+        mapping = build_boundary_mapping(content_values, alpha_threshold, padding, depth.shape[:2])
     write_image_rgba_buffer(
         depth_image,
-        apply_depth_boundary_mapping(depth, depth_mapping, depth_metadata["intrinsics"]),
+        apply_depth_boundary_mapping(depth, mapping, depth_metadata["intrinsics"]),
     )

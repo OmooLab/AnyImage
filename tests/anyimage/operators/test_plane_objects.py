@@ -1,4 +1,3 @@
-from anyimage.common import image_plane
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
@@ -7,6 +6,7 @@ from mathutils import Matrix, Vector
 from anyimage.common import image as image_data
 from anyimage.common import object as object_data
 from anyimage.common.geometry_image import depth_node_direction
+from anyimage.operators.convert_to_plane import create_plane_object
 from anyimage.operators.depth_plane import object as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from tests.support.image_objects import _depth_image, _depth_metadata, _evaluated_positions
@@ -24,10 +24,9 @@ def test_build_plane_keeps_one_quad_and_generates_topology_in_geometry_nodes():
     bpy.context.collection.objects.link(source)
     material = bpy.data.materials.new("Source.material")
 
-    result = image_plane.create_plane_object(
+    result = create_plane_object(
         bpy.context,
         source,
-        2,
         material,
     )
 
@@ -96,10 +95,9 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
     plane_bounds = image_data.image_empty_bounds(plane_source)
     plane_matrix = plane_source.matrix_world.copy()
     plane_material = bpy.data.materials.new("Centered Plane Material")
-    plane = image_plane.create_plane_object(
+    plane = create_plane_object(
         bpy.context,
         plane_source,
-        0,
         plane_material,
     )
     assert_centered(plane, plane_bounds, plane_matrix)
@@ -136,6 +134,10 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
             "Uniform Scale",
         )
     ]
+    assert np.isclose(
+        depth_modifier[object_data.modifier_input_identifier(saved, "Depth Limit")],
+        0.5 * uniform_scale,
+    )
     assert np.isclose(
         depth_modifier[
             object_data.modifier_input_identifier(

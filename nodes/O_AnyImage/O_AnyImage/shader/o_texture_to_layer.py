@@ -9,9 +9,9 @@ class OTextureToLayer(CustomShaderGroup):
     _tree_properties = {"description": "Prepare O Texture to Layer material outputs.", "default_group_node_width": 190}
 
     def _build_group(self, tree: TreeBuilder[ShaderNodeTree]) -> None:
-        color_texture = tree.inputs.color("Color Texture", (0.8, 0.8, 0.8, 1.0))
-        alpha_texture = tree.inputs.float("Alpha Texture", 1.0, min_value=0.0, max_value=1.0, subtype="FACTOR")
-        normal_texture = tree.inputs.color("Normal Texture", (0.5, 0.5, 1.0, 1.0))
+        color_texture = tree.inputs.color("Color Texture", (0.8, 0.8, 0.8, 1.0), hide_value=True)
+        alpha_texture = tree.inputs.float("Alpha Texture", 1.0, min_value=0.0, max_value=1.0, subtype="FACTOR", hide_value=True)
+        normal_texture = tree.inputs.color("Normal Texture", (0.5, 0.5, 1.0, 1.0), hide_value=True)
         roughness_scale = tree.inputs.float("Roughness Scale", 1.0, description="Adjust the overall surface roughness.", min_value=0.0, max_value=1.0, subtype="FACTOR")
         alpha_scale = tree.inputs.float("Alpha Scale", 1.0, description="Adjust opacity derived from color and texture alpha.", min_value=0.0, max_value=1.0, subtype="FACTOR")
         normal_scale = tree.inputs.float("Normal Scale", 1.0, description="Control the strength of surface detail from the normal map.", min_value=0.0, max_value=2.0)

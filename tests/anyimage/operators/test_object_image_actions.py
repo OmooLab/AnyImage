@@ -158,7 +158,8 @@ def test_object_commit_isolates_shared_material():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, source = _material()
     first = _image_object(material, "First")
-    second = _image_object(material, "Second")
+    second = first.copy()
+    bpy.context.collection.objects.link(second)
     target = ImageEditTarget.capture(_context(first))
     result = bpy.data.images.new("Result", width=8, height=6, alpha=True)
     result.pixels.foreach_set(
@@ -287,6 +288,7 @@ def test_object_menu_and_operator_polls_use_marked_object():
         "anyimage.bake_mesh",
         "anyimage.remove_image_background",
         "anyimage.upscale_image",
+        "anyimage.set_color_reference",
         "anyimage.match_color_reference",
         "anyimage.open_ai_environment_settings",
     ], identifiers

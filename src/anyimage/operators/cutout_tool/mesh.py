@@ -3,47 +3,48 @@
 import numpy as np
 from scipy import ndimage
 from scipy.spatial import cKDTree
-from .polygon import approximate_polygon
 
-from . import geometry as g
+from .contours import (
+    contour_area,
+    contour_interior_point,
+    contours_for_component,
+    extract_selection_contours,
+    separate_contour_contacts,
+    smooth_selection_contour,
+    valid_contours,
+)
 
 
 # Keep predicate tolerances independent of scene units and requested density.
 NORMALIZED_EDGE_LENGTH = 32.0
 
 
-def separate_contour_contacts(contours):
-    """Open pixel-corner contacts with a subpixel bevel in each incident ring."""
-    points = np.concatenate(contours)
-    pairs = cKDTree(points).query_pairs(1e-8)
-    if not pairs:
-        return contours
-    contacts = {i for pair in pairs for i in pair}
-    result = []
-    offset = 0
-    for contour in contours:
-        ring = contour.copy()
-        for i in range(len(ring)):
-            if offset + i in contacts:
-                before = contour[i-1] - contour[i]
-                after = contour[(i+1) % len(ring)] - contour[i]
-                length = min(np.linalg.norm(before), np.linalg.norm(after))
-                direction = (
-                    before / np.linalg.norm(before) + after / np.linalg.norm(after)
-                )
-                ring[i] += direction * length * 0.125
-        result.append(ring)
-        offset += len(ring)
-    return result
+def boundary_vertices_from_faces(vertex_count, faces):
+    faces = np.asarray(faces, dtype=np.int32)
+    boundary = np.zeros(vertex_count, dtype=bool)
+    if not len(faces):
+        return boundary
+    edges = np.concatenate(
+        [
+            faces[:, (index, (index + 1) % faces.shape[1])]
+            for index in range(faces.shape[1])
+        ],
+        axis=0,
+    )
+    edges.sort(axis=1)
+    unique_edges, users = np.unique(edges, axis=0, return_counts=True)
+    boundary[unique_edges[users == 1].ravel()] = True
+    return boundary
 
 
 def support_mesh(points, faces, *, max_vertices=50000):
     """Split boundary chords once so every face has an interior height sample."""
-    boundary = g.boundary_vertices_from_faces(len(points), faces)
     edges, counts = np.unique(
         np.sort(np.concatenate((faces[:, :2], faces[:, 1:], faces[:, ::2])), axis=1),
         axis=0, return_counts=True,
     )
+    boundary = np.zeros(len(points), dtype=bool)
+    boundary[edges[counts == 1]] = True
     chords = edges[(counts == 2) & boundary[edges].all(axis=1)]
     midpoints = {tuple(edge): len(points) + i for i, edge in enumerate(chords)}
     isolated = sum(
@@ -84,51 +85,15 @@ def support_mesh(points, faces, *, max_vertices=50000):
     return np.asarray(vertices), np.asarray(output, dtype=np.int32)
 
 
-def valid_contours(contours):
-    """Reject crossing rings and holes moved outside the outer ring."""
-    starts = np.concatenate(contours)
-    if cKDTree(starts).query_pairs(1e-8):
-        return False
-    ends = np.concatenate([np.roll(c, -1, axis=0) for c in contours])
-    delta = ends - starts
-    count = len(starts)
-    following = np.concatenate(
-        [
-            np.roll(np.arange(len(contour)) + sum(map(len, contours[:index])), -1)
-            for index, contour in enumerate(contours)
-        ]
-    )
-    for first in range(0, count, 32):
-        ids = np.arange(first, min(first + 32, count))[:, None]
-        other = np.arange(count)[None, :]
-        a = starts[first : first + 32, None]
-        v = delta[first : first + 32, None]
-        w = delta[None]
-        d = starts[None] - a
-        determinant = v[..., 0] * w[..., 1] - v[..., 1] * w[..., 0]
-        divisor = np.where(np.abs(determinant) > 1e-12, determinant, 1.0)
-        t = (d[..., 0] * w[..., 1] - d[..., 1] * w[..., 0]) / divisor
-        u = (d[..., 0] * v[..., 1] - d[..., 1] * v[..., 0]) / divisor
-        adjacent = (other == following[ids]) | (ids == following[other])
-        if np.any(
-            (other > ids)
-            & ~adjacent
-            & (np.abs(determinant) > 1e-12)
-            & (t >= -1e-9)
-            & (t <= 1 + 1e-9)
-            & (u >= -1e-9)
-            & (u <= 1 + 1e-9)
-        ):
-            return False
-    return all(
-        g.points_inside_contours(hole[:1], contours[:1])[0] for hole in contours[1:]
-    )
-
-
 def prepare_mask(alpha, threshold, transform, fine_outline):
-    """Fill holes according to the normalized world-space target length."""
-    filtered = filter_alpha(alpha, threshold)
-    mask = (filtered > 0) & (filtered >= threshold)
+    """Keep significant islands and fill holes at the target mesh spacing."""
+    labels, count = ndimage.label((alpha > 0) & (alpha >= threshold))
+    areas = np.bincount(labels.ravel(), minlength=count + 1)
+    keep = areas >= 16
+    keep[0] = False
+    if count:
+        keep[1 + np.argmax(areas[1:])] = True
+    mask = keep[labels]
     filled = ndimage.binary_fill_holes(mask)
     if not fine_outline:
         return filled
@@ -161,6 +126,7 @@ def build_mesh(
     *,
     pixel_transform=None,
     fine_outline=True,
+    include_components=True,
 ):
     """Return pixel-space quality triangles, component ranges and final Mask."""
     alpha = np.asarray(alpha, dtype=float)
@@ -175,17 +141,15 @@ def build_mesh(
     mask = prepare_mask(alpha, threshold, transform, fine_outline)
     if not mask.any():
         raise ValueError("The Cutout selection contains no visible image pixels")
-    reference = g.extract_selection_contours(
-        mask.astype(float), max_resolution=max(mask.shape), threshold=0.5
-    )
-    prepared = []
-    for component in reference.components:
+    points, faces, components = [], [], []
+    offset = 0
+    for component in extract_selection_contours(mask):
         raw = separate_contour_contacts([np.asarray(c) @ transform for c in component])
         if fine_outline:
             contours = contours_for_component(raw, NORMALIZED_EDGE_LENGTH, pixel_transform=transform)
         else:
             contours = [
-                g.smooth_selection_contour(
+                smooth_selection_contour(
                     c,
                     min(
                         NORMALIZED_EDGE_LENGTH,
@@ -200,75 +164,22 @@ def build_mesh(
             ]
             if not valid_contours(contours):
                 raise ValueError("Cutout simplified outline is invalid")
-        prepared.append(contours)
-    points, faces, components = [], [], []
-    offset = 0
-    for contours in prepared:
         vertices, triangles = triangulate(contours, NORMALIZED_EDGE_LENGTH)
         vertices, triangles = support_mesh(
             vertices, triangles, max_vertices=50000-offset
         )
         points.append(vertices @ inverse)
         faces.append(triangles + offset)
-        components.append(
-            (offset, offset + len(vertices), triangles, contours[0] @ inverse)
-        )
+        if include_components:
+            components.append(
+                (offset, offset + len(vertices), triangles, contours[0] @ inverse)
+            )
         offset += len(vertices)
         if offset > 50000:
             raise ValueError("Cutout mesh vertex limit exceeded")
     points, faces = np.concatenate(points), np.concatenate(faces)
-    result = points, faces, g.boundary_vertices_from_faces(len(points), faces), components
-    return *result, mask
-
-
-def filter_alpha(alpha, threshold, min_area=16):
-    mask = (alpha > 0) & (alpha >= threshold)
-    labels, count = ndimage.label(mask)
-    areas = np.bincount(labels.ravel(), minlength=count + 1)
-    keep = areas >= min_area
-    keep[0] = False
-    if count:
-        keep[1 + np.argmax(areas[1:])] = True
-    removed = mask & ~keep[labels]
-    result = alpha.copy()
-    result[removed] = 0
-    return result
-
-
-def contours_for_component(component, spacing, strength=1.0, *, pixel_transform=None):
-    """Soften pixel steps before simplifying in the target edge-length metric."""
-    result = []
-    transform = np.eye(2) if pixel_transform is None else pixel_transform
-    inverse = np.linalg.inv(transform)
-    tolerance = spacing * 0.078125
-    for contour in component:
-        original = np.asarray(contour, dtype=float)
-        if strength > 0:
-            original = ndimage.gaussian_filter1d(
-                g.resample_closed_contour(original @ inverse, 0.5),
-                1.6 * strength,
-                axis=0,
-                mode="wrap",
-            ) @ transform
-        for error in (tolerance * strength, tolerance * strength * 0.5, 0):
-            simplified = approximate_polygon(np.vstack((original, original[0])), error)[
-                :-1
-            ]
-            if len(simplified) >= 3 and abs(g.contour_area(simplified)) > 0.05:
-                break
-        points = []
-        for a, b in zip(simplified, np.roll(simplified, -1, axis=0)):
-            count = max(1, int(np.ceil(np.linalg.norm(b - a) / spacing)))
-            points.extend(a + np.arange(count)[:, None] / count * (b - a))
-        result.append(np.asarray(points))
-    if not valid_contours(result):
-        if strength == 0:
-            raise ValueError("Cutout outline is invalid")
-        return contours_for_component(
-            component, spacing, strength * 0.5 if strength > 0.125 else 0,
-            pixel_transform=transform,
-        )
-    return result
+    boundary = boundary_vertices_from_faces(len(points), faces)
+    return points, faces, boundary, components, mask
 
 
 def normalize_constraints(points, edges):
@@ -337,8 +248,8 @@ def triangulate(contours, spacing):
         offset += len(contour)
     input_points = points
     points, segments, sources = normalize_constraints(points, edges)
-    points = np.vstack((points, g.contour_interior_point(contours, spacing)))
-    holes = [g.contour_interior_point([contour], spacing).tolist() for contour in contours[1:]]
+    points = np.vstack((points, contour_interior_point(contours, spacing)))
+    holes = [contour_interior_point([contour], spacing).tolist() for contour in contours[1:]]
     raw_points, raw_faces, raw_segments = tangle.build_mesh(
         points.tolist(), segments, holes, np.sqrt(3) / 4 * spacing**2
     )
@@ -359,8 +270,8 @@ def triangulate(contours, spacing):
         )
         / 2
     )
-    expected_area = abs(g.contour_area(contours[0])) - sum(
-        abs(g.contour_area(c)) for c in contours[1:]
+    expected_area = abs(contour_area(contours[0])) - sum(
+        abs(contour_area(c)) for c in contours[1:]
     )
     if np.any(areas <= 1e-10) or not np.isclose(
         areas.sum(), expected_area, rtol=1e-8, atol=1e-7

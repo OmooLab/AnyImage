@@ -107,12 +107,11 @@ class TranslationsTest(BlenderTestCase):
                 lookup.assert_called_once_with(source)
             self.assertEqual(menu.upscale_menu_label(None), "Upscale (1280 × 960)")
 
-    def test_reference_tooltip_cache_tracks_language_and_tooltip_setting(self):
+    def test_reference_gallery_uses_current_tooltip_translation(self):
         properties = self.anyimage.properties
         reference = SimpleNamespace(session_uid=1, name="Photo.png", size=(4, 3), as_pointer=lambda: 123)
         translations = self.fake_bpy.app.translations
         view = self.fake_bpy.context.preferences.view
-        properties.invalidate_color_reference_items()
         with patch.object(properties, "color_reference_candidates", return_value=[reference]), \
              patch.object(properties, "release_unused_color_references"), \
              patch.object(properties, "color_reference_preview_icon", return_value=1):
@@ -125,7 +124,6 @@ class TranslationsTest(BlenderTestCase):
             with patch.object(translations, "locale", "zh_HANS"), \
                  patch.object(view, "use_translate_tooltips", False):
                 self.assertEqual(properties.color_reference_items(None, None)[1][2], english[1][2])
-        properties.invalidate_color_reference_items()
 
     def test_mask_status_translates_template_and_keeps_radius(self):
         catalog = self.anyimage.TRANSLATIONS["zh_HANS"]

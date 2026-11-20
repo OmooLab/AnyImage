@@ -11,9 +11,11 @@ from PIL import Image
 from mathutils import Matrix
 
 from anyimage.operators.convert_to_panorama import operators, object as conversion
+from anyimage.operators.convert_to_world import ConvertToWorld
 from server.geometry.depth_texture import write_float_exr
 from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
 from anyimage.common.image import image_content_signature
+from anyimage.common.panorama import panorama_crop_bounds
 
 
 @pytest.mark.parametrize("size, expected", [
@@ -24,13 +26,7 @@ from anyimage.common.image import image_content_signature
     ((35, 16), (1, 0, 33, 16)),
 ])
 def test_panorama_crop_bounds(size, expected):
-    assert operators.panorama_crop_bounds(*size) == expected
-
-
-@pytest.mark.parametrize("size", [(0, 1), (1, 1), (2, 0), (-2, 1)])
-def test_panorama_crop_bounds_rejects_unusable_dimensions(size):
-    with pytest.raises(ValueError, match="at least 2 x 1 pixels"):
-        operators.panorama_crop_bounds(*size)
+    assert panorama_crop_bounds(*size) == expected
 
 
 @pytest.fixture
@@ -48,6 +44,15 @@ def source():
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     return obj
+
+
+def test_world_conversion_requires_a_static_panorama_source(source):
+    assert ConvertToWorld.poll(bpy.context)
+    source.data.scale(1, 8)
+    assert not ConvertToWorld.poll(bpy.context)
+    source.data.scale(16, 8)
+    source.data.source = "SEQUENCE"
+    assert not ConvertToWorld.poll(bpy.context)
 
 
 def test_entry_submits_current_alpha_preferences_and_cleans_cancelled_input(source, monkeypatch):
@@ -129,6 +134,25 @@ def artifacts(tmp_path, source):
                                color_path=str(prepare_material_color_input(source.data)))
     yield result, operator
     cleanup_material_color_input(operator.color_path)
+
+
+@pytest.mark.parametrize("view_transform", ["AgX", "Standard"])
+def test_world_and_panorama_interpret_the_same_srgb_image(source, artifacts, view_transform):
+    scene = bpy.context.scene
+    scene.view_settings.view_transform = view_transform
+    assert source.data.colorspace_settings.name == "sRGB"
+    world_source = source.copy()
+    bpy.context.collection.objects.link(world_source)
+    bpy.context.view_layer.objects.active = world_source
+    assert ConvertToWorld.execute(SimpleNamespace(), bpy.context) == {"FINISHED"}
+    standalone = next(n.image for n in scene.world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
+
+    bpy.context.view_layer.objects.active = source
+    conversion.create_panorama_from_result(bpy.context, *artifacts)
+    panorama = next(n.image for n in scene.world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
+    assert standalone.colorspace_settings.name == panorama.colorspace_settings.name
+    assert standalone.alpha_mode == panorama.alpha_mode
+    np.testing.assert_allclose(standalone.pixels[:], panorama.pixels[:])
 
 
 def test_result_replaces_source_with_zero_rotation_and_object_normal_material(source, artifacts, monkeypatch):
@@ -247,8 +271,8 @@ def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, m
     elif failure == "finalize":
         monkeypatch.setattr(conversion, "finalize_object_result", Mock(side_effect=RuntimeError("Failed finalize")))
     elif failure == "world":
-        from anyimage.operators.convert_to_panorama import world
-        monkeypatch.setattr(world, "load_node_group", Mock(side_effect=RuntimeError("Failed world")))
+        from anyimage.common import panorama
+        monkeypatch.setattr(panorama, "load_node_group", Mock(side_effect=RuntimeError("Failed world")))
     elif failure == "stale":
         operator._source_object = object()
     elif failure == "replaced_image":

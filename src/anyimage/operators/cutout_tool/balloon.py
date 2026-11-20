@@ -144,15 +144,16 @@ def smooth_interior_heights(
         for start, end in zip(face, face[1:] + face[:1]):
             neighbors[start].add(end)
             neighbors[end].add(start)
+    interior_neighbors = []
+    for index in np.flatnonzero(~boundary_mask):
+        adjacent = [neighbor for neighbor in neighbors[index] if not boundary_mask[neighbor]]
+        if adjacent:
+            interior_neighbors.append((index, adjacent))
     for _iteration in range(iterations):
         updated = values.copy()
-        for index in np.flatnonzero(~boundary_mask):
-            adjacent = [
-                neighbor for neighbor in neighbors[index] if not boundary_mask[neighbor]
-            ]
-            if adjacent:
-                average = float(values[adjacent].mean())
-                updated[index] = values[index] * (1.0 - factor) + average * factor
+        for index, adjacent in interior_neighbors:
+            average = float(values[adjacent].mean())
+            updated[index] = values[index] * (1.0 - factor) + average * factor
         updated[boundary_mask] = 0.0
         values = updated
     return values

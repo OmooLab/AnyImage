@@ -13,7 +13,6 @@ from ...common.image_preview import (
 )
 from ...common.viewport import (
     active_view3d_tool_id,
-    deserialize_matrix,
     draw_dashed_line,
     draw_polygon_fill,
     drawing_in_region,
@@ -21,9 +20,8 @@ from ...common.viewport import (
     report_image_edit_exception,
     resolve_image_edit_click,
     screen_path_to_image_pixels,
-    serialize_matrix,
 )
-from ...common.image_target import require_conversion_source
+from ...common.object import require_conversion_source
 from ...common.image import image_content_signature, create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
 from ...common.projective_image import warp_projective_pixels
 from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
@@ -56,7 +54,6 @@ class RectifyImagePerspective(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     source_object_name: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
-    source_matrix_data: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
     quad_json: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
     aspect_ratio: bpy.props.FloatProperty(
         default=1.0,
@@ -76,7 +73,6 @@ class RectifyImagePerspective(bpy.types.Operator):
     _source_image = None
     _source_signature = None
     _initial_aspect_ratio = 1.0
-    _raw_aspect_ratio = 1.0
     _aspect_preset_label = None
     _aspect_anchor_x = 0.0
     _area_pointer = 0
@@ -135,16 +131,14 @@ class RectifyImagePerspective(bpy.types.Operator):
         )
 
     def _update_aspect(self, context, event):
-        self._raw_aspect_ratio = aspect_ratio_from_mouse(
+        ratio = aspect_ratio_from_mouse(
             self._initial_aspect_ratio,
             float(event.mouse_x) - self._aspect_anchor_x,
         )
         if event.ctrl:
-            self.aspect_ratio, self._aspect_preset_label = snapped_aspect_ratio(
-                self._raw_aspect_ratio
-            )
+            self.aspect_ratio, self._aspect_preset_label = snapped_aspect_ratio(ratio)
         else:
-            self.aspect_ratio = self._raw_aspect_ratio
+            self.aspect_ratio = ratio
             self._aspect_preset_label = None
         self._set_aspect_status(context)
         context.area.tag_redraw()
@@ -185,7 +179,7 @@ class RectifyImagePerspective(bpy.types.Operator):
         self._source_object = source_object
         self._source_image = source_object.data
         self._source_signature = image_content_signature(source_object.data)
-        self.source_matrix_data = serialize_matrix(source_object.matrix_world)
+        self._source_matrix = source_object.matrix_world.copy()
         self.quad_json = ""
         self._phase = "POINTS"
         self._preview_texture = None
@@ -266,12 +260,11 @@ class RectifyImagePerspective(bpy.types.Operator):
                 return {"CANCELLED"}
             try:
                 canonical_perspective_quad(self._points, MIN_QUAD_AREA)
-                matrix_world = deserialize_matrix(self.source_matrix_data)
                 quad = screen_path_to_image_pixels(
                     self._points,
                     context.region,
                     context.region_data,
-                    matrix_world,
+                    self._source_matrix,
                     image_empty_bounds(source_object),
                     tuple(source_object.data.size),
                 )
@@ -290,7 +283,6 @@ class RectifyImagePerspective(bpy.types.Operator):
                 )
                 self.aspect_ratio = perspective_quad_aspect(quad)
                 self._initial_aspect_ratio = self.aspect_ratio
-                self._raw_aspect_ratio = self.aspect_ratio
                 self._aspect_preset_label = None
                 center_x = (
                     float(event.mouse_x)

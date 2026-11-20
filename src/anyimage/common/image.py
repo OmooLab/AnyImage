@@ -9,6 +9,7 @@ image_content_handlers = []
 TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
 CLIPBOARD_HASH_PROPERTY = "anyimage_clipboard_sha256"
 IMAGE_EMPTY_REFERENCE_PROPERTY = "anyimage_image_empty_reference"
+COLOR_REFERENCE_PROPERTY = "anyimage_color_reference"
 COLOR_NORMALIZED_PROPERTY = "anyimage_color_normalized"
 
 IMAGE_NAME_SUFFIXES = (
@@ -65,14 +66,16 @@ def image_pixels(image):
     return pixels
 
 
-def image_rgba(image):
-    """Read one Blender Image into a top-down RGBA float32 array."""
+def image_rgba(image, pixels=None):
+    """Return top-down RGBA, reusing Blender-order pixels when supplied."""
     import numpy as np
 
     width, height = (int(value) for value in image.size)
     if width <= 0 or height <= 0:
         raise ValueError("The source image has no readable dimensions")
-    return np.flipud(image_pixels(image).reshape((height, width, 4)))
+    if pixels is None:
+        pixels = image_pixels(image)
+    return np.flipud(pixels.reshape((height, width, 4)))
 
 
 def is_animated_image(image):
@@ -129,15 +132,15 @@ def is_color_reference_candidate(image):
         get = getattr(image, "get", None)
         if get is not None and get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
             return False
-        if get is not None and (get(CLIPBOARD_HASH_PROPERTY) or get(IMAGE_EMPTY_REFERENCE_PROPERTY)):
+        if get is not None and (get(COLOR_REFERENCE_PROPERTY) or get(CLIPBOARD_HASH_PROPERTY) or get(IMAGE_EMPTY_REFERENCE_PROPERTY)):
             return True
         return any(is_image_empty(owner) and owner.data == image for owner in bpy.data.objects)
     except (AttributeError, ReferenceError, TypeError, ValueError):
         return False
 
 
-def create_image_edit_result(source_image, pixels, output_size):
-    """Create a packed Image datablock from edited RGBA pixels."""
+def create_image_edit_result(source_image, pixels, output_size, *, pack=True):
+    """Create an Image datablock from edited RGBA pixels."""
     output_width, output_height = (int(value) for value in output_size)
     if output_width <= 0 or output_height <= 0:
         raise ValueError("The edited image dimensions must be positive")
@@ -156,7 +159,8 @@ def create_image_edit_result(source_image, pixels, output_size):
         if source_image.get(COLOR_NORMALIZED_PROPERTY):
             image[COLOR_NORMALIZED_PROPERTY] = True
         image.pixels.foreach_set(pixels)
-        image.pack()
+        if pack:
+            image.pack()
         image.update()
     except Exception:
         bpy.data.images.remove(image, do_unlink=True)

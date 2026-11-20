@@ -381,10 +381,11 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
         depth_image.size,
     )
     model_reference = value(modifier, "Reference Depth") / value(modifier, "Uniform Scale")
+    _, model_median = geometry_image.reference_and_median_depth(depth_image, reference_mask)
     expected_limit = max(
         (
             geometry_image.DEPTH_LIMIT_MEDIAN_FACTOR
-            * geometry_image.median_depth(depth_image, reference_mask)
+            * model_median
             - model_reference
         )
         * value(modifier, "Uniform Scale"),

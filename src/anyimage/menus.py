@@ -1,6 +1,7 @@
 import bpy
 from .operators.convert_to_plane import ConvertToPlane
-from .operators.color_match import MatchColorReference
+from .operators.convert_to_world import ConvertToWorld
+from .operators.color_match import MatchColorReference, SetColorReference
 from .operators.bake_mesh import BakeMesh
 
 
@@ -12,6 +13,8 @@ class ImageMenuLite(bpy.types.Menu):
         layout = self.layout
         layout.operator_context = "INVOKE_DEFAULT"
         layout.operator(ConvertToPlane.bl_idname, icon="IMAGE_PLANE")
+        layout.operator(ConvertToWorld.bl_idname, icon="WORLD")
+        layout.operator(SetColorReference.bl_idname, icon="EYEDROPPER")
         layout.operator(MatchColorReference.bl_idname, icon="COLOR")
 
 
@@ -21,6 +24,7 @@ class TextureNodeMenuLite(bpy.types.Menu):
 
     def draw(self, context):
         self.layout.operator_context = "INVOKE_DEFAULT"
+        self.layout.operator(SetColorReference.bl_idname, icon="EYEDROPPER")
         self.layout.operator(MatchColorReference.bl_idname, icon="COLOR")
 
 
@@ -33,4 +37,5 @@ class ObjectMenuLite(bpy.types.Menu):
         layout.operator_context = "INVOKE_DEFAULT"
         layout.operator(BakeMesh.bl_idname, icon="MESH_DATA")
         layout.separator()
+        layout.operator(SetColorReference.bl_idname, icon="EYEDROPPER")
         layout.operator(MatchColorReference.bl_idname, icon="COLOR")

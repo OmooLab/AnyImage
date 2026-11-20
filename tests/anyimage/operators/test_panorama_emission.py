@@ -131,7 +131,7 @@ def test_emission_failure_restores_strength_links_and_images(image_object, monke
     else:
         monkeypatch.setattr(materials, "arrange_material_textures", fail)
     with pytest.raises(RuntimeError, match="Injected emission"):
-        materialization.materialize_mesh_and_textures(bpy.context, obj)
+        materialization.materialize_mesh_and_textures(bpy.context, obj, materialization.mesh_bake_modifiers(obj))
     assert shader.inputs["Emission Strength"].default_value == strength
     assert links == {(link.from_socket.as_pointer(), link.to_socket.as_pointer()) for link in tree.links}
     assert counts == tuple(len(items) for items in (bpy.data.images, bpy.data.meshes, bpy.data.materials, bpy.data.scenes, bpy.data.node_groups))

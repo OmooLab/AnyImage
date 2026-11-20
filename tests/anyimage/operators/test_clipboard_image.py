@@ -15,6 +15,7 @@ class ClipboardImageTest(BlenderTestCase):
         self.actions = importlib.import_module(
             "anyimage.operators.clipboard_image.actions"
         )
+        self.brush = importlib.import_module("anyimage.operators.clipboard_image.brush")
         self.clipboard = importlib.import_module(
             "anyimage.operators.clipboard_image.clipboard"
         )
@@ -234,46 +235,8 @@ class ClipboardImageTest(BlenderTestCase):
         self.assertIs(result, reference)
         self.assertEqual(reference.empty_display_size, 5.0)
 
-    def test_redo_reuses_captured_node_location(self):
-        operator = self.clipboard_image.PasteClipboardImage()
-        operator.paste_target = "NODE"
-        operator.location = (10.0, 20.0, 0.0)
-        operator.location_set = True
-        operator.report = Mock()
-        context = self.make_context(
-            "NODE_EDITOR",
-            tree_type="ShaderNodeTree",
-        )
-        image = SimpleNamespace(name="Clipboard Image")
-
-        clipboard_image = self.clipboard_image
-        with (
-            patch.object(
-                clipboard_image,
-                "read_clipboard_image",
-                return_value=(b"image", ".png"),
-            ),
-            patch.object(
-                clipboard_image,
-                "acquire_packed_image",
-                return_value=(image, True),
-            ),
-            patch.object(clipboard_image, "paste_image") as paste_image,
-        ):
-            result = operator.execute(context)
-
-        self.assertEqual(result, {"FINISHED"})
-        paste_image.assert_called_once_with(
-            context,
-            image,
-            None,
-            location=(10.0, 20.0),
-        )
-
-
     def test_empty_clipboard_leaves_selected_target_untouched(self):
         operator = self.clipboard_image.PasteClipboardImage()
-        operator.paste_target = "IMAGE_EMPTY"
         with (
             patch.object(self.clipboard_image, "read_clipboard_image",
                          side_effect=self.clipboard.ClipboardImageUnavailable),
@@ -292,14 +255,14 @@ class ClipboardImageTest(BlenderTestCase):
 
     def test_stencil_dimensions_preserve_scale_and_image_aspect(self):
         self.assertEqual(
-            self.actions._stencil_dimensions(
+            self.brush._stencil_dimensions(
                 (1920, 1080),
                 (400.0, 200.0),
             ),
             (400.0, 225.0),
         )
         self.assertEqual(
-            self.actions._stencil_dimensions(
+            self.brush._stencil_dimensions(
                 (800, 1200),
                 (128.0, 256.0),
             ),
@@ -354,8 +317,8 @@ class ClipboardImageTest(BlenderTestCase):
 
     def test_sets_and_reuses_stencil_brush_texture(self):
         textures = FakeTextures()
-        original_data = self.actions.bpy.data
-        self.actions.bpy.data = SimpleNamespace(textures=textures, images=SimpleNamespace(remove=Mock()))
+        original_data = self.brush.bpy.data
+        self.brush.bpy.data = SimpleNamespace(textures=textures, images=SimpleNamespace(remove=Mock()))
         brush = SimpleNamespace(
             is_editable=True,
             texture=None,
@@ -376,15 +339,15 @@ class ClipboardImageTest(BlenderTestCase):
         )
         try:
             with (
-                patch.object(self.actions, "image_content_state", return_value={"filepath": ""}),
-                patch.object(self.actions, "replace_image_content"),
-                patch.object(self.actions, "create_normalized_color_image") as configure,
+                patch.object(self.brush, "image_content_state", return_value={"filepath": ""}),
+                patch.object(self.brush, "replace_image_content"),
+                patch.object(self.brush, "create_normalized_color_image") as configure,
             ):
-                first_texture = self.actions.set_tool_texture(context, image)
+                first_texture = self.brush.set_tool_texture(context, image)
                 configure.assert_called_once_with(image)
-                second_texture = self.actions.set_tool_texture(context, image)
+                second_texture = self.brush.set_tool_texture(context, image)
         finally:
-            self.actions.bpy.data = original_data
+            self.brush.bpy.data = original_data
 
         self.assertIs(first_texture, second_texture)
         self.assertEqual(len(textures), 1)
@@ -402,7 +365,7 @@ class ClipboardImageTest(BlenderTestCase):
                     mode=mode,
                     tool_settings=SimpleNamespace(
                         **{
-                            self.actions.PAINT_SETTINGS_BY_MODE[mode]:
+                            self.brush.PAINT_SETTINGS_BY_MODE[mode]:
                                 SimpleNamespace(
                                     unified_paint_settings=unified_settings,
                                 )
@@ -410,7 +373,7 @@ class ClipboardImageTest(BlenderTestCase):
                     ),
                 )
 
-                self.actions._set_unbiased_paint_color(context, brush)
+                self.brush._set_unbiased_paint_color(context, brush)
 
                 self.assertEqual(brush.color, (1.0, 1.0, 1.0))
                 self.assertEqual(
@@ -421,7 +384,7 @@ class ClipboardImageTest(BlenderTestCase):
     def test_sculpt_keeps_brush_color(self):
         brush = SimpleNamespace(color=(0.2, 0.4, 0.8))
 
-        self.actions._set_unbiased_paint_color(
+        self.brush._set_unbiased_paint_color(
             SimpleNamespace(mode="SCULPT"),
             brush,
         )

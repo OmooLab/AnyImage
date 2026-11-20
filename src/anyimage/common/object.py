@@ -2,21 +2,7 @@
 
 import bpy
 
-from .image import is_image_empty, mark_image_empty_reference
-
-
-def blender_frame_rotation():
-    """Map Image Empty local axes to the canonical Blender object frame."""
-    from mathutils import Matrix
-
-    return Matrix(
-        (
-            (1.0, 0.0, 0.0, 0.0),
-            (0.0, 0.0, -1.0, 0.0),
-            (0.0, 1.0, 0.0, 0.0),
-            (0.0, 0.0, 0.0, 1.0),
-        )
-    )
+from .image import image_content_signature, is_image_empty, mark_image_empty_reference
 
 
 def modifier_input_identifier(node_group, name, *, subtype=None):
@@ -57,6 +43,25 @@ def get_modifier_input(modifier, identifier):
     return modifier.get(identifier)
 
 
+def require_conversion_source(operator):
+    """Validate the live object and image captured before conversion."""
+    try:
+        source = operator._source_object
+        if (is_image_empty(source) and source.data == operator._source_image
+                and image_content_signature(source.data) == operator._source_signature):
+            return source
+    except ReferenceError:
+        pass
+    raise RuntimeError("The conversion source image has changed")
+
+
+def remove_conversion_source(source_object):
+    """Preserve the image reference when removing a converted object."""
+    if is_image_empty(source_object):
+        mark_image_empty_reference(source_object.data)
+    bpy.data.objects.remove(source_object, do_unlink=True)
+
+
 def finalize_object_result(
     context,
     source_object,
@@ -71,8 +76,6 @@ def finalize_object_result(
     result_object.select_set(True)
     context.view_layer.objects.active = result_object
     if not keep_source:
-        if is_image_empty(source_object):
-            mark_image_empty_reference(source_object.data)
-        bpy.data.objects.remove(source_object, do_unlink=True)
+        remove_conversion_source(source_object)
         result_object.name = source_name
     return result_object

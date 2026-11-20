@@ -2,7 +2,7 @@
 
 from ...common.ai import ai_ready
 from . import interaction
-from .shape import CUTOUT_SHAPE_LABELS, DEPTH_CUTOUT_SHAPES
+from .shape import DEPTH_CUTOUT_SHAPES
 from .operators import SelectCutoutSelection as SharedSelection
 
 CUTOUT_SHAPE_BUTTONS = (
@@ -32,7 +32,6 @@ def open_shape_pie(context, event, source_object, selection_path, *, gesture="LA
         selection_path,
         gesture=gesture,
         buttons=CUTOUT_SHAPE_BUTTONS if ready else interaction.CUTOUT_SHAPE_BUTTONS,
-        labels=CUTOUT_SHAPE_LABELS,
         create_button=create_button,
     )
 

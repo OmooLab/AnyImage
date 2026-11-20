@@ -9,6 +9,7 @@ import pytest
 from anyimage.common import color_image, image as images
 from anyimage.common.color_space import normalize_color_rgba
 from anyimage.operators.clipboard_image import actions
+from anyimage.operators.clipboard_image import brush as brush_tools
 
 
 @pytest.fixture
@@ -26,7 +27,7 @@ def context(monkeypatch):
         texture=None, texture_slot=SimpleNamespace(texture=None, map_mode="VIEW_PLANE"),
         stencil_dimension=(256, 256), update_tag=lambda: None,
     )
-    monkeypatch.setattr(actions, "_set_brush_preview", lambda *args: None)
+    monkeypatch.setattr(brush_tools, "set_brush_preview", lambda *args: None)
     return SimpleNamespace(mode="PAINT_TEXTURE", brush=brush, scene=bpy.context.scene)
 
 
@@ -50,7 +51,7 @@ def test_brush_color_preserves_hdr_and_normalizes_byte_images(source, context, k
     )
     identity = (source.as_pointer(), source.name, source.filepath_raw)
     resources = (set(bpy.data.images), set(bpy.data.scenes))
-    texture = actions.set_tool_texture(context, source)
+    texture = brush_tools.set_tool_texture(context, source)
     assert texture.image == source
     assert source.is_float == (kind == "hdr")
     assert source.colorspace_settings.name == ("Linear Rec.709" if kind == "hdr" else "sRGB")
@@ -65,7 +66,7 @@ def test_brush_color_preserves_hdr_and_normalizes_byte_images(source, context, k
 @pytest.mark.parametrize("mode", ["SCULPT", "PAINT_TEXTURE", "PAINT_VERTEX"])
 def test_brush_modes_bind_normalized_texture(source, context, mode):
     context.mode = mode
-    texture = actions.set_tool_texture(context, source)
+    texture = brush_tools.set_tool_texture(context, source)
     assert context.brush.texture == context.brush.texture_slot.texture == texture
     assert context.brush.texture_slot.map_mode == "STENCIL"
     assert texture.image[images.COLOR_NORMALIZED_PROPERTY]
@@ -79,10 +80,10 @@ def test_brush_cache_and_saved_texture_preserve_normalized_content(source, conte
     source.pack()
     source[actions.CLIPBOARD_HASH_PROPERTY] = "original"
     source[actions.CLIPBOARD_CONTENT_PROPERTY] = actions._clipboard_content_hash(source)
-    texture = actions.set_tool_texture(context, source)
+    texture = brush_tools.set_tool_texture(context, source)
     assert actions._find_packed_clipboard_image("original") is None
     before = images.image_pixels(source)
-    assert actions.set_tool_texture(context, source) == texture
+    assert brush_tools.set_tool_texture(context, source) == texture
     np.testing.assert_array_equal(images.image_pixels(source), before)
     library = tmp_path / "brush-color.blend"
     bpy.data.libraries.write(str(library), {texture})
@@ -112,8 +113,8 @@ def test_brush_failure_rolls_back_normalized_image_and_binding(source, context, 
     brush = context.brush
     brush.update_tag = fail
     textures = set(bpy.data.textures)
-    with pytest.raises(actions.PasteTargetError, match="Brush failed"):
-        actions.set_tool_texture(context, source)
+    with pytest.raises(RuntimeError, match="Brush failed"):
+        brush_tools.set_tool_texture(context, source)
     np.testing.assert_array_equal(images.image_pixels(source), before)
     assert bytes(source.packed_file.data) == packed
     assert source.is_float == is_float

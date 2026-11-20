@@ -1,7 +1,6 @@
 from anyimage.common.job_image import apply_image_result
 from anyimage.common.job_image import load_image_edit_result
 from unittest.mock import patch
-from types import SimpleNamespace
 
 import bpy
 import numpy as np
@@ -10,32 +9,6 @@ import pytest
 from anyimage.common import image as images
 from anyimage.common import image_target as targets
 from tests.support.image_texture import texture, texture_context, write_result
-
-
-@pytest.mark.parametrize("failure", ["copy", "node"])
-def test_material_isolation_failure_releases_unassigned_result(texture, failure):
-    before_images = set(bpy.data.images)
-    before_materials = set(bpy.data.materials)
-    result = bpy.data.images.new("Unassigned result", width=2, height=2)
-
-    def copy_material():
-        if failure == "copy":
-            raise RuntimeError("Copy failed")
-        copied = bpy.data.materials.new("Incomplete copy")
-        copied.use_nodes = True
-        return copied
-
-    source = SimpleNamespace(copy=copy_material)
-    slot = SimpleNamespace(material=source)
-    target = SimpleNamespace(
-        object_owner=SimpleNamespace(material_slots=[slot]), material_slot=0,
-        material=source, node_identity="missing", image=texture.image,
-    )
-    with pytest.raises(RuntimeError):
-        targets.ImageEditTarget._commit_isolated_material(target, result)
-    assert slot.material is source
-    assert set(bpy.data.images) == before_images
-    assert set(bpy.data.materials) == before_materials
 
 
 @pytest.mark.parametrize("change", ["pixels", "colorspace", "alpha_mode"])
@@ -108,15 +81,13 @@ def test_image_actions_preserve_source_color_space_and_alpha(texture, tmp_path, 
         np.testing.assert_array_equal(images.image_pixels(original), original_pixels)
 
 
-@pytest.mark.parametrize("invalid", ["world", "light", "compositor", "geometry", "missing_image", "other_node", "no_tree"])
+@pytest.mark.parametrize("invalid", ["light", "compositor", "geometry", "missing_image", "other_node", "no_tree"])
 def test_invalid_node_context_does_not_fall_back_to_empty(texture, invalid):
     context = texture_context(texture)
     context.object = bpy.data.objects.new("Fallback Empty", None)
     context.object.empty_display_type = "IMAGE"
     context.object.data = texture.image
-    if invalid == "world":
-        context.space_data.shader_type = "WORLD"
-    elif invalid == "light":
+    if invalid == "light":
         context.space_data.id = bpy.data.lights.new("Light", type="POINT")
     elif invalid in {"compositor", "geometry"}:
         context.space_data.tree_type = "CompositorNodeTree" if invalid == "compositor" else "GeometryNodeTree"

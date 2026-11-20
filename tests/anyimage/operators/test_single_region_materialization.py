@@ -295,7 +295,7 @@ def test_geometry_only_bake_rejects_animated_color(image_object):
 
 
 @pytest.mark.parametrize("image_object", ["PLANE"], indirect=True)
-def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
+def test_baked_color_texture_supports_object_and_node_actions(image_object):
     import anyimage
     from anyimage import ai_menus as menu
     from anyimage.common.image_target import active_texture_node, image_edit_owner
@@ -308,13 +308,14 @@ def test_baked_object_actions_end_but_texture_node_actions_remain(image_object):
     obj, _kind, _color, _normal = image_object
     assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
     context = SimpleNamespace(object=obj, space_data=SimpleNamespace(type="VIEW_3D"), scene=bpy.context.scene)
-    assert image_edit_owner(context) is None
+    assert image_edit_owner(context).image.name == "Color"
     layout = Mock()
     anyimage.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
-    layout.menu.assert_not_called()
+    layout.menu.assert_called_once_with(menu.TextureNodeMenu.bl_idname)
+    layout.reset_mock()
     with patch.object(runtime, "state", return_value="IDLE"):
-        assert not RemoveImageBackground.poll(context)
-        assert not UpscaleImage.poll(context)
+        assert RemoveImageBackground.poll(context)
+        assert UpscaleImage.poll(context)
         assert not MatchColorReference.poll(context)
     material = obj.active_material
     node = next(n for n in material.node_tree.nodes if n.type == "TEX_IMAGE" and n.image.name == "Color")

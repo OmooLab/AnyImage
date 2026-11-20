@@ -103,9 +103,12 @@ def require_model(model_key):
 
 
 def geometry_job_parameters(path, model, resolution_level):
-    return {
+    parameters = {
         "input": str(path),
         "model": model,
         "resolution_level": int(resolution_level),
         "device": production_device().lower(),
     }
+    if model == "MOGE3_VITL":
+        parameters["refine_steps"] = int(getattr(addon_preferences(), "geometry_refine_steps", 1))
+    return parameters

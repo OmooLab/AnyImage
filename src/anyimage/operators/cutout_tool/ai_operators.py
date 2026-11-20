@@ -81,7 +81,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         options=_HIDDEN,
     )
     resolution_level: bpy.props.IntProperty(
-        default=5,
+        default=3,
         min=0,
         max=9,
         options=_HIDDEN,
@@ -127,7 +127,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             if setup_result is not None:
                 return setup_result
             self.model = configured_geometry_model(context)
-            self.resolution_level = int(getattr(addon_preferences(context), "geometry_resolution_level", 5))
+            self.resolution_level = int(getattr(addon_preferences(context), "geometry_resolution_level", 3))
             self.selection_bounds_json = json.dumps(
                 selection_mask.bounds,
                 separators=(",", ":"),

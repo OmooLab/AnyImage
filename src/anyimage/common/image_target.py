@@ -67,35 +67,69 @@ def is_image_object(obj):
     )
 
 
-def object_color_texture(obj):
-    """Return the unique marked Color texture in the active image material."""
-    if not is_image_object(obj):
-        return None
+def object_image_texture(obj):
+    """Find a connected texture in the current material, preferring a color image."""
     material = getattr(obj, "active_material", None)
     tree = getattr(material, "node_tree", None)
     if tree is None or not tree.is_editable:
         return None
-    textures = [
-        node
-        for node in tree.nodes
-        if node.bl_idname == "ShaderNodeTexImage" and node.get("o_image_color", False)
-    ]
-    if len(textures) != 1:
+    engine = bpy.context.scene.render.engine
+    target = {"CYCLES": "CYCLES", "BLENDER_EEVEE_NEXT": "EEVEE"}.get(engine, "ALL")
+    output = tree.get_output_node(target)
+    if output is None:
         return None
-    node = textures[0]
-    if node.image is None or not node.image.is_editable:
-        return None
-    return node
+
+    connected = set()
+    visited = set()
+
+    def trace(socket, groups):
+        for link in socket.links:
+            source = link.from_socket
+            key = (source, groups)
+            if not link.is_valid or link.is_muted or key in visited:
+                continue
+            visited.add(key)
+            node = source.node
+            if node.mute:
+                inputs = [edge.from_socket for edge in node.internal_links if edge.to_socket == source]
+            elif node.type == "GROUP" and node.node_tree:
+                group_output = next((n for n in node.node_tree.nodes
+                                     if n.type == "GROUP_OUTPUT" and n.is_active_output), None)
+                if group_output:
+                    for port in group_output.inputs:
+                        if port.identifier == source.identifier:
+                            trace(port, groups + (node,))
+                continue
+            elif node.type == "GROUP_INPUT" and groups:
+                for port in groups[-1].inputs:
+                    if port.identifier == source.identifier:
+                        trace(port, groups[:-1])
+                continue
+            else:
+                if node.type == "TEX_IMAGE" and not groups and node.image and node.image.is_editable:
+                    connected.add(node)
+                inputs = node.inputs
+            for port in inputs:
+                if port.enabled and port.is_linked:
+                    trace(port, groups)
+
+    for socket in output.inputs:
+        trace(socket, ())
+    candidates = [node for node in tree.nodes if node in connected]
+    return next((node for node in candidates if "color" in node.image.name.casefold()),
+                candidates[0] if candidates else None)
 
 
 def image_edit_owner(context):
     """Resolve the editor's image owner without falling back across editors."""
     if getattr(getattr(context, "space_data", None), "type", None) == "NODE_EDITOR":
         return active_texture_node(context)
+    if getattr(getattr(context, "space_data", None), "type", None) == "OUTLINER":
+        return None
     owner = getattr(context, "object", None)
     if is_image_empty(owner):
         return owner
-    return object_color_texture(owner)
+    return object_image_texture(owner)
 
 
 def replace_texture_image(node, result_image):
@@ -152,14 +186,10 @@ class ImageEditTarget:
             raise RuntimeError("Only still images are supported")
         tree = None if is_image_empty(owner) else owner.id_data
         object_owner = getattr(context, "object", None)
-        if not is_image_object(object_owner) or object_color_texture(object_owner) != owner:
+        if tree is None or object_image_texture(object_owner) != owner:
             object_owner = None
-        material = getattr(object_owner, "active_material", None)
-        material_slot = (
-            int(object_owner.active_material_index)
-            if object_owner is not None
-            else -1
-        )
+        material_slot = object_owner.active_material_index if object_owner is not None else -1
+        material = object_owner.active_material if object_owner is not None else None
         identity = ""
         if tree is not None:
             identity = owner.get("anyimage_identity")
@@ -196,11 +226,10 @@ class ImageEditTarget:
                 if valid and self.object_owner is not None:
                     slots = self.object_owner.material_slots
                     valid = (
-                        is_image_object(self.object_owner)
-                        and 0 <= self.material_slot < len(slots)
+                        0 <= self.material_slot < len(slots)
                         and slots[self.material_slot].material == self.material
                         and self.material.node_tree == self.tree
-                        and object_color_texture(self.object_owner) == self.owner
+                        and object_image_texture(self.object_owner) == self.owner
                     )
             if valid:
                 return
@@ -230,9 +259,11 @@ class ImageEditTarget:
             image = self._commit_isolated_material(result_image)
             self.material = self.object_owner.material_slots[self.material_slot].material
             self.tree = self.material.node_tree
-            self.owner = object_color_texture(self.object_owner)
+
         else:
             image = replace_texture_image(self.owner, result_image)
+        if self.object_owner is not None:
+            self.owner = object_image_texture(self.object_owner)
         # Pending edits of the same owner follow only our successful replacements.
         self.image = image
         self.content_signature = image_content_signature(image)

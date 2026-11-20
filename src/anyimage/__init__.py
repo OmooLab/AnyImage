@@ -37,7 +37,7 @@ from .ai_menus import ImageMenu, ObjectMenu, TextureNodeMenu
 from .color_panel import ColorMatchPanel
 from .panel import ServerPanel, DangerZonePanel
 from .common.image import is_image_empty
-from .common.image_target import is_image_object, active_texture_node
+from .common.image_target import is_image_object, active_texture_node, object_image_texture
 from .tools import FrameTool, MaskTool, RectifyTool
 from .ai_tools import CutoutTool
 from .runtime import runtime
@@ -140,9 +140,13 @@ def draw_image_context_menu(self, context):
 
 
 def draw_image_object_context_menu(self, context):
-    if not is_image_object(getattr(context, "object", None)):
+    obj = context.object
+    if is_image_object(obj):
+        self.layout.menu(ObjectMenu.bl_idname)
+    elif object_image_texture(obj) is not None:
+        self.layout.menu(TextureNodeMenu.bl_idname)
+    else:
         return
-    self.layout.menu(ObjectMenu.bl_idname)
     self.layout.separator()
 
 
@@ -156,8 +160,6 @@ def draw_texture_node_context_menu(self, context):
 MENUS = (
     (bpy.types.VIEW3D_MT_object_context_menu, draw_image_context_menu),
     (bpy.types.VIEW3D_MT_object_context_menu, draw_image_object_context_menu),
-    (bpy.types.OUTLINER_MT_object, draw_image_context_menu),
-    (bpy.types.OUTLINER_MT_object, draw_image_object_context_menu),
     (bpy.types.NODE_MT_context_menu, draw_texture_node_context_menu),
 )
 

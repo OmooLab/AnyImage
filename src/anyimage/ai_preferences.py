@@ -177,9 +177,16 @@ class Preferences(PreferencesLite):
             "Set the processing resolution for depth and normal generation. "
             "Higher levels can capture finer details but take more time and memory."
         ),
-        default=5,
+        default=3,
         min=0,
         max=9,
+    )
+
+    geometry_refine_steps: bpy.props.IntProperty(
+        name="MoGe 3 Refine Steps",
+        description="Number of geometry refinement steps after the initial prediction",
+        default=1,
+        min=0,
     )
 
     def draw(self, _context):
@@ -212,7 +219,6 @@ class Preferences(PreferencesLite):
             ai = self._draw_box(layout, "AI")
             ai.prop(self, "device")
             ai.prop(self, "max_ai_input_size")
-            ai.prop(self, "geometry_resolution_level")
             ai.separator(type="LINE")
             self._draw_model_property(
                 ai,
@@ -235,6 +241,9 @@ class Preferences(PreferencesLite):
                 DEFAULT_UPSCALE_MODEL_KEY,
                 "AI Upscale Image",
             )
+            ai.prop(self, "geometry_resolution_level")
+            if self.geometry_model == "MOGE3_VITL":
+                ai.prop(self, "geometry_refine_steps")
 
         super().draw(_context)
 

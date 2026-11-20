@@ -3,6 +3,7 @@ import sys
 import bpy
 
 from .operators.clipboard_image import PasteClipboardImage
+from .tools import CutoutTool
 
 
 _items = []
@@ -57,6 +58,11 @@ def register():
         )
         for shortcut in definition["shortcuts"]:
             _add(keymap, shortcut)
+
+    object_keymap = addon_keyconfig.keymaps.new(name="Object Mode", space_type="EMPTY")
+    item = object_keymap.keymap_items.new("wm.tool_set_by_id", "C", "PRESS", head=True)
+    item.properties.name = CutoutTool.bl_idname
+    _items.append((object_keymap, item))
 
 
 def unregister():

@@ -59,6 +59,7 @@ def infer_geometry(model_manager, parameters, image, *, include_points, cancel_c
         np.asarray(image, dtype=np.float32) / 255.0,
         int(parameters["resolution_level"]),
         include_points=include_points,
+        **({"refine_steps": parameters["refine_steps"]} if "refine_steps" in parameters else {}),
     )
     depth = np.asarray(prediction["depth"], dtype=np.float32)
     height, width = depth.shape

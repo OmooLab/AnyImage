@@ -19,7 +19,7 @@ class ClipboardImageTest(BlenderTestCase):
             "anyimage.operators.clipboard_image.clipboard"
         )
 
-    def test_registers_and_removes_clipboard_shortcuts(self):
+    def test_registers_and_removes_shortcuts(self):
         class KeyMapItems:
             def __init__(self):
                 self.items = []
@@ -29,6 +29,7 @@ class ClipboardImageTest(BlenderTestCase):
                     idname=operator_id,
                     type=event_type,
                     value=value,
+                    properties=SimpleNamespace(),
                     **modifiers,
                 )
                 self.items.append(item)
@@ -63,22 +64,28 @@ class ClipboardImageTest(BlenderTestCase):
             create=True,
         ):
             self.keymaps.register()
-            items = [
+            clipboard_items = [
                 item
                 for keymap in keymaps.items
+                if keymap.name in {"3D View", "Node Editor"}
                 for item in keymap.keymap_items.items
             ]
             self.assertEqual(
-                [item.idname for item in items],
+                [item.idname for item in clipboard_items],
                 [
                     "anyimage.paste_clipboard_image",
                     "anyimage.paste_clipboard_image",
                 ],
             )
             modifier = "oskey" if sys.platform == "darwin" else "ctrl"
-            self.assertTrue(all(getattr(item, modifier) for item in items))
-            self.assertTrue(all(item.shift for item in items))
-            self.assertTrue(all(item.type == "V" for item in items))
+            self.assertTrue(all(getattr(item, modifier) for item in clipboard_items))
+            self.assertTrue(all(item.shift for item in clipboard_items))
+            self.assertTrue(all(item.type == "V" for item in clipboard_items))
+            object_keymap, = (km for km in keymaps.items if km.name == "Object Mode")
+            cutout, = object_keymap.keymap_items.items
+            self.assertEqual((cutout.idname, cutout.type, cutout.value),
+                             ("wm.tool_set_by_id", "C", "PRESS"))
+            self.assertEqual(cutout.properties.name, self.keymaps.CutoutTool.bl_idname)
             self.keymaps.unregister()
 
         self.assertTrue(

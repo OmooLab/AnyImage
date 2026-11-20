@@ -18,7 +18,7 @@ from .operators.rectify_tool import RectifyImagePerspective
 from .menus import ImageMenuLite, ObjectMenuLite, TextureNodeMenuLite
 from .color_panel import ColorMatchPanel
 from .common.image import is_image_empty
-from .common.image_target import is_image_object, active_texture_node
+from .common.image_target import is_image_object, active_texture_node, object_image_texture
 from .tools import CutoutTool, FrameTool, MaskTool, RectifyTool
 from .translations import (
     build_translations,
@@ -85,9 +85,13 @@ def draw_image_context_menu(self, context):
 
 
 def draw_image_object_context_menu(self, context):
-    if not is_image_object(getattr(context, "object", None)):
+    obj = context.object
+    if is_image_object(obj):
+        self.layout.menu(ObjectMenuLite.bl_idname)
+    elif object_image_texture(obj) is not None:
+        self.layout.menu(TextureNodeMenuLite.bl_idname)
+    else:
         return
-    self.layout.menu(ObjectMenuLite.bl_idname)
     self.layout.separator()
 
 
@@ -101,8 +105,6 @@ def draw_texture_node_context_menu(self, context):
 MENUS = (
     (bpy.types.VIEW3D_MT_object_context_menu, draw_image_context_menu),
     (bpy.types.VIEW3D_MT_object_context_menu, draw_image_object_context_menu),
-    (bpy.types.OUTLINER_MT_object, draw_image_context_menu),
-    (bpy.types.OUTLINER_MT_object, draw_image_object_context_menu),
     (bpy.types.NODE_MT_context_menu, draw_texture_node_context_menu),
 )
 

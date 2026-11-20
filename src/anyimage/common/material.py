@@ -39,7 +39,6 @@ def create_image_material(
         output = nodes.new("ShaderNodeOutputMaterial")
 
         color_texture.image = material_image
-        color_texture["o_image_color"] = True
         color_texture.interpolation = "Linear"
         color_texture.extension = texture_extension
         color_texture.location = (-700.0, 300.0)

@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 
 from server.models import onnx_moge3
 from server import model_catalog
@@ -25,7 +26,8 @@ def test_sparse_neighbors_and_pooling_follow_voxel_coordinates():
         assert np.array_equal(values, onnx_moge3.build_sparse_inputs(shifted)[key])
 
 
-def test_inference_runs_three_refinements_and_preserves_image_dimensions():
+@pytest.mark.parametrize(("options", "steps"), [({}, 1), ({"refine_steps": 0}, 0), ({"refine_steps": 3}, 3)])
+def test_inference_runs_requested_refinements_and_preserves_image_dimensions(options, steps):
     calls = []
     coord = np.zeros((1, 16, 16, 3), dtype=np.float32)
     backbone = object()
@@ -57,12 +59,13 @@ def test_inference_runs_three_refinements_and_preserves_image_dimensions():
             np.zeros((7, 11, 3), np.float32),
             9,
             fov_x=90,
+            **options,
         )
-    assert len(calls) == 4
+    assert len(calls) == steps + 1
     assert calls[0][1]["num_tokens"] == 3600
-    assert [call[2] for call in calls[1:]] == [False, False, True]
+    assert [call[2] for call in calls[1:]] == [step == steps - 1 for step in range(steps)]
     assert output["points"].shape == (1, 7, 11, 3)
-    assert np.allclose(output["points"][..., 2], np.exp(0.3))
+    assert np.allclose(output["points"][..., 2], np.exp(0.1 * steps))
     assert options["fov_x"] == 90
 
 

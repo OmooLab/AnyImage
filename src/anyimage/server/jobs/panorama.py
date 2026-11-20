@@ -66,8 +66,10 @@ def run(context, parameters):
             if session is None:
                 session, _load_ms = manager.get_session(parameters["model"], parameters["device"])
             color = sample_panorama(image[..., :3], directions) * view_alpha[..., None]
+            refinement_options = {"refine_steps": parameters["refine_steps"]} if "refine_steps" in parameters else {}
             prediction = adapter.infer(session, color, parameters["resolution_level"],
-                                       fov_x=90.0, source_valid=visible)
+                                       fov_x=90.0, source_valid=visible,
+                                       **refinement_options)
             distances.append(np.linalg.norm(prediction["points"], axis=-1))
             masks.append((prediction["mask"] > 0.5) & visible)
             normals.append(prediction["normal"])

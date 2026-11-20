@@ -72,6 +72,8 @@ AI_GEOMETRY = {
     'Generate depth and surface normals with the fastest MoGe-2 option.': '使用速度最快的 MoGe-2 模型生成深度和表面法线。',
     'Generate depth and surface normals with a balance of processing speed and detail.': '兼顾处理速度和细节，生成深度和表面法线。',
     'Generate depth and surface normals with MoGe-3, refining the prediction in three steps.': '使用 MoGe-3 生成深度和表面法线，通过三个步骤细化预测结果。',
+    'MoGe 3 Refine Steps': 'MoGe 3 细化次数',
+    'Number of geometry refinement steps after the initial prediction': '初始预测后的几何细化次数',
     'MoGe Resolution Level': 'MoGe 分辨率级别',
     'Set the processing resolution for depth and normal generation. Higher levels can capture finer details but take more time and memory.': '设置生成深度和法线的处理分辨率。级别越高，细节越丰富，但耗时和内存占用也越多。',
     'Normal Map': '法线贴图',

@@ -112,6 +112,7 @@ def infer(
     image,
     resolution_level,
     *,
+    refine_steps=1,
     fov_x=None,
     source_valid=None,
     include_points=True,
@@ -130,7 +131,7 @@ def infer(
             "num_tokens": np.asarray(tokens, dtype=np.int64),
         },
     )
-    for step in range(3):
+    for step in range(refine_steps):
         if not np.isfinite(coord).all():
             raise ValueError("MoGe-3 produced non-finite coordinates")
         inputs = build_sparse_inputs(coord)
@@ -139,7 +140,7 @@ def infer(
             session.refiner,
             ["delta"],
             inputs,
-            release_memory=step == 2,
+            release_memory=step == refine_steps - 1,
         )
         coord[..., 2] += delta
         del inputs, delta

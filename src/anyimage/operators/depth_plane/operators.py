@@ -45,7 +45,7 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
         default="DEPTH", options=_HIDDEN,
     )
     model: bpy.props.StringProperty(default=DEFAULT_GEOMETRY_MODEL_KEY, options=_HIDDEN)
-    resolution_level: bpy.props.IntProperty(default=5, min=0, max=9, options=_HIDDEN)
+    resolution_level: bpy.props.IntProperty(default=3, min=0, max=9, options=_HIDDEN)
     max_input_size: bpy.props.IntProperty(
         default=DEFAULT_MAX_AI_INPUT_SIZE,
         min=MIN_MAX_AI_INPUT_SIZE,
@@ -110,7 +110,7 @@ def start_depth_conversion(operator, context, plane_type):
             color_path=str(color_path),
             source_object_name=source_object.name,
             model=configured_geometry_model(context),
-            resolution_level=int(getattr(preferences, "geometry_resolution_level", 5)),
+            resolution_level=int(getattr(preferences, "geometry_resolution_level", 3)),
             max_input_size=configured_max_ai_input_size(context),
         )
     except (OSError, RuntimeError, ValueError) as error:

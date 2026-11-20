@@ -9,7 +9,7 @@ from ...common.bake import BAKE_MARGIN, bake_context
 from ...common.color_image import create_normalized_color_image, require_static_color_image
 from ...common.image import create_image_edit_result, image_content_state, image_pixels, replace_image_content, restore_image_content
 from ...common.image import has_other_image_user
-from ...common.image_target import is_image_object, material_has_other_object_user, object_color_texture
+from ...common.image_target import is_image_object, material_has_other_object_user
 from ...common.material import IMAGE_MATERIAL_NODE_GROUP_NAME, SHADELESS_NODE_GROUP_NAME
 from ..cutout_tool.shape import CUTOUT_NODE_GROUP_NAMES, IMAGE_REGION_ATTRIBUTE_NAME
 from ...common.image_plane import IMAGE_PLANE_NODE_GROUP_NAME
@@ -77,6 +77,43 @@ def isolate_bake_modifiers(context, obj, modifiers):
         if states:
             obj.update_tag(refresh={"DATA"})
             context.view_layer.update()
+
+
+def object_color_texture(obj):
+    """Follow the surface color connection in the first material slot."""
+    slots = getattr(obj, "material_slots", ())
+    material = slots[0].material if slots else None
+    tree = getattr(material, "node_tree", None)
+    if tree is None or not tree.is_editable:
+        return None
+    output = tree.get_output_node("ALL")
+    socket = output.inputs["Surface"] if output else None
+    visited = set()
+    while socket and socket.is_linked:
+        link = socket.links[0]
+        node = link.from_node
+        if node in visited:
+            break
+        visited.add(node)
+        if node.type == "TEX_IMAGE":
+            if link.from_socket.name == "Color" and node.image and node.image.is_editable:
+                return node
+            break
+        if node.type == "REROUTE":
+            socket = node.inputs[0]
+        elif node.type == "BSDF_PRINCIPLED":
+            socket = node.inputs["Base Color"]
+        elif node.type == "GROUP":
+            group_name = getattr(node.node_tree, "name", "")
+            if group_name == IMAGE_MATERIAL_NODE_GROUP_NAME and link.from_socket.name == "Color":
+                socket = node.inputs.get("Color Texture")
+            elif group_name == SHADELESS_NODE_GROUP_NAME:
+                socket = node.inputs.get("Color")
+            else:
+                break
+        else:
+            socket = node.inputs.get("Color")
+    return None
 
 
 def material_inputs(obj, modifiers):

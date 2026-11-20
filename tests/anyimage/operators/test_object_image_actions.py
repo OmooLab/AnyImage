@@ -11,7 +11,7 @@ from anyimage.common import material as material_data
 from anyimage.common.image_target import (
     ImageEditTarget,
     image_edit_owner,
-    object_color_texture,
+    object_image_texture,
 )
 from anyimage.operators import upscale
 from anyimage.operators.remove_background import operators as remove_background
@@ -60,8 +60,8 @@ def test_pending_edits_follow_shared_material_replacement(tmp_path):
     apply_image_result(second, tmp_path / "foreground.png")
     assert first_owner.active_material != material
     assert second_owner.active_material == material
-    assert object_color_texture(second_owner).image == image
-    assert tuple(object_color_texture(first_owner).image.size) == (8, 6)
+    assert object_image_texture(second_owner).image == image
+    assert tuple(object_image_texture(first_owner).image.size) == (8, 6)
 
 
 @pytest.mark.parametrize("kind", ["PLAIN", "PANORAMA", "SHADELESS"])
@@ -70,7 +70,7 @@ def test_marked_object_resolves_generated_material_color(kind):
     material, color = _material(kind)
     obj = _image_object(material)
 
-    node = object_color_texture(obj)
+    node = object_image_texture(obj)
     assert node is not None and node.image == color
     assert image_edit_owner(_context(obj)) == node
     target = ImageEditTarget.capture(_context(obj))
@@ -80,7 +80,7 @@ def test_marked_object_resolves_generated_material_color(kind):
     target.validate()
 
 
-def test_object_target_rejects_unknown_material_and_never_falls_back():
+def test_ordinary_object_uses_first_texture_of_current_material():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material = bpy.data.materials.new("Unknown")
     material.use_nodes = True
@@ -88,13 +88,32 @@ def test_object_target_rejects_unknown_material_and_never_falls_back():
     texture = tree.nodes.new("ShaderNodeTexImage")
     texture.image = bpy.data.images.new("Unknown Color", width=4, height=3)
     tree.links.new(texture.outputs["Color"], tree.nodes["Principled BSDF"].inputs["Base Color"])
+    other = tree.nodes.new("ShaderNodeTexImage")
+    other.image = bpy.data.images.new("Other paint image", width=4, height=3)
     obj = _image_object(material)
 
+    obj.data.materials.append(bpy.data.materials.new("Second"))
+    obj.active_material_index = 1
+    del obj["o_image_object"]
     context = _context(obj)
-    assert object_color_texture(obj) is None
+    assert not material.texture_paint_images
     assert image_edit_owner(context) is None
-    with pytest.raises(RuntimeError, match="Select an Image Empty or a material Image Texture"):
-        ImageEditTarget.capture(context)
+    obj.active_material_index = 0
+    assert image_edit_owner(context) == texture
+    assert not material.texture_paint_images
+    ImageEditTarget.capture(context).validate()
+    bpy.context.tool_settings.image_paint.mode = "MATERIAL"
+    material.paint_active_slot = 1
+    tree.nodes.active = other
+    assert image_edit_owner(context) == texture
+
+    tree.links.new(other.outputs["Color"], tree.nodes["Principled BSDF"].inputs["Roughness"])
+    texture.image.name = "Diffuse"
+    assert image_edit_owner(context) == texture
+    other.image.name = "albedo_COLOR.png"
+    assert image_edit_owner(context) == other
+    texture.image.name = "base_color"
+    assert image_edit_owner(context) == texture
 
 
 @pytest.mark.parametrize("edit", ["reroute", "disconnect", "remove_shader"])
@@ -114,32 +133,13 @@ def test_object_color_target_survives_shader_edits(edit):
         tree.links.clear()
     else:
         tree.nodes.remove(shader)
-    assert object_color_texture(obj).image == color
-    target.validate()
-    with patch.object(runtime, "state", return_value="IDLE"):
-        assert remove_background.RemoveImageBackground.poll(_context(obj))
-
-
-@pytest.mark.parametrize("edit", ["unmark", "remove", "missing_image", "duplicate"])
-def test_object_color_target_rejects_missing_or_ambiguous_marker(edit):
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    material, _color = _material()
-    obj = _image_object(material)
-    target = ImageEditTarget.capture(_context(obj))
-    node = object_color_texture(obj)
-    if edit == "unmark":
-        del node["o_image_color"]
-    elif edit == "remove":
-        material.node_tree.nodes.remove(node)
-    elif edit == "missing_image":
-        node.image = None
-    else:
-        other = material.node_tree.nodes.new("ShaderNodeTexImage")
-        other["o_image_color"] = True
-        other.image = node.image
-    assert object_color_texture(obj) is None
-    with pytest.raises(RuntimeError, match="no longer available"):
+    if edit == "reroute":
+        assert object_image_texture(obj).image == color
         target.validate()
+    else:
+        assert object_image_texture(obj) is None
+        with pytest.raises(RuntimeError):
+            target.validate()
 
 
 def test_object_target_rejects_changed_material_slot():
@@ -169,8 +169,8 @@ def test_object_commit_isolates_shared_material():
 
     assert first.active_material != material
     assert second.active_material == material
-    assert object_color_texture(first).image == committed
-    assert object_color_texture(second).image == source
+    assert object_image_texture(first).image == committed
+    assert object_image_texture(second).image == source
     assert tuple(committed.size) == (8, 6)
     assert tuple(source.size) == (4, 3)
 
@@ -188,7 +188,7 @@ def test_object_commit_isolates_shared_image():
 
     committed = target.commit(result)
 
-    assert object_color_texture(obj).image == committed
+    assert object_image_texture(obj).image == committed
     assert committed != source
     assert other.data == source
     assert tuple(source.size) == (4, 3)
@@ -239,15 +239,15 @@ def test_object_action_undo_redo_restores_shared_material(
             first = bpy.data.objects["First"]
             second = bpy.data.objects["Second"]
             assert first.active_material != second.active_material
-            assert tuple(object_color_texture(first).image.size) == (8, 6)
-            assert tuple(object_color_texture(second).image.size) == (4, 3)
+            assert tuple(object_image_texture(first).image.size) == (8, 6)
+            assert tuple(object_image_texture(second).image.size) == (4, 3)
 
             assert bpy.ops.ed.undo() == {"FINISHED"}
             first = bpy.data.objects["First"]
             second = bpy.data.objects["Second"]
             assert first.active_material == second.active_material
             np.testing.assert_array_equal(
-                np.asarray(object_color_texture(first).image.pixels[:]),
+                np.asarray(object_image_texture(first).image.pixels[:]),
                 source_pixels,
             )
 
@@ -255,8 +255,8 @@ def test_object_action_undo_redo_restores_shared_material(
             first = bpy.data.objects["First"]
             second = bpy.data.objects["Second"]
             assert first.active_material != second.active_material
-            assert tuple(object_color_texture(first).image.size) == (8, 6)
-            assert tuple(object_color_texture(second).image.size) == (4, 3)
+            assert tuple(object_image_texture(first).image.size) == (8, 6)
+            assert tuple(object_image_texture(second).image.size) == (4, 3)
         finally:
             bpy.utils.unregister_class(operation)
 
@@ -273,7 +273,7 @@ def test_object_menu_and_operator_polls_use_marked_object():
     layout.menu.reset_mock()
     obj["o_image_object"] = False
     anyimage.draw_image_object_context_menu(SimpleNamespace(layout=layout), context)
-    layout.menu.assert_not_called()
+    layout.menu.assert_called_once_with(menu.TextureNodeMenu.bl_idname)
     obj["o_image_object"] = True
 
     layout = SimpleNamespace(operator=Mock(), separator=Mock(), menu=Mock())

@@ -84,13 +84,8 @@ def test_source_is_closed_before_cancelled_inference(tmp_path):
     assert list(tmp_path.iterdir()) == [path]
 
 
-@pytest.mark.parametrize(
-    "generate_depth,generate_normal",
-    [(True, True), (True, False), (False, True)],
-)
-def test_artifacts_write_raw_requested_depth_and_preserve_normals(
-    tmp_path, generate_depth, generate_normal
-):
+@pytest.mark.parametrize("generate_depth", [True, False])
+def test_artifacts_write_normals_and_optional_depth(tmp_path, generate_depth):
     frame, alpha = silhouette()
     rgba = np.full((*alpha.shape, 4), 255, np.uint8)
     rgba[..., 3] = np.round(alpha * 255).astype(np.uint8)
@@ -116,15 +111,12 @@ def test_artifacts_write_raw_requested_depth_and_preserve_normals(
         ) as normal,
     ):
         artifacts.generate_moge_artifacts(
-            context, {}, path, generate_depth=generate_depth, generate_normal=generate_normal,
+            context, {}, path, generate_depth=generate_depth,
         )
     infer.assert_called_once()
-    if generate_normal:
-        assert normal.call_args.args[0] is frame
-        np.testing.assert_array_equal(normal.call_args.args[1], alpha >= 0.1)
-        assert normal.call_args.args[2] == (35, 25)
-    else:
-        normal.assert_not_called()
+    assert normal.call_args.args[0] is frame
+    np.testing.assert_array_equal(normal.call_args.args[1], alpha >= 0.1)
+    assert normal.call_args.args[2] == (35, 25)
     if generate_depth:
         written_frame = depth.call_args.args[0]
         np.testing.assert_array_equal(depth.call_args.kwargs["alpha"], alpha)

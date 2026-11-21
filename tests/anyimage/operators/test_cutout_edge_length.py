@@ -22,13 +22,13 @@ def source_plane(size=(100, 100), display_size=1, matrix=None):
 
 def test_relative_floor_uses_visible_world_bounds(monkeypatch):
     monkeypatch.setattr(g, "configured_min_cutout_relative_edge_length", lambda _: 0.01)
-    alpha = np.zeros((100, 100))
-    alpha[25:75, 25:75] = 1
+    visible = np.zeros((100, 100), dtype=bool)
+    visible[25:75, 25:75] = True
     source = source_plane(display_size=2)
     def resolve(length):
         bounds = g.crop_plane_bounds(source, (0, 0, 100, 100), source.data.size)
         metric, _ = g.world_plane_metric(source.matrix_world)
-        return g.effective_cutout_edge_length(None, bounds, length, alpha, metric)
+        return g.effective_cutout_edge_length(None, bounds, length, visible, metric)
     assert resolve(0.001) == 0.01
     assert resolve(0.1) == 0.1
     source.matrix_world = Matrix.Rotation(0.7, 4, "Y") @ Matrix.Diagonal((2, 3, 1, 1))

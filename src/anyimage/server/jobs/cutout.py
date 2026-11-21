@@ -9,19 +9,10 @@ def run(context, parameters):
     context.progress(0.05, "Preparing Cutout Selection")
     context.directory.mkdir(parents=True, exist_ok=True)
     input_path = validate_input_path(parameters["input"])
-    result = {}
-    generate_depth = bool(parameters.get("generate_depth", False))
-    generate_normal = bool(parameters.get("generate_normal", False))
-    if generate_depth or generate_normal:
-        artifacts = generate_moge_artifacts(
-            context,
-            parameters,
-            input_path,
-            generate_depth=generate_depth,
-            generate_normal=generate_normal,
-            normal_space="OBJECT",
-        )
-        result.update({key: path.name for key, path in artifacts.items()})
+    artifacts = generate_moge_artifacts(
+        context, parameters, input_path,
+        generate_depth=parameters["generate_depth"], normal_space="OBJECT",
+    )
     context.check_cancelled()
     context.progress(1.0, "Cutout artifacts are ready")
-    return result
+    return {key: path.name for key, path in artifacts.items()}

@@ -87,6 +87,7 @@ def create_shape_object(
     base_shape,
     *,
     content_values=None,
+    alpha_threshold=CUTOUT_ALPHA_THRESHOLD,
     depth_image=None,
     depth_metadata=None,
     normal_image=None,
@@ -114,7 +115,7 @@ def create_shape_object(
             if depth_image is None or depth_metadata is None:
                 raise ValueError("Depth Shape requires a Depth texture and metadata")
             front_size = depth_metadata["image_size"]
-            reference_mask = build_reference_mask(content_values, front_size)
+            reference_mask = build_reference_mask(content_values, front_size, alpha_threshold)
             depth, valid = camera_depth_values(depth_image)
             if reference_mask.shape != depth.shape:
                 raise ValueError("Depth reference mask dimensions do not match")
@@ -234,6 +235,7 @@ def create_cutout_shape(
         bounds,
         base_shape,
         content_values=content_values,
+        alpha_threshold=alpha_threshold,
         depth_image=depth_image,
         depth_metadata=depth_metadata,
         normal_image=normal_image,

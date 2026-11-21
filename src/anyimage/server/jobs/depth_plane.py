@@ -16,7 +16,6 @@ def run(context, parameters):
         parameters,
         input_path,
         generate_depth=True,
-        generate_normal=True,
         normal_space="OBJECT" if plane_type == "DEPTH" else "TANGENT",
     )
     context.check_cancelled()

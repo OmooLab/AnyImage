@@ -14,9 +14,8 @@ from ...common.image import (
     is_animated_image,
     restore_image_content,
 )
-from ...common.image_input import cleanup_image_input
+from ...common.image_input import prepare_input_png
 from ...common.image import has_other_image_user
-from ...common.color_image import save_color_png
 from ...common.hdr_image import build_recognition_rgba, create_packed_hdr_image
 
 
@@ -39,13 +38,7 @@ class HdrBackgroundInput:
         rgba = image_rgba(image, pixels)
         if not np.isfinite(rgba).all() or np.any((rgba[..., 3] < 0) | (rgba[..., 3] > 1)):
             raise RuntimeError("HDR image contains invalid color or alpha values")
-        path = Path(tempfile.mkdtemp(prefix="anyimage-hdr-")) / "input.png"
-        try:
-            preview_rgba = build_recognition_rgba(rgba, image.alpha_mode)
-            save_color_png(preview_rgba, path, "sRGB")
-        except Exception:
-            cleanup_image_input(path)
-            raise
+        path = prepare_input_png(build_recognition_rgba(rgba, image.alpha_mode))
         return cls(rgba, image.alpha_mode, path)
 
     def apply(self, target, alpha_path, *, prepare_undo=False):
@@ -76,9 +69,10 @@ class HdrBackgroundInput:
                 if (prepare_undo and (image.is_dirty or image.source == "GENERATED")
                         and not has_other_image_user(target.owner)):
                     original_state = image_content_state(image)
-                    baseline_rgba = image_rgba(image)
+                    baseline_rgba = image_rgba(image, original_state["pixels"])
                     baseline_alpha_mode = image.alpha_mode
                     if baseline_alpha_mode == "NONE":
+                        baseline_rgba = baseline_rgba.copy()
                         baseline_rgba[..., 3] = 1
                     baseline = create_packed_hdr_image(
                         baseline_rgba, image.name, Path(directory) / "source.exr",

@@ -17,6 +17,7 @@ from anyimage.operators import upscale
 from anyimage.operators.remove_background import operators as remove_background
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
+from tests.support.materials import shadeless_material
 
 
 def _image_object(material, name="Image object"):
@@ -41,7 +42,7 @@ def _context(obj):
 def _material(kind="PLAIN", image=None):
     color = image or bpy.data.images.new(f"{kind} Color", width=4, height=3, alpha=True)
     if kind == "SHADELESS":
-        return material_data.create_image_material(color, color, shadeless=True), color
+        return shadeless_material(color), color
     if kind == "PANORAMA":
         return material_data.create_image_material(color, color, emission_strength=1.0), color
     return material_data.create_image_material(color, color), color
@@ -65,7 +66,7 @@ def test_pending_edits_follow_shared_material_replacement(tmp_path):
 
 
 @pytest.mark.parametrize("kind", ["PLAIN", "PANORAMA", "SHADELESS"])
-def test_marked_object_resolves_generated_material_color(kind):
+def test_marked_object_resolves_material_color(kind):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, color = _material(kind)
     obj = _image_object(material)

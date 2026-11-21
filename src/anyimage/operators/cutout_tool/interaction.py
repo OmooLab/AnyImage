@@ -2,13 +2,9 @@
 
 from .shape import CUTOUT_SHAPE_LABELS
 
-CUTOUT_SHAPE_BUTTONS = (("FLAT", "MESH_GRID"), ("SOLID", "MESH_UVSPHERE"))
 
-
-def create_shape_button(pie, shape, label, icon):
-    from .operators import CreateCutoutShape
-
-    return pie.operator(CreateCutoutShape.bl_idname, text=label, text_ctxt="AnyImage", icon=icon)
+def flat_and_solid_buttons(operator):
+    return (("FLAT", "MESH_GRID", operator), ("SOLID", "MESH_UVSPHERE", operator))
 
 
 def open_shape_pie(
@@ -18,9 +14,12 @@ def open_shape_pie(
     selection_path,
     *,
     gesture="LASSO",
-    buttons=CUTOUT_SHAPE_BUTTONS,
-    create_button=create_shape_button,
+    buttons=None,
 ):
+    if buttons is None:
+        from .operators import CreateCutoutShape
+
+        buttons = flat_and_solid_buttons(CreateCutoutShape)
     settings = context.scene.anyimage_settings
     parameters = {
         "source_object_name": source_object.name,
@@ -33,8 +32,10 @@ def open_shape_pie(
 
     def draw(menu, _context):
         pie = menu.layout.menu_pie()
-        for shape, icon in buttons:
-            operator = create_button(pie, shape, CUTOUT_SHAPE_LABELS[shape], icon)
+        for shape, icon, operator_type in buttons:
+            operator = pie.operator(
+                operator_type.bl_idname, text=CUTOUT_SHAPE_LABELS[shape], text_ctxt="AnyImage", icon=icon,
+            )
             operator.shape = shape
             for name, value in parameters.items():
                 setattr(operator, name, value)

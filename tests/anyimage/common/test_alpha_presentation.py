@@ -76,6 +76,7 @@ def test_generated_premul_reads_current_pixels(floating):
 
 @pytest.mark.parametrize("packed,floating,dirty", [
     (False, False, False),
+    (True, False, False),
     (True, False, True),
     (False, True, True),
     (True, True, False),
@@ -104,12 +105,26 @@ def test_file_read_preserves_byte_and_native_float_cache(tmp_path, packed, float
         before = np.array(source.pixels[:])
         assert source.is_dirty == dirty
         assert source.is_float == floating
-        expected = before if floating or dirty else np.array([51, 102, 204, 64]) / 255
+        expected = np.array([51, 102, 204, 64]) / 255 if packed and not floating and not dirty else before
         count = len(bpy.data.images)
         np.testing.assert_allclose(images.image_pixels(source), expected, atol=1e-7)
         np.testing.assert_array_equal(source.pixels[:], before)
         assert source.is_dirty == dirty and source.alpha_mode == "PREMUL"
         assert len(bpy.data.images) == count
+    finally:
+        bpy.data.images.remove(source)
+
+
+def test_external_premul_read_uses_loaded_pixels_after_file_changes(tmp_path):
+    path = tmp_path / "source.png"
+    Image.new("RGBA", (2, 3), (40, 80, 10, 128)).save(path)
+    source = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        source.alpha_mode = "PREMUL"
+        visible = np.array(source.pixels[:], dtype=np.float32).reshape(3, 2, 4)
+        Image.new("RGBA", (5, 1), (0, 0, 255, 255)).save(path)
+        np.testing.assert_array_equal(images.image_rgba(source), visible[::-1])
+        assert tuple(source.size) == (2, 3) and not source.is_dirty
     finally:
         bpy.data.images.remove(source)
 
@@ -126,7 +141,7 @@ def test_isolated_decode_failure_releases_copy():
 
     reader = FailedReader()
     source = SimpleNamespace(alpha_mode="PREMUL", is_dirty=False, is_float=False,
-                             source="FILE", copy=lambda: reader)
+                             source="FILE", packed_file=object(), copy=lambda: reader)
     with patch.object(images, "bpy", SimpleNamespace(data=SimpleNamespace(images=SimpleNamespace(remove=lambda value: removed.append(value))))):
         removed = []
         with pytest.raises(RuntimeError, match="Decode failed"):

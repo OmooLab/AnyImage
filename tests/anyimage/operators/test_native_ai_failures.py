@@ -34,6 +34,7 @@ def test_native_server_controls_are_disabled_during_migration():
     (panorama, panorama.ConvertToPanorama, panorama.GeneratePanorama, None),
 ])
 def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, inner, plane_type, monkeypatch, capfd):
+    from anyimage.common import ai
     from anyimage.runtime import runtime
 
     reason = "Geometry generation failed"
@@ -44,6 +45,7 @@ def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, 
         assert list(path.parent.iterdir()) == [path]
         assert parameters["max_input_size"] == 1024
         assert parameters["resolution_level"] == 2
+        assert parameters["model"] == "MOGE3_VITL" and parameters["refine_steps"] == 3
         assert parameters.get("plane_type") == plane_type
         with Image.open(path) as png:
             assert png.format == "PNG" and png.mode == "RGBA"
@@ -54,10 +56,11 @@ def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, 
         raise RuntimeError(reason)
 
     monkeypatch.setattr(runtime, "submit", reject)
-    monkeypatch.setattr(module, "require_environment", lambda: None)
-    monkeypatch.setattr(module, "require_model", lambda model: None)
-    monkeypatch.setattr(module, "configured_max_ai_input_size", lambda context: 1024)
-    monkeypatch.setattr(module, "addon_preferences", lambda context: SimpleNamespace(geometry_resolution_level=2))
+    monkeypatch.setattr(ai, "require_environment", lambda: None)
+    monkeypatch.setattr(ai, "require_model", lambda model: None)
+    monkeypatch.setattr(ai, "configured_max_ai_input_size", lambda context: 1024)
+    monkeypatch.setattr(ai, "configured_geometry_model", lambda context: "MOGE3_VITL")
+    monkeypatch.setattr(ai, "addon_preferences", lambda context: SimpleNamespace(geometry_resolution_level=2, geometry_refine_steps=3))
     monkeypatch.setattr(outer, "poll", classmethod(lambda cls, context: True))
     monkeypatch.setattr(module, "invoke_ai_setup_if_needed", lambda _operator: None)
     owner = bpy.data.objects.new("Native validation source", None)

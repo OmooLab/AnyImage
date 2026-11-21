@@ -120,10 +120,8 @@ def test_material_pixels_survive_pack_and_library_reload(color_data, tmp_path, k
     np.testing.assert_allclose(images.image_pixels(edited), expected, atol=1 / 255)
 
 
-@pytest.mark.parametrize("entry,shadeless", [
-    ("plane", False), ("cutout", True), ("depth", False),
-])
-def test_material_configures_the_image_selected_by_its_caller(color_data, entry, shadeless):
+@pytest.mark.parametrize("with_normal", [False, True])
+def test_material_configures_the_image_selected_by_its_caller(color_data, with_normal):
     source = bpy.data.images.new("Shared source", width=2, height=2, alpha=True)
     source.pixels.foreach_set(np.tile(np.array([0.2, 0.4, 0.8, 0.25], dtype=np.float32), 4))
     owner = bpy.data.objects.new("Shared Empty", None)
@@ -132,7 +130,7 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
     before = images.image_pixels(source)
     scene = view_scene("AgX")
     data_textures = {}
-    if entry == "depth":
+    if with_normal:
         image = bpy.data.images.new("Normal", width=2, height=2, float_buffer=True)
         image.colorspace_settings.name = "Non-Color"
         data_textures["normal_image"] = image
@@ -141,12 +139,12 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         for key, image in data_textures.items()
     }
     color = color_images.create_material_color_image(source, (0, 0, 2, 2), images.image_rgba(source))
-    first = material.create_image_material(source, color, shadeless=shadeless, scene=scene, **data_textures)
+    first = material.create_image_material(source, color, scene=scene, **data_textures)
     original_color = color_texture(first)
     assert original_color.colorspace_settings.name == "AgX Base sRGB"
     assert original_color.alpha_mode == "STRAIGHT"
     before_repeat = images.image_pixels(original_color)
-    second = material.create_image_material(source, original_color, shadeless=shadeless, scene=scene)
+    second = material.create_image_material(source, original_color, scene=scene)
     new_color = color_texture(second)
     assert new_color == original_color
     np.testing.assert_array_equal(images.image_pixels(new_color), before_repeat)

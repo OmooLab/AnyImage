@@ -38,20 +38,6 @@ def test_generated_materials_use_implicit_uv_and_readable_layout():
         ("Roughness", "Roughness"),
     }
 
-    panorama = material_data.create_image_material(
-        source, color, shadeless=True, texture_extension="REPEAT")
-    nodes = panorama.node_tree.nodes
-    assert not any(node.bl_idname in {
-        "ShaderNodeUVMap", "ShaderNodeSeparateXYZ", "ShaderNodeClamp", "ShaderNodeCombineXYZ",
-    } for node in nodes)
-    texture = next(node for node in nodes if node.type == "TEX_IMAGE")
-    shader = next(node for node in nodes if node.type == "GROUP")
-    output = next(node for node in nodes if node.type == "OUTPUT_MATERIAL")
-    assert not texture.inputs["Vector"].is_linked
-    assert texture.extension == "REPEAT"
-    assert (tuple(texture.location), tuple(shader.location), tuple(output.location)) == (
-        (-700.0, 300.0), (-300.0, 300.0), (100.0, 300.0))
-
 
 def test_image_layer_switches_between_tangent_and_object_space_normal():
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -89,7 +75,7 @@ def test_cutout_material_uses_ior_1_2():
     assert not shader.inputs["Specular IOR Level"].is_linked
 
 
-def test_plane_material_uses_default_specular_and_supports_shadeless():
+def test_plane_material_uses_default_specular():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     image = bpy.data.images.new("Plane", width=2, height=2, alpha=True)
 
@@ -103,16 +89,6 @@ def test_plane_material_uses_default_specular_and_supports_shadeless():
     image_layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), material.node_tree)
     assert image_layer.inputs["Bump Scale"].default_value == 1.0
     assert not shader.inputs["Specular IOR Level"].is_linked
-
-    shadeless = material_data.create_image_material(
-        image,
-        image,
-        shadeless=True,
-    )
-    assert not any(
-        node.bl_idname == "ShaderNodeBsdfPrincipled"
-        for node in shadeless.node_tree.nodes
-    )
 
 
 def test_shared_conversion_images_use_blender_duplicate_suffix():

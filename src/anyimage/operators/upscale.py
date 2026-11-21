@@ -1,4 +1,4 @@
-from ..common.job_image import prepare_target_input, apply_image_result
+from ..common.job_image import apply_image_result
 import bpy
 
 from ..ai_preferences import configured_device, configured_max_ai_input_size, configured_upscale_model
@@ -15,8 +15,8 @@ from ..common.ai import (
     require_environment,
     require_model,
 )
-from ..common.image import owner_image
-from ..common.image_input import cleanup_image_input
+from ..common.image import image_rgba, owner_image
+from ..common.image_input import cleanup_image_input, prepare_input_png
 from ..common.image_target import ImageEditTarget, image_edit_owner
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
@@ -67,12 +67,12 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
         from ..runtime import runtime
 
         owner = image_edit_owner(context)
+        if owner is None:
+            return False
+        image = owner_image(owner)
         return (
-            owner is not None
-            and upscale_input_size_allowed(
-                owner_image(owner),
-                configured_max_ai_input_size(context),
-            )
+            not image.is_float
+            and upscale_input_size_allowed(image, configured_max_ai_input_size(context))
             and runtime.can_submit()
         )
 
@@ -86,11 +86,13 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
         self.model = configured_upscale_model(context)
         self.max_input_size = configured_max_ai_input_size(context)
         try:
-            self._image_target = ImageEditTarget.capture(context)
+            self._image_target, pixels = ImageEditTarget.capture_with_pixels(context)
         except (OSError, RuntimeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
         source_image = self._image_target.image
+        if source_image.is_float:
+            return {"CANCELLED"}
         if not upscale_input_size_allowed(source_image, self.max_input_size):
             self.report(
                 {"ERROR"},
@@ -100,7 +102,7 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
             )
             return {"CANCELLED"}
         try:
-            source_path = prepare_target_input(self._image_target)
+            source_path = prepare_input_png(image_rgba(source_image, pixels))
         except (OSError, RuntimeError, ValueError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}

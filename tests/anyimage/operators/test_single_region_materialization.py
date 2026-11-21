@@ -16,6 +16,7 @@ from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLaye
 from tests.support.planes import create_surface
 from tests.support.panorama import panorama
 from tests.support.mesh_bake import add_post_bake_modifiers, mesh_geometry, modifier_inputs, render_material
+from tests.support.materials import shadeless_material
 
 
 @pytest.fixture(params=["PLANE", "DEPTH", "RELIEF", "PANORAMA"])
@@ -278,19 +279,27 @@ def test_conversion_failure_keeps_depth(image_object, monkeypatch):
     assert obj.data == source and len(obj.modifiers) == 1
 
 
-@pytest.mark.parametrize("image_object", ["PLANE", "PANORAMA"], indirect=True)
-def test_geometry_only_bake_rejects_animated_color(image_object):
-    obj, _kind, color, normal = image_object
-    from nodes.O_AnyImage.O_AnyImage.shader.o_shadeless import OShadeless
-    OShadeless.create_group()
-    obj.data.materials[0] = create_image_material(color, color, shadeless=True)
+@pytest.mark.parametrize("image_object", ["PLANE"], indirect=True)
+@pytest.mark.parametrize("animated", [False, True])
+def test_bake_existing_shadeless_material(image_object, animated):
+    obj, _kind, color, _normal = image_object
+    obj.data.materials[0] = shadeless_material(color)
     node = next(n for n in obj.active_material.node_tree.nodes if n.type == "TEX_IMAGE")
+    operator = SimpleNamespace(report=Mock())
+    if not animated:
+        assert BakeMesh.execute(operator, bpy.context) == {"FINISHED"}
+        assert not obj.modifiers
+        output = obj.active_material.node_tree.get_output_node("CYCLES")
+        group = output.inputs["Surface"].links[0].from_node
+        assert group.node_tree.name == "O Shadeless"
+        assert group.inputs["Color"].links[0].from_node == node
+        assert tuple(node.image.size) == tuple(color.size) and node.image.packed_file
+        return
     color.source = "SEQUENCE"
     node.interpolation = "Closest"
     node.extension = "CLIP"
     node.projection = "BOX"
     before = tuple(color.size)
-    operator = SimpleNamespace(report=Mock())
     original_mesh = obj.data
     assert BakeMesh.execute(operator, bpy.context) == {"CANCELLED"}
     assert node.image == color and tuple(color.size) == before

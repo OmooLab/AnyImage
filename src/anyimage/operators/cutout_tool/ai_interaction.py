@@ -2,37 +2,26 @@
 
 from ...common.ai import ai_ready
 from . import interaction
-from .shape import DEPTH_CUTOUT_SHAPES
-from .operators import SelectCutoutSelection as SharedSelection
-
-CUTOUT_SHAPE_BUTTONS = (
-    *interaction.CUTOUT_SHAPE_BUTTONS,
-    ("DEPTH_SYMMETRY", "META_BALL"),
-    ("DEPTH_SOLID", "SURFACE_NCURVE"),
-)
+from .ai_operators import CutoutSelectionToShape
+from .operators import CreateCutoutShape, SelectCutoutSelection as SharedSelection
 
 
 def open_shape_pie(context, event, source_object, selection_path, *, gesture="LASSO"):
-    ready = ai_ready()
-    generate_normal = ready and bool(context.scene.anyimage_settings.cutout_generate_normal)
-
-    def create_button(pie, shape, label, icon):
-        if not generate_normal and shape not in DEPTH_CUTOUT_SHAPES:
-            return interaction.create_shape_button(pie, shape, label, icon)
-        from .ai_operators import CutoutSelectionToShape
-
-        operator = pie.operator(CutoutSelectionToShape.bl_idname, text=label, text_ctxt="AnyImage", icon=icon)
-        operator.generate_normal = generate_normal
-        return operator
-
+    buttons = None
+    if ai_ready():
+        basic = CutoutSelectionToShape if context.scene.anyimage_settings.cutout_generate_normal else CreateCutoutShape
+        buttons = (
+            *interaction.flat_and_solid_buttons(basic),
+            ("DEPTH_SYMMETRY", "META_BALL", CutoutSelectionToShape),
+            ("DEPTH_SOLID", "SURFACE_NCURVE", CutoutSelectionToShape),
+        )
     interaction.open_shape_pie(
         context,
         event,
         source_object,
         selection_path,
         gesture=gesture,
-        buttons=CUTOUT_SHAPE_BUTTONS if ready else interaction.CUTOUT_SHAPE_BUTTONS,
-        create_button=create_button,
+        buttons=buttons,
     )
 
 

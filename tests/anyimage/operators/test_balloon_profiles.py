@@ -8,7 +8,7 @@ from anyimage.operators.cutout_tool.mesh import build_mesh
 
 
 def test_small_quality_mesh_has_positive_balloon_support():
-    points, faces, boundary, _, _ = build_mesh(np.ones((2, 2)), 32, .9)
+    points, faces, boundary, _, _ = build_mesh(np.ones((2, 2), dtype=bool), 32)
     profile = poisson_balloon_profile(points, faces, boundary)
     assert np.all(profile[boundary] == 0)
     assert profile.max() > 0

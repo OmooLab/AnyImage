@@ -1,7 +1,7 @@
 """Composite linear image samples with independent RGB and Alpha coverage."""
 
 import math
-from ...common.projective_image import PROJECTIVE_CHUNK_ROWS, homography_from_points, sample_rgba, transform_homography
+from ...common.projective_image import PROJECTIVE_CHUNK_ROWS, sample_rgba
 from .projection import frame_source_coordinates
 
 
@@ -41,20 +41,20 @@ def _composite_frame_samples(sources, screen_points):
     return result, covered
 
 
-def _frame_boundary_lines(source, output_to_screen):
+def _frame_boundary_lines(source, pixel_step):
     import numpy as np
 
     width, height = source["region_size"]
-    mapping = source["screen_to_source"] @ np.diag((1 / width, 1 / height, 1)) @ output_to_screen
+    mapping = source["screen_to_source"] @ np.diag((1 / width, 1 / height, 1))
     u, v, w = mapping
     lines = [(line, True) for line in (u, v, w - u, w - v, w)]
     if source["perspective"]:
         lines.append((source["source_to_view"][2] @ mapping, False))
-    return [(line, 0.5 * (abs(line[0]) + abs(line[1])), clips_image)
+    return [(line, 0.5 * (abs(line[0] * pixel_step[0]) + abs(line[1] * pixel_step[1])), clips_image)
             for line, clips_image in lines]
 
 
-def _frame_boundary_pixels(sources, boundary_lines, points, output_to_screen):
+def _frame_boundary_pixels(sources, boundary_lines, points, pixel_step):
     """Conservatively detect projected contour and depth-order crossings."""
     import numpy as np
 
@@ -74,7 +74,7 @@ def _frame_boundary_pixels(sources, boundary_lines, points, output_to_screen):
         first_order = None
         for offset in ((-0.499999, -0.499999), (0.499999, -0.499999),
                        (-0.499999, 0.499999), (0.499999, 0.499999)):
-            screen = transform_homography(points + offset, output_to_screen)
+            screen = points + offset * pixel_step
             depths = []
             for source in sources:
                 _, depth, valid = frame_source_coordinates(source, screen)
@@ -99,20 +99,19 @@ def composite_frame_pixels(sources, frame_quad, output_size):
     )
     if not sources or not sources[-1]["active"]:
         raise ValueError("Frame requires one active Image Empty")
-    output_quad = ((0, 0), (output_width, 0), (output_width, output_height), (0, output_height))
-    output_to_screen = homography_from_points(output_quad, frame_quad)
-    boundary_lines = [_frame_boundary_lines(source, output_to_screen) for source in sources]
+    left, top = frame_quad[0]
+    right, bottom = frame_quad[2]
+    pixel_step = np.array(((right - left) / output_width, (bottom - top) / output_height))
+    boundary_lines = [_frame_boundary_lines(source, pixel_step) for source in sources]
     output = np.zeros((output_height, output_width, 4), dtype=np.float32)
-    target_x = np.arange(output_width, dtype=np.float64) + 0.5
+    target_x = left + (np.arange(output_width) + 0.5) * pixel_step[0]
     for row_start in range(0, output_height, PROJECTIVE_CHUNK_ROWS):
         row_end = min(row_start + PROJECTIVE_CHUNK_ROWS, output_height)
-        target_y = np.arange(row_start, row_end, dtype=np.float64) + 0.5
+        target_y = top + (np.arange(row_start, row_end) + 0.5) * pixel_step[1]
         x, y = np.meshgrid(target_x, target_y)
         points = np.stack((x, y), axis=-1)
-        composite, _ = _composite_frame_samples(
-            sources, transform_homography(points, output_to_screen)
-        )
-        boundary = _frame_boundary_pixels(sources, boundary_lines, points, output_to_screen)
+        composite, _ = _composite_frame_samples(sources, points)
+        boundary = _frame_boundary_pixels(sources, boundary_lines, points, pixel_step)
         if np.any(boundary):
             edge_points = points[boundary]
             accumulated = np.zeros((len(edge_points), 4), dtype=np.float32)
@@ -121,7 +120,7 @@ def composite_frame_pixels(sources, frame_quad, output_size):
                 for dx in (-0.375, -0.125, 0.125, 0.375):
                     sample, hit = _composite_frame_samples(
                         sources,
-                        transform_homography(edge_points + (dx, dy), output_to_screen),
+                        edge_points + (dx, dy) * pixel_step,
                     )
                     accumulated += sample
                     counts += hit

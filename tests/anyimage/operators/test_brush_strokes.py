@@ -3,7 +3,6 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import numpy as np
-import pytest
 
 
 from anyimage.common import image_gesture
@@ -28,13 +27,14 @@ def test_straight_stroke_is_independent_of_segmentation():
     size = (160, 160)
     sparse = ((40, 70), (110, 70))
     dense = tuple((x, 70) for x in range(40, 111, 5))
-    results = [mask.rasterize_brush_path(size, path, 5, lambda p: p).full_values(size)
-               for path in (sparse, dense)]
-    np.testing.assert_array_equal(*results)
+    first, second = [mask.rasterize_brush_path(size, path, 5, lambda p: p)
+                     for path in (sparse, dense)]
+    assert first.bounds == second.bounds
+    np.testing.assert_array_equal(first.values, second.values)
 
 
 def test_incremental_preview_matches_full_union_when_tail_moves_and_crosses():
-    cache = image_gesture.BrushPreview()
+    cache = mask.BrushPreview()
     path = [(10, 10)]
     operations = [(False, (100, 100)), (True, (110, 90)), (False, (10, 90)),
                   (False, (110, 10)), (True, (105, 15)), (False, (10, 10))]
@@ -55,7 +55,7 @@ def test_incremental_preview_matches_full_union_when_tail_moves_and_crosses():
 
 
 def test_preview_reuses_batches_and_limits_updates_to_changed_rows():
-    cache = image_gesture.BrushPreview()
+    cache = mask.BrushPreview()
     path = [(10, y) for y in range(0, 800, 10)]
     cache.update(path, 5)
     gpu = SimpleNamespace(shader=Mock(), state=Mock())
@@ -77,38 +77,3 @@ def test_preview_reuses_batches_and_limits_updates_to_changed_rows():
         changed = {chunk for chunk, batches in initial.items() if cache.batches[chunk] is not batches}
         assert len(changed) <= 2
         assert len(initial) > 10
-
-
-@pytest.mark.parametrize("exit_kind", ["ESC", "SWITCH", "ERROR", "COMPLETE"])
-def test_gesture_releases_preview_and_samples_on_every_exit(exit_kind):
-    gesture = image_gesture.ImageGesture()
-    gesture.gesture = "BRUSH"
-    gesture.active_tool_id = "anyimage.mask"
-    gesture._path = [(0, 0), (10, 10)]
-    gesture._path_samples = list(gesture._path)
-    gesture._brush_preview = image_gesture.BrushPreview()
-    handle = gesture._handle = object()
-    gesture._brush_preview.update(gesture._path, 5)
-    context = SimpleNamespace(workspace=Mock(), area=Mock())
-    event = SimpleNamespace(type="ESC" if exit_kind == "ESC" else "LEFTMOUSE",
-                            value="PRESS" if exit_kind == "ESC" else "RELEASE",
-                            mouse_region_x=10, mouse_region_y=10)
-    gesture.report = Mock()
-    def complete(context):
-        if exit_kind == "ERROR":
-            raise ValueError("Failed projection")
-        gesture._finish(context)
-        return {"FINISHED"}
-    gesture._complete = complete
-    tool = "builtin.select" if exit_kind == "SWITCH" else gesture.active_tool_id
-    remove = Mock()
-    fake_bpy = SimpleNamespace(types=SimpleNamespace(SpaceView3D=SimpleNamespace(draw_handler_remove=remove)))
-    with patch.object(image_gesture, "active_view3d_tool_id", return_value=tool), patch.object(image_gesture, "bpy", fake_bpy):
-        result = gesture.modal(context, event)
-        gesture._finish(context)
-    remove.assert_called_once_with(handle, "WINDOW")
-    assert gesture._handle is None
-    assert result == ({"FINISHED"} if exit_kind == "COMPLETE" else {"CANCELLED"})
-    assert gesture._path is gesture._path_samples is gesture._brush_preview is None
-    assert gesture._fill_triangles == gesture._outline_segments == ()
-    assert image_gesture.ImageGesture()._brush_preview is None

@@ -29,6 +29,29 @@ def test_recognition_preview_preserves_byte_rounding_at_half_step():
     )
 
 
+def test_failed_hdr_undo_preserves_pixels_with_unused_alpha(hdr_texture, tmp_path):
+    from anyimage.operators.remove_background import hdr
+
+    image = hdr_texture.image
+    image.alpha_mode = "NONE"
+    original = image_pixels(image)
+    original[3::4] = 0.25
+    image.pixels.foreach_set(original)
+    target, pixels = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
+    snapshot = HdrBackgroundInput.prepare(image, pixels)
+    path = tmp_path / "alpha.npy"
+    np.save(path, np.ones((3, 4), np.float32))
+    try:
+        with patch.object(hdr, "bpy", SimpleNamespace(
+            data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **_: {"CANCELLED"})),
+        )), pytest.raises(RuntimeError, match="Undo"):
+            snapshot.apply(target, path, prepare_undo=True)
+        assert image.alpha_mode == "NONE"
+        np.testing.assert_array_equal(image_pixels(image), original)
+    finally:
+        cleanup_image_input(snapshot.path)
+
+
 def test_queued_hdr_results_follow_successful_target_replacements(hdr_texture, tmp_path):
     from anyimage.operators.remove_background import hdr
 

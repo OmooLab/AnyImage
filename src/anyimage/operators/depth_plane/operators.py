@@ -2,26 +2,16 @@
 
 import bpy
 
-from ...ai_preferences import configured_geometry_model, configured_max_ai_input_size
 from ...common.ai import (
     geometry_job_parameters,
     invoke_ai_setup_if_needed,
     report_ai_error,
-    require_environment,
-    require_model,
 )
 from ...common.color_image import require_static_color_image
 from ...common.image import image_content_signature, image_pixels, image_rgba, is_image_empty, require_image_empty
 from ...common.image_input import cleanup_image_input
 from ...common.job_image import prepare_recognition_input
-from ...preferences import addon_preferences
 from ...runtime import JobOperator
-from ...server.media.resolution import (
-    DEFAULT_MAX_AI_INPUT_SIZE,
-    MAX_MAX_AI_INPUT_SIZE,
-    MIN_MAX_AI_INPUT_SIZE,
-)
-from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
 from .object import create_depth_plane_from_result
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
@@ -39,26 +29,17 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
         items=(("DEPTH", "Depth Plane", ""), ("RELIEF", "Relief", "")),
         default="DEPTH", options=_HIDDEN,
     )
-    model: bpy.props.StringProperty(default=DEFAULT_GEOMETRY_MODEL_KEY, options=_HIDDEN)
-    resolution_level: bpy.props.IntProperty(default=3, min=0, max=9, options=_HIDDEN)
-    max_input_size: bpy.props.IntProperty(
-        default=DEFAULT_MAX_AI_INPUT_SIZE,
-        min=MIN_MAX_AI_INPUT_SIZE,
-        max=MAX_MAX_AI_INPUT_SIZE,
-        options=_HIDDEN,
-    )
 
     def request(self, context):
-        require_environment()
-        require_model(self.model)
+        parameters = geometry_job_parameters(context)
         self._source_object = require_image_empty(self.source_object_name)
         image = self._source_image = self._source_object.data
         pixels = image_pixels(image)
         self._source_signature = image_content_signature(image, pixels)
         self._input_path = prepare_recognition_input(image, image_rgba(image, pixels))
         return {
-            **geometry_job_parameters(self._input_path, self.model, self.resolution_level),
-            "max_input_size": int(self.max_input_size),
+            **parameters,
+            "input": str(self._input_path),
             "plane_type": self.plane_type,
         }
 
@@ -88,13 +69,9 @@ def start_depth_conversion(operator, context, plane_type):
     if setup_result is not None:
         return setup_result
     try:
-        preferences = addon_preferences(context)
         result = bpy.ops.anyimage.generate_plane_geometry(
             plane_type=plane_type,
             source_object_name=source_object.name,
-            model=configured_geometry_model(context),
-            resolution_level=int(getattr(preferences, "geometry_resolution_level", 3)),
-            max_input_size=configured_max_ai_input_size(context),
         )
     except (OSError, RuntimeError, ValueError) as error:
         report_ai_error(operator, error)

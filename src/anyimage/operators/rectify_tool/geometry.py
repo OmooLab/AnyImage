@@ -141,16 +141,9 @@ def _trim_pixels_to_alpha(pixels, output_size):
     return np.flipud(rgba[top:bottom, left:right]).ravel(), (left, top, right, bottom)
 
 
-def extract_perspective_pixels(
-    source_pixels,
-    source_size,
-    quad,
-    aspect_ratio,
-):
+def extract_perspective_pixels(premultiplied, quad, aspect_ratio):
     output_size = projective_output_size(quad, aspect_ratio)
-    pixels = warp_projective_pixels(
-        source_pixels, source_size, quad, output_size
-    )
+    pixels = warp_projective_pixels(premultiplied, quad, output_size)
     pixels, trim_bounds = _trim_pixels_to_alpha(pixels, output_size)
     trimmed_size = (
         trim_bounds[2] - trim_bounds[0],

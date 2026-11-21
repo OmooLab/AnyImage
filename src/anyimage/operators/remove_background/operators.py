@@ -1,4 +1,4 @@
-from ...common.job_image import prepare_target_input, apply_image_result
+from ...common.job_image import apply_image_result
 import bpy
 
 from ...ai_preferences import configured_background_model, configured_device
@@ -11,7 +11,8 @@ from ...common.ai import (
     require_model,
 )
 
-from ...common.image_input import cleanup_image_input
+from ...common.image import image_rgba
+from ...common.image_input import cleanup_image_input, prepare_input_png
 from ...common.image_target import ImageEditTarget, image_edit_owner
 from .hdr import HdrBackgroundInput
 
@@ -60,12 +61,12 @@ class RunBackgroundRemoval(JobOperator, bpy.types.Operator):
         self._hdr_input = None
         try:
             self._image_target, pixels = ImageEditTarget.capture_with_pixels(context)
-            if getattr(self._image_target.image, "is_float", False):
-                self._hdr_input = HdrBackgroundInput.prepare(self._image_target.image, pixels)
+            image = self._image_target.image
+            if image.is_float:
+                self._hdr_input = HdrBackgroundInput.prepare(image, pixels)
                 source_path = self._hdr_input.path
             else:
-                del pixels
-                source_path = prepare_target_input(self._image_target)
+                source_path = prepare_input_png(image_rgba(image, pixels))
         except (OSError, RuntimeError, ValueError, MemoryError) as error:
             self._hdr_input = None
             self._image_target = None

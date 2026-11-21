@@ -54,6 +54,25 @@ def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, fl
     np.testing.assert_array_equal(images.image_rgba(source), before)
 
 
+def test_straight_exr_material_uses_visible_hdr_after_file_changes(tmp_path):
+    from anyimage.common.hdr_image import save_hdr_image
+
+    path = tmp_path / "lighting.exr"
+    rgba = np.array([[[8, 4, 1, .5], [12, 3, 2, 1]]], np.float32)
+    save_hdr_image(rgba, path)
+    source = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        source.alpha_mode = "STRAIGHT"
+        visible = images.image_rgba(source)
+        save_hdr_image(np.ones((2, 1, 4), np.float32), path)
+        with colors.material_color_image(source) as color:
+            assert color.is_float and color.file_format == "OPEN_EXR"
+            np.testing.assert_array_equal(images.image_rgba(color), visible)
+        assert source.alpha_mode == "STRAIGHT" and not source.is_dirty
+    finally:
+        bpy.data.images.remove(source)
+
+
 def test_original_path_never_matches_material_color(tmp_path):
     path = tmp_path / "original.png"
     Image.new("RGBA", (2, 2), (100, 150, 200, 128)).save(path)

@@ -8,7 +8,6 @@ from .node import load_node_group
 
 
 IMAGE_MATERIAL_NODE_GROUP_NAME = "O Texture to Layer"
-SHADELESS_NODE_GROUP_NAME = "O Shadeless"
 
 
 def create_image_material(
@@ -16,7 +15,6 @@ def create_image_material(
     color_image,
     *,
     color_is_full_source=False,
-    shadeless=False,
     normal_image=None,
     normal_space="TANGENT",
     scene=None,
@@ -45,34 +43,21 @@ def create_image_material(
         color_texture.location = (-700.0, 300.0)
         output.location = (500.0, 300.0)
         links = material.node_tree.links
-        alpha = color_texture.outputs["Alpha"]
-        if shadeless:
-            shader = nodes.new("ShaderNodeGroup")
-            shader.node_tree = load_node_group(SHADELESS_NODE_GROUP_NAME)
-            shader.location = (-300.0, 300.0)
-            output.location = (100.0, 300.0)
-            links.new(color_texture.outputs["Color"], shader.inputs["Color"])
-            links.new(alpha, shader.inputs["Alpha"])
-            links.new(shader.outputs["Shader"], output.inputs["Surface"])
-            return material
         material_inputs = nodes.new("ShaderNodeGroup")
         material_inputs.node_tree = load_node_group(IMAGE_MATERIAL_NODE_GROUP_NAME)
         material_inputs.width = material_inputs.node_tree.default_group_node_width
         material_inputs.location = (-300.0, 300.0)
-        if color_is_full_source or source_image == material_image:
-            threshold = color_images.estimate_highlight_threshold(material_image, panorama=panorama)
-        else:
-            # Use the complete source in the same color interpretation as the crop.
-            with color_images.material_color_image(source_image) as reference:
-                color_images.configure_material_color_image(reference, scene)
-                threshold = color_images.estimate_highlight_threshold(reference, panorama=panorama)
+        threshold = color_images.estimate_highlight_threshold(
+            material_image if color_is_full_source else source_image,
+            material_image=material_image, panorama=panorama,
+        )
         material_inputs.inputs["Highlight Threshold"].default_value = threshold
         if normal_space not in {"TANGENT", "OBJECT"}:
             raise ValueError(f"Unsupported normal space: {normal_space}")
         # Without a normal texture, the neutral tangent input follows the mesh.
         material_inputs.inputs["Object Space"].default_value = normal_image is not None and normal_space == "OBJECT"
         links.new(color_texture.outputs["Color"], material_inputs.inputs["Color Texture"])
-        links.new(alpha, material_inputs.inputs["Alpha Texture"])
+        links.new(color_texture.outputs["Alpha"], material_inputs.inputs["Alpha Texture"])
         if normal_image is not None:
             normal_texture = nodes.new("ShaderNodeTexImage")
             normal_texture.image = normal_image

@@ -62,9 +62,6 @@ def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkey
         return {"CANCELLED"}
 
     monkeypatch.setattr(operators, "invoke_ai_setup_if_needed", lambda _operator: None)
-    monkeypatch.setattr(operators, "addon_preferences", lambda _: SimpleNamespace(geometry_resolution_level=5))
-    monkeypatch.setattr(operators, "configured_geometry_model", lambda _: "MOGE2_VITB_NORMAL")
-    monkeypatch.setattr(operators, "configured_max_ai_input_size", lambda _: 1024)
     monkeypatch.setattr(operators, "bpy", SimpleNamespace(
         app=bpy.app,
         ops=SimpleNamespace(anyimage=SimpleNamespace(generate_panorama=submit))))

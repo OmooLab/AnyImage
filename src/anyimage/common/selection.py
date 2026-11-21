@@ -70,23 +70,13 @@ class SelectionMask:
         object.__setattr__(self, "values", np.clip(values, 0.0, 1.0))
         object.__setattr__(self, "bounds", bounds)
 
-    def full_values(self, image_size):
-        import numpy as np
-
-        width, height = (int(value) for value in image_size)
-        result = np.zeros((height, width), dtype=np.float32)
+    def region_in(self, canvas):
+        """Return matching views of the canvas and the mask where they overlap."""
         left, top, right, bottom = self.bounds
-        source_left = max(left, 0)
-        source_top = max(top, 0)
-        source_right = min(right, width)
-        source_bottom = min(bottom, height)
-        if source_right <= source_left or source_bottom <= source_top:
-            return result
-        result[source_top:source_bottom, source_left:source_right] = self.values[
-            source_top - top : source_bottom - top,
-            source_left - left : source_right - left,
-        ]
-        return result
+        region = canvas[max(0, top):max(0, bottom), max(0, left):max(0, right)]
+        height, width = region.shape
+        x, y = max(0, -left), max(0, -top)
+        return region, self.values[y:y + height, x:x + width]
 
 
 def selection_path_bounds(points):

@@ -107,11 +107,12 @@ def create_normalized_color_image(image):
         raise
 
 
-def decode_color_image(image, color_space):
+def decode_color_image(image, color_space, rgba=None):
     """Evaluate RGB through Blender color management, preserving business alpha."""
     import numpy as np
 
-    rgba = image_rgba(image)
+    if rgba is None:
+        rgba = image_rgba(image)
     if not np.isfinite(rgba).all():
         raise ValueError("Color normalization requires finite RGBA values")
     height, width = rgba.shape[:2]
@@ -142,20 +143,44 @@ def decode_color_image(image, color_space):
         bpy.data.images.remove(reader)
 
 
-def linear_color_rgba(image):
+def _material_png_colors(rgba, source_space):
+    """Convert distinct source RGB values with Blender's material PNG encoder."""
+    import numpy as np
+    from PIL import Image
+
+    rgb = np.rint(rgba[..., :3] * 255).astype(np.uint8)
+    colors, indices = np.unique(rgb.reshape(-1, 3), axis=0, return_inverse=True)
+    width = min(1024, len(colors))
+    rows = (len(colors) + width - 1) // width
+    swatches = np.ones((rows * width, 4), dtype=np.float32)
+    swatches[:len(colors), :3] = colors / 255.0
+    with tempfile.TemporaryDirectory(prefix="anyimage-color-") as directory:
+        path = Path(directory) / "swatches.png"
+        save_color_png(swatches.reshape(rows, width, 4), path, source_space)
+        with Image.open(path) as encoded:
+            palette = np.asarray(encoded.convert("RGB")).reshape(-1, 3)
+    return palette[indices].reshape(rgb.shape).astype(np.float32) / 255.0
+
+
+def linear_color_rgba(image, *, material_image=None):
     """Read straight-alpha linear RGB while preserving the image alpha."""
     import numpy as np
     from .color_space import srgb_to_linear_rgb
 
-    space = image.colorspace_settings
-    if image.is_float and (space.is_data or space.name == "Linear Rec.709"):
-        rgba = image_rgba(image)
-    elif not image.is_float and space.name == "sRGB":
-        rgba = image_rgba(image)
+    interpretation = material_image if material_image is not None else image
+    space = interpretation.colorspace_settings
+    rgba = image_rgba(image)
+    if interpretation != image:
+        source_space = image.colorspace_settings
+        if not image.is_float and not source_space.is_data and source_space.name != "sRGB":
+            rgba[..., :3] = _material_png_colors(rgba, source_space.name)
+        if image.is_float and interpretation.alpha_mode == "NONE":
+            rgba[..., 3] = 1
+    if not image.is_float and space.name == "sRGB":
         rgba[..., :3] = srgb_to_linear_rgb(rgba[..., :3])
-    else:
-        rgba = decode_color_image(image, space.name)
-    if image.is_float and image.alpha_mode in {"STRAIGHT", "PREMUL"}:
+    elif not (image.is_float and (space.is_data or space.name == "Linear Rec.709")):
+        rgba = decode_color_image(image, space.name, rgba)
+    if image.is_float and interpretation.alpha_mode in {"STRAIGHT", "PREMUL"}:
         rgba[..., :3] /= np.where(rgba[..., 3:4] > 0, rgba[..., 3:4], 1)
     return rgba
 
@@ -178,11 +203,11 @@ def _luminance_split(values, percentile, *, logarithmic=False):
     return max(float(2 ** split if logarithmic else split), 0.0001)
 
 
-def estimate_highlight_threshold(image, *, panorama=False):
+def estimate_highlight_threshold(image, *, panorama=False, material_image=None):
     """Estimate highlight onset from full RGB and spatial brightness contrast."""
     import numpy as np
 
-    rgba = linear_color_rgba(image)
+    rgba = linear_color_rgba(image, material_image=material_image)
     if not (rgba[..., 3] > 0.1).any() or not np.isfinite(rgba).all():
         return 1.0
     # Transparent pixels retain the original surroundings; alpha is not a weight.
@@ -255,22 +280,12 @@ def save_color_png(rgba, path, color_space, *, as_srgb=False):
 
 def create_material_color_image(source, bounds=None, rgba=None):
     """Pack the selected source pixels as a material PNG or scene-linear EXR."""
-    import numpy as np
     from .hdr_image import save_hdr_image
 
     require_static_color_image(source)
     width, height = map(int, source.size)
-    if (source.is_float and source.source == "FILE" and not source.is_dirty
-            and not source.packed_files and source.alpha_mode == "STRAIGHT"):
-        # Read the encoded float colors without applying a second alpha multiplication.
-        reader = source.copy()
-        try:
-            reader.alpha_mode = "PREMUL"
-            rgba = image_rgba(reader)
-        finally:
-            bpy.data.images.remove(reader)
-    else:
-        rgba = image_rgba(source) if rgba is None else np.asarray(rgba, dtype=np.float32)
+    if rgba is None:
+        rgba = image_rgba(source)
     if rgba.shape != (height, width, 4):
         raise ValueError("The source RGBA does not match the Blender Image")
     left, top, right, bottom = (0, 0, width, height) if bounds is None else map(int, bounds)

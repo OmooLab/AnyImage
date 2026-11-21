@@ -16,12 +16,12 @@ def clean_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-def color_image(rgb, alpha=1, *, floating=True):
+def color_image(rgb, alpha=1, *, floating=True, space=None):
     """Create a top-down test image with straight RGB and explicit alpha."""
     height, width = rgb.shape[:2]
     image = bpy.data.images.new("Emission source", width=width, height=height,
                                 alpha=True, float_buffer=floating)
-    image.colorspace_settings.name = "Linear Rec.709" if floating else "sRGB"
+    image.colorspace_settings.name = space or ("Linear Rec.709" if floating else "sRGB")
     image.alpha_mode = "PREMUL" if floating else "STRAIGHT"
     rgba = np.ones((height, width, 4), np.float32)
     rgba[..., :3] = rgb
@@ -101,17 +101,20 @@ def test_fully_transparent_nonuniform_image_keeps_default():
     assert estimate_highlight_threshold(color_image(rgb, .05)) == 1
 
 
-@pytest.mark.parametrize("view,panorama,floating", [
-    ("Standard", False, False), ("AgX", False, False),
-    ("AgX", True, False), ("AgX", True, True),
+@pytest.mark.parametrize("view,panorama,floating,space", [
+    ("Standard", False, False, "sRGB"), ("AgX", False, False, "sRGB"),
+    ("AgX", True, False, "Linear Rec.709"), ("AgX", False, False, "AgX Base sRGB"),
+    ("AgX", True, True, "Linear Rec.709"),
 ])
-def test_cropped_material_inherits_full_source_threshold(view, panorama, floating):
+def test_cropped_material_inherits_full_source_threshold(view, panorama, floating, space):
     bpy.context.scene.view_settings.view_transform = view
     rgb = np.full((40, 60, 3), .05)
     rgb[10:30, 15:45] = np.linspace(.4, .9, 30)[None, :, None]
     if panorama:
         rgb[:10] = .8
-    source = color_image(rgb, floating=floating)
+    if floating:
+        rgb *= 6
+    source = color_image(rgb, alpha=.5, floating=floating, space=space)
     if not floating:
         del source[COLOR_NORMALIZED_PROPERTY]
     before = image_rgba(source)

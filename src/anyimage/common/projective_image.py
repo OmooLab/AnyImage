@@ -179,14 +179,13 @@ def straight_rgba(premultiplied):
     return rgba
 
 
-def warp_projective_pixels(source_pixels, source_size, quad, output_size):
-    """Warp one source quad into Blender-order straight RGBA pixels."""
+def warp_projective_pixels(premultiplied, quad, output_size):
+    """Sample a top-down premultiplied source into Blender-order straight RGBA."""
     import numpy as np
 
     output_width, output_height = (int(value) for value in output_size)
     if min(output_width, output_height) <= 0:
         raise ValueError("Projective output dimensions must be positive")
-    source = premultiplied_rgba(source_pixels, source_size)
     target = np.asarray(
         (
             (0.0, 0.0),
@@ -205,5 +204,5 @@ def warp_projective_pixels(source_pixels, source_size, quad, output_size):
         x, y = np.meshgrid(target_x, target_y)
         points = np.stack((x, y), axis=-1)
         mapped = transform_homography(points, output_to_source)
-        output[row_start:row_end] = sample_rgba(source, mapped)
+        output[row_start:row_end] = sample_rgba(premultiplied, mapped)
     return np.flipud(straight_rgba(output)).ravel()

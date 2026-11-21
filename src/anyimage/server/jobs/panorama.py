@@ -3,7 +3,10 @@
 import json
 
 from ..media.exr import write_float_exr
-from ..geometry.panorama import camera_bases, merge_distances, merge_normals, panorama_sample_coordinates, sample_panorama, view_rays
+from ..geometry.panorama import (
+    camera_bases, merge_distances, merge_normals, pad_panorama_seam,
+    panorama_sample_coordinates, sample_panorama, view_rays,
+)
 from ..geometry.panorama_relief import refine_panorama_normals
 from ..media.input import open_image, validate_input_path
 from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, normalized_max_input_size
@@ -37,7 +40,9 @@ def run(context, parameters):
                 size = min(maximum, max(512, source.width // 4))
                 height = min(source.width, maximum) // 2
                 width = 2 * height
-                image = np.asarray(source, dtype=np.float32) / 255.0
+                source_shape = (source.height, source.width)
+                padded = pad_panorama_seam(np.asarray(source)).astype(np.float32)
+                padded /= 255.0
                 source_alpha = source.getchannel("A")
                 if width < source.width:
                     source_alpha = source_alpha.resize((width, height), Image.Resampling.BOX)
@@ -56,8 +61,8 @@ def run(context, parameters):
                 "Generating panorama view {index}/{total}",
                 index=index + 1, total=len(bases),
             )
-            coords = panorama_sample_coordinates(rays @ basis, image.shape[:2])
-            view_alpha = sample_panorama(image[..., 3], coords, order=0)
+            coords = panorama_sample_coordinates(rays @ basis, source_shape)
+            view_alpha = sample_panorama(padded[..., 3], coords, order=0)
             visible = view_alpha > 0
             if not visible.any():
                 distances.append(np.ones((size, size), dtype=np.float32))
@@ -66,7 +71,7 @@ def run(context, parameters):
                 continue
             if session is None:
                 session, _load_ms = manager.get_session(parameters["model"], parameters["device"])
-            color = sample_panorama(image[..., :3], coords) * view_alpha[..., None]
+            color = sample_panorama(padded[..., :3], coords) * view_alpha[..., None]
             prediction = adapter.infer(session, color, parameters["resolution_level"],
                                        fov_x=90.0, source_valid=visible,
                                        **refinement_options)
@@ -74,7 +79,7 @@ def run(context, parameters):
             masks.append((prediction["mask"] > 0.5) & visible)
             normals.append(prediction["normal"])
             del prediction
-        del image, rays, coords
+        del padded, rays, coords
         context.progress(0.75, "Merging panorama depth maps")
         distance, valid = merge_distances(distances, masks, bases, width, height,
                                          cancel_check=context.check_cancelled)

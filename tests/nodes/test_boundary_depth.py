@@ -14,8 +14,8 @@ def test_cutout_fine_outline_smooths_only_within_boundary_band():
 
     obj, set_value = surface(step=0, resolution=8)
     yy, xx = np.mgrid[:32, :64]
-    alpha = ((xx - 32)**2 / 27**2 + (yy - 16)**2 / 13**2 < 1).astype(float)
-    points, faces, _, _, _ = build_mesh(alpha, 3, .9)
+    visible = (xx - 32)**2 / 27**2 + (yy - 16)**2 / 13**2 < 1
+    points, faces, _, _, _ = build_mesh(visible, 3)
     obj.data.clear_geometry()
     obj.data.from_pydata([(x / 32, y / 32, 0) for x, y in points], [], faces.tolist())
     uv = obj.data.uv_layers.get("UVMap") or obj.data.uv_layers.new(name="UVMap")

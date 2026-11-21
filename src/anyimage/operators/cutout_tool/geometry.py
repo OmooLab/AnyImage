@@ -154,23 +154,18 @@ def effective_cutout_edge_length(
     context,
     bounds,
     edge_length,
-    content_values,
+    visible,
     metric,
-    threshold=CUTOUT_ALPHA_THRESHOLD,
 ):
     """Resolve target spacing in Blender world units from visible content bounds."""
-    import numpy as np
-
     if not math.isfinite(edge_length) or edge_length <= 0:
         raise ValueError("Cutout edge length must be greater than zero")
-    values = np.asarray(content_values)
-    visible = (values > 0) & (values >= threshold)
     visible_bounds = visible_pixel_bounds(visible)
     if visible_bounds is None:
         raise ValueError("The Cutout selection contains no visible image pixels")
     left, top, right, bottom = visible_bounds
-    width = (bounds[1] - bounds[0]) * (right - left) / values.shape[1]
-    height = (bounds[3] - bounds[2]) * (bottom - top) / values.shape[0]
+    width = (bounds[1] - bounds[0]) * (right - left) / visible.shape[1]
+    height = (bounds[3] - bounds[2]) * (bottom - top) / visible.shape[0]
     longest = max(width * math.sqrt(metric[0][0]), height * math.sqrt(metric[1][1]))
     return max(
         float(edge_length),
@@ -178,13 +173,17 @@ def effective_cutout_edge_length(
     )
 
 
-def build_reference_mask(content_values, image_size):
+def visible_cutout_pixels(values, threshold):
+    return (values > 0) & (values >= threshold)
+
+
+def build_reference_mask(content_values, image_size, alpha_threshold):
     """Resample Cutout content into a boolean mask at Depth texture resolution."""
     import numpy as np
 
     values = np.asarray(content_values, dtype=np.float32)
-    target_width, target_height = (int(value) for value in image_size)
-    return _resize_values(values, (target_width, target_height)) > 0.5
+    values = _resize_values(values, image_size)
+    return visible_cutout_pixels(values, alpha_threshold)
 
 
 def build_cutout_shape(
@@ -199,19 +198,23 @@ def build_cutout_shape(
 ):
     import numpy as np
 
+    values = np.asarray(content_values)
+    if values.ndim != 2 or not values.size or not np.isfinite(values).all():
+        raise ValueError("The Cutout Alpha must be a finite two-dimensional array")
+    visible = visible_cutout_pixels(values, alpha_threshold)
     world_metric, world_z_scale = world_plane_metric(source_object.matrix_world)
     if world_z_scale <= 1e-10:
         raise ValueError("The Image Empty has a degenerate world transform")
     transform = metric_transform(world_metric)
     pixel_transform = np.diag(
         (
-            (bounds[1] - bounds[0]) / content_values.shape[1],
-            -(bounds[3] - bounds[2]) / content_values.shape[0],
+            (bounds[1] - bounds[0]) / visible.shape[1],
+            -(bounds[3] - bounds[2]) / visible.shape[0],
         )
     ) @ transform
 
     effective_length = effective_cutout_edge_length(
-        context, bounds, edge_length, content_values, world_metric, alpha_threshold
+        context, bounds, edge_length, visible, world_metric
     )
     if report is not None and effective_length > edge_length * (1 + 1e-6):
         units = context.scene.unit_settings
@@ -230,9 +233,8 @@ def build_cutout_shape(
     preferences = addon_preferences(context)
     balloon_algorithm = getattr(preferences, "balloon_profile_algorithm", "POISSON")
     mesh = build_mesh(
-        content_values,
+        visible,
         effective_length,
-        alpha_threshold,
         pixel_transform=pixel_transform,
         fine_outline=fine_outline,
         include_components=str(balloon_algorithm).upper() == "TEDDY",
@@ -263,6 +265,6 @@ def cutout_content_values(
         if alpha.shape != selection.shape:
             raise ValueError("The Cutout source Alpha does not match the Selection")
         values = alpha * selection
-    if not np.any((values > 0.0) & (values >= alpha_threshold)):
+    if not np.any(visible_cutout_pixels(values, alpha_threshold)):
         raise ImageEditWarning("The Cutout selection contains no visible image pixels")
     return values

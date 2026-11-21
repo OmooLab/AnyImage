@@ -46,14 +46,17 @@ def panorama_sample_coordinates(directions, image_shape):
     return np.clip(v * height - 0.5, 0, height - 1), u * width + 0.5
 
 
-def sample_panorama(image, coords, *, order=1):
+def pad_panorama_seam(image):
+    return np.concatenate((image[:, -1:], image, image[:, :1]), axis=1)
+
+
+def sample_panorama(padded, coords, *, order=1):
     from scipy.ndimage import map_coordinates
 
-    padded = np.concatenate((image[:, -1:], image, image[:, :1]), axis=1)
-    if image.ndim == 2:
+    if padded.ndim == 2:
         return map_coordinates(padded, coords, order=order, mode="nearest")
     return np.stack([map_coordinates(padded[..., c], coords, order=order,
-                                    mode="nearest") for c in range(image.shape[2])], -1)
+                                    mode="nearest") for c in range(padded.shape[2])], -1)
 
 
 def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel_check=None):
@@ -109,11 +112,9 @@ def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel
     return result
 
 
-def warp_log_distances(log_distances, masks, bases, width, height, *, directions=None):
+def warp_log_distances(log_distances, masks, bases, directions):
     from scipy.ndimage import map_coordinates
 
-    if directions is None:
-        directions = panorama_directions(width, height)
     logs, validities = [], []
     for log_distance, mask, basis in zip(log_distances, masks, bases):
         rays = directions @ basis.T
@@ -132,7 +133,7 @@ def warp_log_distances(log_distances, masks, bases, width, height, *, directions
     return np.asarray(logs), np.asarray(validities)
 
 
-def merge_distances(distances, masks, bases, width, height, *, cancel_check=None):
+def _solve_log_distances(logs, valid, cancel_check):
     """Fuse log-distance derivatives with a cyclic longitude and a scale anchor.
 
     Algorithm reference: microsoft/MoGe, moge/utils/panorama.py.
@@ -141,13 +142,7 @@ def merge_distances(distances, masks, bases, width, height, *, cancel_check=None
     from scipy.sparse import coo_matrix, diags
     from scipy.sparse.linalg import spsolve
 
-    if cancel_check is not None:
-        cancel_check()
-    if width > 512:
-        return _refine_distances(distances, masks, bases, width, height, cancel_check)
-    log_distances = [np.log(np.maximum(distance, 1e-6)) for distance in distances]
-    logs, valid = warp_log_distances(log_distances, masks, bases, width, height)
-    view_count = len(logs)
+    view_count, height, width = logs.shape
     count = width * height
     index = np.arange(count).reshape(height, width)
     start = np.concatenate((index.ravel(), index[:-1].ravel()))
@@ -181,19 +176,24 @@ def merge_distances(distances, masks, bases, width, height, *, cancel_check=None
     if cancel_check is not None:
         cancel_check()
     solution += np.median(baseline[coverage] - solution[coverage])
-    return np.exp(solution).astype(np.float32), coverage
+    return solution, coverage
 
 
-def _refine_distances(distances, masks, bases, width, height, cancel_check):
-    """Apply coarse periodic alignment to view detail in bounded output tiles."""
+def merge_distances(distances, masks, bases, width, height, *, cancel_check=None):
+    """Align the views on a bounded grid, then restore full-resolution detail."""
     from scipy.ndimage import map_coordinates
 
-    coarse_width, coarse_height = 512, 256
-    coarse, _ = merge_distances(distances, masks, bases, coarse_width, coarse_height,
-                                       cancel_check=cancel_check)
+    if cancel_check is not None:
+        cancel_check()
+    coarse_width, coarse_height = (512, 256) if width > 512 else (width, height)
     log_distances = [np.log(np.maximum(distance, 1e-6)) for distance in distances]
-    logs, valid = warp_log_distances(log_distances, masks, bases, coarse_width, coarse_height)
-    coarse_log = np.log(coarse)
+    logs, valid = warp_log_distances(
+        log_distances, masks, bases, panorama_directions(coarse_width, coarse_height),
+    )
+    coarse_log, coverage = _solve_log_distances(logs, valid, cancel_check)
+    if width == coarse_width:
+        return np.exp(coarse_log).astype(np.float32), coverage
+
     corrections = (coarse_log[None] - logs) * valid
     # Pad longitude once; tile UVs already provide the exact coarse sampling coordinates.
     support_maps = np.pad(valid.astype(float), ((0, 0), (0, 0), (1, 1)), mode="wrap")
@@ -209,8 +209,7 @@ def _refine_distances(distances, masks, bases, width, height, cancel_check):
         u, v = np.meshgrid((np.arange(width) + 0.5) / width,
                            (np.arange(start, stop) + 0.5) / height)
         directions = uv_directions(u, v)
-        detail, visible = warp_log_distances(log_distances, masks, bases, width, height,
-                                         directions=directions)
+        detail, visible = warp_log_distances(log_distances, masks, bases, directions)
         total = np.zeros(u.shape)
         weights = np.zeros(u.shape)
         coords = (np.clip(v * coarse_height - .5, 0, coarse_height - 1), u * coarse_width + .5)

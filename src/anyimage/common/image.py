@@ -52,8 +52,10 @@ def image_pixels(image):
         getattr(image, "alpha_mode", None) == "PREMUL"
         and not getattr(image, "is_dirty", False)
         and not getattr(image, "is_float", False)
-        and getattr(image, "source", None) != "GENERATED"
+        and image.source != "GENERATED"
+        and image.packed_file
     ):
+        # The packed bytes retain hidden RGB even when Blender displays them premultiplied.
         reader = image.copy()
     try:
         if reader is not image:

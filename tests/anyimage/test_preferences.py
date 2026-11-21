@@ -189,9 +189,13 @@ class PreferencesTest(BlenderTestCase):
 
 
     def test_upscale_execute_reads_model_and_size_from_preferences(self):
+        import numpy as np
+
         source_image = SimpleNamespace(
             name="Original",
             source="FILE",
+            size=(1, 1),
+            is_float=False,
         )
         source_object = SimpleNamespace(
             name="Source",
@@ -207,8 +211,8 @@ class PreferencesTest(BlenderTestCase):
         )
         operator = self.upscale.UpscaleImage()
         with (
-            patch.object(self.upscale.ImageEditTarget, "capture",
-                         return_value=SimpleNamespace(image=source_image)),
+            patch.object(self.upscale.ImageEditTarget, "capture_with_pixels",
+                         return_value=(SimpleNamespace(image=source_image), np.ones(4, np.float32))),
             patch.object(
                 self.upscale,
                 "configured_upscale_model",
@@ -221,7 +225,7 @@ class PreferencesTest(BlenderTestCase):
             ),
             patch.object(
                 self.upscale,
-                "prepare_target_input",
+                "prepare_input_png",
                 return_value=Path("input.png"),
             ),
             patch.object(

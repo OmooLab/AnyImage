@@ -10,7 +10,6 @@ import pytest
 
 @pytest.mark.parametrize("change", ["rename", "binding", "pixels", "colorspace", "alpha_mode"])
 def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
-    from anyimage.common.color_space import image_rgba_to_linear
     from anyimage.common.image import image_content_signature, image_pixels
     from anyimage.operators.rectify_tool import operators
 
@@ -25,7 +24,7 @@ def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
     pixels = image_pixels(image)
     operator = SimpleNamespace(
         _source_object=source, _source_image=image,
-        _source_linear=image_rgba_to_linear(image, pixels.reshape(-1, 4)).ravel(),
+        _source_premultiplied=operators._rectify_sampling_pixels(image, pixels),
         _source_signature=image_content_signature(image, pixels),
         source_object_name=source.name, quad_json="[[0,0],[2,0],[2,2],[0,2]]",
         aspect_ratio=1.0, report=Mock(),
@@ -128,8 +127,7 @@ class RectifyToolTest(BlenderTestCase):
         top_down /= float(top_down.max())
         top_down[:, :, 3] = 1.0
         result = projective_image.warp_projective_pixels(
-            np.flipud(top_down).ravel(),
-            (4, 3),
+            top_down,
             ((0, 0), (4, 0), (4, 3), (0, 3)),
             (4, 3),
         )
@@ -146,8 +144,7 @@ class RectifyToolTest(BlenderTestCase):
 
         source = np.ones((2, 2, 4), dtype=np.float32)
         result = projective_image.warp_projective_pixels(
-            np.flipud(source).ravel(),
-            (2, 2),
+            source,
             ((-2, 0), (2, 0), (2, 2), (-2, 2)),
             (4, 2),
         )
@@ -205,8 +202,7 @@ class RectifyToolTest(BlenderTestCase):
         top_down[1:3, 1:3] = (0.2, 0.4, 0.6, 1.0)
         pixels, output_size, placement_bounds = (
             self.rectify_geometry.extract_perspective_pixels(
-                np.flipud(top_down).ravel(),
-                (4, 4),
+                top_down,
                 ((0, 0), (4, 0), (4, 4), (0, 4)),
                 1.0,
             )

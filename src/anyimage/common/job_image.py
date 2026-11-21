@@ -1,12 +1,10 @@
 """Prepare and commit image files for server jobs."""
 
 from pathlib import Path
-import tempfile
 import bpy
 
-from .color_image import save_color_png
 from .image import COLOR_NORMALIZED_PROPERTY
-from .image_input import cleanup_image_input, prepare_image_input
+from .image_input import prepare_input_png
 from .hdr_image import build_recognition_rgba
 
 
@@ -31,11 +29,6 @@ def load_image_edit_result(source_image, output_path):
     return result_image
 
 
-def prepare_target_input(target):
-    target.validate_binding()
-    return prepare_image_input(target.image)
-
-
 def apply_image_result(target, path):
     target.validate_binding()
     return target.commit(load_image_edit_result(target.image, path))
@@ -43,14 +36,7 @@ def apply_image_result(target, path):
 
 def prepare_recognition_input(image, rgba):
     """Write a cropped sRGB PNG for inference, retaining source opacity."""
-    color_space = image.colorspace_settings.name
     if image.is_float:
         rgba = build_recognition_rgba(rgba, image.alpha_mode, preserve_alpha=True)
-        color_space = "sRGB"
-    path = Path(tempfile.mkdtemp(prefix="anyimage-input-")) / "input.png"
-    try:
-        save_color_png(rgba, path, color_space, as_srgb=True)
-    except Exception:
-        cleanup_image_input(path)
-        raise
-    return path
+        return prepare_input_png(rgba)
+    return prepare_input_png(rgba, color_space=image.colorspace_settings.name)

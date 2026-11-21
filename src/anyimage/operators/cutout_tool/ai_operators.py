@@ -6,30 +6,20 @@ from ...preferences import (
     DEFAULT_CUTOUT_BOUNDARY_PADDING,
     MAX_CUTOUT_BOUNDARY_PADDING,
     MIN_CUTOUT_BOUNDARY_PADDING,
-    addon_preferences,
     configured_cutout_boundary_padding,
 )
-from ...ai_preferences import configured_device, configured_geometry_model, configured_max_ai_input_size
 from ...properties import (
     cutout_alpha_threshold_property,
     cutout_fine_outline_property,
     cutout_edge_length_property,
 )
 from ...runtime import JobOperator
-from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
-from ...server.media.resolution import (
-    DEFAULT_MAX_AI_INPUT_SIZE,
-    MAX_MAX_AI_INPUT_SIZE,
-    MIN_MAX_AI_INPUT_SIZE,
-)
 from ...common.job_image import prepare_recognition_input
 from ...common.image_input import cleanup_image_input
 from ...common.ai import (
     invoke_ai_setup_if_needed,
     geometry_job_parameters,
-    require_environment,
     require_input_path,
-    require_model,
 )
 from ...common.image import image_content_signature, image_rgba, require_image_empty, is_animated_image
 from ...common.object import read_conversion_source
@@ -68,23 +58,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     shape: bpy.props.StringProperty(default="SOLID", options=_HIDDEN)
     gesture: bpy.props.StringProperty(default="LASSO", options=_HIDDEN)
     edge_length: cutout_edge_length_property(options=_HIDDEN)
-    model: bpy.props.StringProperty(
-        default=DEFAULT_GEOMETRY_MODEL_KEY,
-        options=_HIDDEN,
-    )
-    resolution_level: bpy.props.IntProperty(
-        default=3,
-        min=0,
-        max=9,
-        options=_HIDDEN,
-    )
-    max_ai_input_size: bpy.props.IntProperty(
-        default=DEFAULT_MAX_AI_INPUT_SIZE,
-        min=MIN_MAX_AI_INPUT_SIZE,
-        max=MAX_MAX_AI_INPUT_SIZE,
-        options=_HIDDEN,
-    )
-    generate_normal: bpy.props.BoolProperty(default=False, options=_HIDDEN)
     alpha_threshold: cutout_alpha_threshold_property()
     fine_outline: cutout_fine_outline_property()
     boundary_padding: bpy.props.FloatProperty(
@@ -123,10 +96,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             self._source_signature = image_content_signature(source_object.data, source_rgba[::-1])
             context.view_layer.objects.active = source_object
             source_object.select_set(True)
-            self.max_ai_input_size = configured_max_ai_input_size(context)
             self.boundary_padding = configured_cutout_boundary_padding(context)
-            self.model = configured_geometry_model(context)
-            self.resolution_level = int(getattr(addon_preferences(context), "geometry_resolution_level", 3))
             self._content_values = content_values
             self._content_bounds = selection_mask.bounds
             self.input_path = str(prepare_recognition_input(source_object.data, cropped))
@@ -142,34 +112,21 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         return super().execute(context)
 
     def request(self, context):
-        require_environment()
-        source_path = require_input_path(self.input_path)
-        generate_depth = self.shape in DEPTH_CUTOUT_SHAPES
-        generate_normal = generate_depth or self.generate_normal
-        if generate_normal:
-            require_model(self.model)
-            parameters = geometry_job_parameters(source_path, self.model, self.resolution_level)
-        else:
-            parameters = {"input": str(source_path), "device": configured_device()}
         return {
-            **parameters,
-            "generate_depth": generate_depth,
-            "generate_normal": generate_normal,
-            "max_input_size": int(self.max_ai_input_size),
+            **geometry_job_parameters(context),
+            "input": str(require_input_path(self.input_path)),
+            "generate_depth": self.shape in DEPTH_CUTOUT_SHAPES,
         }
 
     def response(self, context, result):
         source_object, pixels = read_conversion_source(self)
         normal_image = None
         depth_image = None
-        normal_missing = False
         try:
-            if self.shape in DEPTH_CUTOUT_SHAPES or self.generate_normal:
-                try:
-                    normal_path = result.file("object_normal")
-                    normal_image = load_normal_result_image(normal_path, source_object)
-                except (FileNotFoundError, RuntimeError):
-                    normal_missing = True
+            normal_image = load_normal_result_image(result.file("object_normal"), source_object)
+        except (FileNotFoundError, RuntimeError):
+            pass
+        try:
             depth_metadata = None
             if self.shape in DEPTH_CUTOUT_SHAPES:
                 depth_metadata = load_depth_metadata(result.file("depth_metadata"))
@@ -188,7 +145,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                     fine_outline=self.fine_outline, boundary_padding=self.boundary_padding,
                     color_image=color, gesture=self.gesture, report=self.report,
                 )
-            if normal_missing:
+            if normal_image is None:
                 self.report({"WARNING"}, "The normal texture is missing; the shape was created without it")
         except Exception:
             if normal_image is not None and normal_image.users == 0:

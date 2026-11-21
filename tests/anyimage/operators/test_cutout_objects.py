@@ -378,8 +378,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert value(modifier, "Uniform Scale") > 0
     assert value(modifier, "Reference Depth") > 0
     reference_mask = cutout_geometry.build_reference_mask(
-        selection_values,
-        depth_image.size,
+        selection_values, depth_image.size, cutout_geometry.CUTOUT_ALPHA_THRESHOLD,
     )
     model_reference = value(modifier, "Reference Depth") / value(modifier, "Uniform Scale")
     depth, valid = geometry_image.camera_depth_values(depth_image)

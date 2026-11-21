@@ -7,6 +7,7 @@ from mathutils import Matrix
 
 
 from anyimage.common import image as image_data
+from anyimage.common import image_gesture
 from anyimage.common.selection import SelectionMask
 from anyimage.common.color_space import srgb_to_linear_rgb, linear_rgb_to_srgb
 from anyimage.operators import mask_tool as edit_mask
@@ -261,7 +262,8 @@ def test_brush_release_commits_one_packed_image_without_touching_shared_source()
     assert tuple(source.empty_image_offset) == (-0.25, -0.75)
 
 
-def test_brush_drag_does_not_create_or_update_an_image():
+@pytest.mark.parametrize("cancel", ["ESC", "SWITCH_TOOL"])
+def test_cancelled_brush_stroke_releases_preview_and_preserves_shared_image(monkeypatch, cancel):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     source_image = bpy.data.images.new("Mask Cancel", width=4, height=3, alpha=True)
     source = bpy.data.objects.new("Mask Cancel", None)
@@ -273,29 +275,36 @@ def test_brush_drag_does_not_create_or_update_an_image():
     shared.empty_display_type = "IMAGE"
     shared.data = source_image
     before = np.array(source_image.pixels[:])
-    operator = edit_mask.ImageGesture()
-    operator.active_tool_id = "anyimage.mask"
-    operator.gesture = "BRUSH"
-    operator._path = [(10.0, 10.0)]
-    operator._path_samples = list(operator._path)
-    operator._cursor = (10.0, 10.0)
-    context = SimpleNamespace(area=SimpleNamespace(tag_redraw=lambda: None),
-                              workspace=SimpleNamespace(status_text_set=lambda value: None))
-    event = SimpleNamespace(
-        type="MOUSEMOVE",
-        value="NOTHING",
-        mouse_region_x=20,
-        mouse_region_y=25,
-    )
 
-    result = edit_mask.ImageGesture.modal(operator, context, event)
+    def execute(operator, context):
+        operator.gesture, operator.radius = "BRUSH", 5
+        operator.source_object_name = source.name
+        operator._source_matrix = source.matrix_world.copy()
+        operator._path = [(10.0, 10.0)]
+        operator._path_samples = list(operator._path)
+        event = SimpleNamespace(type="MOUSEMOVE", value="NOTHING", mouse_region_x=20, mouse_region_y=25)
+        assert operator.modal(context, event) == {"RUNNING_MODAL"}
+        operator._draw_preview((1, 1, 1, 0.16))
+        assert operator._brush_preview.coverage
+        if cancel == "SWITCH_TOOL":
+            monkeypatch.setattr(image_gesture, "active_view3d_tool_id", lambda _: "builtin.select")
+        else:
+            event.type, event.value = "ESC", "PRESS"
+        result = operator.modal(context, event)
+        assert operator._path is operator._path_samples is operator._brush_preview is None
+        return result
 
-    assert result == {"RUNNING_MODAL"}
-    assert source.data == source_image
-    assert len(bpy.data.images) == image_count
-    event.type, event.value = "ESC", "PRESS"
-    assert operator.modal(context, event) == {"CANCELLED"}
+    monkeypatch.setattr(image_gesture, "active_view3d_tool_id", lambda _: edit_mask.MASK_TOOL_ID)
+    monkeypatch.setattr(edit_mask.BrushPreview, "draw", lambda *_: None)
+    monkeypatch.setattr(edit_mask.EditImageAlpha, "poll", classmethod(lambda cls, context: True))
+    monkeypatch.setattr(edit_mask.EditImageAlpha, "execute", execute, raising=False)
+    bpy.utils.register_class(edit_mask.EditImageAlpha)
+    try:
+        area = next(area for area in bpy.context.screen.areas if area.type == "VIEW_3D")
+        with bpy.context.temp_override(area=area):
+            assert bpy.ops.anyimage.edit_image_alpha() == {"CANCELLED"}
+    finally:
+        bpy.utils.unregister_class(edit_mask.EditImageAlpha)
     assert source.data == shared.data == source_image
     np.testing.assert_array_equal(source_image.pixels[:], before)
     assert len(bpy.data.images) == image_count
-    assert operator._path is operator._path_samples is operator._brush_preview is None

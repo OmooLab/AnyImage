@@ -42,13 +42,32 @@ def test_cutout_crop_bounds_map_to_the_source_plane():
 
 
 def test_cutout_reference_mask_resamples_content_to_depth_resolution():
-    content = np.zeros((4, 4), dtype=np.float32)
-    content[:, 2:] = 1.0
+    content = np.repeat([[0., 0.5, 0.75, 1.]], 2, axis=1).astype(np.float32)
+    for threshold, expected in (
+        (0., [False, True, True, True]),
+        (0.5, [False, True, True, True]),
+        (0.9, [False, False, False, True]),
+    ):
+        mask = cutout_geometry.build_reference_mask(content, (4, 1), threshold)
+        np.testing.assert_array_equal(mask, [expected])
 
-    mask = cutout_geometry.build_reference_mask(content, (2, 2))
 
-    assert mask.dtype == np.bool_
-    np.testing.assert_array_equal(mask, ((False, True), (False, True)))
+def test_mesh_threshold_selects_visible_islands_and_preserves_source_alpha():
+    source = SimpleNamespace(matrix_world=Matrix.Identity(4))
+    alpha = np.zeros((40, 60), dtype=np.float32)
+    alpha[5:25, 5:25] = 0.5
+    alpha[12, 20:45] = 0.5
+    alpha[32:34, 50:52] = 1
+    original = alpha.copy()
+    for threshold, keep_branch in ((0, True), (0.5, True), (0.9, False)):
+        shape = cutout_geometry.build_cutout_shape(
+            bpy.context, source, 32, alpha, (0, 60, 0, 40), threshold, fine_outline=True,
+        )
+        assert shape.mask[12, 44] == keep_branch
+        assert shape.mask[32, 50] != keep_branch
+        assert not shape.mask[0, 0]
+        assert len(shape.faces) > 0
+    np.testing.assert_array_equal(alpha, original)
 
 
 def test_small_selection_generates_a_centered_mesh_with_source_uvs():

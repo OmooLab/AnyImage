@@ -101,7 +101,6 @@ def test_cutout_pie_uses_two_local_shapes_without_ai(monkeypatch):
         call[0] == "anyimage.create_cutout_shape"
         for call in window_manager.pie.calls
     )
-    assert not any(hasattr(call[2], "generate_normal") for call in window_manager.pie.calls)
     assert all(call[2].edge_length == 0.1 for call in window_manager.pie.calls)
 
 
@@ -141,7 +140,7 @@ def test_cutout_pie_passes_image_lasso_options_to_all_ai_shapes(monkeypatch):
         "DEPTH_SYMMETRY",
         "DEPTH_SOLID",
     ]
-    assert all(call[2].generate_normal for call in window_manager.pie.calls)
+    assert all(call[0] == "anyimage.cutout_selection_to_shape" for call in window_manager.pie.calls)
     from anyimage import TRANSLATIONS
 
     catalog = TRANSLATIONS["zh_HANS"]
@@ -191,6 +190,10 @@ def test_cutout_menu_keeps_submitted_gesture_during_redraw(monkeypatch):
         SelectionPath(points=((0, 0), (10, 0), (0, 10))), gesture="POLYLINE",
     )
     assert all(call[2].gesture == "POLYLINE" for call in window_manager.pie.calls)
+    assert [call[0] for call in window_manager.pie.calls] == [
+        "anyimage.create_cutout_shape", "anyimage.create_cutout_shape",
+        "anyimage.cutout_selection_to_shape", "anyimage.cutout_selection_to_shape",
+    ]
 
 
 @pytest.mark.parametrize("finish", ("START", "DOUBLE_CLICK", "RET", "NUMPAD_ENTER"))

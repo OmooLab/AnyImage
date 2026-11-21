@@ -52,7 +52,7 @@ def boundary_distance(points, contours):
 @pytest.mark.parametrize("fine_outline", [False, True])
 @pytest.mark.parametrize("spacing", [2, 48])
 def test_local_support_connects_coarse_and_dense_branches(fine_outline, spacing):
-    result = mesh.build_mesh(branch_alpha(), spacing, 0.9, fine_outline=fine_outline)
+    result = mesh.build_mesh(branch_mask(), spacing, fine_outline=fine_outline)
     assert_supported(*result[:4])
 
 
@@ -82,11 +82,11 @@ def test_support_adds_one_sample_to_isolated_triangle_and_is_idempotent():
 
 @pytest.mark.parametrize("spacing", [1, 16])
 def test_pixel_corner_hole_contacts_produce_valid_supported_mesh(spacing):
-    alpha = np.ones((40, 40))
+    alpha = np.ones((40, 40), dtype=bool)
     alpha[10:17, 10:17] = 0
     alpha[17:24, 17:24] = 0
     original = alpha.copy()
-    result = mesh.build_mesh(alpha, spacing, .9)
+    result = mesh.build_mesh(alpha, spacing)
     assert_supported(*result[:4])
     np.testing.assert_array_equal(alpha, original)
     p, f, b, _, _mask = result
@@ -97,7 +97,7 @@ def test_pixel_corner_hole_contacts_produce_valid_supported_mesh(spacing):
     assert not np.any((centers[:, 0] > 11) & (centers[:, 0] < 16) & (centers[:, 1] > 11) & (centers[:, 1] < 16))
 
 
-def branch_alpha(offset=0):
+def branch_mask(offset=0):
     yy, xx = np.mgrid[:192, :192]
     xx = xx - offset
     yy = yy - offset
@@ -109,7 +109,7 @@ def branch_alpha(offset=0):
         t = np.clip(d @ v / (v @ v), 0, 1)
         alpha |= np.sum((d - t[..., None] * v) ** 2, axis=-1) < 2.5**2
     alpha |= (xx - 130) ** 2 + (yy - 110) ** 2 < 7**2
-    return alpha.astype(float)
+    return alpha
 
 
 def assert_supported(points, faces, boundary, components):
@@ -140,7 +140,7 @@ def assert_supported(points, faces, boundary, components):
 @pytest.mark.parametrize("offset", (0, 1))
 def test_fine_bent_leg_and_joint_have_connected_positive_support(spacing, offset):
     points, faces, boundary, components, _mask = mesh.build_mesh(
-        branch_alpha(offset), spacing, 0.9
+        branch_mask(offset), spacing
     )
     assert_supported(points, faces, boundary, components)
     interior = points[~boundary]
@@ -162,14 +162,14 @@ def test_fine_bent_leg_and_joint_have_connected_positive_support(spacing, offset
 
 @pytest.mark.parametrize("spacing", (8, 32))
 def test_fine_comb_hole_and_one_pixel_bridge(spacing):
-    alpha = np.zeros((160, 180))
+    alpha = np.zeros((160, 180), dtype=bool)
     alpha[15:145, 15:42] = 1
     alpha[45:115, 125:165] = 1
     alpha[75, 40:126] = 1
     alpha[65:90, 140:150] = 0
     for row in range(20, 140, 12):
         alpha[row : row + 2, 35:110] = 1
-    result = mesh.build_mesh(alpha, spacing, 0.9)
+    result = mesh.build_mesh(alpha, spacing)
     assert_supported(*result[:4])
     points, faces, _boundary, components, _mask = result
     assert len(components) == 1
@@ -179,23 +179,6 @@ def test_fine_comb_hole_and_one_pixel_bridge(spacing):
             [np.asarray(((140, 65), (150, 65), (150, 90), (140, 90)))],
         )
     )
-
-
-def test_fine_cleanup_uses_threshold_and_preserves_input_and_largest_island():
-    alpha = np.zeros((40, 60))
-    alpha[5:25, 5:25] = 0.5
-    alpha[12, 20:45] = 0.5
-    alpha[32:34, 50:52] = 1
-    original = alpha.copy()
-    low = mesh.build_mesh(alpha, 32, 0.3)
-    high = mesh.build_mesh(alpha, 32, 0.9)
-    assert low[-1][12, 44] and not low[-1][32, 50]
-    assert high[-1][32, 50] and not high[-1][12, 44]
-    np.testing.assert_array_equal(alpha, original)
-    assert_supported(*low[:4])
-    assert_supported(*high[:4])
-    with pytest.raises(ValueError, match="no visible"):
-        mesh.build_mesh(np.zeros((10, 10)), 32, 0.9)
 
 
 def test_higher_detail_recovers_curve_instead_of_splitting_low_edges():
@@ -269,13 +252,13 @@ def test_contour_validation_requires_separation_of_pixel_contacts():
 
 @pytest.mark.parametrize("fine_outline", [False, True])
 def test_hole_policy_preserves_alpha_and_external_notches(fine_outline):
-    alpha = np.ones((80, 80))
+    alpha = np.ones((80, 80), dtype=bool)
     alpha[10:12, 10:12] = 0
     alpha[20:29, 20:29] = 0
     alpha[40:41, 10:40] = 0
     alpha[:15, 60:65] = 0
     original = alpha.copy()
-    mask = mesh.prepare_mask(alpha, 0.9, np.eye(2) * 3.2, fine_outline)
+    mask = mesh.prepare_mask(alpha, np.eye(2) * 3.2, fine_outline)
     assert mask[10, 10]
     assert mask[24, 24] == (not fine_outline)
     assert mask[40, 25] == (not fine_outline)
@@ -285,20 +268,20 @@ def test_hole_policy_preserves_alpha_and_external_notches(fine_outline):
 
 @pytest.mark.parametrize("size,filled", [(2, True), (3, False)])
 def test_micro_hole_threshold_respects_world_transform(size, filled):
-    alpha = np.ones((40, 40))
+    alpha = np.ones((40, 40), dtype=bool)
     alpha[10 : 10 + size, 10 : 10 + size] = 0
-    mask = mesh.prepare_mask(alpha, 0.9, np.eye(2) * 3.2, True)
+    mask = mesh.prepare_mask(alpha, np.eye(2) * 3.2, True)
     assert bool(mask[10, 10]) == filled
-    stretched = mesh.prepare_mask(alpha, 0.9, np.diag((6.4, 3.2)), True)
+    stretched = mesh.prepare_mask(alpha, np.diag((6.4, 3.2)), True)
     assert not stretched[10, 10]
 
 
 def test_filling_nested_hole_merges_island_without_overlap():
-    alpha = np.zeros((80, 80))
+    alpha = np.zeros((80, 80), dtype=bool)
     alpha[5:75, 5:75] = 1
     alpha[20:60, 20:60] = 0
     alpha[30:50, 30:50] = 1
-    result = mesh.build_mesh(alpha, 8, 0.9, fine_outline=False)
+    result = mesh.build_mesh(alpha, 8, fine_outline=False)
     p, f, _, components, _mask = result
     assert len(components) == 1
     assert_supported(*result[:4])

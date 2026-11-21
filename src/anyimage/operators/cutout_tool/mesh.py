@@ -72,9 +72,9 @@ def support_mesh(points, faces, *, max_vertices=50000):
     return np.asarray(vertices), np.asarray(output, dtype=np.int32)
 
 
-def prepare_mask(alpha, threshold, transform, fine_outline):
+def prepare_mask(visible, transform, fine_outline):
     """Keep significant islands and fill holes at the target mesh spacing."""
-    labels, count = ndimage.label((alpha > 0) & (alpha >= threshold))
+    labels, count = ndimage.label(visible)
     areas = np.bincount(labels.ravel(), minlength=count + 1)
     keep = areas >= 16
     keep[0] = False
@@ -107,25 +107,21 @@ def prepare_mask(alpha, threshold, transform, fine_outline):
 
 
 def build_mesh(
-    alpha,
+    visible,
     spacing,
-    threshold,
     *,
     pixel_transform=None,
     fine_outline=True,
     include_components=True,
 ):
     """Return pixel-space quality triangles, component ranges and final Mask."""
-    alpha = np.asarray(alpha, dtype=float)
-    if alpha.ndim != 2 or not alpha.size or not np.isfinite(alpha).all():
-        raise ValueError("The Cutout Alpha must be a finite two-dimensional array")
     if not np.isfinite(spacing) or spacing <= 0:
         raise ValueError("Cutout point spacing must be greater than zero")
     transform = (
         np.eye(2) if pixel_transform is None else np.asarray(pixel_transform)
     ) * (NORMALIZED_EDGE_LENGTH / spacing)
     inverse = np.linalg.inv(transform)
-    mask = prepare_mask(alpha, threshold, transform, fine_outline)
+    mask = prepare_mask(visible, transform, fine_outline)
     if not mask.any():
         raise ValueError("The Cutout selection contains no visible image pixels")
     points, faces, components = [], [], []

@@ -26,7 +26,7 @@ from ...common.viewport import (
 from ...common.selection import ImageEditWarning
 from ...common.object import read_conversion_source, require_conversion_source
 from ...common.image import image_content_signature, create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
-from ...common.projective_image import warp_projective_pixels
+from ...common.projective_image import premultiplied_rgba, warp_projective_pixels
 from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
@@ -51,6 +51,11 @@ MIN_QUAD_AREA = 16.0
 RECTIFY_TOOL_ID = "anyimage.rectify"
 
 
+def _rectify_sampling_pixels(image, pixels):
+    linear = image_rgba_to_linear(image, pixels.reshape(-1, 4))
+    return premultiplied_rgba(linear, image.size)
+
+
 class RectifyImagePerspective(bpy.types.Operator):
     bl_idname = "anyimage.rectify_image_perspective"
     bl_label = "Rectify Image Perspective"
@@ -72,7 +77,7 @@ class RectifyImagePerspective(bpy.types.Operator):
     _timer = None
     _phase = "POINTS"
     _preview_texture = None
-    _source_linear = None
+    _source_premultiplied = None
     _source_object = None
     _source_image = None
     _source_signature = None
@@ -152,7 +157,7 @@ class RectifyImagePerspective(bpy.types.Operator):
             context.window_manager.event_timer_remove(self._timer)
             self._timer = None
         self._preview_texture = None
-        self._source_linear = None
+        self._source_premultiplied = None
         context.workspace.status_text_set(None)
         if context.area is not None:
             context.area.tag_redraw()
@@ -178,7 +183,7 @@ class RectifyImagePerspective(bpy.types.Operator):
         self.quad_json = ""
         self._phase = "POINTS"
         self._preview_texture = None
-        self._source_linear = None
+        self._source_premultiplied = None
         self._points = [(float(event.mouse_region_x), float(event.mouse_region_y))]
         self._cursor = self._points[0]
         self._area_pointer = context.area.as_pointer()
@@ -267,10 +272,10 @@ class RectifyImagePerspective(bpy.types.Operator):
         if not perspective_quad_overlaps_image(quad, image_size):
             raise ImageEditWarning("Rectify quad does not overlap the source image")
 
-        self._source_linear = image_rgba_to_linear(image, pixels.reshape((-1, 4))).ravel()
+        self._source_premultiplied = _rectify_sampling_pixels(image, pixels)
         del pixels
         preview_size = (PREVIEW_TEXTURE_SIZE, PREVIEW_TEXTURE_SIZE)
-        preview = warp_projective_pixels(self._source_linear, image_size, quad, preview_size)
+        preview = warp_projective_pixels(self._source_premultiplied, quad, preview_size)
         preview = np.asarray(preview).reshape((*preview_size, 4))
         if not np.any(preview[:, :, 3] > 0.0):
             raise ImageEditWarning("Rectify quad contains no visible image pixels")
@@ -308,16 +313,11 @@ class RectifyImagePerspective(bpy.types.Operator):
                     "Rectify quad does not overlap the source image",
                 )
                 return {"CANCELLED"}
-            source_linear = self._source_linear
-            if source_linear is None:
-                source_linear = image_rgba_to_linear(
-                    source_object.data, image_pixels(source_object.data).reshape((-1, 4)),
-                ).ravel()
+            sampling_pixels = self._source_premultiplied
+            if sampling_pixels is None:
+                sampling_pixels = _rectify_sampling_pixels(source_object.data, image_pixels(source_object.data))
             pixels, output_size, placement_bounds = extract_perspective_pixels(
-                source_linear,
-                tuple(source_object.data.size),
-                quad,
-                self.aspect_ratio,
+                sampling_pixels, quad, self.aspect_ratio,
             )
             result_image = create_image_edit_result(
                 source_object.data,
@@ -339,7 +339,7 @@ class RectifyImagePerspective(bpy.types.Operator):
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
         finally:
-            self._source_linear = None
+            self._source_premultiplied = None
             self._source_object = None
             self._source_image = None
             self._source_signature = None

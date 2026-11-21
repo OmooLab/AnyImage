@@ -7,8 +7,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.common.job_image import prepare_target_input, apply_image_result
-from anyimage.common.image_input import cleanup_image_input
+from anyimage.common.job_image import apply_image_result
+from anyimage.common.image import image_rgba
+from anyimage.common.image_input import cleanup_image_input, prepare_input_png
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
@@ -42,8 +43,8 @@ def test_queued_edits_capture_inputs_and_apply_in_order(tmp_path, same_target, s
         input_path = None
 
         def request(self, context):
-            self.target = ImageEditTarget.capture(context)
-            self.input_path = prepare_target_input(self.target)
+            self.target, pixels = ImageEditTarget.capture_with_pixels(context)
+            self.input_path = prepare_input_png(image_rgba(self.target.image, pixels))
             inputs.append(self.input_path)
             return {"input": str(self.input_path)}
 
@@ -98,30 +99,9 @@ def test_queued_edits_capture_inputs_and_apply_in_order(tmp_path, same_target, s
             assert tuple(b.data.size) == (4, 3)
 
 
-def test_disk_input_is_snapshotted_before_queueing(tmp_path):
-    from anyimage.common.image_input import prepare_image_input
-    source = tmp_path / "source.png"
-    source.write_bytes(b"first")
-    image = SimpleNamespace(
-        is_dirty=False, source="FILE", packed_files=(),
-        filepath_from_user=lambda: str(source),
-    )
-    first = prepare_image_input(image)
-    source.write_bytes(b"second")
-    second = prepare_image_input(image)
-    try:
-        assert first.read_bytes() == b"first"
-        assert second.read_bytes() == b"second"
-    finally:
-        cleanup_image_input(first)
-        cleanup_image_input(second)
-    assert source.read_bytes() == b"second"
-
-
 @pytest.mark.parametrize("kind", ["dirty", "generated"])
 def test_input_snapshot_exports_current_unsaved_pixels(tmp_path, kind):
     from anyimage.common.image import image_pixels
-    from anyimage.common.image_input import prepare_image_input
 
     if kind == "dirty":
         original = tmp_path / "original.png"
@@ -137,7 +117,7 @@ def test_input_snapshot_exports_current_unsaved_pixels(tmp_path, kind):
     settings = image.source, image.filepath_raw, image.file_format
     path = None
     try:
-        path = prepare_image_input(image)
+        path = prepare_input_png(image_rgba(image, before))
         with Image.open(path) as snapshot:
             np.testing.assert_allclose(np.asarray(snapshot).reshape(-1) / 255, before, atol=1 / 255)
         np.testing.assert_array_equal(image_pixels(image), before)

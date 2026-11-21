@@ -104,7 +104,6 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.shape = "DEPTH_SOLID"
         operator.report = lambda *_args: None
         operator.edge_length = 0.1
-        operator.generate_normal = False
         operator.report = lambda *_args: None
 
         with (
@@ -127,18 +126,8 @@ class CutoutOperatorsTest(BlenderTestCase):
             ) as rasterize,
             patch.object(
                 self.cutout_main,
-                "configured_max_ai_input_size",
-                return_value=2048,
-            ),
-            patch.object(
-                self.cutout_main,
                 "invoke_ai_setup_if_needed",
                 return_value=None,
-            ),
-            patch.object(
-                self.cutout_main,
-                "configured_geometry_model",
-                return_value="MODEL",
             ),
             patch.object(
                 self.cutout_main,
@@ -194,46 +183,19 @@ class CutoutOperatorsTest(BlenderTestCase):
                 ai_color.assert_not_called()
 
 
-    def test_cutout_request_describes_ai_capabilities(self):
+    def test_cutout_request_only_adds_depth_for_depth_shapes(self):
         operator = self.cutout_main.CutoutSelectionToShape()
-        operator.alpha_threshold = 0.25
-        operator.fine_outline = False
         operator.input_path = __file__
-        operator.source_object_name = "Source"
-        operator.shape = "DEPTH_SOLID"
-        operator.model = self.anyimage.ai_preferences.DEFAULT_GEOMETRY_MODEL_KEY
-        operator.resolution_level = 5
-        operator.max_ai_input_size = 2048
-        operator.generate_normal = True
-        context = SimpleNamespace(
-            scene=SimpleNamespace(anyimage_settings=SimpleNamespace())
-        )
         with (
-            patch.object(self.cutout_main, "require_environment"),
-            patch.object(self.cutout_main, "require_model") as require_model,
+            patch.object(self.cutout_main, "geometry_job_parameters", return_value={"model": "MOGE3_VITL"}),
             patch.object(self.cutout_main, "require_input_path", return_value=Path("input.png")),
         ):
             for shape in ("FLAT", "SOLID", "DEPTH_SOLID", "DEPTH_SYMMETRY"):
-                for enabled in (False, True):
-                    with self.subTest(shape=shape, enabled=enabled):
-                        operator.shape = shape
-                        operator.generate_normal = enabled
-                        require_model.reset_mock()
-                        parameters = operator.request(context)
-                        depth = shape in {"DEPTH_SOLID", "DEPTH_SYMMETRY"}
-                        self.assertEqual(parameters["input"], "input.png")
-                        self.assertEqual(parameters["device"], "cuda")
-                        self.assertEqual(parameters["max_input_size"], 2048)
-                        self.assertEqual(parameters["generate_depth"], depth)
-                        self.assertEqual(parameters["generate_normal"], depth or enabled)
-                        self.assertNotIn("alpha_threshold", parameters)
-                        if depth or enabled:
-                            self.assertEqual(parameters["model"], operator.model)
-                            self.assertEqual(parameters["resolution_level"], 5)
-                            require_model.assert_called_once_with(operator.model)
-                        else:
-                            self.assertNotIn("model", parameters)
-                            require_model.assert_not_called()
+                operator.shape = shape
+                self.assertEqual(operator.request(None), {
+                    "model": "MOGE3_VITL", "input": "input.png",
+                    "generate_depth": shape in {"DEPTH_SOLID", "DEPTH_SYMMETRY"},
+                })
 
 
     def test_cutout_tool_settings_gate_normal_generation(self):
@@ -310,7 +272,6 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.gesture = "POLYLINE"
         operator.report = Mock()
         operator.edge_length = 0.1
-        operator.generate_normal = True
         operator._content_values = content_values
         operator._content_bounds = bounds
         operator._source_object = source

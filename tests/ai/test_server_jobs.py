@@ -61,7 +61,6 @@ class ServerJobsTest(unittest.TestCase):
                 parameters,
                 input_path,
                 generate_depth=True,
-                generate_normal=True,
                 normal_space=normal_space,
             )
 

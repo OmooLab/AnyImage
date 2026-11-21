@@ -15,8 +15,7 @@ def generate_moge_artifacts(
     parameters,
     input_path,
     *,
-    generate_depth=False,
-    generate_normal=False,
+    generate_depth,
     normal_space="TANGENT",
 ):
     """Run MoGe once and write only the requested file artifacts."""
@@ -51,14 +50,11 @@ def generate_moge_artifacts(
         result["depth_metadata"] = write_depth_metadata(
             frame, context.directory / "depth.json",
         )
-    if generate_normal:
-        context.progress(0.72, "Generating surface normal")
-        normal_name = f"{normal_space.lower()}_normal"
-        result[normal_name] = write_normal_texture(
-            frame,
-            alpha >= 0.1,
-            output_size,
-            context.directory / f"{normal_name.replace('_', '-')}.png",
-            normal_space=normal_space,
-        )
+    context.progress(0.72, "Generating surface normal")
+    normal_name = f"{normal_space.lower()}_normal"
+    result[normal_name] = write_normal_texture(
+        frame, alpha >= 0.1, output_size,
+        context.directory / f"{normal_name.replace('_', '-')}.png",
+        normal_space=normal_space,
+    )
     return result

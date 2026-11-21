@@ -4,7 +4,7 @@ import bpy
 
 from ..server.media.input import validate_input_path
 
-from ..ai_preferences import configured_device
+from ..ai_preferences import configured_device, configured_geometry_model, configured_max_ai_input_size
 from ..preferences import addon_preferences
 from ..runtime import runtime
 from ..server import model_catalog as shared_model_catalog
@@ -93,13 +93,17 @@ def require_model(model_key):
         raise RuntimeError(f"Download {model.label} first")
 
 
-def geometry_job_parameters(path, model, resolution_level):
+def geometry_job_parameters(context):
+    require_environment()
+    model = configured_geometry_model(context)
+    require_model(model)
+    preferences = addon_preferences(context)
     parameters = {
-        "input": str(path),
         "model": model,
-        "resolution_level": int(resolution_level),
+        "resolution_level": int(getattr(preferences, "geometry_resolution_level", 3)),
+        "max_input_size": configured_max_ai_input_size(context),
         "device": configured_device(),
     }
     if model == "MOGE3_VITL":
-        parameters["refine_steps"] = int(getattr(addon_preferences(), "geometry_refine_steps", 1))
+        parameters["refine_steps"] = int(getattr(preferences, "geometry_refine_steps", 1))
     return parameters

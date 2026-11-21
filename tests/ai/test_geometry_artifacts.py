@@ -158,9 +158,12 @@ class GeometryArtifactsTest(unittest.TestCase):
             with self.subTest(max_size=max_size):
                 outputs = []
                 for source in (first_path, second_path):
-                    with patch.object(artifacts, "infer_geometry", return_value=frame) as infer:
+                    with (
+                        patch.object(artifacts, "infer_geometry", return_value=frame) as infer,
+                        patch.object(artifacts, "write_normal_texture"),
+                    ):
                         artifacts.generate_moge_artifacts(
-                            context, {"max_input_size": max_size}, source,
+                            context, {"max_input_size": max_size}, source, generate_depth=False,
                         )
                     model_image = infer.call_args.args[2]
                     self.assertEqual(model_image.mode, "RGB")
@@ -209,7 +212,6 @@ class GeometryArtifactsTest(unittest.TestCase):
                 {"max_input_size": 2048},
                 input_path,
                 generate_depth=True,
-                generate_normal=True,
             )
 
         np.testing.assert_array_equal(write.call_args.args[0][..., 3], [[1, 0], [1, 1]])
@@ -253,7 +255,6 @@ class GeometryArtifactsTest(unittest.TestCase):
                 {
                     "input": str(input_path),
                     "generate_depth": True,
-                    "generate_normal": True,
                 },
             )
 
@@ -270,10 +271,8 @@ class GeometryArtifactsTest(unittest.TestCase):
             {
                 "input": str(input_path),
                 "generate_depth": True,
-                "generate_normal": True,
             },
             input_path,
             generate_depth=True,
-            generate_normal=True,
             normal_space="OBJECT",
         )

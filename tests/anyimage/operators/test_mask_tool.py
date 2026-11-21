@@ -5,6 +5,15 @@ from types import SimpleNamespace
 from tests.support.blender import BlenderTestCase
 
 
+def mask_on_canvas(mask, size):
+    import numpy as np
+
+    left, top, right, bottom = mask.bounds
+    canvas = np.zeros(size[::-1], dtype=np.float32)
+    canvas[top:bottom, left:right] = mask.values
+    return canvas
+
+
 class MaskToolTest(BlenderTestCase):
     def test_selection_mask_keeps_nonzero_winding_overlap(self):
         path = (
@@ -24,9 +33,9 @@ class MaskToolTest(BlenderTestCase):
         selection = self.image_selection.rasterize_selection_path(
             (12, 9),
             self.image_selection.SelectionPath(points=path),
-        ).full_values((12, 9))
+        )
 
-        self.assertTrue(selection[3, 5])
+        self.assertTrue(mask_on_canvas(selection, (12, 9))[3, 5])
 
         triangles = polygon_geometry.preview_fill_geometry(path)[0]
         preview_area = sum(
@@ -137,7 +146,7 @@ class MaskToolTest(BlenderTestCase):
             np.asarray(((0.25, 1.0), (0.5, 0.75)), dtype=np.float32),
             (1, 0, 3, 2),
         )
-        full_mask = mask.full_values((3, 2))
+        full_mask = mask_on_canvas(mask, (3, 2))
         expected_alpha = {
             "SET": source[:, :, 3] * full_mask,
             "EXTEND": np.maximum(source[:, :, 3], full_mask),
@@ -167,8 +176,8 @@ class MaskToolTest(BlenderTestCase):
             10,
             lambda path: path,
         )
-        single_values = single.full_values((120, 50))
-        stroke_values = stroke.full_values((120, 50))
+        single_values = mask_on_canvas(single, (120, 50))
+        stroke_values = mask_on_canvas(stroke, (120, 50))
 
         self.assertGreater(single_values[25, 20], 0.9)
         self.assertEqual(single_values[0, 0], 0.0)
@@ -223,7 +232,7 @@ class MaskToolTest(BlenderTestCase):
             lambda path: path,
         )
 
-        values = selection_mask.full_values((80, 80))
+        values = mask_on_canvas(selection_mask, (80, 80))
         self.assertGreater(values[40, 40], 0.9)
 
 

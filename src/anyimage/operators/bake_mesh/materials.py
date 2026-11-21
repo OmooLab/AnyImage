@@ -5,8 +5,11 @@ from dataclasses import dataclass, field
 
 
 from ...common.color_image import require_static_color_image
-from ...common.material import IMAGE_MATERIAL_NODE_GROUP_NAME, SHADELESS_NODE_GROUP_NAME
+from ...common.material import IMAGE_MATERIAL_NODE_GROUP_NAME
 from .geometry import SINGLE_REGION_GROUPS
+
+
+SHADELESS_NODE_GROUP_NAME = "O Shadeless"
 
 
 def surface_color_texture(socket):

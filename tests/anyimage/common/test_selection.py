@@ -103,9 +103,10 @@ def test_nonzero_winding_keeps_same_direction_overlap():
     mask = selection.rasterize_selection_path(
         (12, 9),
         selection.SelectionPath(points),
-    ).full_values((12, 9))
+    )
 
-    assert mask[3, 5] == 1.0
+    left, top, _, _ = mask.bounds
+    assert mask.values[3 - top, 5 - left] == 1.0
 
 
 def test_scanline_matches_reference_for_edge_cases():

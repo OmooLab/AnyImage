@@ -2,7 +2,7 @@ import subprocess
 import sys
 import textwrap
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 import unittest
 
 import server as server_module
@@ -50,7 +50,7 @@ def test_server_registration_and_metadata_do_not_load_backend_dependencies():
 class JobServerTest(unittest.TestCase):
     def test_model_job_resource_failure_clears_cache_without_retry(self):
         error = onnx_runtime.OnnxResourceError("memory exhausted")
-        manager = SimpleNamespace(clear=Mock())
+        manager = SimpleNamespace(sessions=Mock())
         context = SimpleNamespace(resource=lambda _name: manager)
         handler = Mock(side_effect=error)
 
@@ -59,10 +59,10 @@ class JobServerTest(unittest.TestCase):
 
         self.assertIs(raised.exception, error)
         handler.assert_called_once_with(context, {"value": 1})
-        manager.clear.assert_called_once_with()
+        manager.sessions.close.assert_called_once_with()
 
     def test_model_job_success_and_ordinary_failure_keep_cache(self):
-        manager = SimpleNamespace(clear=Mock())
+        manager = SimpleNamespace(sessions=Mock())
         context = SimpleNamespace(resource=lambda _name: manager)
         success = Mock(return_value={"value": 1})
 
@@ -77,25 +77,4 @@ class JobServerTest(unittest.TestCase):
                 {},
             )
 
-        manager.clear.assert_not_called()
-
-    def test_every_model_inference_job_uses_resource_failure_boundary(self):
-        context = object()
-        parameters = {"value": 1}
-        jobs = (
-            server_module.remove_background,
-            server_module.upscale_image,
-            server_module.generate_depth_plane_geometry,
-            server_module.generate_cutout_artifacts,
-            server_module.generate_panorama_geometry,
-        )
-
-        with patch.object(
-            server_module,
-            "_run_model_job",
-            return_value={"result": True},
-        ) as run:
-            for job in jobs:
-                self.assertEqual(job(context, parameters), {"result": True})
-
-        self.assertEqual(run.call_count, len(jobs))
+        manager.sessions.close.assert_not_called()

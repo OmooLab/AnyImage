@@ -2,6 +2,7 @@ import sys
 
 import bpy
 
+from .common import tool_status
 from .operators.clipboard_image import PasteClipboardImage
 from .tools import CutoutTool
 
@@ -51,6 +52,7 @@ def register():
     if addon_keyconfig is None:
         return
 
+    tool_status.register(addon_keyconfig.keymaps)
     for definition in KEYMAPS:
         keymap = addon_keyconfig.keymaps.new(
             name=definition["name"],
@@ -69,3 +71,4 @@ def unregister():
     for keymap, item in _items:
         keymap.keymap_items.remove(item)
     _items.clear()
+    tool_status.unregister()

@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 
 from tests.support.blender import BlenderTestCase
@@ -36,128 +37,35 @@ class ImageEditToolTest(BlenderTestCase):
         )
 
 
-    def test_image_edit_first_click_selects_another_image_without_editing(self):
-        selected = []
+    def test_point_tools_start_inside_the_selected_image_and_pass_through_outside(self):
+        from mathutils import Matrix
 
-        def image(name):
-            return SimpleNamespace(
-                name=name,
-                type="EMPTY",
-                empty_display_type="IMAGE",
-                data=object(),
-                select_set=lambda value: selected.append((name, value)),
-            )
-
-        active = image("Active")
-        clicked = image("Clicked")
-        context = SimpleNamespace(
-            active_object=active,
-            selected_objects=(active,),
-            view_layer=SimpleNamespace(objects=SimpleNamespace(active=active)),
-        )
-        event = SimpleNamespace(mouse_region_x=10, mouse_region_y=20)
-        previous_ops = getattr(self.fake_bpy, "ops", None)
-        previous_objects = self.fake_bpy.data.objects
-
-        def select(**_kwargs):
-            context.active_object = clicked
-
-        self.fake_bpy.ops = SimpleNamespace(
-            view3d=SimpleNamespace(select=select),
-            object=SimpleNamespace(select_all=lambda **_kwargs: None),
-        )
-        self.fake_bpy.data.objects = {
-            active.name: active,
-            clicked.name: clicked,
-        }
-        try:
-            source, should_edit = self.image_interaction.resolve_image_edit_click(
-                context, event, lambda *_args: None
-            )
-        finally:
-            self.fake_bpy.data.objects = previous_objects
-            if previous_ops is None:
-                del self.fake_bpy.ops
-            else:
-                self.fake_bpy.ops = previous_ops
-
-        self.assertIs(source, clicked)
-        self.assertFalse(should_edit)
-        self.assertEqual(selected, [])
-
-
-    def test_image_edit_first_click_selects_another_object_without_editing(self):
-        active = SimpleNamespace(
-            name="Active",
-            type="EMPTY",
-            empty_display_type="IMAGE",
-            data=object(),
-        )
-        clicked = SimpleNamespace(name="Mesh", type="MESH", data=object())
-        context = SimpleNamespace(
-            active_object=active,
-            selected_objects=(active,),
-        )
-        event = SimpleNamespace(mouse_region_x=10, mouse_region_y=20)
-        previous_ops = getattr(self.fake_bpy, "ops", None)
-        select_options = []
-
-        def select(**options):
-            select_options.append(options)
-            context.active_object = clicked
-
-        self.fake_bpy.ops = SimpleNamespace(
-            view3d=SimpleNamespace(select=select),
-        )
-        try:
-            source, should_edit = self.image_interaction.resolve_image_edit_click(
-                context, event, lambda *_args: None
-            )
-        finally:
-            if previous_ops is None:
-                del self.fake_bpy.ops
-            else:
-                self.fake_bpy.ops = previous_ops
-
-        self.assertIs(source, clicked)
-        self.assertFalse(should_edit)
-        self.assertEqual(select_options[0]["deselect_all"], False)
-
-
-    def test_image_edit_empty_click_keeps_active_image_and_starts_editing(self):
-        active = SimpleNamespace(
-            name="Active",
-            type="EMPTY",
-            empty_display_type="IMAGE",
-            data=object(),
+        source = SimpleNamespace(
+            name="Photo", type="EMPTY", empty_display_type="IMAGE", data=SimpleNamespace(size=(200, 100)),
+            matrix_world=Matrix.Identity(4), empty_image_offset=(-0.5, -0.5), empty_display_size=1,
         )
         context = SimpleNamespace(
-            active_object=active,
-            selected_objects=(active,),
+            active_object=source, selected_objects=[source], region=Mock(width=200, height=200),
+            area=Mock(), window_manager=Mock(), window=Mock(), workspace=Mock(),
+            region_data=SimpleNamespace(is_perspective=False, view_perspective="ORTHO",
+                                        perspective_matrix=Matrix.Identity(4), view_matrix=Matrix.Identity(4)),
         )
-        event = SimpleNamespace(mouse_region_x=10, mouse_region_y=20)
-        previous_ops = getattr(self.fake_bpy, "ops", None)
-        select_options = []
-        self.fake_bpy.ops = SimpleNamespace(
-            view3d=SimpleNamespace(
-                select=lambda **options: select_options.append(options)
-            ),
-        )
-        try:
-            source, should_edit = self.image_interaction.resolve_image_edit_click(
-                context, event, lambda *_args: None
-            )
-        finally:
-            if previous_ops is None:
-                del self.fake_bpy.ops
-            else:
-                self.fake_bpy.ops = previous_ops
-
-        self.assertIs(source, active)
-        self.assertTrue(should_edit)
-        self.assertIs(context.active_object, active)
-        self.assertEqual(select_options[0]["deselect_all"], False)
-
+        center = SimpleNamespace(value="PRESS", mouse_region_x=100, mouse_region_y=100)
+        outside = SimpleNamespace(value="PRESS", mouse_region_x=100, mouse_region_y=130)
+        self.assertIs(self.image_interaction.clicked_image_source(context, center), source)
+        self.assertIsNone(self.image_interaction.clicked_image_source(context, outside))
+        context.scene = SimpleNamespace(anyimage_settings=SimpleNamespace(
+            cutout_gesture="POLYLINE", mask_gesture="POLYLINE", mask_mode="SUBTRACT", mask_radius=25,
+        ))
+        with patch.object(self.fake_bpy.types, "SpaceView3D", Mock(), create=True), \
+             patch.object(self.rectify, "image_content_signature", return_value=()):
+            for operator in (self.rectify.RectifyImagePerspective(), self.edit_mask.EditImageAlpha(),
+                             self.cutout_operators.SelectCutoutSelection()):
+                self.assertEqual(operator.invoke(context, outside), {"PASS_THROUGH"})
+                self.assertEqual(operator.invoke(context, center), {"RUNNING_MODAL"})
+                context.window_manager.modal_handler_add.assert_called_with(operator)
+        context.selected_objects = []
+        self.assertIsNone(self.image_interaction.clicked_image_source(context, center))
 
     def test_image_edit_source_requires_active_image_to_be_selected(self):
         active = SimpleNamespace(

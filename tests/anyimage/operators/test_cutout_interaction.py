@@ -7,7 +7,7 @@ import pytest
 
 
 from anyimage.common.selection import SelectionPath
-from anyimage.common import viewport
+from anyimage.common import image_gesture
 from anyimage.operators.cutout_tool import ai_interaction as interaction
 from anyimage.operators.cutout_tool import operators as cutout_main
 
@@ -167,41 +167,13 @@ def test_cutout_lasso_submission_passes_only_the_selected_path(monkeypatch):
     source = cutout_source()
     window_manager = WindowManager()
     context = cutout_context(window_manager)
-    monkeypatch.setattr(cutout_main, "require_image_empty", lambda _name: source)
     monkeypatch.setattr(interaction, "ai_ready", lambda: False)
     path = SelectionPath(points=((0, 0), (10, 0), (0, 10)))
     operator = SimpleNamespace(source_object_name=source.name, _pie_event=object(), gesture="LASSO",
                                show_shape_menu=interaction.open_shape_pie)
-    result = cutout_main.SelectCutoutSelection._submit_selection_path(operator, context, path)
+    result = cutout_main.SelectCutoutSelection._submit_selection_path(operator, context, source, path)
     assert result == {"FINISHED"}
     assert SelectionPath.from_json(window_manager.pie.calls[0][2].selection_path_json) == path
-
-
-def test_cutout_tool_starts_on_press_and_keeps_shift_selection():
-    from anyimage.tools import CutoutTool
-
-    keymap = CutoutTool.bl_keymap
-    assert keymap[0][1]["value"] == "PRESS"
-    assert len(keymap) == 2
-    assert keymap[1][0] == "view3d.select"
-    assert keymap[1][2] == {"properties": [("toggle", True)]}
-    assert cutout_main.SelectCutoutSelection.resolve_on_press
-
-
-def test_cutout_f_has_no_option_shortcut(monkeypatch):
-    operator = SimpleNamespace(
-        gesture="LASSO",
-        active_tool_id="anyimage.cutout_lasso",
-    )
-    monkeypatch.setattr(viewport, "active_view3d_tool_id", lambda _context: None)
-
-    result = cutout_main.SelectCutoutSelection.modal(
-        operator,
-        SimpleNamespace(),
-        SimpleNamespace(type="F", value="PRESS"),
-    )
-
-    assert result == {"PASS_THROUGH"}
 
 
 def test_cutout_menu_keeps_submitted_gesture_during_redraw(monkeypatch):
@@ -229,15 +201,13 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
     context.region = context.region_data = object()
     context.scene.anyimage_settings.cutout_gesture = "POLYLINE"
     source = cutout_source()
-    monkeypatch.setattr(viewport, "active_view3d_tool_id", lambda _context: None)
-    monkeypatch.setattr(viewport, "require_image_empty", lambda _name: source)
-    monkeypatch.setattr(cutout_main, "require_image_empty", lambda _name: source)
-    monkeypatch.setattr(viewport, "deserialize_matrix", lambda _data: None)
-    monkeypatch.setattr(viewport, "image_empty_bounds", lambda _source: None)
-    monkeypatch.setattr(viewport, "screen_path_to_image_pixels", lambda path, *_args: path)
+    monkeypatch.setattr(image_gesture, "active_view3d_tool_id", lambda _context: None)
+    monkeypatch.setattr(image_gesture, "require_image_empty", lambda _name: source)
+    monkeypatch.setattr(image_gesture, "image_empty_bounds", lambda _source: None)
+    monkeypatch.setattr(image_gesture, "screen_path_to_image_pixels", lambda path, *_args: path)
     monkeypatch.setattr(interaction, "ai_ready", lambda: False)
     operator = SimpleNamespace(
-        source_object_name=source.name, source_matrix_data="matrix",
+        source_object_name=source.name, _source_matrix=None,
         active_tool_id="anyimage.cutout_lasso", _path=[(0, 0)],
         _polyline_confirm_type=None,
         _finish=Mock(),
@@ -255,7 +225,7 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
     assert event("RET") == {"RUNNING_MODAL"}
     event("LEFTMOUSE", point=(100, 0))
     event("LEFTMOUSE", point=(100, 100))
-    event("BACK_SPACE")
+    event("RIGHTMOUSE")
     assert operator._path == [(0, 0), (100, 0)]
     event("LEFTMOUSE", point=(100, 100))
     if finish == "START":
@@ -269,7 +239,7 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
     operator._finish.assert_not_called()
     points = tuple(operator._path)
     assert event("MOUSEMOVE", point=(200, 200)) == {"RUNNING_MODAL"}
-    assert event("BACK_SPACE") == {"RUNNING_MODAL"}
+    assert event("RIGHTMOUSE") == {"RUNNING_MODAL"}
     assert tuple(operator._path) == points
     release_type = "LEFTMOUSE" if finish in {"START", "DOUBLE_CLICK"} else finish
     assert event("SPACE", "RELEASE") == {"RUNNING_MODAL"}
@@ -283,15 +253,15 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
     assert SelectionPath.from_json(submitted.selection_path_json).points == ((0, 0), (100, 0), (100, 100))
 
 
-@pytest.mark.parametrize("reason", ("ESC", "RIGHTMOUSE", "TOOL_SWITCH"))
+@pytest.mark.parametrize("reason", ("ESC", "TOOL_SWITCH"))
 def test_cutout_polyline_cancel_cleans_preview(monkeypatch, reason):
     context = SimpleNamespace()
     operator = SimpleNamespace(
         gesture="POLYLINE", active_tool_id="anyimage.cutout_lasso", _finish=Mock(),
         _polyline_confirm_type="LEFTMOUSE",
     )
-    operator._cancel_and_finish = MethodType(viewport.ImageGesture._cancel_and_finish, operator)
-    monkeypatch.setattr(viewport, "active_view3d_tool_id", lambda _context: "other" if reason == "TOOL_SWITCH" else None)
+    operator._cancel_and_finish = MethodType(image_gesture.ImageGesture._cancel_and_finish, operator)
+    monkeypatch.setattr(image_gesture, "active_view3d_tool_id", lambda _context: "other" if reason == "TOOL_SWITCH" else None)
     result = cutout_main.SelectCutoutSelection.modal(operator, context, SimpleNamespace(type=reason, value="PRESS"))
     assert result == {"CANCELLED"}
     operator._finish.assert_called_once_with(context)

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.image import image_rgba
+from anyimage.common.image import image_pixels, image_rgba
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators.remove_background import operators
@@ -44,8 +44,8 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
     def execute(operator, context):
         owner = current_owner()
         target_context = SimpleNamespace(object=owner, space_data=None) if owner_kind == "empty" else texture_context(owner)
-        operator._image_target = ImageEditTarget.capture(target_context)
-        operator._hdr_input = HdrBackgroundInput.prepare(current_image())
+        operator._image_target, pixels = ImageEditTarget.capture_with_pixels(target_context)
+        operator._hdr_input = HdrBackgroundInput.prepare(operator._image_target.image, pixels)
         operator.input_path = str(operator._hdr_input.path)
         try:
             operator.response(context, SimpleNamespace(file=lambda key: alpha_path))
@@ -74,7 +74,7 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
 
 @pytest.mark.parametrize("outcome", ["cancel", "raise"])
 def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outcome):
-    target = ImageEditTarget.capture(texture_context(hdr_texture))
+    capture = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
     paths = []
     operation = operators.RunBackgroundRemoval
     original_cleanup = operation.cleanup
@@ -95,7 +95,7 @@ def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outco
 
     from anyimage.runtime import runtime
     with (
-        patch.object(ImageEditTarget, "capture", return_value=target),
+        patch.object(ImageEditTarget, "capture_with_pixels", return_value=capture),
         patch.object(runtime, "can_submit", return_value=outcome == "raise"),
         patch.object(runtime, "enable"),
         patch.object(runtime.server, "poll"),
@@ -117,7 +117,7 @@ def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outco
 
 def test_hdr_request_uses_alpha_output_and_current_still(hdr_texture):
     operation = operators.RunBackgroundRemoval
-    snapshot = HdrBackgroundInput.prepare(hdr_texture.image)
+    snapshot = HdrBackgroundInput.prepare(hdr_texture.image, image_pixels(hdr_texture.image))
     operator = SimpleNamespace(input_path=str(snapshot.path), _hdr_input=snapshot,
                                _image_target=SimpleNamespace())
     context = SimpleNamespace(scene=SimpleNamespace(anyimage_settings=SimpleNamespace()))

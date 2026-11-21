@@ -96,13 +96,6 @@ def _trace_selection_contours(mask):
     return contours
 
 
-def _signed_contour_area(contour):
-    return 0.5 * sum(
-        start[0] * end[1] - end[0] * start[1]
-        for start, end in zip(contour, contour[1:] + contour[:1])
-    )
-
-
 def _point_inside_contour(point, contour):
     inside = False
     previous = contour[-1]
@@ -124,7 +117,7 @@ def extract_selection_contours(mask):
     outer_areas = []
     holes = []
     for contour in _trace_selection_contours(mask):
-        area = _signed_contour_area(contour)
+        area = contour_area(contour)
         if area > 0:
             components.append([contour])
             outer_areas.append(area)
@@ -203,7 +196,7 @@ def smooth_selection_contour(contour, spacing, iterations=16):
     return contour
 
 
-def _contour_edges(contours):
+def _crossing_edges(contours):
     starts = []
     ends = []
     for contour in contours:
@@ -239,7 +232,7 @@ def points_inside_contours(points, contours):
     inside = np.zeros(len(points), dtype=bool)
     if not len(points):
         return inside
-    starts, ends = _contour_edges(contours)
+    starts, ends = _crossing_edges(contours)
     if not len(starts):
         return inside
     minimum_y = min(float(points[:, 1].min()), float(starts[:, 1].min()))
@@ -280,23 +273,26 @@ def points_inside_contours(points, contours):
     return inside
 
 
+def contour_edge_indices(contours):
+    """Index the closed edges of each ring in their concatenated vertex array."""
+    edges = []
+    offset = 0
+    for contour in contours:
+        count = len(contour)
+        edges.extend((offset + i, offset + (i + 1) % count) for i in range(count))
+        offset += count
+    return edges
+
+
 def contour_interior_point(contours, spacing):
     """Choose an interior seed from the largest auxiliary triangle."""
     from mathutils import Vector
     from mathutils.geometry import delaunay_2d_cdt
 
     input_points = np.concatenate(contours, axis=0)
-    boundary_edges = []
-    offset = 0
-    for contour in contours:
-        count = len(contour)
-        boundary_edges.extend(
-            (offset + index, offset + (index + 1) % count) for index in range(count)
-        )
-        offset += count
     result = delaunay_2d_cdt(
         [Vector(point) for point in input_points],
-        boundary_edges,
+        contour_edge_indices(contours),
         [],
         0,
         max(spacing * 1e-6, 1e-9),
@@ -310,19 +306,17 @@ def contour_interior_point(contours, spacing):
         [tuple(face) for face in result[2] if len(face) == 3],
         dtype=np.int32,
     )
-    if len(faces):
-        centers = planar_points[faces].mean(axis=1)
-        faces = faces[points_inside_contours(centers, contours)]
-    if not len(faces):
+    triangles = planar_points[faces.reshape(-1, 3)]
+    centers = triangles.mean(axis=1)
+    inside = np.flatnonzero(points_inside_contours(centers, contours))
+    if not len(inside):
         raise ValueError("Unable to triangulate the Cutout selection components")
-    triangles = planar_points[faces]
+    triangles = triangles[inside]
     first = triangles[:, 1] - triangles[:, 0]
     second = triangles[:, 2] - triangles[:, 0]
     areas = abs(first[:, 0] * second[:, 1] - first[:, 1] * second[:, 0])
-    seed = triangles[np.argmax(areas)].mean(axis=0)
-    if not points_inside_contours(seed[None], contours)[0]:
-        raise ValueError("Cutout seed is outside its contour")
-    return seed
+    return centers[inside[np.argmax(areas)]]
+
 
 
 def separate_contour_contacts(contours):

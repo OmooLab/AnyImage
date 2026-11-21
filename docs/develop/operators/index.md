@@ -1,5 +1,30 @@
 # Operator 实现索引
 
+## Convert To 与 Cutout 的图像流程
+
+先确定工具使用原图的哪一块。需要深度或法线时，把这块图转成 sRGB PNG 交给 AI。材质和 World 的颜色始终取自原图的同一区域，普通图打包为 PNG，HDR 打包为 32 位线性 EXR，保留高光与透明度。
+
+```mermaid
+flowchart TD
+    source["确定原图范围"] --> ai{"需要深度或法线？"}
+    ai -->|否| color["从原图同一区域创建颜色贴图"]
+    ai -->|是| png["导出 sRGB PNG 给 AI"]
+    png --> geometry["收到深度或法线，校验原图"]
+    geometry --> color
+    color --> result["创建物体或 World"]
+```
+
+| 工具 | 使用哪块原图 | AI 提供什么 | 结果 |
+| --- | --- | --- | --- |
+| Plane | 整图 | 无 | 矩形面片 |
+| Depth Plane | 整图 | 深度、对象空间法线 | 随透视起伏的表面 |
+| Relief | 整图 | 深度、切线空间法线 | 浮雕 |
+| World | 最大居中 2:1 区域 | 无 | 世界环境 |
+| Panorama | 最大居中 2:1 区域 | 深度、法线及烘焙权重 | 全景物体与 World，共用一张颜色贴图 |
+| Cutout | 选区外接矩形，选区与源 Alpha 决定轮廓 | 面片与体块可选法线，深度形状需要深度与法线 | 沿轮廓生成的网格 |
+
+## 源码索引
+
 | 源码（相对 `src/anyimage/`） | 功能 |
 | --- | --- |
 | `operators/ai_setup.py` | [AI 环境管理](ai-setup.md) |

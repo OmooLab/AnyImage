@@ -29,14 +29,14 @@ class HdrBackgroundInput:
     path: Path
 
     @classmethod
-    def prepare(cls, image):
+    def prepare(cls, image, pixels):
         if is_animated_image(image):
             raise RuntimeError("HDR background removal supports still images only")
         if image.source not in {"FILE", "GENERATED"}:
             raise RuntimeError("HDR background removal requires a file or generated image")
         if image.colorspace_settings.is_data:
             raise RuntimeError("HDR background removal requires a color image with opacity alpha")
-        rgba = image_rgba(image).copy()
+        rgba = image_rgba(image, pixels)
         if not np.isfinite(rgba).all() or np.any((rgba[..., 3] < 0) | (rgba[..., 3] > 1)):
             raise RuntimeError("HDR image contains invalid color or alpha values")
         path = Path(tempfile.mkdtemp(prefix="anyimage-hdr-")) / "input.png"

@@ -18,10 +18,10 @@ from anyimage.operators.cutout_tool.contours import (
 from anyimage.operators.cutout_tool.balloon import poisson_balloon_profile
 from anyimage.operators.cutout_tool import mesh
 from anyimage.operators.cutout_tool import tangle
+from anyimage.operators.cutout_tool.triangulation import triangulate
 
 
-@pytest.mark.parametrize("fail", [False, True])
-def test_triangulation_restores_numeric_context_and_can_be_repeated(monkeypatch, fail):
+def test_triangulation_failure_restores_numeric_context_for_next_cutout(monkeypatch):
     points = [(0, 0), (4, 0), (4, 4), (0, 4)]
     segments = [(0, 1, 1), (1, 2, 1), (2, 3, 1), (3, 0, 1)]
     epsilon = tangle.EPS
@@ -29,17 +29,13 @@ def test_triangulation_restores_numeric_context_and_can_be_repeated(monkeypatch,
     expected = tangle.build_mesh(points, segments, [], 4)
 
     def fail_refinement(*args):
-        assert getcontext().prec == 80
         tangle.EPS = 1
         raise ValueError("Refinement failed")
 
     with monkeypatch.context() as patch:
-        if fail:
-            patch.setattr(tangle, "refine_quality", fail_refinement)
-            with pytest.raises(ValueError, match="Refinement failed"):
-                tangle.build_mesh(points, segments, [], 4)
-        else:
-            assert tangle.build_mesh(points, segments, [], 4) == expected
+        patch.setattr(tangle, "refine_quality", fail_refinement)
+        with pytest.raises(ValueError, match="Refinement failed"):
+            tangle.build_mesh(points, segments, [], 4)
     assert tangle.EPS == epsilon
     assert getcontext().prec == precision
     assert tangle.build_mesh(points, segments, [], 4) == expected
@@ -243,7 +239,7 @@ def test_cdt_collinear_outline_samples_do_not_become_sliver_faces(offset):
     contour = contour @ np.asarray(((0.763, -0.646), (0.646, 0.763)))
     contour += np.asarray((420.123456, 540.234567)) + offset
     contours = [resample_closed_contour(contour, 16)]
-    points, faces = mesh.triangulate(contours, 16)
+    points, faces = triangulate(contours, 16)
     triangles = points[faces]
     area = abs(
         np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])

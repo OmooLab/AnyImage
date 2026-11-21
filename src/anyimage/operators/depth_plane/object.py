@@ -2,23 +2,26 @@
 
 import bpy
 
-from ...common.image import image_empty_bounds
-from ...common.geometry_image import (
+from ...common.image import image_empty_bounds, image_rgba
+from ...common.depth_geometry import (
     depth_plane_limit_preset,
     depth_node_direction,
     depth_uniform_scale,
     fit_image_depth_direction,
+    reference_and_median_depth,
+)
+from ...common.geometry_image import (
+    camera_depth_values,
     load_depth_metadata,
     load_depth_result_image,
     load_normal_result_image,
-    reference_and_median_depth,
 )
 from ...common.material import create_image_material
 from ...common.color_image import material_color_image
 from ...common.object import (
     finalize_object_result,
     modifier_input_identifier,
-    require_conversion_source,
+    read_conversion_source,
     set_modifier_input,
 )
 from ...common.node import load_node_group
@@ -57,12 +60,10 @@ def create_depth_plane_object(
         modifier = plane.modifiers.new(name=node_group.name, type="NODES")
         modifier.node_group = node_group
         modifier.show_group_selector = False
-        model_reference, _ = reference_and_median_depth(depth_image)
-        uniform_scale = depth_uniform_scale(
-            source_object,
-            depth_metadata,
-            model_reference,
-        )
+        depth, valid = camera_depth_values(depth_image)
+        values = depth[valid]
+        model_reference, model_median = reference_and_median_depth(values)
+        uniform_scale = depth_uniform_scale(bounds, depth_metadata, model_reference)
         inputs = [
             ("Subdivide", max(0, min(8, int(subdivisions)))),
             ("Reference Depth", model_reference * uniform_scale),
@@ -70,14 +71,11 @@ def create_depth_plane_object(
             ("Depth Image", depth_image),
         ]
         if plane_type == "DEPTH":
-            inputs.append(("Depth Limit", depth_plane_limit_preset(depth_image, model_reference, uniform_scale)))
+            limit = depth_plane_limit_preset(values, model_median, model_reference, uniform_scale)
+            inputs.append(("Depth Limit", limit))
         else:
             depth_direction = depth_node_direction(
-                fit_image_depth_direction(
-                    depth_image,
-                    bounds,
-                    uniform_scale,
-                )
+                fit_image_depth_direction(depth, valid, bounds, uniform_scale)
             )
             inputs.append((
                 "Depth Direction",
@@ -100,12 +98,12 @@ def create_depth_plane_object(
 
 def create_depth_plane_from_result(context, result, operator, *, plane_type, undo_label):
     normal_space = {"DEPTH": "OBJECT", "RELIEF": "TANGENT"}[plane_type]
-    source_object = require_conversion_source(operator)
+    source_object, pixels = read_conversion_source(operator)
     material = None
     depth_image = None
     normal_image = None
     try:
-        with material_color_image(input_path=operator.color_path) as color_image:
+        with material_color_image(source_object.data, rgba=image_rgba(source_object.data, pixels)) as color_image:
             depth_metadata = load_depth_metadata(result.file("depth_metadata"))
             depth_image = load_depth_result_image(
                 result.file("depth"), source_object, depth_metadata,
@@ -115,6 +113,7 @@ def create_depth_plane_from_result(context, result, operator, *, plane_type, und
             )
             material = create_image_material(
                 source_object.data, color_image,
+                color_is_full_source=True,
                 normal_image=normal_image, normal_space=normal_space,
                 scene=context.scene,
             )

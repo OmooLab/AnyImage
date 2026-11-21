@@ -6,7 +6,7 @@ from anyimage.common import image as image_data
 from anyimage.common.selection import SelectionMask
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
 from anyimage.operators.cutout_tool import object as cutout_object
-from tests.support.color_image import color_image as prepared_color_image
+from anyimage.common.color_image import create_material_color_image
 
 
 def _inputs(group):
@@ -43,23 +43,24 @@ def _create_cutout_shape(
         selection_values = np.ones((bottom - top, right - left), dtype=np.float32)
     selection_mask = SelectionMask(selection_values, bounds)
     source_rgba = image_data.image_rgba(source.data)
-    color_image = prepared_color_image(
+    color_image = create_material_color_image(
         source.data,
         selection_mask.bounds,
         source_rgba,
     )
-    base_shape = cutout_geometry.build_base_shape(
+    plane_bounds = cutout_geometry.crop_plane_bounds(source, bounds, source.data.size)
+    base_shape = cutout_geometry.build_cutout_shape(
         bpy.context,
         source,
         edge_length,
         selection_mask.values,
-        selection_mask.bounds,
+        plane_bounds,
     )
     return cutout_object.create_shape_object(
         bpy.context,
         source,
         shape,
-        selection_mask.bounds,
+        plane_bounds,
         base_shape,
         content_values=selection_mask.values,
         depth_image=depth_image,

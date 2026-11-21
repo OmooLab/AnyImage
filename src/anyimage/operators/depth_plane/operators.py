@@ -8,16 +8,12 @@ from ...common.ai import (
     invoke_ai_setup_if_needed,
     report_ai_error,
     require_environment,
-    require_input_path,
     require_model,
 )
-from ...common.color_image import (
-    cleanup_material_color_input,
-    prepare_material_color_input,
-    require_static_color_image,
-)
-from ...common.image import image_content_signature, is_image_empty, require_image_empty
-from ...common.job_image import material_analysis_input
+from ...common.color_image import require_static_color_image
+from ...common.image import image_content_signature, image_pixels, image_rgba, is_image_empty, require_image_empty
+from ...common.image_input import cleanup_image_input
+from ...common.job_image import prepare_recognition_input
 from ...preferences import addon_preferences
 from ...runtime import JobOperator
 from ...server.media.resolution import (
@@ -37,8 +33,7 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
     job_type = "generate_depth_plane_geometry"
     starting_message = "Preparing depth conversion"
 
-    input_path: bpy.props.StringProperty(options=_HIDDEN)
-    color_path: bpy.props.StringProperty(options=_HIDDEN)
+    _input_path = None
     source_object_name: bpy.props.StringProperty(options=_HIDDEN)
     plane_type: bpy.props.EnumProperty(
         items=(("DEPTH", "Depth Plane", ""), ("RELIEF", "Relief", "")),
@@ -53,23 +48,16 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
         options=_HIDDEN,
     )
 
-    def execute(self, context):
-        try:
-            self._source_object = require_image_empty(self.source_object_name)
-            self._source_image = self._source_object.data
-            self._source_signature = image_content_signature(self._source_image)
-        except RuntimeError as error:
-            cleanup_material_color_input(self.color_path)
-            report_ai_error(self, error)
-            return {"CANCELLED"}
-        return super().execute(context)
-
     def request(self, context):
         require_environment()
         require_model(self.model)
-        input_path = require_input_path(self.input_path)
+        self._source_object = require_image_empty(self.source_object_name)
+        image = self._source_image = self._source_object.data
+        pixels = image_pixels(image)
+        self._source_signature = image_content_signature(image, pixels)
+        self._input_path = prepare_recognition_input(image, image_rgba(image, pixels))
         return {
-            **geometry_job_parameters(input_path, self.model, self.resolution_level),
+            **geometry_job_parameters(self._input_path, self.model, self.resolution_level),
             "max_input_size": int(self.max_input_size),
             "plane_type": self.plane_type,
         }
@@ -85,7 +73,7 @@ class GeneratePlaneGeometry(JobOperator, bpy.types.Operator):
         return "Relief is ready" if self.plane_type == "RELIEF" else "Depth Plane is ready"
 
     def cleanup(self):
-        cleanup_material_color_input(self.color_path)
+        cleanup_image_input(self._input_path)
         self._source_object = self._source_image = self._source_signature = None
 
 
@@ -99,28 +87,19 @@ def start_depth_conversion(operator, context, plane_type):
     setup_result = invoke_ai_setup_if_needed(operator)
     if setup_result is not None:
         return setup_result
-    color_path = None
     try:
-        color_path = prepare_material_color_input(source_object.data)
-        source_path = material_analysis_input(color_path)
         preferences = addon_preferences(context)
         result = bpy.ops.anyimage.generate_plane_geometry(
-            input_path=str(source_path),
             plane_type=plane_type,
-            color_path=str(color_path),
             source_object_name=source_object.name,
             model=configured_geometry_model(context),
             resolution_level=int(getattr(preferences, "geometry_resolution_level", 3)),
             max_input_size=configured_max_ai_input_size(context),
         )
     except (OSError, RuntimeError, ValueError) as error:
-        cleanup_material_color_input(color_path)
         report_ai_error(operator, error)
         return {"CANCELLED"}
-    if "CANCELLED" in result:
-        cleanup_material_color_input(color_path)
-        return {"CANCELLED"}
-    return {"FINISHED"}
+    return {"CANCELLED"} if "CANCELLED" in result else {"FINISHED"}
 
 
 class ConvertToDepthPlane(bpy.types.Operator):

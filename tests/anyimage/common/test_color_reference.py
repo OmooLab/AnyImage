@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 from anyimage import properties
 from anyimage.common import color_reference as reference_cache
-from anyimage.common.image import image_rgba, is_color_reference_candidate
+from anyimage.common.image import image_rgba
+from anyimage.common.color_reference import is_color_reference_candidate
 from anyimage.common.color_space import srgb_to_linear_rgb
 from tests.support.color_reference import create_clipboard_image, registered_color_reference, isolate_reference_cache
 

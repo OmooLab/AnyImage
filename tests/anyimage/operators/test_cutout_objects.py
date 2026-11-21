@@ -1,4 +1,5 @@
 from anyimage.common import geometry_image
+from anyimage.common.depth_geometry import DEPTH_LIMIT_MEDIAN_FACTOR
 
 from unittest.mock import patch
 import bpy
@@ -7,7 +8,7 @@ import pytest
 from mathutils import Vector
 
 
-from tests.support.color_image import color_image as prepared_color_image
+from anyimage.common.color_image import create_material_color_image
 from anyimage.common import image as image_data
 from anyimage.common import material as material_data
 from anyimage.common import object as object_data
@@ -212,7 +213,7 @@ def test_depth_surface_object_evaluates(gesture):
         modifier,
         object_data.modifier_input_identifier(modifier.node_group, "Depth Limit"),
     ) == pytest.approx(
-        (geometry_image.DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
+        (DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
         * modifier_value(modifier, scale_id)
     )
     object_data.set_modifier_input(
@@ -381,10 +382,11 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
         depth_image.size,
     )
     model_reference = value(modifier, "Reference Depth") / value(modifier, "Uniform Scale")
-    _, model_median = geometry_image.reference_and_median_depth(depth_image, reference_mask)
+    depth, valid = geometry_image.camera_depth_values(depth_image)
+    model_median = np.median(depth[valid & reference_mask])
     expected_limit = max(
         (
-            geometry_image.DEPTH_LIMIT_MEDIAN_FACTOR
+            DEPTH_LIMIT_MEDIAN_FACTOR
             * model_median
             - model_reference
         )
@@ -427,7 +429,7 @@ def test_boundary_padding_preserves_independent_blender_image_interpretation(flo
     padded.pixels.foreach_set(np.flipud(values).ravel())
     original = image_rgba_buffer(source)
 
-    pad_cutout_images(padded, None, None, values[..., 3], 0.5, 2.0)
+    pad_cutout_images(padded, None, None, values[..., 3] >= 0.5, 2.0)
 
     np.testing.assert_array_equal(image_rgba_buffer(source), original)
     assert image_rgba_buffer(padded)[1, 4, 3] == pytest.approx(1.0)
@@ -504,7 +506,7 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
             selection_mask.values,
             alpha_threshold=0.5,
         )
-        color_image = prepared_color_image(
+        color_image = create_material_color_image(
             source.data,
             selection_mask.bounds,
             rgba,

@@ -6,22 +6,25 @@ import math
 import bpy
 
 from ...common.image_preview import (
-    draw_preview_frame,
+    draw_preview_caption,
     preview_draw_bounds,
     create_preview_texture,
     draw_preview_texture,
 )
+from ...common.tool_status import set_tool_status
 from ...common.viewport import (
     active_view3d_tool_id,
     draw_dashed_line,
     draw_polygon_fill,
+    draw_polygon_outline,
     drawing_in_region,
     image_edit_poll,
     report_image_edit_exception,
-    resolve_image_edit_click,
+    clicked_image_source,
     screen_path_to_image_pixels,
 )
-from ...common.object import require_conversion_source
+from ...common.selection import ImageEditWarning
+from ...common.object import read_conversion_source, require_conversion_source
 from ...common.image import image_content_signature, create_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
 from ...common.projective_image import warp_projective_pixels
 from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
@@ -33,11 +36,12 @@ from .geometry import (
     perspective_quad_aspect,
     perspective_quad_overlaps_image,
     validate_perspective_quad,
+    validated_corner_ring,
 )
 from .preview import (
     PREVIEW_TEXTURE_SIZE,
     aspect_ratio_from_mouse,
-    draw_aspect_hud,
+    aspect_ratio_label,
     interactive_preview_polygon,
     snapped_aspect_ratio,
 )
@@ -68,7 +72,7 @@ class RectifyImagePerspective(bpy.types.Operator):
     _timer = None
     _phase = "POINTS"
     _preview_texture = None
-    _source_pixels = None
+    _source_linear = None
     _source_object = None
     _source_image = None
     _source_signature = None
@@ -90,10 +94,13 @@ class RectifyImagePerspective(bpy.types.Operator):
             (region.width, region.height), self.aspect_ratio,
         )
         draw_preview_texture(self._preview_texture, bounds)
-        draw_preview_frame(bounds)
-        draw_aspect_hud(
-            bounds, self.aspect_ratio, self._aspect_preset_label
+        left, bottom, width, height = bounds
+        right, top = left + width, bottom + height
+        draw_polygon_outline(
+            ((left, bottom), (right, bottom), (right, top), (left, top)),
+            (0.8, 0.8, 0.8, 0.85),
         )
+        draw_preview_caption(region, aspect_ratio_label(self.aspect_ratio, self._aspect_preset_label))
 
     def _draw_overlay(self):
         if not self._points or not drawing_in_region(
@@ -110,24 +117,19 @@ class RectifyImagePerspective(bpy.types.Operator):
         draw_dashed_line(vertices)
 
     def _set_point_status(self, context):
-        remaining = 4 - len(self._points)
-        context.workspace.status_text_set(
-            bpy.app.translations.pgettext_iface(
-                "Rectify: click {remaining} more corner; click order does not matter; "
-                "Backspace removes, RMB or Esc cancels"
-                if remaining == 1 else
-                "Rectify: click {remaining} more corners; click order does not matter; "
-                "Backspace removes, RMB or Esc cancels"
-            ).format(remaining=remaining)
+        label = bpy.app.translations.pgettext_iface("Place Corner {index}/4")
+        set_tool_status(
+            context,
+            (label.format(index=len(self._points) + 1), "LEFTMOUSE"),
+            ("Remove Point", "RIGHTMOUSE"),
+            cancel_event="ESC",
         )
 
     def _set_aspect_status(self, context):
-        context.workspace.status_text_set(
-            bpy.app.translations.pgettext_iface(
-                "Rectify Aspect {ratio:.3f}: "
-                "move mouse horizontally, LMB confirms, Backspace returns, "
-                "RMB or Esc cancels"
-            ).format(ratio=self.aspect_ratio)
+        set_tool_status(
+            context,
+            ("Snap to Preset", "LEFT_CTRL"),
+            ("Confirm", "LEFTMOUSE"),
         )
 
     def _update_aspect(self, context, event):
@@ -140,11 +142,7 @@ class RectifyImagePerspective(bpy.types.Operator):
         else:
             self.aspect_ratio = ratio
             self._aspect_preset_label = None
-        self._set_aspect_status(context)
         context.area.tag_redraw()
-
-    def _remove_preview(self):
-        self._preview_texture = None
 
     def _finish(self, context):
         if self._handle is not None:
@@ -153,7 +151,8 @@ class RectifyImagePerspective(bpy.types.Operator):
         if self._timer is not None:
             context.window_manager.event_timer_remove(self._timer)
             self._timer = None
-        self._remove_preview()
+        self._preview_texture = None
+        self._source_linear = None
         context.workspace.status_text_set(None)
         if context.area is not None:
             context.area.tag_redraw()
@@ -162,13 +161,9 @@ class RectifyImagePerspective(bpy.types.Operator):
         self._finish(context)
 
     def invoke(self, context, event):
-        source_object, should_edit = resolve_image_edit_click(
-            context, event, self.report
-        )
-        if not should_edit:
-            return {"FINISHED"} if source_object is not None else {"CANCELLED"}
+        source_object = clicked_image_source(context, event)
         if source_object is None:
-            return {"CANCELLED"}
+            return {"PASS_THROUGH"}
         if is_animated_image(source_object.data):
             self.report(
                 {"WARNING"},
@@ -183,7 +178,7 @@ class RectifyImagePerspective(bpy.types.Operator):
         self.quad_json = ""
         self._phase = "POINTS"
         self._preview_texture = None
-        self._source_pixels = None
+        self._source_linear = None
         self._points = [(float(event.mouse_region_x), float(event.mouse_region_y))]
         self._cursor = self._points[0]
         self._area_pointer = context.area.as_pointer()
@@ -204,24 +199,18 @@ class RectifyImagePerspective(bpy.types.Operator):
         if active_tool is not None and active_tool != RECTIFY_TOOL_ID:
             self._finish(context)
             return {"CANCELLED"}
-        if event.type in {"ESC", "RIGHTMOUSE"} and event.value == "PRESS":
-            self._finish(context)
-            return {"CANCELLED"}
-        if event.type == "BACK_SPACE" and event.value == "PRESS":
-            if self._phase == "ASPECT":
-                self._remove_preview()
-                self._source_pixels = None
-                self._phase = "POINTS"
+        if event.type == "RIGHTMOUSE" and event.value == "PRESS":
+            if self._phase == "POINTS" and len(self._points) > 1:
                 self._points.pop()
                 self._cursor = self._points[-1]
                 self._set_point_status(context)
                 context.area.tag_redraw()
                 return {"RUNNING_MODAL"}
-            if len(self._points) > 1:
-                self._points.pop()
-                self._set_point_status(context)
-                context.area.tag_redraw()
-            return {"RUNNING_MODAL"}
+            self._finish(context)
+            return {"CANCELLED"}
+        if event.type == "ESC" and event.value == "PRESS":
+            self._finish(context)
+            return {"CANCELLED"}
         if (
             self._phase == "ASPECT"
             and event.type in {"LEFT_CTRL", "RIGHT_CTRL"}
@@ -242,8 +231,10 @@ class RectifyImagePerspective(bpy.types.Operator):
             if not drawing_in_region(self._area_pointer, self._region_pointer):
                 return {"PASS_THROUGH"}
             if self._phase == "ASPECT":
-                self._finish(context)
-                return self.execute(context)
+                try:
+                    return self.execute(context)
+                finally:
+                    self._finish(context)
             point = (float(event.mouse_region_x), float(event.mouse_region_y))
             if math.dist(point, self._points[-1]) < 2.0:
                 return {"RUNNING_MODAL"}
@@ -253,83 +244,50 @@ class RectifyImagePerspective(bpy.types.Operator):
                 context.area.tag_redraw()
                 return {"RUNNING_MODAL"}
             try:
-                source_object = require_conversion_source(self)
-            except RuntimeError as error:
-                self.report({"ERROR"}, str(error))
-                self._finish(context)
-                return {"CANCELLED"}
-            try:
-                canonical_perspective_quad(self._points, MIN_QUAD_AREA)
-                quad = screen_path_to_image_pixels(
-                    self._points,
-                    context.region,
-                    context.region_data,
-                    self._source_matrix,
-                    image_empty_bounds(source_object),
-                    tuple(source_object.data.size),
-                )
-                quad = canonical_perspective_quad(quad)
-                if not perspective_quad_overlaps_image(
-                    quad, tuple(source_object.data.size)
-                ):
-                    self.report(
-                        {"WARNING"},
-                        "Rectify quad does not overlap the source image",
-                    )
-                    self._finish(context)
-                    return {"CANCELLED"}
-                self.quad_json = json.dumps(
-                    quad.tolist(), separators=(",", ":")
-                )
-                self.aspect_ratio = perspective_quad_aspect(quad)
-                self._initial_aspect_ratio = self.aspect_ratio
-                self._aspect_preset_label = None
-                center_x = (
-                    float(event.mouse_x)
-                    - float(event.mouse_region_x)
-                    + context.region.width * 0.5
-                )
-                center_y = (
-                    float(event.mouse_y)
-                    - float(event.mouse_region_y)
-                    + context.region.height * 0.5
-                )
-                context.window.cursor_warp(round(center_x), round(center_y))
-                self._aspect_anchor_x = center_x
-                import numpy as np
-
-                self._source_pixels = image_pixels(source_object.data)
-                source_linear = image_rgba_to_linear(
-                    source_object.data, self._source_pixels.reshape((-1, 4)),
-                ).ravel()
-                preview_pixels = warp_projective_pixels(
-                    source_linear,
-                    tuple(source_object.data.size),
-                    quad,
-                    (PREVIEW_TEXTURE_SIZE, PREVIEW_TEXTURE_SIZE),
-                )
-                if not np.any(
-                    np.asarray(preview_pixels).reshape((-1, 4))[:, 3] > 0.0
-                ):
-                    self.report(
-                        {"WARNING"},
-                        "Rectify quad contains no visible image pixels",
-                    )
-                    self._finish(context)
-                    return {"CANCELLED"}
-                self._preview_texture = create_preview_texture(
-                    np.flipud(preview_pixels.reshape((PREVIEW_TEXTURE_SIZE, PREVIEW_TEXTURE_SIZE, 4))),
-                )
-                self._phase = "ASPECT"
-                self._cursor = None
+                self._begin_aspect_preview(context, event)
             except (RuntimeError, TypeError, ValueError) as error:
                 report_image_edit_exception(self, error)
                 self._finish(context)
                 return {"CANCELLED"}
-            self._set_aspect_status(context)
-            context.area.tag_redraw()
             return {"RUNNING_MODAL"}
         return {"PASS_THROUGH"}
+
+    def _begin_aspect_preview(self, context, event):
+        import numpy as np
+
+        validated_corner_ring(self._points, MIN_QUAD_AREA)
+        source, pixels = read_conversion_source(self)
+        image = source.data
+        image_size = tuple(image.size)
+        quad = screen_path_to_image_pixels(
+            self._points, context.region, context.region_data, self._source_matrix,
+            image_empty_bounds(source), image_size,
+        )
+        quad = canonical_perspective_quad(quad)
+        if not perspective_quad_overlaps_image(quad, image_size):
+            raise ImageEditWarning("Rectify quad does not overlap the source image")
+
+        self._source_linear = image_rgba_to_linear(image, pixels.reshape((-1, 4))).ravel()
+        del pixels
+        preview_size = (PREVIEW_TEXTURE_SIZE, PREVIEW_TEXTURE_SIZE)
+        preview = warp_projective_pixels(self._source_linear, image_size, quad, preview_size)
+        preview = np.asarray(preview).reshape((*preview_size, 4))
+        if not np.any(preview[:, :, 3] > 0.0):
+            raise ImageEditWarning("Rectify quad contains no visible image pixels")
+        self._preview_texture = create_preview_texture(np.flipud(preview))
+
+        self.quad_json = json.dumps(quad.tolist(), separators=(",", ":"))
+        self.aspect_ratio = perspective_quad_aspect(quad)
+        self._initial_aspect_ratio = self.aspect_ratio
+        self._aspect_preset_label = None
+        center_x = event.mouse_x - event.mouse_region_x + context.region.width * 0.5
+        center_y = event.mouse_y - event.mouse_region_y + context.region.height * 0.5
+        context.window.cursor_warp(round(center_x), round(center_y))
+        self._aspect_anchor_x = center_x
+        self._phase = "ASPECT"
+        self._cursor = None
+        self._set_aspect_status(context)
+        context.area.tag_redraw()
 
     def execute(self, context):
         try:
@@ -350,12 +308,11 @@ class RectifyImagePerspective(bpy.types.Operator):
                     "Rectify quad does not overlap the source image",
                 )
                 return {"CANCELLED"}
-            source_pixels = self._source_pixels
-            if source_pixels is None:
-                source_pixels = image_pixels(source_object.data)
-            source_linear = image_rgba_to_linear(
-                source_object.data, source_pixels.reshape((-1, 4)),
-            ).ravel()
+            source_linear = self._source_linear
+            if source_linear is None:
+                source_linear = image_rgba_to_linear(
+                    source_object.data, image_pixels(source_object.data).reshape((-1, 4)),
+                ).ravel()
             pixels, output_size, placement_bounds = extract_perspective_pixels(
                 source_linear,
                 tuple(source_object.data.size),
@@ -382,7 +339,7 @@ class RectifyImagePerspective(bpy.types.Operator):
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
         finally:
-            self._source_pixels = None
+            self._source_linear = None
             self._source_object = None
             self._source_image = None
             self._source_signature = None

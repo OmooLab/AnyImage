@@ -17,7 +17,8 @@ job = load_server_module("jobs.panorama")
 
 def test_panorama_projection_preserves_asymmetric_source_pixels():
     image = np.arange(32 * 64, dtype=float).reshape(32, 64)
-    sampled = geometry.sample_panorama(image, geometry.panorama_directions(64, 32))
+    coords = geometry.panorama_sample_coordinates(geometry.panorama_directions(64, 32), image.shape)
+    sampled = geometry.sample_panorama(image, coords)
     np.testing.assert_allclose(sampled, image, atol=1e-9)
 
 
@@ -90,7 +91,8 @@ def test_periodic_fusion_removes_view_scale_offsets():
     assert valid.all()
     assert np.mean(abs(merged / expected - 1)) < 0.002
     assert np.max(abs(merged[:, [0, -1]] / expected[:, [0, -1]] - 1)) < 0.005
-    sampled = geometry.sample_panorama(expected, np.array(((1, 1e-8, 0), (1, -1e-8, 0))))
+    coords = geometry.panorama_sample_coordinates(np.array(((1, 1e-8, 0), (1, -1e-8, 0))), expected.shape)
+    sampled = geometry.sample_panorama(expected, coords)
     np.testing.assert_allclose(sampled[0], sampled[1], atol=1e-6)
 
 

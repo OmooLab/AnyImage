@@ -1,16 +1,17 @@
 # 转为立体全景
 
-`operators/convert_to_panorama/` 将静态等距柱状 Image Empty 转换为径向深度表面，提交前裁剪出最大居中 2:1 区域。`operators.py` 提交任务，`object.py` 导入对象，`normal.py` 烘焙地形法线，`common/world.py` 为立体全景和独立的“转为世界环境”操作创建环境光照。
+`operators/convert_to_panorama/` 将静态等距柱状 Image Empty 转换为径向深度表面。`operators.py` 取最大居中 2:1 区域并提交任务，`object.py` 导入对象，`normal.py` 烘焙地形法线。`common/panorama.py` 为立体全景和独立的“转为世界环境”操作创建环境光照。
 
 ```mermaid
 flowchart TD
-    A[准备颜色与分析图] --> B[generate_panorama_geometry]
+    A["将原图的居中 2:1 区域导出为 sRGB PNG"] --> B[generate_panorama_geometry]
     B --> C[采样 12 个透视视图并推理]
     C --> D[融合径向深度与法线]
     D --> E[写出深度、法线与烘焙权重]
-    E --> F[创建材质与 O Depth Panorama]
+    E --> color[校验原图，从同一裁剪区创建颜色贴图]
+    color --> F[创建材质与 O Depth Panorama]
     F --> G[烘焙地形并合入天空法线]
-    G --> H[创建由物体旋转驱动的 World]
+    G --> H[World 复用物体的颜色贴图]
 ```
 
 任务使用偏好设置选择的几何模型。`geometry/panorama.py` 负责视图采样与融合，`geometry/panorama_relief.py` 以深度为方向基准恢复地形细节，并为天空生成朝内的球面法线。`jobs/panorama.py` 编排推理与写入，深度和法线共用 **Maximum AI Input Size** 的宽度上限。

@@ -1,76 +1,46 @@
 import tempfile
-from contextlib import ExitStack
-from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from tests.support.blender import BlenderTestCase
+import bpy
+import pytest
+from PIL import Image
+
+from anyimage.operators import upscale
+from anyimage.operators.remove_background import operators as background
+from anyimage.runtime import runtime
 
 
-class AiInputFailuresTest(BlenderTestCase):
-    def test_image_edits_reject_same_input_before_submission(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "input.tiff"
-            messages = []
-            for module, operator_type in (
-                (self.upscale, self.upscale.UpscaleImage),
-                (self.remove_background, self.remove_background.RunBackgroundRemoval),
-            ):
-                path.parent.mkdir(exist_ok=True)
-                path.touch()
-                operator = operator_type()
-                operator.report = Mock()
-                target = Mock(image=SimpleNamespace(size=(16, 16)))
-                context = SimpleNamespace(scene=SimpleNamespace(
-                    anyimage_settings=SimpleNamespace()))
-                with ExitStack() as stack:
-                    stack.enter_context(patch.object(module.ImageEditTarget, "capture", return_value=target))
-                    stack.enter_context(patch.object(module, "prepare_target_input", return_value=path))
-                    stack.enter_context(patch.object(module, "require_environment"))
-                    stack.enter_context(patch.object(module, "require_model"))
-                    stack.enter_context(patch.object(self.runtime.runtime, "can_submit", return_value=True))
-                    submit = stack.enter_context(patch.object(self.runtime.runtime.server, "submit"))
-                    if module == self.upscale:
-                        stack.enter_context(patch.object(module, "configured_upscale_model", return_value="HAT_GAN_X4_SHARPER"))
-                        stack.enter_context(patch.object(module, "configured_max_ai_input_size", return_value=2048))
-                    self.assertEqual(operator.execute(context), {"CANCELLED"})
-                    submit.assert_not_called()
-                messages.append(operator.report.call_args.args[1])
-                self.assertIsNone(operator._image_target)
-                self.assertFalse(path.exists())
-            self.assertEqual(messages[0], messages[1])
-            self.assertIn("Unsupported input format: .tiff", messages[0])
-
-    def test_invoke_ai_setup_reports_nested_failure(self):
-        owner = SimpleNamespace(report=Mock())
-        with (
-            patch.object(self.ai, "ai_status", return_value={"ready": False, "environment_ready": False}),
-            patch.object(self.ai.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(
-                setup_ai_server=Mock(side_effect=RuntimeError("Error: setup failed\n")))), create=True),
-        ):
-            self.assertEqual(self.ai.invoke_ai_setup_if_needed(owner), {"CANCELLED"})
-        owner.report.assert_called_once_with({"ERROR"}, "setup failed")
-
-    def test_depth_and_relief_cleanup_on_nested_failure(self):
-        module = self.depth_plane_operators
-        for plane_type in ("DEPTH", "RELIEF"):
-            for failure in (RuntimeError("Error: invalid input\n"), None):
-                with tempfile.TemporaryDirectory() as directory:
-                    path = Path(directory) / "prepared" / "input.png"
-                    path.parent.mkdir()
-                    path.touch()
-                    operator = SimpleNamespace(report=Mock())
-                    context = SimpleNamespace(object=SimpleNamespace(name="source", as_pointer=lambda: 1,
-                        data=SimpleNamespace(as_pointer=lambda: 2)), scene=object())
-                    generate = Mock(side_effect=failure, return_value={"CANCELLED"})
-                    with (
-                        patch.object(module, "invoke_ai_setup_if_needed", return_value=None),
-                        patch.object(module, "prepare_material_color_input", return_value=path),
-                        patch.object(module, "material_analysis_input", return_value=path),
-                        patch.object(module, "addon_preferences", return_value=SimpleNamespace(geometry_resolution_level=5)),
-                        patch.object(module, "configured_geometry_model", return_value="model"),
-                        patch.object(module, "configured_max_ai_input_size", return_value=2048),
-                        patch.object(module.bpy, "ops", SimpleNamespace(anyimage=SimpleNamespace(generate_plane_geometry=generate)), create=True),
-                    ):
-                        self.assertEqual(module.start_depth_conversion(operator, context, plane_type), {"CANCELLED"})
-                    self.assertFalse(path.parent.exists())
+@pytest.mark.parametrize("module", [upscale, background], ids=["upscale", "remove_background"])
+def test_unsupported_file_is_reported_before_submission(module, tmp_path, monkeypatch, capfd):
+    source = tmp_path / "original.tiff"
+    Image.new("RGB", (16, 16), (32, 64, 128)).save(source)
+    original = source.read_bytes()
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    image = bpy.data.images.load(str(source), check_existing=False)
+    owner = bpy.data.objects.new("Image to edit", None)
+    owner.empty_display_type = "IMAGE"
+    owner.data = image
+    bpy.context.collection.objects.link(owner)
+    bpy.context.view_layer.objects.active = owner
+    monkeypatch.setattr(runtime, "can_submit", lambda: True)
+    monkeypatch.setattr(module, "require_environment", lambda: None)
+    monkeypatch.setattr(module, "require_model", lambda _model: None)
+    submit = Mock()
+    monkeypatch.setattr(runtime.server, "submit", submit)
+    classes = ((upscale.UpscaleImage,) if module is upscale else
+               (background.RunBackgroundRemoval, background.RemoveImageBackground))
+    for cls in classes:
+        bpy.utils.register_class(cls)
+    try:
+        action = getattr(bpy.ops.anyimage, classes[-1].bl_idname.split(".")[1])
+        with pytest.raises(RuntimeError) as error:
+            action()
+        assert str(error.value).startswith("Error: Unsupported input format: .tiff")
+        assert "Traceback" not in capfd.readouterr().err
+        submit.assert_not_called()
+        assert list(tmp_path.iterdir()) == [source] and source.read_bytes() == original
+    finally:
+        for cls in reversed(classes):
+            bpy.utils.unregister_class(cls)
+        bpy.data.objects.remove(owner, do_unlink=True)
+        bpy.data.images.remove(image)

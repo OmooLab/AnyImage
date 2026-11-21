@@ -50,7 +50,7 @@ def create_packed_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
         raise
 
 
-def build_recognition_rgba(rgba, alpha_mode):
+def build_recognition_rgba(rgba, alpha_mode, *, preserve_alpha=False):
     """Tone-map scene-linear pixels for sRGB recognition without changing the source."""
     alpha = 1.0 if alpha_mode == "NONE" else rgba[..., 3:4]
     rgb = rgba[..., :3].astype(np.float64)
@@ -61,5 +61,9 @@ def build_recognition_rgba(rgba, alpha_mode):
     rgb /= 1 + luminance[..., None]
     encoded = linear_rgb_to_srgb(rgb)
     preview = np.ones(rgba.shape, dtype=np.float32)
-    preview[..., :3] = np.clip(encoded, 0, 1) * alpha
+    preview[..., :3] = np.clip(encoded, 0, 1)
+    if preserve_alpha:
+        preview[..., 3:4] = alpha
+    else:
+        preview[..., :3] *= alpha
     return preview

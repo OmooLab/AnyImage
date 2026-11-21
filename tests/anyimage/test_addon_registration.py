@@ -44,6 +44,20 @@ class AddonRegistrationTest(BlenderTestCase):
             self.rectify.RectifyImagePerspective.bl_idname,
         )
 
+    def test_image_tool_keymaps_keep_native_object_selection(self):
+        for tool, events in (
+            (self.tools.FrameTool, ["CLICK_DRAG"]),
+            (self.tools.RectifyTool, ["PRESS"]),
+            (self.tools.MaskTool, ["PRESS", "CLICK_DRAG"]),
+            (self.tools.CutoutTool, ["PRESS", "CLICK_DRAG"]),
+        ):
+            bindings = tool.bl_keymap
+            self.assertEqual([event["value"] for op, event, _ in bindings if op == tool.bl_operator], events)
+            select, toggle = bindings[-2:]
+            self.assertEqual(select, ("view3d.select", {"type": "LEFTMOUSE", "value": "CLICK"},
+                                      {"properties": [("deselect_all", True)]}))
+            self.assertTrue(toggle[1]["shift"])
+
     def test_mask_tool_settings_follow_the_active_gesture(self):
         mask_tool = self.tools.MaskTool
         settings_value = SimpleNamespace(

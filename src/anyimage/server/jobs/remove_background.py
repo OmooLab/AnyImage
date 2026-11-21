@@ -32,7 +32,7 @@ def run(context, parameters):
     )
     context.check_cancelled()
     model_image = Image.new("RGB", source.size, (0, 0, 0))
-    model_image.paste(source.convert("RGB"), (0, 0), source.getchannel("A"))
+    model_image.paste(source, (0, 0), source)
     if output_kind == "foreground":
         context.progress(0.35, "Removing background")
     inference_started = time.perf_counter()
@@ -57,14 +57,8 @@ def run(context, parameters):
 
     context.check_cancelled()
     total_ms = (time.perf_counter() - total_started) * 1000.0
-    message = (
-        f"Background removed in {inference_ms:.0f} ms "
-        f"(model load {load_ms:.0f} ms, total {total_ms:.0f} ms)"
-    )
-    context.log(message)
-    context.progress(
-        1.0,
-        "Background removed in {inference} ms (model load {load} ms, total {total} ms)",
-        inference=f"{inference_ms:.0f}", load=f"{load_ms:.0f}", total=f"{total_ms:.0f}",
-    )
+    message = "Background removed in {inference} ms (model load {load} ms, total {total} ms)"
+    timings = dict(inference=f"{inference_ms:.0f}", load=f"{load_ms:.0f}", total=f"{total_ms:.0f}")
+    context.log(message.format(**timings))
+    context.progress(1.0, message, **timings)
     return {"alpha": "alpha.npy"} if output_kind == "alpha" else {"foreground": "foreground.png"}

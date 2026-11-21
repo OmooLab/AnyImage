@@ -13,8 +13,8 @@ from anyimage.operators import mask_tool as edit_mask
 from anyimage.operators.frame_tool import operators as edit_frame
 
 
-@pytest.mark.parametrize("remove_source", [False, True], ids=["rename", "delete"])
-def test_frame_drag_keeps_original_sources_when_name_is_reused(monkeypatch, remove_source):
+@pytest.mark.parametrize("change", ["rename", "delete", "deselect", "add"])
+def test_frame_drag_requires_the_same_selected_sources(monkeypatch, change):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     image = bpy.data.images.new("Frame", width=2, height=2)
 
@@ -37,14 +37,19 @@ def test_frame_drag_keeps_original_sources_when_name_is_reused(monkeypatch, remo
     monkeypatch.setattr(edit_frame, "apply_frame", composite)
     press = SimpleNamespace(mouse_region_x=0, mouse_region_y=0)
     assert edit_frame.FrameImages.invoke(operator, context, press) == {"RUNNING_MODAL"}
-    if remove_source:
+    if change == "delete":
         bpy.data.objects.remove(original, do_unlink=True)
-    else:
+        context.selected_objects = (active, image_empty("Other"))
+    elif change == "rename":
         original.name = "Renamed"
-    image_empty("Other")
+        image_empty("Other")
+    elif change == "deselect":
+        context.selected_objects = (active,)
+    else:
+        context.selected_objects += (image_empty("New"),)
     release = SimpleNamespace(type="LEFTMOUSE", value="RELEASE", mouse_region_x=10, mouse_region_y=10)
     result = edit_frame.FrameImages.modal(operator, context, release)
-    if remove_source:
+    if change != "rename":
         assert result == {"CANCELLED"}
         composite.assert_not_called()
     else:
@@ -192,6 +197,8 @@ def test_frame_restored_alpha_keeps_foreground_blended_into_white(monkeypatch):
     result = apply_frame(
         monkeypatch, sources, ((0, 4 / 3), (6, 4 / 3), (6, 2 / 3), (0, 2 / 3)), (6, 2),
     )
+    assert bpy.data.objects.get("Background") is None
+    assert front.data == result
     assert not result.is_float and result.colorspace_settings.name == "sRGB"
     encoded = np.asarray(Image.open(BytesIO(result.packed_file.data)).convert("RGBA")) / 255
     np.testing.assert_allclose(encoded[..., :3], expected, atol=1 / 255)

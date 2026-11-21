@@ -7,7 +7,7 @@ import pytest
 
 from anyimage import ai_menus as menu
 from anyimage.operators.bake_mesh import BakeMesh
-from anyimage.operators.bake_mesh.materialization import mesh_bake_modifiers
+from anyimage.operators.bake_mesh.geometry import mesh_bake_modifiers
 
 
 class ImageObject(dict):

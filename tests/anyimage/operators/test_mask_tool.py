@@ -1,7 +1,7 @@
 from anyimage.common import polygon as polygon_geometry
+from anyimage.common.image_gesture import append_lasso_point
 
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
 from tests.support.blender import BlenderTestCase
 
 
@@ -60,129 +60,12 @@ class MaskToolTest(BlenderTestCase):
         self.assertEqual(operator.radius, 64)
 
 
-    def test_mask_and_rectify_start_after_an_empty_pick(self):
-        source = SimpleNamespace(
-            name="Source",
-            data=SimpleNamespace(size=(8, 6)),
-            matrix_world="matrix",
-        )
-        area = SimpleNamespace(as_pointer=lambda: 1, tag_redraw=Mock())
-        region = SimpleNamespace(as_pointer=lambda: 2, width=100, height=80)
-        window_manager = SimpleNamespace(
-            modal_handler_add=Mock(),
-            event_timer_add=Mock(return_value="timer"),
-        )
-        context = SimpleNamespace(
-            area=area,
-            region=region,
-            window=object(),
-            window_manager=window_manager,
-            workspace=SimpleNamespace(status_text_set=Mock()),
-            scene=SimpleNamespace(
-                anyimage_settings=SimpleNamespace(
-                    mask_gesture="LASSO",
-                    mask_mode="SUBTRACT",
-                    mask_radius=25,
-                )
-            ),
-        )
-        event = SimpleNamespace(
-            mouse_region_x=12,
-            mouse_region_y=18,
-            value="PRESS",
-        )
-        previous_space = getattr(self.fake_bpy.types, "SpaceView3D", None)
-        self.fake_bpy.types.SpaceView3D = SimpleNamespace(
-            draw_handler_add=Mock(return_value="handler")
-        )
-        try:
-            with (
-                patch.object(
-                    self.image_interaction,
-                    "resolve_image_edit_click",
-                    return_value=(source, True),
-                ),
-                patch.object(
-                    self.image_interaction,
-                    "is_animated_image",
-                    return_value=False,
-                ),
-                patch.object(
-                    self.image_interaction,
-                    "serialize_matrix",
-                    return_value="serialized",
-                ),
-            ):
-                mask = self.edit_mask.EditImageAlpha()
-                mask.report = Mock()
-                self.assertEqual(mask.invoke(context, event), {"RUNNING_MODAL"})
-                self.assertEqual(mask._path, [(12.0, 18.0)])
-
-            with (
-                patch.object(
-                    self.rectify,
-                    "resolve_image_edit_click",
-                    return_value=(source, True),
-                ),
-                patch.object(
-                    self.rectify,
-                    "is_animated_image",
-                    return_value=False,
-                ),
-                patch.object(
-                    self.rectify,
-                    "serialize_matrix",
-                    return_value="serialized",
-                ),
-                patch.object(
-                    self.rectify,
-                    "image_content_signature",
-                    return_value=("source pixels",),
-                ),
-            ):
-                rectify = self.rectify.RectifyImagePerspective()
-                rectify.report = Mock()
-                self.assertEqual(rectify.invoke(context, event), {"RUNNING_MODAL"})
-                self.assertEqual(rectify._points, [(12.0, 18.0)])
-                self.assertIs(rectify._source_object, source)
-                self.assertIs(rectify._source_image, source.data)
-                self.assertEqual(rectify._source_signature, ("source pixels",))
-        finally:
-            if previous_space is None:
-                del self.fake_bpy.types.SpaceView3D
-            else:
-                self.fake_bpy.types.SpaceView3D = previous_space
-
-
-    def test_mask_and_rectify_cancel_without_an_active_image(self):
-        context = SimpleNamespace(
-            scene=SimpleNamespace(
-                anyimage_settings=SimpleNamespace(
-                    mask_gesture="LASSO",
-                    mask_mode="SUBTRACT",
-                    mask_radius=25,
-                )
-            )
-        )
-        event = SimpleNamespace()
-
-        with patch.object(
-            self.image_interaction,
-            "resolve_image_edit_click",
-            return_value=(None, False),
-        ):
-            mask = self.edit_mask.EditImageAlpha()
-            mask.report = Mock()
-            self.assertEqual(mask.invoke(context, event), {"CANCELLED"})
-        with patch.object(
-            self.rectify,
-            "resolve_image_edit_click",
-            return_value=(None, False),
-        ):
-            rectify = self.rectify.RectifyImagePerspective()
-            rectify.report = Mock()
-            self.assertEqual(rectify.invoke(context, event), {"CANCELLED"})
-
+    def test_drag_modes_leave_single_click_for_object_selection(self):
+        for gesture in ("BRUSH", "LASSO"):
+            settings = SimpleNamespace(mask_gesture=gesture, mask_mode="SUBTRACT", mask_radius=25)
+            context = SimpleNamespace(scene=SimpleNamespace(anyimage_settings=settings))
+            result = self.edit_mask.EditImageAlpha().invoke(context, SimpleNamespace(value="PRESS"))
+            self.assertEqual(result, {"PASS_THROUGH"})
 
     def test_image_mask_fill_triangulates_a_concave_polygon_without_overlap(self):
         polygon = (
@@ -348,11 +231,11 @@ class MaskToolTest(BlenderTestCase):
         path = [(0.0, 0.0)]
         samples = list(path)
 
-        self.assertFalse(self.image_interaction.append_lasso_point(path, (0.0, 0.0), samples))
+        self.assertFalse(append_lasso_point(path, (0.0, 0.0), samples))
         self.assertEqual(path, [(0.0, 0.0)])
-        self.assertTrue(self.image_interaction.append_lasso_point(path, (3.0, 0.0), samples))
-        self.assertTrue(self.image_interaction.append_lasso_point(path, (6.0, 0.2), samples))
+        self.assertTrue(append_lasso_point(path, (3.0, 0.0), samples))
+        self.assertTrue(append_lasso_point(path, (6.0, 0.2), samples))
         self.assertEqual(len(path), 2)
         self.assertEqual(path[-1], (6.0, 0.2))
-        self.assertTrue(self.image_interaction.append_lasso_point(path, (6.0, 4.0), samples))
+        self.assertTrue(append_lasso_point(path, (6.0, 4.0), samples))
         self.assertEqual(len(path), 3)

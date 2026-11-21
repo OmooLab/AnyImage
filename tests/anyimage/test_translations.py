@@ -11,13 +11,16 @@ from tests.support.blender import BlenderTestCase
 
 
 class TranslationsTest(BlenderTestCase):
-    def test_tool_labels_do_not_use_builtin_mask_and_frame_translations(self):
-        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
-        builtin = {("Operator", "Mask"): "遮罩", ("Operator", "Frame"): "帧"}
-        for tool, expected in ((self.tools.MaskTool, "局部显隐"),
-                               (self.tools.FrameTool, "重设画框")):
-            key = ("Operator", tool.bl_label)
-            self.assertEqual(builtin.get(key, catalog.get(key)), expected)
+    def test_short_toolbar_labels_have_their_own_chinese_translations(self):
+        for addon in (self.anyimage, self.lite_addon):
+            catalog = addon.TRANSLATIONS["zh_HANS"]
+            for tool, english, chinese in (
+                (self.tools.FrameTool, "Frame", "重设画框"),
+                (self.tools.MaskTool, "Mask", "局部显隐"),
+            ):
+                self.assertEqual(tool.bl_label.rstrip("\u200b"), english)
+                self.assertNotIn(("Operator", english), catalog)
+                self.assertEqual(catalog["Operator", tool.bl_label], chinese)
 
     def test_base_messages_are_available_in_both_editions(self):
         lite = self.lite_addon.TRANSLATIONS["zh_HANS"]
@@ -26,9 +29,9 @@ class TranslationsTest(BlenderTestCase):
         self.assertNotIn(("*", "Set Up AI Server"), lite)
         self.assertEqual(full[("*", "Set Up AI Server")], "设置 AI 服务器")
         for message in (
-            "Frame: drag a rectangle to merge selected Image Empties; RMB or Esc cancels",
-            "Rectify Aspect {ratio:.3f}: move mouse horizontally, LMB confirms, Backspace returns, RMB or Esc cancels",
-            "click points; click start, double-click, or Enter to finish; Backspace removes",
+            "Draw Frame",
+            "Snap to Preset",
+            "Choose Shape",
             "Exclude areas below this opacity from the Cutout outline. Higher values exclude more semi-transparent edges.",
         ):
             self.assertIn(("*", message), lite)
@@ -124,15 +127,3 @@ class TranslationsTest(BlenderTestCase):
             with patch.object(translations, "locale", "zh_HANS"), \
                  patch.object(view, "use_translate_tooltips", False):
                 self.assertEqual(properties.color_reference_items(None, None)[1][2], english[1][2])
-
-    def test_mask_status_translates_template_and_keeps_radius(self):
-        catalog = self.anyimage.TRANSLATIONS["zh_HANS"]
-        context = SimpleNamespace(workspace=SimpleNamespace(status_text_set=Mock()))
-        operator = self.edit_mask.EditImageAlpha()
-        operator.gesture, operator.mode, operator.radius = "BRUSH", "SUBTRACT", 25
-        with patch.object(self.fake_bpy.app.translations, "pgettext_iface",
-                          side_effect=lambda message: catalog.get(("*", message), message)):
-            operator._set_status(context)
-        context.workspace.status_text_set.assert_called_once_with(
-            "局部显隐画笔：使用半径 25 像素的画笔涂绘；减去；右键或 Esc 取消"
-        )

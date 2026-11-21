@@ -1,13 +1,13 @@
 import bpy
 
 from .actions import (
-    acquire_packed_image,
     paste_image,
     paste_location,
     replacement_for_context,
     replace_pasted_image,
     target_for_context,
 )
+from .cache import acquire_packed_image
 from .brush import BrushPreviewError
 from .clipboard import (
     ClipboardImageError,
@@ -27,11 +27,6 @@ class PasteClipboardImage(bpy.types.Operator):
         size=3,
         options={"HIDDEN", "SKIP_SAVE"},
     )
-    location_set: bpy.props.BoolProperty(
-        default=False,
-        options={"HIDDEN", "SKIP_SAVE"},
-    )
-
     @classmethod
     def poll(cls, context):
         if not clipboard_image_supported():
@@ -43,7 +38,6 @@ class PasteClipboardImage(bpy.types.Operator):
         if location is not None:
             values = tuple(location)
             self.location = (*values, 0.0)[:3]
-            self.location_set = True
         return self.execute(context)
 
     def execute(self, context):
@@ -65,7 +59,7 @@ class PasteClipboardImage(bpy.types.Operator):
             if replacement is not None:
                 replace_pasted_image(context, replacement, image)
             else:
-                paste_image(context, image, self.location if self.location_set else None)
+                paste_image(context, image, self.location if self.properties.is_property_set("location") else None)
             paste_succeeded = True
         except BrushPreviewError as error:
             self.report({"WARNING"}, str(error))

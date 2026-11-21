@@ -114,9 +114,6 @@ class ModelManager:
     def snapshot(self):
         return {"loaded": self.sessions.snapshot(), "validation_errors": dict(self.validation_errors)}
 
-    def clear(self):
-        self.sessions.close()
-
     def close(self):
         self.sessions.close()
 
@@ -150,8 +147,9 @@ class ModelManager:
         model = model_catalog.get_downloadable_model(model_key)
         context.check_cancelled()
         self.sessions.release_model(model)
+        directory = self.directory(model_key)
         for filename, _size, _checksum in model.files:
-            self.verified_files.pop(self.directory(model_key) / filename, None)
-        download_model(model, self.directory(model_key), progress, context.check_cancelled)
+            self.verified_files.pop(directory / filename, None)
+        download_model(model, directory, progress, context.check_cancelled)
         context.check_cancelled()
         self.validation_errors.pop(model_key, None)

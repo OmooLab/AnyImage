@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 
-from anyimage.common import viewport
+from anyimage.common import image_gesture
 from anyimage.operators import mask_tool as mask
 
 
@@ -14,7 +14,7 @@ def test_simplified_segments_bound_every_original_sample():
     raw = [(float(x), float(20 * np.sin(x / 15))) for x in np.arange(0, 160, 0.2)]
     path, samples = [], []
     for point in raw:
-        viewport.append_lasso_point(path, point, samples)
+        image_gesture.append_lasso_point(path, point, samples)
     assert len(path) < len(raw) / 5
     for start, end in zip(path, path[1:]):
         segment = np.array(end) - start
@@ -34,7 +34,7 @@ def test_straight_stroke_is_independent_of_segmentation():
 
 
 def test_incremental_preview_matches_full_union_when_tail_moves_and_crosses():
-    cache = viewport.BrushPreview()
+    cache = image_gesture.BrushPreview()
     path = [(10, 10)]
     operations = [(False, (100, 100)), (True, (110, 90)), (False, (10, 90)),
                   (False, (110, 10)), (True, (105, 15)), (False, (10, 10))]
@@ -55,7 +55,7 @@ def test_incremental_preview_matches_full_union_when_tail_moves_and_crosses():
 
 
 def test_preview_reuses_batches_and_limits_updates_to_changed_rows():
-    cache = viewport.BrushPreview()
+    cache = image_gesture.BrushPreview()
     path = [(10, y) for y in range(0, 800, 10)]
     cache.update(path, 5)
     gpu = SimpleNamespace(shader=Mock(), state=Mock())
@@ -81,12 +81,12 @@ def test_preview_reuses_batches_and_limits_updates_to_changed_rows():
 
 @pytest.mark.parametrize("exit_kind", ["ESC", "SWITCH", "ERROR", "COMPLETE"])
 def test_gesture_releases_preview_and_samples_on_every_exit(exit_kind):
-    gesture = viewport.ImageGesture()
+    gesture = image_gesture.ImageGesture()
     gesture.gesture = "BRUSH"
     gesture.active_tool_id = "anyimage.mask"
     gesture._path = [(0, 0), (10, 10)]
     gesture._path_samples = list(gesture._path)
-    gesture._brush_preview = viewport.BrushPreview()
+    gesture._brush_preview = image_gesture.BrushPreview()
     handle = gesture._handle = object()
     gesture._brush_preview.update(gesture._path, 5)
     context = SimpleNamespace(workspace=Mock(), area=Mock())
@@ -103,7 +103,7 @@ def test_gesture_releases_preview_and_samples_on_every_exit(exit_kind):
     tool = "builtin.select" if exit_kind == "SWITCH" else gesture.active_tool_id
     remove = Mock()
     fake_bpy = SimpleNamespace(types=SimpleNamespace(SpaceView3D=SimpleNamespace(draw_handler_remove=remove)))
-    with patch.object(viewport, "active_view3d_tool_id", return_value=tool), patch.object(viewport, "bpy", fake_bpy):
+    with patch.object(image_gesture, "active_view3d_tool_id", return_value=tool), patch.object(image_gesture, "bpy", fake_bpy):
         result = gesture.modal(context, event)
         gesture._finish(context)
     remove.assert_called_once_with(handle, "WINDOW")
@@ -111,4 +111,4 @@ def test_gesture_releases_preview_and_samples_on_every_exit(exit_kind):
     assert result == ({"FINISHED"} if exit_kind == "COMPLETE" else {"CANCELLED"})
     assert gesture._path is gesture._path_samples is gesture._brush_preview is None
     assert gesture._fill_triangles == gesture._outline_segments == ()
-    assert viewport.ImageGesture()._brush_preview is None
+    assert image_gesture.ImageGesture()._brush_preview is None

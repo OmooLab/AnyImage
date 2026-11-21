@@ -37,7 +37,6 @@ def extract_color_palette(rgb):
         weights=list(populations.values()),
         minlength=len(colors),
     )
-    weights /= weights.sum()
     colors, weights = _merge_palette_colors(colors, weights)
     return colors.astype(np.float32), weights.astype(np.float32)
 

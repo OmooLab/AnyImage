@@ -117,7 +117,7 @@ def test_cropped_material_inherits_full_source_threshold(view, panorama, floatin
     before = image_rgba(source)
     state = (source.colorspace_settings.name, source.alpha_mode)
     with material_color_image(source) as full:
-        full_material = create_image_material(source, full, panorama=panorama)
+        full_material = create_image_material(source, full, color_is_full_source=True, panorama=panorama)
     with material_color_image(source, bounds=(15, 10, 45, 30)) as cropped:
         cropped_material = create_image_material(source, cropped, panorama=panorama)
         assert layer_threshold(cropped_material) == pytest.approx(layer_threshold(full_material))

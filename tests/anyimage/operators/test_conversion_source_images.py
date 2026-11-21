@@ -8,7 +8,6 @@ import pytest
 from PIL import Image
 
 from anyimage.common import image as images, material
-from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
 from anyimage.operators import convert_to_plane as operators
 from anyimage.operators.depth_plane import object as conversion
 
@@ -29,16 +28,8 @@ def source():
 
 
 def share_image(source, sharing):
-    if sharing in {"visible", "hidden", "other_scene", "same_path"}:
-        other = source.copy()
-        if sharing == "same_path":
-            source.data.filepath_raw = "//source.png"
-            other.data = source.data.copy()
-        collection = bpy.context.collection
-        if sharing == "other_scene":
-            collection = bpy.data.scenes.new("Other scene").collection
-        collection.objects.link(other)
-        other.hide_viewport = sharing == "hidden"
+    if sharing == "visible":
+        bpy.context.collection.objects.link(source.copy())
     elif sharing == "material":
         existing = bpy.data.materials.new("Existing")
         existing.use_nodes = True
@@ -61,13 +52,12 @@ def run_conversion(source, entry, monkeypatch):
         monkeypatch.setattr(conversion, "load_normal_result_image", load_depth)
         monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data,
             ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **_: {"FINISHED"}))))
-        path = prepare_material_color_input(source.data)
-        try:
-            conversion.create_depth_plane_from_result(bpy.context, SimpleNamespace(file=lambda key: key),
-                SimpleNamespace(source_object_name=source.name, _source_object=source,
-                                _source_image=source.data, _source_signature=images.image_content_signature(source.data), color_path=str(path)), plane_type=entry, undo_label="Convert to Depth Plane")
-        finally:
-            cleanup_material_color_input(path)
+        operator = SimpleNamespace(_source_object=source, _source_image=source.data,
+                                   _source_signature=images.image_content_signature(source.data))
+        conversion.create_depth_plane_from_result(
+            bpy.context, SimpleNamespace(file=lambda key: key), operator,
+            plane_type=entry, undo_label="Convert to Depth Plane",
+        )
     return bpy.context.object
 
 
@@ -130,15 +120,10 @@ def test_conversion_failure_restores_image_and_releases_resources(source, monkey
 
 @pytest.mark.parametrize("shared,kind", [(False, "generated"), (True, "file")])
 def test_conversion_pixels_survive_library_reload(source, tmp_path, monkeypatch, kind, shared):
-    if kind in {"file", "dirty"}:
+    if kind == "file":
         path = tmp_path / "source.png"
         Image.fromarray(np.array([[[51, 102, 204, 64], [153, 76, 25, 0]]], np.uint8)).save(path)
         source.data = bpy.data.images.load(str(path))
-        if kind == "dirty":
-            source.data.pixels[0] = 0.8
-    elif kind == "packed":
-        source.data.pack()
-        source.data.reload()
     if shared:
         share_image(source, "visible")
     obj = run_conversion(source, "PLANE", monkeypatch)

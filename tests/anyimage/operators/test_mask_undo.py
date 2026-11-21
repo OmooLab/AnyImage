@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 
-from anyimage.common import image, viewport
+from anyimage.common import image, image_gesture
 from anyimage.operators import mask_tool as mask
 
 
@@ -31,7 +31,7 @@ def test_mask_commit_is_one_undo_transaction(gesture, alpha_mode):
         """Drive gesture completion without a window event in background bpy."""
         operator.gesture, operator.mode, operator.radius = gesture, "SUBTRACT", 2
         operator.source_object_name = owner_name
-        operator.source_matrix_data = viewport.serialize_matrix(owner.matrix_world)
+        operator._source_matrix = owner.matrix_world.copy()
         operator._path = [(2, 2), (6, 2), (6, 6), (2, 6)]
         operator._path_samples = list(operator._path)
         return operator._complete(context)
@@ -39,7 +39,7 @@ def test_mask_commit_is_one_undo_transaction(gesture, alpha_mode):
     bpy.context.preferences.edit.use_global_undo = True
     with patch.object(mask.EditImageAlpha, "execute", execute, create=True), patch.object(
         mask.EditImageAlpha, "poll", classmethod(lambda cls, context: True)
-    ), patch.object(viewport, "screen_path_to_image_pixels", side_effect=lambda path, *args, **kwargs: path), patch.object(
+    ), patch.object(image_gesture, "screen_path_to_image_pixels", side_effect=lambda path, *args, **kwargs: path), patch.object(
         mask, "screen_path_to_image_pixels", side_effect=lambda path, *args, **kwargs: path
     ), patch.object(mask, "create_image_edit_result", wraps=mask.create_image_edit_result) as create:
         bpy.utils.register_class(mask.EditImageAlpha)

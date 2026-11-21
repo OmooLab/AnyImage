@@ -2,8 +2,9 @@
 
 import math
 
-from ...common.selection import ImageEditWarning, clip_polygon_halfplanes
-from ...common.projective_image import projective_output_size, warp_projective_pixels
+from ...common.polygon import clip_polygon_halfplanes
+from ...common.selection import ImageEditWarning, visible_pixel_bounds
+from ...common.projective_image import projective_output_size, quad_edge_dimensions, warp_projective_pixels
 
 
 MIN_INTERACTIVE_ASPECT = 0.05
@@ -36,8 +37,19 @@ def validate_perspective_quad(points, min_area=1e-6):
     return quad
 
 
-def canonical_perspective_quad(points, min_area=1e-6):
-    """Order four unordered points as source-oriented top-left through bottom-left."""
+def corners_in_cyclic_order(points):
+    """Order corners around their center, keeping incomplete lines in click order."""
+    import numpy as np
+
+    points = np.asarray(points, dtype=np.float64)
+    if len(points) < 3:
+        return points
+    offset = points - points.mean(axis=0)
+    return points[np.argsort(np.arctan2(offset[:, 1], offset[:, 0]))]
+
+
+def validated_corner_ring(points, min_area=1e-6):
+    """Return four distinct convex corners in cyclic order."""
     import numpy as np
 
     points = np.asarray(points, dtype=np.float64)
@@ -47,9 +59,14 @@ def canonical_perspective_quad(points, min_area=1e-6):
     distances += np.eye(4) * 1e9
     if float(distances.min()) < 2.0:
         raise ValueError("Rectify corners are too close together")
-    center = points.mean(axis=0)
-    ring = points[np.argsort(np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0]))]
-    ring = validate_perspective_quad(ring, min_area)
+    return validate_perspective_quad(corners_in_cyclic_order(points), min_area)
+
+
+def canonical_perspective_quad(points):
+    """Order four unordered points as source-oriented top-left through bottom-left."""
+    import numpy as np
+
+    ring = validated_corner_ring(points)
     candidates = []
     for winding in (ring, ring[::-1]):
         for start in range(4):
@@ -83,15 +100,7 @@ def perspective_quad_overlaps_image(points, image_size):
 
 def perspective_quad_aspect(quad):
     """Estimate an initial output aspect from the visible quad edge lengths."""
-    import numpy as np
-
-    quad = validate_perspective_quad(quad)
-    width = 0.5 * (
-        np.linalg.norm(quad[1] - quad[0]) + np.linalg.norm(quad[2] - quad[3])
-    )
-    height = 0.5 * (
-        np.linalg.norm(quad[2] - quad[1]) + np.linalg.norm(quad[3] - quad[0])
-    )
+    width, height = quad_edge_dimensions(quad)
     return min(
         max(float(width / max(height, 1e-8)), MIN_INTERACTIVE_ASPECT),
         MAX_INTERACTIVE_ASPECT,
@@ -125,20 +134,11 @@ def _trim_pixels_to_alpha(pixels, output_size):
     rgba = np.flipud(
         np.asarray(pixels, dtype=np.float32).reshape((height, width, 4))
     )
-    visible_y, visible_x = np.nonzero(rgba[:, :, 3] > 0.0)
-    if not len(visible_x):
+    bounds = visible_pixel_bounds(rgba[..., 3] > 0.0)
+    if bounds is None:
         raise ImageEditWarning("The edit contains no visible image pixels")
-    content_left = int(visible_x.min())
-    content_top = int(visible_y.min())
-    content_right = int(visible_x.max()) + 1
-    content_bottom = int(visible_y.max()) + 1
-    output = rgba[content_top:content_bottom, content_left:content_right].copy()
-    return np.flipud(output).ravel(), (
-        content_left,
-        content_top,
-        content_right,
-        content_bottom,
-    )
+    left, top, right, bottom = bounds
+    return np.flipud(rgba[top:bottom, left:right]).ravel(), (left, top, right, bottom)
 
 
 def extract_perspective_pixels(

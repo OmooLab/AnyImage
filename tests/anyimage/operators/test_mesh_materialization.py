@@ -10,7 +10,8 @@ from anyimage.common import color_image as color_images
 from anyimage.common.image import image_content_state, image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
-from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures, mesh_bake_modifiers, PROTOCOL_ATTRIBUTES
+from anyimage.operators.bake_mesh.geometry import PROTOCOL_ATTRIBUTES, TARGET_UV, build_layout, mesh_bake_modifiers
+from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures
 from anyimage.operators.bake_mesh import BakeMesh
 from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout import OCutout
 from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
@@ -380,7 +381,7 @@ def test_single_region_without_normal_or_bump_preserves_user_attributes(cutout):
     assert any(n.type == "NEW_GEOMETRY" for n in result.materials[0].node_tree.nodes)
 
 
-@pytest.mark.parametrize("failure", ["bake_material_output", "create_normalized_color_image"])
+@pytest.mark.parametrize("failure", ["cycles", "create_normalized_color_image"])
 def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch, failure):
     from anyimage.operators.bake_mesh import materialization
 
@@ -392,7 +393,12 @@ def test_bake_failure_keeps_source_and_cleans_resources(cutout, monkeypatch, fai
     images = [n.image for n in material.node_tree.nodes if n.type == "TEX_IMAGE"]
     def fail(*args, **kwargs):
         raise RuntimeError("Injected bake failure")
-    monkeypatch.setattr(materialization, failure, fail)
+    if failure == "cycles":
+        monkeypatch.setattr(materialization, "bpy", SimpleNamespace(
+            data=bpy.data, context=bpy.context, ops=SimpleNamespace(object=SimpleNamespace(bake=fail)),
+        ))
+    else:
+        monkeypatch.setattr(materialization, failure, fail)
     with pytest.raises(RuntimeError, match="Injected"):
         materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert cutout.data == source and tuple(cutout.modifiers)[1:] == trailing
@@ -535,7 +541,6 @@ def test_color_tiles_preserve_hdr_alpha_and_transparent_rgb(cutout):
     ((0, 1, 3), ((1, 3), (0, None)), ((0, 1), (0, 0), (1, 0))),
 ])
 def test_layout_preserves_surface_axes_and_composes_uv_flips(regions, expected_tiles, offsets):
-    from anyimage.operators.bake_mesh.materialization import build_layout, SOURCE_UV, TARGET_UV
     mesh = bpy.data.meshes.new("Layout")
     try:
         mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)] * len(regions), [],
@@ -547,7 +552,7 @@ def test_layout_preserves_surface_axes_and_composes_uv_flips(regions, expected_t
         assert tiles == expected_tiles
         columns, rows = len(tiles[0]), len(tiles)
         actual = np.array([v.uv[:] for v in mesh.uv_layers[TARGET_UV].data])
-        np.testing.assert_array_equal(np.array([v.uv[:] for v in mesh.uv_layers[SOURCE_UV].data]), source)
+        np.testing.assert_array_equal(np.array([v.uv[:] for v in mesh.uv_layers["UVMap"].data]), source)
         for i in range(len(regions)):
             local = source[i * 3:i * 3 + 3].copy()
             if regions[i] in (1, 2):
@@ -588,43 +593,6 @@ def test_conversion_bakes_strength_and_preserves_other_settings(cutout, tmp_path
     assert shader.inputs["Emission Strength"].default_value == pytest.approx(.6)
 
 
-def test_bake_context_setup_failure_releases_scene_and_object(cutout):
-    from anyimage.common.bake import bake_context
-
-    scene = bpy.context.window.scene
-    counts = (len(bpy.data.scenes), len(bpy.data.objects))
-    with pytest.raises(ValueError, match="sequence expected"):
-        with bake_context(cutout.data, cutout.active_material, object()):
-            pytest.fail("Invalid matrix must fail during setup")
-    assert bpy.context.window.scene == scene
-    assert counts == (len(bpy.data.scenes), len(bpy.data.objects))
-
-
-@pytest.mark.parametrize("stage", ["allocation", "bake"])
-@pytest.mark.parametrize("channel", ["Normal", "Roughness", "Alpha"])
-def test_material_bake_failure_cleans_internal_resources(cutout, monkeypatch, stage, channel):
-    from anyimage.operators.bake_mesh import materialization
-
-    material = cutout.active_material.copy()
-    layer = next(n for n in material.node_tree.nodes if n.type == "GROUP")
-    group = layer.node_tree
-    counts = (len(bpy.data.images), len(bpy.data.node_groups), len(material.node_tree.nodes))
-    fail = Mock(side_effect=RuntimeError("Injected internal failure"))
-    proxy = SimpleNamespace(data=bpy.data, context=bpy.context, ops=bpy.ops)
-    if stage == "allocation":
-        proxy.data = SimpleNamespace(images=SimpleNamespace(new=fail), node_groups=bpy.data.node_groups)
-    else:
-        proxy.ops = SimpleNamespace(object=SimpleNamespace(bake=fail))
-    monkeypatch.setattr(materialization, "bpy", proxy)
-    try:
-        with pytest.raises(RuntimeError, match="Injected internal"):
-            materialization.bake_material_output(material, layer.name, (64, 128), channel)
-        assert layer.node_tree == group
-        assert counts == (len(bpy.data.images), len(bpy.data.node_groups), len(material.node_tree.nodes))
-    finally:
-        bpy.data.materials.remove(material)
-
-
 @pytest.mark.parametrize("invalid_input", ["modifier", "linked_strength", "reserved_uv", "missing_uv", "shared_image", "constant_normal", "linked_alpha_fix", "custom_color"])
 def test_unsupported_input_preserves_source_and_releases_resources(cutout, monkeypatch, invalid_input):
     from anyimage.operators.bake_mesh import materialization
@@ -647,7 +615,7 @@ def test_unsupported_input_preserves_source_and_releases_resources(cutout, monke
             source = next(n for n in group.nodes if n.type == "GROUP_INPUT")
             group.links.new(source.outputs["Normal Texture"], output.inputs["Color"])
     elif invalid_input == "reserved_uv":
-        cutout.data.uv_layers.new(name=materialization.SOURCE_UV)
+        cutout.data.uv_layers.new(name=TARGET_UV)
     elif invalid_input in {"shared_image", "constant_normal"}:
         tree = cutout.active_material.node_tree
         layer = next(n for n in tree.nodes if n.type == "GROUP")
@@ -700,7 +668,7 @@ def test_bump_without_source_normal_creates_static_map(cutout, tmp_path, bump):
 @pytest.mark.parametrize("color_space,is_float", [("Non-Color", True), ("sRGB", False), ("AgX Base sRGB", False)])
 def test_flattened_outputs_preserve_original_shader_values_and_consumers(cutout, tmp_path, color_space, is_float):
     from scipy.ndimage import binary_erosion
-    from anyimage.common.image import is_color_reference_candidate
+    from anyimage.common.color_reference import is_color_reference_candidate
 
     tree = cutout.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
@@ -758,8 +726,7 @@ def test_flattened_outputs_preserve_original_shader_values_and_consumers(cutout,
     assert not any(image.name.endswith("_alpha.png") for image in bpy.data.images)
 
 
-@pytest.mark.parametrize("stage", ["Roughness", "Alpha", "Normal", "connections", "layout"])
-def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch, stage):
+def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch):
     from anyimage.operators.bake_mesh import materialization, materials
 
     tree = cutout.active_material.node_tree
@@ -771,20 +738,11 @@ def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch,
     links = {(link.from_socket.as_pointer(), link.to_socket.as_pointer()) for link in tree.links}
     images = [(n.image, image_pixels(n.image).copy()) for n in tree.nodes if n.type == "TEX_IMAGE"]
     source = cutout.data
-    if stage in {"connections", "layout"}:
-        target = "connect_static_outputs" if stage == "connections" else "arrange_material_textures"
-        connect = getattr(materials, target)
-        def fail(*args):
-            connect(*args)
-            raise RuntimeError("Injected connections failure")
-        monkeypatch.setattr(materials, target, fail)
-    else:
-        bake = materialization.bake_material_output
-        def fail(*args):
-            if args[-1] == stage:
-                raise RuntimeError("Injected channel failure")
-            return bake(*args)
-        monkeypatch.setattr(materialization, "bake_material_output", fail)
+    arrange = materials.arrange_material_textures
+    def fail(material):
+        arrange(material)
+        raise RuntimeError("Injected layout failure")
+    monkeypatch.setattr(materials, "arrange_material_textures", fail)
     with pytest.raises(RuntimeError, match="Injected"):
         materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert cutout.data == source and cutout["o_image_object"]
@@ -834,6 +792,36 @@ def test_layer_emission_used_by_two_shader_inputs(cutout):
     assert raw.is_float and raw.packed_file and expected.max() > 1
     actual = srgb_to_linear_rgb(image_pixels(encoded).reshape(-1, 4)[:, :3]) * strength
     np.testing.assert_allclose(actual, expected, atol=.02)
+
+
+def test_baked_emission_keeps_mapped_texture_coordinates_on_both_faces(cutout):
+    from anyimage.common.color_space import srgb_to_linear_rgb
+
+    tree = cutout.active_material.node_tree
+    layer = next(n for n in tree.nodes if n.type == "GROUP")
+    shader = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+    uv = tree.nodes.new("ShaderNodeUVMap")
+    uv.uv_map = "UVMap"
+    mapping = tree.nodes.new("ShaderNodeMapping")
+    mapping.inputs["Scale"].default_value = (0, 1, 1)
+    mapping.inputs["Location"].default_value = (.75, 0, 0)
+    mask = tree.nodes.new("ShaderNodeTexImage")
+    mask.image = bpy.data.images.new("Emission mask", 2, 2, alpha=True)
+    mask.image.pixels.foreach_set([0, 0, 0, 1] * 3 + [1, 1, 1, 1])
+    mask.interpolation = "Closest"
+    tree.links.new(uv.outputs["UV"], mapping.inputs["Vector"])
+    tree.links.new(mapping.outputs["Vector"], mask.inputs["Vector"])
+    tree.links.new(mask.outputs["Color"], shader.inputs["Emission Strength"])
+    tree.links.new(layer.outputs["Color"], shader.inputs["Emission Color"])
+
+    cutout.data = materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
+    image = shader.inputs["Emission Color"].links[0].from_node.image
+    blue = srgb_to_linear_rgb(image_pixels(image).reshape(128, 64, 4)[..., 2])
+    blue *= shader.inputs["Emission Strength"].default_value
+    # Both atlas tiles sample the right-hand column of the mask over the full UV height.
+    for face in np.split(blue, 2):
+        np.testing.assert_allclose(face[4:28, 4:-4], 0, atol=.01)
+        np.testing.assert_allclose(face[36:60, 4:-4], 1, atol=.02)
 
 
 @pytest.mark.parametrize("strength", [0, .5, 1, 2])

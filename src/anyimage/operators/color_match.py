@@ -12,7 +12,7 @@ from ..common.color_match import (
     build_color_match,
     resize_rgba_proxy,
 )
-from ..common.color_reference import get_color_reference
+from ..common.color_reference import get_color_reference, is_color_reference_candidate
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
     TEMPORARY_IMAGE_PREVIEW_PROPERTY,
@@ -20,7 +20,6 @@ from ..common.image import (
     create_image_edit_result,
     owner_image,
     image_rgba,
-    is_color_reference_candidate,
     is_static_image,
 )
 from ..common.image_target import (
@@ -28,8 +27,9 @@ from ..common.image_target import (
     material_has_other_object_user,
     image_edit_owner,
 )
+from ..common.tool_status import draw_tool_status
 from ..common.viewport import drawing_in_region
-from ..common.image_preview import draw_centered_text
+from ..common.image_preview import draw_preview_caption
 
 
 def _live_datablock(block):
@@ -41,16 +41,12 @@ def _live_datablock(block):
 
 
 def draw_match_status(header, _context):
-    layout = header.layout
-    layout.label(text="Confirm", icon="MOUSE_LMB")
-    layout.label(text="Cancel", icon="MOUSE_RMB")
-    layout.label(text="Fine Adjustment", icon="EVENT_SHIFT")
-    layout.label(text="Horizontal: Color | Vertical: Lightness")
-    layout.separator_spacer()
-    layout.template_reports_banner()
-    layout.template_running_jobs()
-    layout.separator_spacer()
-    layout.template_status_info()
+    draw_tool_status(
+        header.layout,
+        ("Confirm", "LEFTMOUSE"),
+        ("Cancel", "RIGHTMOUSE"),
+        ("Fine Adjustment", "LEFT_SHIFT"),
+    )
 
 
 def current_color_reference(context):
@@ -211,7 +207,7 @@ class MatchColorReference(bpy.types.Operator):
                 self._preview_image.update_tag()
                 self._preview_world.update_tag()
             return
-        self._preview_image = create_image_edit_result(target.image, pixels, rgba.shape[1::-1])
+        self._preview_image = create_image_edit_result(target.image, pixels, rgba.shape[1::-1], pack=False)
         self._preview_image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
         owner = target.owner
         if target.object_owner is not None and material_has_other_object_user(target.material, target.object_owner):
@@ -265,7 +261,9 @@ class MatchColorReference(bpy.types.Operator):
         reference = current_color_reference(context)
         try:
             interactive = target is not None
-            target = target or ImageEditTarget.capture(context)
+            pixels = None
+            if target is None:
+                target, pixels = ImageEditTarget.capture_with_pixels(context)
             if reference is None:
                 raise ValueError("Set a color reference before matching")
             if interactive and reference != self._reference.image:
@@ -284,7 +282,7 @@ class MatchColorReference(bpy.types.Operator):
                 return {"FINISHED"}
             matched = apply_color_match(
                 build_color_match(
-                    prepared.transfer, image_rgba_to_linear(target.image, image_rgba(target.image)),
+                    prepared.transfer, image_rgba_to_linear(target.image, image_rgba(target.image, pixels)),
                     target_float=bool(target.image.is_float),
                     prepared_match=self._preview_match if interactive else None,
                 ),
@@ -307,16 +305,11 @@ class MatchColorReference(bpy.types.Operator):
             self._area_pointer, self._region_pointer
         ):
             return
-        region = bpy.context.region
-        center_x = region.width * 0.5
-        draw_centered_text(
+        draw_preview_caption(
+            bpy.context.region,
             bpy.app.translations.pgettext_iface(
                 "Color {color:.0f}% | Lightness {lightness:.0f}%"
             ).format(color=self._color * 100, lightness=self._lightness * 100),
-            center_x,
-            32,
-            18,
-            (1.0, 1.0, 1.0, 1.0),
         )
 
     def _add_preview_handler(self, context):

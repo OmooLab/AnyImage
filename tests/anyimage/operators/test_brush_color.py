@@ -8,7 +8,7 @@ import pytest
 
 from anyimage.common import color_image, image as images
 from anyimage.common.color_space import normalize_color_rgba
-from anyimage.operators.clipboard_image import actions
+from anyimage.operators.clipboard_image import actions, cache
 from anyimage.operators.clipboard_image import brush as brush_tools
 
 
@@ -79,9 +79,9 @@ def test_brush_cache_and_saved_texture_preserve_normalized_content(source, conte
     source.update()
     source.pack()
     source[actions.CLIPBOARD_HASH_PROPERTY] = "original"
-    source[actions.CLIPBOARD_CONTENT_PROPERTY] = actions._clipboard_content_hash(source)
+    source[cache.CLIPBOARD_CONTENT_PROPERTY] = cache._clipboard_content_hash(source)
     texture = brush_tools.set_tool_texture(context, source)
-    assert actions._find_packed_clipboard_image("original") is None
+    assert cache._find_packed_clipboard_image("original") is None
     before = images.image_pixels(source)
     assert brush_tools.set_tool_texture(context, source) == texture
     np.testing.assert_array_equal(images.image_pixels(source), before)

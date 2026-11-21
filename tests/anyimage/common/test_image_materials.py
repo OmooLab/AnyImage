@@ -125,9 +125,9 @@ def test_shared_conversion_images_use_blender_duplicate_suffix():
 
     other = source.copy()
     bpy.context.collection.objects.link(other)
-    from tests.support.color_image import color_image
-    first = color_image(source.data)
-    second = color_image(source.data)
+    from anyimage.common.color_image import create_material_color_image
+    first = create_material_color_image(source.data)
+    second = create_material_color_image(source.data)
 
     assert first is not image
     assert second is not image

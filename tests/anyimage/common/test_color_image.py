@@ -1,6 +1,5 @@
 """Verify isolated static color artifacts and source fidelity."""
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import bpy
@@ -9,7 +8,8 @@ import pytest
 from PIL import Image
 
 from anyimage.common import color_image as colors, image as images, material
-from anyimage.common.job_image import material_analysis_input
+from anyimage.common.image_input import cleanup_image_input
+from anyimage.common.job_image import prepare_recognition_input
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def source():
 
 
 @pytest.mark.parametrize("floating,alpha,bounds", [(False, "STRAIGHT", (1, 0, 3, 2)), (True, "STRAIGHT", None)])
-def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, monkeypatch, floating, alpha, bounds):
+def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, floating, alpha, bounds):
     if floating:
         source = bpy.data.images.new("Source.exr", width=4, height=2, alpha=True, float_buffer=True)
         source.pixels.foreach_set(np.tile(np.array([4, 2, .5, .25, 8, 3, 1, 0], dtype=np.float32), 4))
@@ -32,35 +32,29 @@ def test_color_artifact_preserves_bounds_and_library_reload(source, tmp_path, mo
     source["anyimage_clipboard_sha256"] = "original"
     before = images.image_rgba(source)
     state = (source.filepath_raw, source.colorspace_settings.name, source.alpha_mode)
-    path = colors.prepare_material_color_input(source, bounds)
-    color = colors.load_material_color_image(path)
-    try:
-        assert color != source and color.name.endswith("_color" + path.suffix)
-        assert "anyimage_clipboard_sha256" not in color
-        assert Path(color.filepath_raw) == path
-        expected = before if bounds is None else before[bounds[1]:bounds[3], bounds[0]:bounds[2]]
-        np.testing.assert_allclose(images.image_rgba(color), expected, atol=1e-6 if floating else 1/255)
-        result = material.create_image_material(source, color, panorama=True)
-        assert next(n.image for n in result.node_tree.nodes if n.type == "TEX_IMAGE") == color
-        colors.cleanup_material_color_input(path)
-        assert not path.parent.exists()
-        library = tmp_path / "colors.blend"
-        bpy.data.libraries.write(str(library), {color})
-        with bpy.data.libraries.load(str(library)) as (saved, loaded):
-            loaded.images = saved.images
-        np.testing.assert_allclose(images.image_rgba(loaded.images[0]), expected, atol=1e-6 if floating else 1/255)
-        if floating:
-            assert color.colorspace_settings.name == "Linear Rec.709"
-            assert color.alpha_mode == ("PREMUL" if alpha == "STRAIGHT" else alpha)
-            layer = next(n for n in result.node_tree.nodes if n.type == "GROUP")
-            assert layer.inputs["Alpha Scale"].default_value == 1
-        assert (source.filepath_raw, source.colorspace_settings.name, source.alpha_mode) == state
-        np.testing.assert_array_equal(images.image_rgba(source), before)
-    finally:
-        colors.cleanup_material_color_input(path)
+    color = colors.create_material_color_image(source, bounds)
+    assert color != source and color.name.endswith("_color.exr" if floating else "_color.png")
+    assert "anyimage_clipboard_sha256" not in color
+    assert color.packed_file
+    expected = before if bounds is None else before[bounds[1]:bounds[3], bounds[0]:bounds[2]]
+    np.testing.assert_allclose(images.image_rgba(color), expected, atol=1e-6 if floating else 1/255)
+    result = material.create_image_material(source, color, panorama=True)
+    assert next(n.image for n in result.node_tree.nodes if n.type == "TEX_IMAGE") == color
+    library = tmp_path / "colors.blend"
+    bpy.data.libraries.write(str(library), {color})
+    with bpy.data.libraries.load(str(library)) as (saved, loaded):
+        loaded.images = saved.images
+    np.testing.assert_allclose(images.image_rgba(loaded.images[0]), expected, atol=1e-6 if floating else 1/255)
+    if floating:
+        assert color.colorspace_settings.name == "Linear Rec.709"
+        assert color.alpha_mode == ("PREMUL" if alpha == "STRAIGHT" else alpha)
+        layer = next(n for n in result.node_tree.nodes if n.type == "GROUP")
+        assert layer.inputs["Alpha Scale"].default_value == 1
+    assert (source.filepath_raw, source.colorspace_settings.name, source.alpha_mode) == state
+    np.testing.assert_array_equal(images.image_rgba(source), before)
 
 
-def test_original_path_never_matches_material_color(tmp_path, monkeypatch):
+def test_original_path_never_matches_material_color(tmp_path):
     path = tmp_path / "original.png"
     Image.new("RGBA", (2, 2), (100, 150, 200, 128)).save(path)
     source = bpy.data.images.load(str(path), check_existing=False)
@@ -82,22 +76,15 @@ def test_static_input_rejects_single_frame_animation(kind):
         colors.require_static_color_image(SimpleNamespace(source=kind, frame_duration=1))
 
 
-@pytest.mark.parametrize("stage", ["export", "load", "material", "object"])
+@pytest.mark.parametrize("stage", ["export", "material", "object"])
 def test_failed_color_preparation_releases_owned_resources(source, tmp_path, monkeypatch, stage):
-    directory = tmp_path / "owned-color"
-    directory.mkdir()
-    monkeypatch.setattr(colors, "tempfile", SimpleNamespace(
-        mkdtemp=lambda **_: str(directory),
-        TemporaryDirectory=colors.tempfile.TemporaryDirectory,
-    ))
+    monkeypatch.setattr(colors.tempfile, "tempdir", str(tmp_path))
     before = set(bpy.data.images)
     original = images.image_pixels(source)
     def fail(*_, **__):
         raise RuntimeError("Color failure")
     if stage == "export":
         monkeypatch.setattr(colors, "save_color_png", fail)
-    elif stage == "load":
-        monkeypatch.setattr(colors, "load_material_color_image", fail)
     elif stage == "material":
         monkeypatch.setattr(material, "load_node_group", fail)
     result = None
@@ -110,34 +97,8 @@ def test_failed_color_preparation_releases_owned_resources(source, tmp_path, mon
         if result is not None:
             bpy.data.materials.remove(result)
     assert set(bpy.data.images) == before
-    assert not directory.exists()
+    assert not list(tmp_path.iterdir())
     np.testing.assert_array_equal(images.image_pixels(source), original)
-
-
-def test_ai_color_uses_submitted_crop_after_source_changes(source):
-    bounds = (1, 0, 3, 2)
-    expected = images.image_rgba(source)[:, 1:3].copy()
-    with colors.material_color_image(source, bounds=bounds) as direct:
-        path = colors.prepare_material_color_input(
-            source, bounds,
-        )
-        try:
-            analysis = material_analysis_input(path)
-            assert analysis == path
-            with Image.open(analysis) as image:
-                assert image.size == (2, 2)
-            source.pixels.foreach_set(np.zeros(32, np.float32))
-            result = colors.load_material_color_image(path)
-            alpha = images.image_rgba(result)[..., 3]
-            try:
-                assert tuple(result.size) == (2, 2)
-                np.testing.assert_array_equal(images.image_rgba(result), images.image_rgba(direct))
-                np.testing.assert_allclose(images.image_rgba(result), expected, atol=1/255)
-                np.testing.assert_allclose(alpha, expected[..., 3], atol=1/255)
-            finally:
-                bpy.data.images.remove(result)
-        finally:
-            colors.cleanup_material_color_input(path)
 
 
 @pytest.mark.parametrize("color_space", ["Linear Rec.709", "sRGB", "Non-Color"])
@@ -158,21 +119,23 @@ def test_float_straight_uses_exr_interpretation_without_rejecting_hidden_rgb(sou
     np.testing.assert_array_equal(source.pixels[:], rgba)
 
 
-def test_hdr_analysis_preview_is_separate_from_full_precision_color(source):
-    source = bpy.data.images.new("HDR", width=2, height=1, alpha=True, float_buffer=True)
-    source.alpha_mode = "PREMUL"
-    source.pixels.foreach_set(np.array([4, 2, .5, .25, 8, 3, 1, 0], np.float32))
-    path = colors.prepare_material_color_input(source)
+@pytest.mark.parametrize("floating,space,gray,expected", [
+    (False, "sRGB", .5, 128),
+    (False, "Linear Rec.709", .5, 188),
+    (True, "Linear Rec.709", 2.0, 231),
+])
+def test_recognition_crop_is_srgb_with_source_opacity(source, floating, space, gray, expected):
+    image = bpy.data.images.new("Cutout", width=3, height=1, alpha=True, float_buffer=floating)
+    image.colorspace_settings.name = space
+    image.alpha_mode = "PREMUL" if floating else "STRAIGHT"
+    image.pixels.foreach_set(np.array([1, 0, 0, 1, gray, gray, gray, .5, 0, 0, 0, 0], np.float32))
+    crop = images.image_rgba(image)[:, 1:]
+    path = prepare_recognition_input(image, crop)
     try:
-        preview = material_analysis_input(path)
-        assert preview != path and preview.suffix == ".png" and path.suffix == ".exr"
-        with Image.open(preview) as image:
-            assert image.size == tuple(source.size)
-        color = colors.load_material_color_image(path)
-        try:
-            np.testing.assert_array_equal(images.image_rgba(color), images.image_rgba(source))
-        finally:
-            bpy.data.images.remove(color)
+        assert list(path.parent.iterdir()) == [path]
+        with Image.open(path) as png:
+            assert (png.format, png.mode, png.size) == ("PNG", "RGBA", (2, 1))
+            np.testing.assert_allclose(png.getpixel((0, 0)), (expected, expected, expected, 128), atol=1)
+            assert png.getpixel((1, 0))[3] == 0
     finally:
-        colors.cleanup_material_color_input(path)
-    assert not preview.exists()
+        cleanup_image_input(path)

@@ -9,32 +9,15 @@ class ImageEditWarning(ValueError):
     pass
 
 
-def clip_polygon_halfplanes(points, boundaries):
-    """Clip a 2D polygon to linear half-planes ax + by + c >= 0."""
-    polygon = tuple(tuple(float(value) for value in point) for point in points)
-    for coefficients in boundaries:
-        scale = max(abs(float(value)) for value in coefficients)
-        if scale == 0.0:
-            continue
-        a, b, c = (float(value) / scale for value in coefficients)
-        result = []
-        if not polygon:
-            break
-        previous = polygon[-1]
-        previous_value = math.fsum((a * previous[0], b * previous[1], c))
-        for current in polygon:
-            value = math.fsum((a * current[0], b * current[1], c))
-            if (value >= 0.0) != (previous_value >= 0.0):
-                weight = previous_value / (previous_value - value)
-                result.append(tuple(
-                    previous[axis] + weight * (current[axis] - previous[axis])
-                    for axis in range(2)
-                ))
-            if value >= 0.0:
-                result.append(current)
-            previous, previous_value = current, value
-        polygon = tuple(result)
-    return polygon
+def visible_pixel_bounds(mask):
+    """Return exclusive right/bottom pixel bounds, or None for an empty mask."""
+    import numpy as np
+
+    rows = np.flatnonzero(mask.any(axis=1))
+    if not rows.size:
+        return None
+    columns = np.flatnonzero(mask.any(axis=0))
+    return int(columns[0]), int(rows[0]), int(columns[-1]) + 1, int(rows[-1]) + 1
 
 
 @dataclass(frozen=True)
@@ -138,13 +121,12 @@ def _rasterize_path(bounds, points):
         if len(rows):
             sample_y = y[rows]
             edge_x = (previous[0] - current[0]) * (sample_y - current[1]) / (
-                previous[1] - current[1] + 1e-300
+                previous[1] - current[1]
             ) + current[0]
             ends = np.ceil(edge_x - left - 0.5).astype(np.int64)
             ends = np.clip(ends, 0, width)
-            starts = np.zeros_like(rows)
             winding = 1 if current[1] > previous[1] else -1
-            np.add.at(changes, (rows, starts), winding)
+            np.add.at(changes, (rows, 0), winding)
             np.add.at(changes, (rows, ends), -winding)
         previous = current
     return np.cumsum(changes[:, :width], axis=1, dtype=np.int16) != 0
@@ -211,13 +193,12 @@ def rasterize_selection_union(image_size, paths, *, antialias=False):
     """Rasterize a geometric union on one local canvas before antialiasing."""
     import numpy as np
 
-    paths = tuple(paths)
-    bounds = [
-        _selection_canvas_bounds(image_size, path, 2 if antialias else 0)
-        for path in paths
-    ]
-    entries = [(path, box) for path, box in zip(paths, bounds)
-               if box[2] > box[0] and box[3] > box[1]]
+    entries = []
+    padding = 2 if antialias else 0
+    for path in paths:
+        box = _selection_canvas_bounds(image_size, path, padding)
+        if box[2] > box[0] and box[3] > box[1]:
+            entries.append((path, box))
     if not entries:
         raise ImageEditWarning("The selection contains no visible image pixels")
     left = min(box[0] for _, box in entries)

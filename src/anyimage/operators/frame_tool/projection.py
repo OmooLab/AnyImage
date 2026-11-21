@@ -2,19 +2,10 @@
 
 import math
 from ...common.projective_image import MAX_PROJECTIVE_OUTPUT_PIXELS
-from ...common.selection import clip_polygon_halfplanes
+from ...common.polygon import clip_polygon_halfplanes
 
 
 PROJECTIVE_RELATIVE_EPSILON = 1e-12
-
-
-def _matrix_array(matrix):
-    import numpy as np
-
-    return np.asarray(
-        tuple(tuple(float(value) for value in row) for row in matrix),
-        dtype=np.float64,
-    )
 
 
 def frame_source_projection(
@@ -42,10 +33,11 @@ def frame_source_projection(
         ),
         dtype=np.float64,
     )
-    world = _matrix_array(matrix_world)
+    world = np.asarray(matrix_world, dtype=np.float64)
+    view = np.asarray(view_matrix, dtype=np.float64)
     source_to_world = world @ source_plane
-    source_to_view = _matrix_array(view_matrix) @ source_to_world
-    source_to_clip = _matrix_array(projection_matrix) @ source_to_world
+    source_to_view = view @ source_to_world
+    source_to_clip = np.asarray(projection_matrix, dtype=np.float64) @ source_to_world
     source_to_screen = np.stack(
         (
             0.5 * (source_to_clip[0] + source_to_clip[3]),
@@ -64,7 +56,7 @@ def frame_source_projection(
         raise ValueError("The Image Empty is edge-on to the current view")
     return {
         "bounds": (x_min, x_max, y_min, y_max),
-        "origin_depth": -float((_matrix_array(view_matrix) @ world)[2, 3]),
+        "origin_depth": -float(view[2] @ world[:, 3]),
         "perspective": bool(perspective),
         "region_size": (region_width, region_height),
         "screen_to_source": np.linalg.inv(source_to_screen),
@@ -93,7 +85,7 @@ def _projective_points(points, matrix):
 
 
 def frame_source_coordinates(source, screen_points):
-    """Return source pixels, view depth, validity, and normalized coordinates."""
+    """Return normalized source coordinates, view depth, and validity."""
     import numpy as np
 
     screen_points = np.asarray(screen_points, dtype=np.float64)
@@ -118,10 +110,7 @@ def frame_source_coordinates(source, screen_points):
         & (normalized_source[..., 1] >= 0.0)
         & (normalized_source[..., 1] <= 1.0)
     )
-    image_width, image_height = source["image_size"]
-    source_points = normalized_source * (image_width, image_height)
-    source_points[~valid] = -1.0
-    return source_points, depth, valid, normalized_source
+    return normalized_source, depth, valid
 
 
 def frame_source_overlap(source, frame_quad):
@@ -224,20 +213,10 @@ def frame_result_transform(frame_quad, source_origin, region, view3d, output_siz
     from mathutils import Matrix
     from bpy_extras import view3d_utils
 
-    corners = tuple(
-        tuple(
-            float(value)
-            for value in view3d_utils.region_2d_to_location_3d(
-                region,
-                view3d,
-                point,
-                source_origin,
-            )
-        )
-        for point in frame_quad
-    )
+    corners = [view3d_utils.region_2d_to_location_3d(region, view3d, point, source_origin)
+               for point in frame_quad]
     matrix, display_size = view_facing_frame_geometry(corners, output_size)
-    return Matrix(tuple(tuple(row) for row in matrix)), display_size
+    return Matrix(matrix), display_size
 
 
 def frame_depth_location(active_source, overlap_polygon):
@@ -248,7 +227,7 @@ def frame_depth_location(active_source, overlap_polygon):
     if not active_source["perspective"] or active_source["origin_depth"] > 0.0:
         return source_object.matrix_world.translation.copy()
     centroid = np.asarray((polygon_centroid(overlap_polygon),), dtype=np.float64)
-    _points, depth, valid, normalized_source = frame_source_coordinates(
+    normalized_source, depth, valid = frame_source_coordinates(
         active_source,
         centroid,
     )

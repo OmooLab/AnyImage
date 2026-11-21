@@ -5,7 +5,7 @@ from mathutils import Matrix, Vector
 
 from anyimage.common import image as image_data
 from anyimage.common import object as object_data
-from anyimage.common.geometry_image import depth_node_direction
+from anyimage.common.depth_geometry import depth_node_direction
 from anyimage.operators.convert_to_plane import create_plane_object
 from anyimage.operators.depth_plane import object as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape

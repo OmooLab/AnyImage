@@ -56,7 +56,7 @@ def test_rgb_upscale_job_writes_one_image_and_reports_settings(tmp_path):
 def test_upscale_resource_error_closes_input_and_reaches_job_boundary(tmp_path):
     path = tmp_path / "input.png"
     Image.new("RGB", (8, 8)).save(path)
-    manager = SimpleNamespace(get_session=lambda *_: (object(), 0.0), clear=Mock())
+    manager = SimpleNamespace(get_session=lambda *_: (object(), 0.0), sessions=Mock())
     context = FakeJobContext(tmp_path / "job", "upscale_image", manager)
     source = Image.open(path)
     try:
@@ -72,13 +72,13 @@ def test_upscale_resource_error_closes_input_and_reaches_job_boundary(tmp_path):
     finally:
         source.close()
     assert list(context.directory.iterdir()) == []
-    manager.clear.assert_called_once_with()
+    manager.sessions.close.assert_called_once_with()
 
 
 def test_upscale_output_allocation_failure_clears_cache_at_job_boundary(tmp_path):
     path = tmp_path / "input.png"
     Image.new("RGB", (2, 2)).save(path)
-    manager = SimpleNamespace(get_session=lambda *_: (object(), 0.0), clear=Mock())
+    manager = SimpleNamespace(get_session=lambda *_: (object(), 0.0), sessions=Mock())
     context = FakeJobContext(tmp_path / "job", "upscale_image", manager)
     padded = np.zeros((256, 256, 3), dtype=np.uint8)
     with (
@@ -90,4 +90,4 @@ def test_upscale_output_allocation_failure_clears_cache_at_job_boundary(tmp_path
             "input": str(path), "model": "REALESRGAN_X4PLUS", "device": "cpu",
         })
     assert list(context.directory.iterdir()) == []
-    manager.clear.assert_called_once_with()
+    manager.sessions.close.assert_called_once_with()

@@ -59,11 +59,12 @@ class RunBackgroundRemoval(JobOperator, bpy.types.Operator):
     def execute(self, context):
         self._hdr_input = None
         try:
-            self._image_target = ImageEditTarget.capture(context)
+            self._image_target, pixels = ImageEditTarget.capture_with_pixels(context)
             if getattr(self._image_target.image, "is_float", False):
-                self._hdr_input = HdrBackgroundInput.prepare(self._image_target.image)
+                self._hdr_input = HdrBackgroundInput.prepare(self._image_target.image, pixels)
                 source_path = self._hdr_input.path
             else:
+                del pixels
                 source_path = prepare_target_input(self._image_target)
         except (OSError, RuntimeError, ValueError, MemoryError) as error:
             self._hdr_input = None

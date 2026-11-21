@@ -85,12 +85,12 @@ def invoke_ai_setup_if_needed(operator):
 
 
 def require_model(model_key):
-    model = next((item for item in model_catalog() if item["key"] == model_key), None)
+    model = shared_model_catalog.DOWNLOADABLE_MODELS.get(model_key)
     if model is None:
         raise RuntimeError(f"Unknown model: {model_key}")
-    if not model["installed"] or model.get("validation_error"):
-        raise RuntimeError(f"Download {model['label']} first")
-    return model
+    errors = runtime.resource("model_manager").get("validation_errors", {})
+    if errors.get(model_key) or not model_files_installed(runtime.storage_root(), model):
+        raise RuntimeError(f"Download {model.label} first")
 
 
 def geometry_job_parameters(path, model, resolution_level):

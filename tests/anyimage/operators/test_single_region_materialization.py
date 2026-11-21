@@ -10,6 +10,7 @@ from anyimage.common.image import image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.common.object import modifier_input_identifier, set_modifier_input
 from anyimage.operators.bake_mesh import BakeMesh
+from anyimage.operators.bake_mesh.geometry import PROTOCOL_ATTRIBUTES, mesh_bake_modifiers
 from anyimage.operators.bake_mesh import materialization
 from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
 from tests.support.planes import create_surface
@@ -117,7 +118,7 @@ def test_four_conversions_keep_single_uv_and_existing_images(image_object, monke
     actual_positions, actual_faces = mesh_geometry(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data)
     np.testing.assert_allclose(actual_positions, final_positions, atol=1e-6)
     assert actual_faces == final_faces
-    assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
+    assert not set(obj.data.attributes.keys()) & PROTOCOL_ATTRIBUTES
     assert list(obj.data.uv_layers.keys()) == ["UVMap"]
     assert [call.args[3] for call in bake.call_args_list] == ["Roughness", "Alpha", "Normal"] + (["Emission"] if kind == "PANORAMA" else [])
     if normal is not None:
@@ -164,7 +165,7 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     layer.inputs["Normal Scale"].default_value = strength
     direction = (0, -.2, 0) if kind == "PANORAMA" else (0, -1, 0)
     before = render_material(obj, tmp_path / "before.exr", direction, with_uv_coverage=True)
-    obj.data = materialization.materialize_mesh_and_textures(bpy.context, obj, materialization.mesh_bake_modifiers(obj))
+    obj.data = materialization.materialize_mesh_and_textures(bpy.context, obj, mesh_bake_modifiers(obj))
     obj.modifiers.clear()
     after = render_material(obj, tmp_path / "after.exr", direction, with_uv_coverage=True)
     np.testing.assert_array_equal(before[1], after[1])
@@ -174,13 +175,14 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     errors = np.linalg.norm(before[0][visible, :3] - after[0][visible, :3], axis=-1)
     assert len(errors) and np.quantile(errors, .95) < .04, (kind, np.quantile(errors, [.5, .95, 1]))
     assert not any(n.type == "GROUP" for n in obj.active_material.node_tree.nodes)
-    assert not set(obj.data.attributes.keys()) & materialization.PROTOCOL_ATTRIBUTES
+    assert not set(obj.data.attributes.keys()) & PROTOCOL_ATTRIBUTES
 
 
 @pytest.mark.parametrize("image_object", ["DEPTH", "PANORAMA"], indirect=True)
 def test_four_conversions_support_undo_redo(image_object):
     obj, kind, color, normal = image_object
     name = obj.name
+    source_mesh_name = obj.data.name
     image_names = [i.name for i in (color, normal) if i is not None]
     original_pixels = {name: image_pixels(bpy.data.images[name]).copy() for name in image_names}
     depth_name = "Radial Depth" if kind == "PANORAMA" else "Camera" if kind != "PLANE" else None
@@ -193,12 +195,14 @@ def test_four_conversions_support_undo_redo(image_object):
     try:
         bpy.ops.ed.undo_push(message="Before conversion")
         assert bpy.ops.anyimage.bake_mesh("EXEC_DEFAULT", True) == {"FINISHED"}
+        assert source_mesh_name not in bpy.data.meshes
         assert "o_image_object" not in bpy.data.objects[name]
         roughness_name = "Color_roughness.png"
         roughness_pixels = image_pixels(bpy.data.images[roughness_name]).copy()
         assert not any(n.type == "GROUP" for n in bpy.data.objects[name].active_material.node_tree.nodes)
         converted_pixels = {name: image_pixels(bpy.data.images[name]).copy() for name in image_names}
         assert bpy.ops.ed.undo() == {"FINISHED"}
+        assert bpy.data.objects[name].data.name == source_mesh_name
         assert roughness_name not in bpy.data.images
         assert any(n.type == "GROUP" and n.node_tree.name == "O Texture to Layer"
                    for n in bpy.data.objects[name].active_material.node_tree.nodes)
@@ -209,6 +213,7 @@ def test_four_conversions_support_undo_redo(image_object):
         for image_name in image_names:
             np.testing.assert_array_equal(image_pixels(bpy.data.images[image_name]), original_pixels[image_name])
         assert bpy.ops.ed.redo() == {"FINISHED"}
+        assert source_mesh_name not in bpy.data.meshes
         np.testing.assert_array_equal(image_pixels(bpy.data.images[roughness_name]), roughness_pixels)
         assert not any(n.type == "GROUP" for n in bpy.data.objects[name].active_material.node_tree.nodes)
         assert [m.name for m in bpy.data.objects[name].modifiers] == names
@@ -250,6 +255,8 @@ def test_conversion_only_removes_unreferenced_depth(image_object, user, tmp_path
         depth.use_fake_user = True
     assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
     assert (depth_name in bpy.data.images) == (user not in {"none", "unused_material"})
+    if user == "modifier":
+        assert other.data != obj.data and other.data.users == 1
     assert unrelated.name in bpy.data.images
     assert path.read_bytes() == disk_content
 

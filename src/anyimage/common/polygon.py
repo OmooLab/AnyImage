@@ -1,6 +1,34 @@
-"""Screen polygon tessellation, scanline fills, and outlines."""
+"""2D polygon clipping, tessellation, scanline fills, and outlines."""
 
 import math
+
+
+def clip_polygon_halfplanes(points, boundaries):
+    """Clip a 2D polygon to linear half-planes ax + by + c >= 0."""
+    polygon = tuple(tuple(float(value) for value in point) for point in points)
+    for coefficients in boundaries:
+        scale = max(abs(float(value)) for value in coefficients)
+        if scale == 0.0:
+            continue
+        a, b, c = (float(value) / scale for value in coefficients)
+        result = []
+        if not polygon:
+            break
+        previous = polygon[-1]
+        previous_value = math.fsum((a * previous[0], b * previous[1], c))
+        for current in polygon:
+            value = math.fsum((a * current[0], b * current[1], c))
+            if (value >= 0.0) != (previous_value >= 0.0):
+                weight = previous_value / (previous_value - value)
+                result.append(tuple(
+                    previous[axis] + weight * (current[axis] - previous[axis])
+                    for axis in range(2)
+                ))
+            if value >= 0.0:
+                result.append(current)
+            previous, previous_value = current, value
+        polygon = tuple(result)
+    return polygon
 
 
 def dashed_line_segments(vertices, dash_length=4.0, gap_length=4.0, offset=0.0):

@@ -1,3 +1,4 @@
+from anyimage.common.color_reference import is_color_reference_candidate
 from anyimage.common.job_image import apply_image_result
 from contextlib import ExitStack
 from pathlib import Path
@@ -43,7 +44,7 @@ def test_set_color_reference_from_texture(shader_editor):
     assert SetColorReference.poll(context)
     assert SetColorReference.execute(None, context) == {"FINISHED"}
     assert settings.color_reference == node.image
-    assert images.is_color_reference_candidate(node.image)
+    assert is_color_reference_candidate(node.image)
 
 
 @pytest.mark.parametrize("node_type", ["ShaderNodeTexEnvironment", "ShaderNodeTexImage"])

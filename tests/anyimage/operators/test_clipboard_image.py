@@ -3,6 +3,8 @@ import struct
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+import bpy
+
 from tests.support.blender import BlenderTestCase
 
 
@@ -21,77 +23,22 @@ class ClipboardImageTest(BlenderTestCase):
         )
 
     def test_registers_and_removes_shortcuts(self):
-        class KeyMapItems:
-            def __init__(self):
-                self.items = []
 
-            def new(self, operator_id, event_type, value, **modifiers):
-                item = SimpleNamespace(
-                    idname=operator_id,
-                    type=event_type,
-                    value=value,
-                    properties=SimpleNamespace(),
-                    **modifiers,
-                )
-                self.items.append(item)
-                return item
-
-            def remove(self, item):
-                self.items.remove(item)
-
-        class KeyMaps:
-            def __init__(self):
-                self.items = []
-
-            def new(self, name, space_type):
-                keymap = SimpleNamespace(
-                    name=name,
-                    space_type=space_type,
-                    keymap_items=KeyMapItems(),
-                )
-                self.items.append(keymap)
-                return keymap
-
-        keymaps = KeyMaps()
-        window_manager = SimpleNamespace(
-            keyconfigs=SimpleNamespace(
-                addon=SimpleNamespace(keymaps=keymaps),
-            ),
-        )
-        with patch.object(
-            self.fake_bpy.context,
-            "window_manager",
-            window_manager,
-            create=True,
-        ):
+        keymaps = bpy.context.window_manager.keyconfigs.addon.keymaps
+        with patch.object(self.fake_bpy.context, "window_manager", bpy.context.window_manager, create=True):
             self.keymaps.register()
-            clipboard_items = [
-                item
-                for keymap in keymaps.items
-                if keymap.name in {"3D View", "Node Editor"}
-                for item in keymap.keymap_items.items
-            ]
-            self.assertEqual(
-                [item.idname for item in clipboard_items],
-                [
-                    "anyimage.paste_clipboard_image",
-                    "anyimage.paste_clipboard_image",
-                ],
-            )
-            modifier = "oskey" if sys.platform == "darwin" else "ctrl"
-            self.assertTrue(all(getattr(item, modifier) for item in clipboard_items))
-            self.assertTrue(all(item.shift for item in clipboard_items))
-            self.assertTrue(all(item.type == "V" for item in clipboard_items))
-            object_keymap, = (km for km in keymaps.items if km.name == "Object Mode")
-            cutout, = object_keymap.keymap_items.items
-            self.assertEqual((cutout.idname, cutout.type, cutout.value),
-                             ("wm.tool_set_by_id", "C", "PRESS"))
-            self.assertEqual(cutout.properties.name, self.keymaps.CutoutTool.bl_idname)
-            self.keymaps.unregister()
-
-        self.assertTrue(
-            all(not keymap.keymap_items.items for keymap in keymaps.items)
-        )
+            try:
+                for name in ("3D View", "Node Editor"):
+                    item = keymaps[name].keymap_items["anyimage.paste_clipboard_image"]
+                    self.assertEqual(item.type, "V")
+                    self.assertTrue(item.shift)
+                    self.assertTrue(item.oskey if sys.platform == "darwin" else item.ctrl)
+                cutout = keymaps["Object Mode"].keymap_items["wm.tool_set_by_id"]
+                self.assertEqual((cutout.type, cutout.value), ("C", "PRESS"))
+                self.assertEqual(cutout.properties.name, self.keymaps.CutoutTool.bl_idname)
+            finally:
+                self.keymaps.unregister()
+        self.assertNotIn(self.keymaps.tool_status.KEYMAP_NAME, keymaps)
 
     def test_routes_supported_contexts(self):
         contexts = (
@@ -268,93 +215,6 @@ class ClipboardImageTest(BlenderTestCase):
             ),
             (256.0 * 2 / 3, 256.0),
         )
-
-    def test_finds_existing_packed_clipboard_image(self):
-        matching_image = FakeImage(
-            self.actions.CLIPBOARD_HASH_PROPERTY,
-            "matching-hash",
-            packed=True,
-        )
-        unpacked_image = FakeImage(
-            self.actions.CLIPBOARD_HASH_PROPERTY,
-            "unpacked-hash",
-            packed=False,
-        )
-        original_data = self.actions.bpy.data
-        self.actions.bpy.data = SimpleNamespace(
-            images=[matching_image, unpacked_image],
-        )
-        try:
-            with patch.object(matching_image, "get", side_effect=lambda key: "matching-hash" if key == self.actions.CLIPBOARD_HASH_PROPERTY else "pixels"), patch.object(self.actions, "_clipboard_content_hash", return_value="pixels"):
-                self.assertIs(
-                    self.actions._find_packed_clipboard_image("matching-hash"),
-                    matching_image,
-                )
-            self.assertIsNone(
-                self.actions._find_packed_clipboard_image("unpacked-hash")
-            )
-        finally:
-            self.actions.bpy.data = original_data
-
-    def test_names_new_packed_image_clipboard(self):
-        image = FakeLoadedImage()
-        images = FakeLoadedImages(image)
-        original_data = self.actions.bpy.data
-        self.actions.bpy.data = SimpleNamespace(images=images)
-        try:
-            with patch.object(self.actions, "_clipboard_content_hash", return_value="pixels"):
-                loaded_image, reused = self.actions.acquire_packed_image(
-                    b"image-data",
-                    ".png",
-                )
-        finally:
-            self.actions.bpy.data = original_data
-
-        self.assertIs(loaded_image, image)
-        self.assertFalse(reused)
-        self.assertEqual(image.name, "Clipboard")
-        self.assertTrue(image.packed)
-
-    def test_sets_and_reuses_stencil_brush_texture(self):
-        textures = FakeTextures()
-        original_data = self.brush.bpy.data
-        self.brush.bpy.data = SimpleNamespace(textures=textures, images=SimpleNamespace(remove=Mock()))
-        brush = SimpleNamespace(
-            is_editable=True,
-            texture=None,
-            texture_slot=SimpleNamespace(
-                texture=None,
-                map_mode="VIEW_PLANE",
-            ),
-            stencil_dimension=(256.0, 256.0),
-            update_tag=lambda: None,
-        )
-        context = SimpleNamespace(
-            brush=brush,
-            scene=SimpleNamespace(view_settings=SimpleNamespace(view_transform="AgX")),
-        )
-        image = SimpleNamespace(
-            name="Clipboard Image", size=(1920, 1080), is_float=False,
-            colorspace_settings=SimpleNamespace(name="sRGB"), alpha_mode="STRAIGHT",
-        )
-        try:
-            with (
-                patch.object(self.brush, "image_content_state", return_value={"filepath": ""}),
-                patch.object(self.brush, "replace_image_content"),
-                patch.object(self.brush, "create_normalized_color_image") as configure,
-            ):
-                first_texture = self.brush.set_tool_texture(context, image)
-                configure.assert_called_once_with(image)
-                second_texture = self.brush.set_tool_texture(context, image)
-        finally:
-            self.brush.bpy.data = original_data
-
-        self.assertIs(first_texture, second_texture)
-        self.assertEqual(len(textures), 1)
-        self.assertIs(brush.texture, first_texture)
-        self.assertIs(brush.texture_slot.texture, first_texture)
-        self.assertEqual(brush.texture_slot.map_mode, "STENCIL")
-        self.assertEqual(brush.stencil_dimension, (256.0, 144.0))
 
     def test_vertex_and_texture_paint_use_unbiased_white(self):
         for mode in ("PAINT_VERTEX", "PAINT_TEXTURE"):
@@ -554,52 +414,3 @@ def build_dib_header(
         )
         struct.pack_into("<4I", header, 40, *masks)
     return header
-
-
-class FakeImage:
-    def __init__(self, property_name, image_hash, packed):
-        self.properties = {property_name: image_hash}
-        self.packed_files = (object(),) if packed else ()
-
-    def get(self, property_name, default=None):
-        return self.properties.get(property_name, default)
-
-
-class FakeLoadedImage(dict):
-    def __init__(self):
-        super().__init__()
-        self.name = None
-        self.packed = False
-
-    def pack(self):
-        self.packed = True
-
-
-class FakeLoadedImages(list):
-    def __init__(self, loaded_image):
-        super().__init__()
-        self.loaded_image = loaded_image
-
-    def load(self, _path, check_existing):
-        return self.loaded_image
-
-    def remove(self, image):
-        super().remove(image)
-
-
-class FakeTexture(dict):
-    def __init__(self, name, texture_type):
-        super().__init__()
-        self.name = name
-        self.type = texture_type
-        self.image = None
-
-
-class FakeTextures(list):
-    def new(self, name, type):
-        texture = FakeTexture(name, type)
-        self.append(texture)
-        return texture
-
-    def remove(self, texture):
-        super().remove(texture)

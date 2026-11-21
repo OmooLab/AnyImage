@@ -25,7 +25,10 @@ def test_relative_floor_uses_visible_world_bounds(monkeypatch):
     alpha = np.zeros((100, 100))
     alpha[25:75, 25:75] = 1
     source = source_plane(display_size=2)
-    resolve = lambda length: g.effective_cutout_edge_length(None, source, length, alpha, (0, 0, 100, 100))
+    def resolve(length):
+        bounds = g.crop_plane_bounds(source, (0, 0, 100, 100), source.data.size)
+        metric, _ = g.world_plane_metric(source.matrix_world)
+        return g.effective_cutout_edge_length(None, bounds, length, alpha, metric)
     assert resolve(0.001) == 0.01
     assert resolve(0.1) == 0.1
     source.matrix_world = Matrix.Rotation(0.7, 4, "Y") @ Matrix.Diagonal((2, 3, 1, 1))
@@ -41,9 +44,8 @@ def test_mesh_density_survives_resolution_and_canvas_changes(fine_outline):
         source = source_plane((size, size), display_size)
         alpha = np.zeros((size, size))
         alpha[inset:size-inset, inset:size-inset] = 1
-        spacing = g.effective_cutout_edge_length(bpy.context, source, 0.1, alpha, (0, 0, size, size))
-        assert spacing == 0.1
-        meshes.append(g.build_base_shape(bpy.context, source, spacing, alpha, (0, 0, size, size), fine_outline=fine_outline))
+        bounds = g.crop_plane_bounds(source, (0, 0, size, size), source.data.size)
+        meshes.append(g.build_cutout_shape(bpy.context, source, 0.1, alpha, bounds, fine_outline=fine_outline))
     counts = [len(mesh.vertices) for mesh in meshes]
     assert max(counts) / min(counts) < 1.05
     for mesh in meshes:
@@ -58,7 +60,7 @@ def test_world_scaling_adds_samples_and_rotation_preserves_density(fine_outline)
     for matrix in (Matrix.Identity(4), Matrix.Diagonal((2, 3, 1, 1)),
                    Matrix.Rotation(0.6, 4, "Z") @ Matrix.Diagonal((2, 3, 1, 1))):
         source = source_plane(matrix=matrix)
-        mesh = g.build_base_shape(bpy.context, source, 0.1, alpha, (0, 0, 100, 100), fine_outline=fine_outline)
+        mesh = g.build_cutout_shape(bpy.context, source, 0.1, alpha, (-0.5, 0.5, -0.5, 0.5), fine_outline=fine_outline)
         counts.append(len(mesh.vertices))
         planar = mesh.vertices[:, [0, 2]] @ g.metric_transform(g.world_plane_metric(matrix)[0])
         edges = np.unique(np.sort(np.concatenate([mesh.faces[:, [0, 1]], mesh.faces[:, [1, 2]], mesh.faces[:, [2, 0]]]), axis=1), axis=0)
@@ -121,11 +123,11 @@ def test_operator_length_property_accepts_world_units():
 def test_effective_length_report_and_geometry_build_share_value():
     report = Mock()
     context = SimpleNamespace(scene=SimpleNamespace(unit_settings=SimpleNamespace(system="METRIC", scale_length=0.01)))
-    source = object()
+    source = source_plane(display_size=1000)
     content = np.ones((10, 10))
     from anyimage.operators.cutout_tool import geometry
     with patch.object(geometry, "effective_cutout_edge_length", return_value=20), \
-         patch.object(geometry, "build_base_shape") as build, \
+         patch.object(geometry, "build_mesh", wraps=geometry.build_mesh) as build, \
          patch.object(operators, "create_shape_object") as create, \
          patch.object(operators.bpy.ops.ed, "undo_push", return_value={"FINISHED"}):
         operators.create_cutout_shape(
@@ -139,7 +141,7 @@ def test_effective_length_report_and_geometry_build_share_value():
             color_image=object(),
             report=report,
         )
-    assert build.call_args.args[2] == 20
+    assert build.call_args.args[1] == 20
     assert create.call_args.args[0] is context
     assert create.call_args.args[1] is source
     assert create.call_args.args[2] == "FLAT"

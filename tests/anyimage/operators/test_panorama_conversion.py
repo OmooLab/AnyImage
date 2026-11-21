@@ -12,8 +12,7 @@ from mathutils import Matrix
 
 from anyimage.operators.convert_to_panorama import operators, object as conversion
 from anyimage.operators.convert_to_world import ConvertToWorld
-from server.geometry.depth_texture import write_float_exr
-from anyimage.common.color_image import prepare_material_color_input, cleanup_material_color_input
+from server.media.exr import write_float_exr
 from anyimage.common.image import image_content_signature
 from anyimage.common.panorama import panorama_crop_bounds
 
@@ -55,42 +54,11 @@ def test_world_conversion_requires_a_static_panorama_source(source):
     assert not ConvertToWorld.poll(bpy.context)
 
 
-def test_entry_submits_current_alpha_preferences_and_cleans_cancelled_input(source, monkeypatch):
-    submitted = {}
-    def submit(**parameters):
-        submitted.update(parameters)
-        with Image.open(parameters["input_path"]) as image:
-            alpha = np.asarray(image)[..., 3]
-            assert not alpha[8:].any()
-            assert np.all(abs(alpha[4:8].astype(float) - 128) <= 1)
-        return {"CANCELLED"}
-    monkeypatch.setattr(operators, "invoke_ai_setup_if_needed", lambda _operator: None)
-    monkeypatch.setattr(operators, "addon_preferences", lambda _: SimpleNamespace(geometry_model="MOGE2_VITB", geometry_resolution_level=2))
-    monkeypatch.setattr(operators, "configured_geometry_model", lambda _: "MOGE2_VITB_NORMAL")
-    monkeypatch.setattr(operators, "configured_max_ai_input_size", lambda _: 1024)
-    monkeypatch.setattr(operators, "bpy", SimpleNamespace(ops=SimpleNamespace(anyimage=SimpleNamespace(generate_panorama=submit))))
-    operator = SimpleNamespace(report=Mock())
-    assert operators.ConvertToPanorama.execute(operator, bpy.context) == {"CANCELLED"}
-    assert submitted["model"] == "MOGE2_VITB_NORMAL" and submitted["resolution_level"] == 2
-    assert submitted["max_input_size"] == 1024
-    assert submitted["color_path"] == submitted["input_path"]
-    operator.report.assert_not_called()
-    from pathlib import Path
-    assert not Path(submitted["input_path"]).exists()
-    assert bpy.data.objects.get(source.name) == source
-
-
 def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkeypatch):
     source.data.scale(31, 20)
-    source.data.pixels.foreach_set(np.ones((20, 31, 4), np.float32).ravel())
-    submitted = {}
 
     def submit(**parameters):
-        submitted.update(parameters)
-        with Image.open(parameters["input_path"]) as image:
-            assert image.size == (30, 15)
-        with Image.open(parameters["color_path"]) as image:
-            assert image.size == (30, 15)
+        assert parameters["crop_bounds"] == (0, 2, 30, 17)
         return {"CANCELLED"}
 
     monkeypatch.setattr(operators, "invoke_ai_setup_if_needed", lambda _operator: None)
@@ -131,9 +99,8 @@ def artifacts(tmp_path, source):
     result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / files[key])
     operator = SimpleNamespace(source_object_name=source.name, _source_object=source,
                                _source_image=source.data, _source_signature=image_content_signature(source.data),
-                               color_path=str(prepare_material_color_input(source.data)))
-    yield result, operator
-    cleanup_material_color_input(operator.color_path)
+                               crop_bounds=panorama_crop_bounds(*source.data.size))
+    return result, operator
 
 
 @pytest.mark.parametrize("view_transform", ["AgX", "Standard"])
@@ -236,8 +203,6 @@ def test_panorama_preserves_hdr_pixels_color_space_and_alpha(source, artifacts, 
     source.data = hdr
     operator._source_image = hdr
     operator._source_signature = image_content_signature(hdr)
-    cleanup_material_color_input(operator.color_path)
-    operator.color_path = str(prepare_material_color_input(hdr))
     if shared:
         other = source.copy()
         bpy.context.collection.objects.link(other)

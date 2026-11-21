@@ -7,7 +7,7 @@ import bpy
 
 from ...preferences import addon_preferences, configured_min_cutout_relative_edge_length
 from ...common.image import image_empty_bounds
-from ...common.selection import ImageEditWarning
+from ...common.selection import ImageEditWarning, visible_pixel_bounds
 from . import balloon
 from .mesh import build_mesh
 
@@ -69,14 +69,13 @@ class BaseShape:
     mask: object
 
 
-def cutout_domain(mesh, bounds, world_metric, balloon_algorithm="POISSON"):
+def cutout_domain(mesh, bounds, transform, balloon_algorithm="POISSON"):
     """Map the quality mesh into local coordinates and solve its height."""
     import numpy as np
 
     x_min, x_max, y_min, y_max = bounds
     pixels, planar_faces, boundary, pixel_components, mask = mesh
     image_height, image_width = mask.shape
-    transform = metric_transform(world_metric)
 
     def pixel_to_local(points):
         local = np.asarray(points, dtype=np.float64).copy()
@@ -95,12 +94,8 @@ def cutout_domain(mesh, bounds, world_metric, balloon_algorithm="POISSON"):
         balloon_algorithm, planar, planar_faces, boundary, components
     )
     faces = counter_clockwise_faces(planar, planar_faces)
-    uv = np.column_stack(
-        (
-            (local[:, 0] - x_min) / (x_max - x_min),
-            (local[:, 1] - y_min) / (y_max - y_min),
-        )
-    ).astype(np.float32)
+    uv = np.column_stack((pixels[:, 0] / image_width, 1.0 - pixels[:, 1] / image_height))
+    uv = uv.astype(np.float32)
     crop_center = np.asarray(
         ((x_min + x_max) * 0.5, (y_min + y_max) * 0.5),
         dtype=np.float64,
@@ -157,10 +152,10 @@ def crop_plane_bounds(source_object, crop_bounds, source_size):
 
 def effective_cutout_edge_length(
     context,
-    source_object,
+    bounds,
     edge_length,
     content_values,
-    content_bounds,
+    metric,
     threshold=CUTOUT_ALPHA_THRESHOLD,
 ):
     """Resolve target spacing in Blender world units from visible content bounds."""
@@ -170,19 +165,12 @@ def effective_cutout_edge_length(
         raise ValueError("Cutout edge length must be greater than zero")
     values = np.asarray(content_values)
     visible = (values > 0) & (values >= threshold)
-    rows = np.flatnonzero(visible.any(axis=1))
-    columns = np.flatnonzero(visible.any(axis=0))
-    if not len(rows):
+    visible_bounds = visible_pixel_bounds(visible)
+    if visible_bounds is None:
         raise ValueError("The Cutout selection contains no visible image pixels")
-    bounds = crop_plane_bounds(
-        source_object, content_bounds, tuple(source_object.data.size)
-    )
-    metric, _ = world_plane_metric(source_object.matrix_world)
-    metric_transform(metric)
-    width = (
-        (bounds[1] - bounds[0]) * (columns.max() + 1 - columns.min()) / values.shape[1]
-    )
-    height = (bounds[3] - bounds[2]) * (rows.max() + 1 - rows.min()) / values.shape[0]
+    left, top, right, bottom = visible_bounds
+    width = (bounds[1] - bounds[0]) * (right - left) / values.shape[1]
+    height = (bounds[3] - bounds[2]) * (bottom - top) / values.shape[0]
     longest = max(width * math.sqrt(metric[0][0]), height * math.sqrt(metric[1][1]))
     return max(
         float(edge_length),
@@ -199,44 +187,57 @@ def build_reference_mask(content_values, image_size):
     return _resize_values(values, (target_width, target_height)) > 0.5
 
 
-def build_base_shape(
+def build_cutout_shape(
     context,
     source_object,
     edge_length,
     content_values,
-    content_bounds,
-    *,
+    bounds,
     alpha_threshold=CUTOUT_ALPHA_THRESHOLD,
     fine_outline=False,
+    report=None,
 ):
     import numpy as np
 
-    bounds = crop_plane_bounds(
-        source_object,
-        content_bounds,
-        tuple(source_object.data.size),
-    )
     world_metric, world_z_scale = world_plane_metric(source_object.matrix_world)
     if world_z_scale <= 1e-10:
         raise ValueError("The Image Empty has a degenerate world transform")
+    transform = metric_transform(world_metric)
     pixel_transform = np.diag(
         (
             (bounds[1] - bounds[0]) / content_values.shape[1],
             -(bounds[3] - bounds[2]) / content_values.shape[0],
         )
-    ) @ metric_transform(world_metric)
+    ) @ transform
 
+    effective_length = effective_cutout_edge_length(
+        context, bounds, edge_length, content_values, world_metric, alpha_threshold
+    )
+    if report is not None and effective_length > edge_length * (1 + 1e-6):
+        units = context.scene.unit_settings
+        label = bpy.utils.units.to_string(
+            units.system if units.system != "NONE" else "METRIC",
+            "LENGTH",
+            effective_length * units.scale_length,
+            precision=4,
+        )
+        report(
+            {"INFO"},
+            bpy.app.translations.pgettext_rpt("Effective Edge Length: {length}").format(
+                length=label
+            ),
+        )
     preferences = addon_preferences(context)
     balloon_algorithm = getattr(preferences, "balloon_profile_algorithm", "POISSON")
     mesh = build_mesh(
         content_values,
-        edge_length,
+        effective_length,
         alpha_threshold,
         pixel_transform=pixel_transform,
         fine_outline=fine_outline,
         include_components=str(balloon_algorithm).upper() == "TEDDY",
     )
-    source_vertices, faces, uv, balloon = cutout_domain(mesh, bounds, world_metric, balloon_algorithm)
+    source_vertices, faces, uv, balloon = cutout_domain(mesh, bounds, transform, balloon_algorithm)
     return BaseShape(
         vertices=np.asarray(source_vertices, dtype=np.float64),
         faces=faces,
@@ -265,41 +266,3 @@ def cutout_content_values(
     if not np.any((values > 0.0) & (values >= alpha_threshold)):
         raise ImageEditWarning("The Cutout selection contains no visible image pixels")
     return values
-
-
-def build_cutout_shape(
-    context,
-    source_object,
-    edge_length,
-    content_values,
-    content_bounds,
-    alpha_threshold,
-    fine_outline,
-    report,
-):
-    effective_length = effective_cutout_edge_length(
-        context, source_object, edge_length, content_values, content_bounds, alpha_threshold
-    )
-    if report is not None and effective_length > edge_length * (1 + 1e-6):
-        units = context.scene.unit_settings
-        label = bpy.utils.units.to_string(
-            units.system if units.system != "NONE" else "METRIC",
-            "LENGTH",
-            effective_length * units.scale_length,
-            precision=4,
-        )
-        report(
-            {"INFO"},
-            bpy.app.translations.pgettext_rpt("Effective Edge Length: {length}").format(
-                length=label
-            ),
-        )
-    return build_base_shape(
-        context,
-        source_object,
-        effective_length,
-        content_values,
-        content_bounds,
-        alpha_threshold=alpha_threshold,
-        fine_outline=fine_outline,
-    )

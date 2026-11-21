@@ -22,7 +22,8 @@ from ...server.media.resolution import (
     MAX_MAX_AI_INPUT_SIZE,
     MIN_MAX_AI_INPUT_SIZE,
 )
-from ...common.job_image import material_analysis_input
+from ...common.job_image import prepare_recognition_input
+from ...common.image_input import cleanup_image_input
 from ...common.ai import (
     invoke_ai_setup_if_needed,
     geometry_job_parameters,
@@ -31,17 +32,13 @@ from ...common.ai import (
     require_model,
 )
 from ...common.image import image_content_signature, image_rgba, require_image_empty, is_animated_image
-from ...common.object import require_conversion_source
+from ...common.object import read_conversion_source
 from ...common.geometry_image import (
     load_depth_metadata,
     load_depth_result_image,
     load_normal_result_image,
 )
-from ...common.color_image import (
-    cleanup_material_color_input,
-    load_material_color_image,
-    prepare_material_color_input,
-)
+from ...common.color_image import material_color_image
 from ...common.viewport import (
     report_image_edit_exception,
 )
@@ -66,7 +63,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     starting_message = "Generating Cutout artifacts"
 
     input_path: bpy.props.StringProperty(options=_HIDDEN)
-    color_path: bpy.props.StringProperty(options=_HIDDEN)
     source_object_name: bpy.props.StringProperty(options=_HIDDEN)
     selection_path_json: bpy.props.StringProperty(options=_HIDDEN)
     shape: bpy.props.StringProperty(default="SOLID", options=_HIDDEN)
@@ -114,23 +110,26 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 antialias=True,
             )
             source_rgba = image_rgba(source_object.data)
+            left, top, right, bottom = selection_mask.bounds
+            cropped = source_rgba[top:bottom, left:right]
+            content_values = cutout_content_values(
+                cropped[..., 3],
+                selection_mask.values,
+                alpha_threshold=self.alpha_threshold,
+            )
+            setup_result = invoke_ai_setup_if_needed(self)
+            if setup_result is not None:
+                return setup_result
             self._source_signature = image_content_signature(source_object.data, source_rgba[::-1])
             context.view_layer.objects.active = source_object
             source_object.select_set(True)
             self.max_ai_input_size = configured_max_ai_input_size(context)
             self.boundary_padding = configured_cutout_boundary_padding(context)
-            setup_result = invoke_ai_setup_if_needed(self)
-            if setup_result is not None:
-                return setup_result
             self.model = configured_geometry_model(context)
             self.resolution_level = int(getattr(addon_preferences(context), "geometry_resolution_level", 3))
-            self._selection_mask = selection_mask
-            self.color_path = str(prepare_material_color_input(
-                source_object.data,
-                selection_mask.bounds,
-                source_rgba,
-            ))
-            self.input_path = str(material_analysis_input(self.color_path))
+            self._content_values = content_values
+            self._content_bounds = selection_mask.bounds
+            self.input_path = str(prepare_recognition_input(source_object.data, cropped))
         except (
             ImageEditWarning,
             OSError,
@@ -138,7 +137,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             TypeError,
             ValueError,
         ) as error:
-            cleanup_material_color_input(getattr(self, "color_path", None))
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
         return super().execute(context)
@@ -161,25 +159,13 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         }
 
     def response(self, context, result):
-        source_object = require_conversion_source(self)
-        selection_mask = getattr(self, "_selection_mask", None)
-        if selection_mask is None:
-            raise RuntimeError("The Cutout Selection is no longer available")
-        color_image = load_material_color_image(self.color_path)
-        value = result.value if isinstance(result.value, dict) else {}
+        source_object, pixels = read_conversion_source(self)
         normal_image = None
         depth_image = None
         normal_missing = False
         try:
-            content_values = cutout_content_values(
-                image_rgba(color_image)[..., 3],
-                selection_mask.values,
-                alpha_threshold=self.alpha_threshold,
-            )
             if self.shape in DEPTH_CUTOUT_SHAPES or self.generate_normal:
                 try:
-                    if "object_normal" not in value:
-                        raise FileNotFoundError("object_normal")
                     normal_path = result.file("object_normal")
                     normal_image = load_normal_result_image(normal_path, source_object)
                 except (FileNotFoundError, RuntimeError):
@@ -192,23 +178,16 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                     source_object,
                     depth_metadata,
                 )
-            create_cutout_shape(
-                context,
-                source_object,
-                self.shape,
-                self.edge_length,
-                content_values,
-                selection_mask.bounds,
-                depth_image=depth_image,
-                depth_metadata=depth_metadata,
-                normal_image=normal_image,
-                alpha_threshold=self.alpha_threshold,
-                fine_outline=self.fine_outline,
-                boundary_padding=self.boundary_padding,
-                color_image=color_image,
-                gesture=self.gesture,
-                report=self.report,
-            )
+            with material_color_image(
+                source_object.data, bounds=self._content_bounds, rgba=image_rgba(source_object.data, pixels),
+            ) as color:
+                create_cutout_shape(
+                    context, source_object, self.shape, self.edge_length, self._content_values,
+                    self._content_bounds, depth_image=depth_image, depth_metadata=depth_metadata,
+                    normal_image=normal_image, alpha_threshold=self.alpha_threshold,
+                    fine_outline=self.fine_outline, boundary_padding=self.boundary_padding,
+                    color_image=color, gesture=self.gesture, report=self.report,
+                )
             if normal_missing:
                 self.report({"WARNING"}, "The normal texture is missing; the shape was created without it")
         except Exception:
@@ -216,14 +195,13 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 bpy.data.images.remove(normal_image, do_unlink=True)
             if depth_image is not None and depth_image.users == 0:
                 bpy.data.images.remove(depth_image, do_unlink=True)
-            if color_image.users == 0:
-                bpy.data.images.remove(color_image, do_unlink=True)
             raise
         return f"{self.shape.replace('_', ' ').title()} is ready"
 
     def cleanup(self):
-        cleanup_material_color_input(self.color_path)
-        self._selection_mask = None
+        cleanup_image_input(self.input_path)
+        self._content_values = None
+        self._content_bounds = None
         self._source_object = None
         self._source_image = None
         self._source_signature = None

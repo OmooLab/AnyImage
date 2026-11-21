@@ -13,6 +13,7 @@ from ...common.image import (
 from ...common.projective_image import premultiplied_rgba
 from ...common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ...preferences import configured_max_frame_resolution
+from ...common.tool_status import set_tool_status
 from ...common.viewport import (
     active_image_edit_source,
     active_view3d_tool_id,
@@ -37,34 +38,15 @@ from .compositing import composite_frame_pixels
 FRAME_TOOL_ID = "anyimage.frame"
 
 
-def _frame_source(source_object, region, view3d, view_matrix, *, active):
-    import numpy as np
-
-    image_size = tuple(source_object.data.size)
-    pixels = image_rgba_to_linear(
-        source_object.data, image_pixels(source_object.data).reshape((-1, 4)),
-    ).ravel()
-    width, height = image_size
-    bounds = image_empty_bounds(source_object)
-    source = frame_source_projection(
+def _project_frame_object(source_object, view3d, region_size):
+    return frame_source_projection(
         view3d.perspective_matrix,
-        view_matrix,
+        view3d.view_matrix,
         source_object.matrix_world,
-        bounds,
-        (region.width, region.height),
+        image_empty_bounds(source_object),
+        region_size,
         perspective=view3d.is_perspective,
     )
-    source.update(
-        {
-            "active": bool(active),
-            "image_size": image_size,
-            "name": source_object.name,
-            "object": source_object,
-            "pixels": premultiplied_rgba(pixels, image_size),
-            "rgba": np.flipud(pixels.reshape((height, width, 4))),
-        }
-    )
-    return source
 
 
 def selected_frame_sources(context):
@@ -76,36 +58,46 @@ def selected_frame_sources(context):
     for source in sources:
         if is_animated_image(source.data):
             raise ValueError("Frame only supports still images")
-    return tuple(
-        sorted(sources, key=lambda source: (source == active, source.name))
-    )
+    sources.remove(active)
+    sources.append(active)
+    return tuple(sources)
 
 
 def apply_frame(context, source_objects, frame_quad):
     """Bake selected projections into the active Image Empty."""
+    import numpy as np
+
     active = context.active_object
     if active not in source_objects:
         raise ValueError("The active Image Empty is not a Frame source")
     view3d = context.region_data
-    sources = tuple(
-        _frame_source(
-            source,
-            context.region,
-            view3d,
-            view3d.view_matrix,
-            active=source == active,
-        )
-        for source in source_objects
-    )
-    active_source = next(source for source in sources if source["active"])
+    region_size = (context.region.width, context.region.height)
+    active_source = _project_frame_object(active, view3d, region_size)
     active_overlap = frame_source_overlap(active_source, frame_quad)
     if not active_overlap:
         raise ImageEditWarning("Frame does not overlap the active Image Empty")
     output_size = frame_output_size(
         frame_quad,
-        (context.region.width, context.region.height),
+        region_size,
         configured_max_frame_resolution(context),
     )
+    sources = []
+    buffers = {}
+    for obj in source_objects:
+        is_active = obj == active
+        source = active_source if is_active else _project_frame_object(obj, view3d, region_size)
+        image = obj.data
+        if image not in buffers:
+            width, height = image.size
+            pixels = image_rgba_to_linear(image, image_pixels(image).reshape((-1, 4)))
+            buffers[image] = {
+                "image_size": (width, height),
+                "rgba": np.flipud(pixels.reshape((height, width, 4))),
+            }
+            if len(source_objects) > 1:
+                buffers[image]["pixels"] = premultiplied_rgba(pixels, (width, height))
+        source.update(buffers[image], active=is_active, object=obj, name=obj.name)
+        sources.append(source)
     pixels = composite_frame_pixels(sources, frame_quad, output_size)
     depth_location = frame_depth_location(active_source, active_overlap)
     matrix, display_size = frame_result_transform(
@@ -194,12 +186,7 @@ class FrameImages(bpy.types.Operator):
         self._handle = bpy.types.SpaceView3D.draw_handler_add(
             self._draw_overlay, (), "WINDOW", "POST_PIXEL"
         )
-        context.workspace.status_text_set(
-            bpy.app.translations.pgettext_iface(
-                "Frame: drag a rectangle to merge selected Image Empties; "
-                "RMB or Esc cancels"
-            )
-        )
+        set_tool_status(context, ("Draw Frame", "DRAG"))
         context.window_manager.modal_handler_add(self)
         context.area.tag_redraw()
         return {"RUNNING_MODAL"}
@@ -229,9 +216,8 @@ class FrameImages(bpy.types.Operator):
                 self._finish(context)
                 return {"CANCELLED"}
             try:
-                if context.active_object != self._sources[-1] or any(
-                    not is_image_empty(source) for source in self._sources
-                ):
+                current = selected_frame_sources(context)
+                if current[-1] != self._sources[-1] or set(current) != set(self._sources):
                     raise ValueError("The selected Image Empties changed during Frame")
                 apply_frame(context, self._sources, frame)
             except ReferenceError:

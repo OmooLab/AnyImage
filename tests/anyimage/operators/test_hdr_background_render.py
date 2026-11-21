@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.image import image_rgba
+from anyimage.common.image import image_pixels, image_rgba
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from tests.support.hdr_image import hdr_texture
@@ -17,14 +17,14 @@ def test_hdr_texture_rgb_remains_visible_independently_of_alpha(hdr_texture, tmp
     alpha = np.tile([0, 0.25, 0.5, 1], (3, 1)).astype(np.float32)
     path = tmp_path / "alpha.npy"
     np.save(path, alpha)
-    snapshot = HdrBackgroundInput.prepare(source)
+    snapshot = HdrBackgroundInput.prepare(source, image_pixels(source))
     try:
         result = snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture)), path)
     finally:
         cleanup_image_input(snapshot.path)
 
     # A second removal must accept its own independent-channel result and keep RGB intact.
-    snapshot = HdrBackgroundInput.prepare(result)
+    snapshot = HdrBackgroundInput.prepare(result, image_pixels(result))
     try:
         snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture)), path)
         np.testing.assert_array_equal(image_rgba(result)[..., :3], np.tile([4, 2, 0.5], (3, 4, 1)))

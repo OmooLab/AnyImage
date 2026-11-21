@@ -7,7 +7,8 @@ from tests.support.planes import surface
 def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surface, monkeypatch):
     from anyimage.operators.depth_plane import object as conversion
     from anyimage.common.image import image_empty_bounds
-    from anyimage.common.geometry_image import reference_and_median_depth
+    from anyimage.common.depth_geometry import reference_and_median_depth
+    from anyimage.common.geometry_image import camera_depth_values
     from mathutils import Matrix, Vector
 
     obj, _, _, inputs, image = surface
@@ -41,7 +42,8 @@ def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surf
     assert modifier[inputs["Thickness"].identifier] == 0
     assert modifier[inputs["Depth Image"].identifier] == image
     assert modifier[inputs["Depth Mask"].identifier] is True
-    reference, _ = reference_and_median_depth(image)
+    depth, valid = camera_depth_values(image)
+    reference, _ = reference_and_median_depth(depth[valid])
     assert modifier[inputs["Reference Depth"].identifier] == pytest.approx(
         reference * modifier[inputs["Uniform Scale"].identifier])
     assert result.data.materials[0] == material

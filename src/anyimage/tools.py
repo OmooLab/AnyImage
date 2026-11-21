@@ -1,6 +1,6 @@
 import bpy
 
-from .common.viewport import image_edit_drag_keymap, image_edit_point_keymap
+from .common.viewport import image_edit_keymap
 from .operators.cutout_tool import SelectCutoutSelection
 from .operators.frame_tool import FrameImages
 from .operators.frame_tool.operators import FRAME_TOOL_ID
@@ -13,25 +13,27 @@ class FrameTool(bpy.types.WorkSpaceTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
     bl_idname = FRAME_TOOL_ID
-    bl_label = "Frame Images"
+    # Blender uses its Operator translation context for tool labels. The
+    # zero-width suffix gives our short labels their own translation keys.
+    bl_label = "Frame\u200b"
     bl_description = (
         "Draw a rectangle to combine selected images into one image from the current view."
     )
     bl_icon = "ops.sculpt.border_mask"
     bl_operator = FrameImages.bl_idname
-    bl_keymap = image_edit_drag_keymap(FrameImages.bl_idname)
+    bl_keymap = image_edit_keymap(FrameImages.bl_idname, "CLICK_DRAG")
 
 
 class MaskTool(bpy.types.WorkSpaceTool):
     bl_space_type = "VIEW_3D"
     bl_context_mode = "OBJECT"
     bl_idname = MASK_TOOL_ID
-    bl_label = "Image Visibility"
+    bl_label = "Mask\u200b"
     bl_description = "Hide or reveal image areas with a lasso, brush, or polyline."
     bl_icon = "ops.sculpt.lasso_mask"
     bl_operator = EditImageAlpha.bl_idname
     bl_cursor = "PAINT_CROSS"
-    bl_keymap = image_edit_point_keymap(EditImageAlpha.bl_idname)
+    bl_keymap = image_edit_keymap(EditImageAlpha.bl_idname, "PRESS", "CLICK_DRAG")
 
     def draw_settings(context, layout, _tool):
         settings = context.scene.anyimage_settings
@@ -51,7 +53,7 @@ class RectifyTool(bpy.types.WorkSpaceTool):
     )
     bl_icon = "ops.sculpt.line_project"
     bl_operator = RectifyImagePerspective.bl_idname
-    bl_keymap = image_edit_point_keymap(RectifyImagePerspective.bl_idname)
+    bl_keymap = image_edit_keymap(RectifyImagePerspective.bl_idname, "PRESS")
 
 
 class CutoutTool(bpy.types.WorkSpaceTool):
@@ -62,7 +64,7 @@ class CutoutTool(bpy.types.WorkSpaceTool):
     bl_description = "Select an Image Empty area with a lasso or polyline and choose a mesh shape"
     bl_icon = "ops.mesh.primitive_sphere_add_gizmo"
     bl_operator = SelectCutoutSelection.bl_idname
-    bl_keymap = image_edit_point_keymap(SelectCutoutSelection.bl_idname)
+    bl_keymap = image_edit_keymap(SelectCutoutSelection.bl_idname, "PRESS", "CLICK_DRAG")
 
     def draw_settings(context, layout, _tool):
         settings = context.scene.anyimage_settings

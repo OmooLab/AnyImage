@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 
-from anyimage.common.selection import clip_polygon_halfplanes
+from anyimage.common.polygon import clip_polygon_halfplanes
 
 
 @pytest.mark.parametrize("focal,angle,depth", [(1, 30, .2), (4, 30, .2), (1, 0, 1e-14)])
@@ -20,7 +20,6 @@ def test_frame_overlap_matches_finite_front_samples(focal, angle, depth):
     source = frame_projection.frame_source_projection(
         projection, np.eye(4), world, (-1, 1, -1, 1), (100, 100), perspective=True
     )
-    source["image_size"] = (100, 100)
     assert frame_projection.frame_source_coordinates(source, np.array(((50, 50),)))[2][0]
     overlap = frame_projection.frame_source_overlap(source, ((0, 100), (100, 100), (100, 0), (0, 0)))
     assert len(overlap) >= 3
@@ -113,13 +112,11 @@ class FrameProjectionTest(unittest.TestCase):
             (100, 100),
             perspective=False,
         )
-        source["image_size"] = (100, 100)
-        points, depth, valid, normalized = frame_projection.frame_source_coordinates(
+        normalized, depth, valid = frame_projection.frame_source_coordinates(
             source,
             np.asarray(((25.0, 75.0),)),
         )
 
-        np.testing.assert_allclose(points[0], (25.0, 25.0))
         np.testing.assert_allclose(normalized[0], (0.25, 0.25))
         self.assertEqual(depth[0], -1.0)
         self.assertTrue(valid[0])
@@ -171,14 +168,13 @@ class FrameProjectionTest(unittest.TestCase):
             (100, 100),
             perspective=True,
         )
-        source["image_size"] = (100, 100)
-        front_points, front_depth, front_valid, _normalized = (
+        front_uv, front_depth, front_valid = (
             frame_projection.frame_source_coordinates(
                 source,
                 np.asarray(((75.0, 50.0),)),
             )
         )
-        _rear_points, rear_depth, rear_valid, _normalized = (
+        _, rear_depth, rear_valid = (
             frame_projection.frame_source_coordinates(
                 source,
                 np.asarray(((-50.0, 50.0),)),
@@ -191,12 +187,12 @@ class FrameProjectionTest(unittest.TestCase):
 
         self.assertTrue(front_valid[0])
         self.assertGreater(front_depth[0], 0.0)
-        self.assertGreaterEqual(front_points[0, 0], 0.0)
+        self.assertGreaterEqual(front_uv[0, 0], 0.0)
         self.assertFalse(rear_valid[0])
         self.assertLess(rear_depth[0], 0.0)
         self.assertTrue(overlap)
 
-        _parallel_points, _parallel_depth, parallel_valid, _normalized = (
+        _, _, parallel_valid = (
             frame_projection.frame_source_coordinates(
                 source,
                 np.asarray(((0.0, 50.0),)),

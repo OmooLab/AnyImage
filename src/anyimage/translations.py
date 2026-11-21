@@ -14,7 +14,6 @@ COMMON = {
     'The source image content or settings have changed': '源图像内容或设置已改变',
     'The conversion source image has changed': '源图像已改变',
     'Any Image': '任意图！',
-    '{gesture}: drag and release; RMB or Esc cancels': '{gesture}：拖动后松开；右键或 Esc 取消',
     'Start': '启动',
     'Error': '错误',
     'Unavailable': '不可用',
@@ -60,7 +59,6 @@ COLOR = {
     'The color reference changed during preview': '色彩参考图在预览期间发生了变化',
     'Color {color:.0f}% | Lightness {lightness:.0f}%': '色彩 {color:.0f}% | 明度 {lightness:.0f}%',
     'Fine Adjustment': '精调',
-    'Horizontal: Color | Vertical: Lightness': '水平：色彩 | 垂直：明度',
     'The color reference is no longer available': '色彩参考图已不可用',
     'The color reference contains no visible pixels': '色彩参考图不包含可见像素',
     'Color Match': '色彩匹配',
@@ -75,6 +73,7 @@ COLOR = {
 
 # 重设画框
 FRAME = {
+    'Frame\u200b': '重设画框',
     'Frame only supports still images': '重设画框仅支持静态图像',
     'The active Image Empty is not a Frame source': '活动图像空物体不在重设画框来源中',
     'Frame does not overlap the active Image Empty': '画框区域与活动图像空物体没有重叠',
@@ -82,31 +81,32 @@ FRAME = {
     'Maximum Frame Resolution': '画框分辨率上限',
     "Set the maximum length, in pixels, of the combined image's longest edge.": '设置合成图像最长边的像素数上限。',
     'Draw a rectangle to combine selected images into one image from the current view.': '绘制矩形，将选中的图像按当前视角合成为一张图像。',
+    'Draw Frame': '拖出画框',
+    'Choose Shape': '选择形状',
+    'Add Point': '添加顶点',
+    'Remove Point': '移除顶点',
+    'Apply Mask': '应用遮罩',
+    'Place Corner {index}/4': '放置角点 {index}/4',
+    'Snap to Preset': '吸附到预设比例',
     'Frame Images': '重设画框',
-    'Frame: drag a rectangle to merge selected Image Empties; RMB or Esc cancels': '重设画框：拖出矩形以合并选中的图像空物体；右键或 Esc 取消',
 }
 
 
 # 透视校正
 RECTIFY = {
-    'Move horizontally  •  Ctrl snap  •  LMB confirm  •  Backspace edit': '水平移动  •  Ctrl 吸附  •  左键确认  •  Backspace 编辑',
+    'Rectify Image Perspective': '校正图像透视',
     'Rectify only supports a still image': '透视校正仅支持静态图像',
     'Rectify quad does not overlap the source image': '校正区域与原图没有重叠',
     'Rectify quad contains no visible image pixels': '校正区域不包含可见的图像像素',
     'Rectify': '透视校正',
     'Select four corners of an image area to correct its perspective into a rectangle.': '选择图像区域的四个角，将其透视校正为矩形。',
-    'Rectify Image Perspective': '校正图像透视',
-    'Rectify: click {remaining} more corner; click order does not matter; Backspace removes, RMB or Esc cancels': '透视校正：再点击 {remaining} 个角点，顺序不限；Backspace 删除顶点，右键或 Esc 取消',
-    'Rectify: click {remaining} more corners; click order does not matter; Backspace removes, RMB or Esc cancels': '透视校正：再点击 {remaining} 个角点，顺序不限；Backspace 删除顶点，右键或 Esc 取消',
-    'Rectify Aspect {ratio:.3f}: move mouse horizontally, LMB confirms, Backspace returns, RMB or Esc cancels': '校正宽高比 {ratio:.3f}：水平移动鼠标，左键确认，Backspace 返回，右键或 Esc 取消',
 }
 
 
 # 局部显隐
 MASK = {
-    'paint with radius {radius} px': '使用半径 {radius} 像素的画笔涂绘',
-    'draw and release': '绘制后松开',
-    'Mask {gesture}: {action}; {mode}; RMB or Esc cancels': '局部显隐{gesture}：{action}；{mode}；右键或 Esc 取消',
+    'Edit Image Alpha': '编辑图像透明度',
+    'Mask\u200b': '局部显隐',
     'Shape used to edit image Alpha': '用于编辑图像透明度的形状',
     'Mode': '模式',
     'Choose how the selected or painted area changes image visibility.': '选择选区或涂绘区域如何改变图像的可见性。',
@@ -118,19 +118,14 @@ MASK = {
     'Keep visible content inside the selected or painted area and hide everything outside.': '保留选区或涂绘区域内的可见内容，隐藏区域外的所有内容。',
     'Reveal the selected or painted area while keeping other areas unchanged.': '显示选区或涂绘区域，其他区域保持不变。',
     'Hide the selected or painted area while keeping other areas unchanged.': '隐藏选区或涂绘区域，其他区域保持不变。',
-    'Image Visibility': '局部显隐',
     'Hide or reveal image areas with a lasso, brush, or polyline.': '使用套索、画笔或折线隐藏或显示图像区域。',
-    'Edit Image Alpha': '编辑图像透明度',
-    'click points; click start, double-click, or Enter to finish; Backspace removes': '点击添加顶点；点击起点、双击或按 Enter 完成；Backspace 删除顶点',
 }
 
 
 # 立体裁切
 CUTOUT = {
+    'Start Cutout Selection': '开始立体裁切选区',
     'Effective Edge Length: {length}': '实际边长：{length}',
-    'click points; click start, double-click, or Enter for shapes; Backspace removes': '点击添加顶点；点击起点、双击或按 Enter 选择形状；Backspace 删除顶点',
-    'drag and release for shapes': '拖动后松开以选择形状',
-    'Cutout {gesture}: {action}; RMB or Esc cancels': '立体裁切{gesture}：{action}；右键或 Esc 取消',
     'Minimum Relative Edge Length': '最小相对边长',
     "Minimum target edge length as a percentage of the Cutout bounds' longest side": '最小目标边长占立体裁切区域包围框最长边的百分比',
     'Boundary Padding': '边界扩展',
@@ -151,7 +146,6 @@ CUTOUT = {
     'Flat': '面片',
     'Solid': '体块',
     'Cutout Selection to Shape': '将立体裁切选区转换为形状',
-    'Start Cutout Selection': '开始立体裁切选区',
     'Select an Image Empty area with a lasso or polyline, then choose its mesh shape': '使用套索或折线选择图像空物体的区域，然后选择网格形状',
     'Exclude areas below this opacity from the Cutout outline. Higher values exclude more semi-transparent edges.': '从立体裁切轮廓中排除不透明度低于此值的区域。值越高，排除的半透明边缘越多。',
 }

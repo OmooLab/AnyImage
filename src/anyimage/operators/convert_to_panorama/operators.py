@@ -2,14 +2,17 @@
 
 import bpy
 
-from ...common.ai import geometry_job_parameters, invoke_ai_setup_if_needed, report_ai_error, require_environment, require_input_path, require_model
+from ...ai_preferences import configured_geometry_model, configured_max_ai_input_size
+from ...common.ai import (
+    geometry_job_parameters, invoke_ai_setup_if_needed, report_ai_error, require_environment, require_model,
+)
+from ...common.image import (
+    image_content_signature, image_pixels, image_rgba, is_animated_image, is_image_empty, require_image_empty,
+)
+from ...common.image_input import cleanup_image_input
+from ...common.job_image import prepare_recognition_input
 from ...common.panorama import panorama_crop_bounds, report_panorama_crop
-from ...common.job_image import material_analysis_input
-from ...common.image import is_image_empty, is_animated_image, require_image_empty, image_content_signature
-from ...common.color_image import prepare_material_color_input, cleanup_material_color_input
 from ...preferences import addon_preferences
-from ...ai_preferences import configured_max_ai_input_size
-from ...ai_preferences import configured_geometry_model
 from ...server.model_catalog import DEFAULT_GEOMETRY_MODEL_KEY
 from ...runtime import JobOperator
 from ...server.media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, MAX_MAX_AI_INPUT_SIZE, MIN_MAX_AI_INPUT_SIZE
@@ -24,30 +27,26 @@ class GeneratePanorama(JobOperator, bpy.types.Operator):
     job_type = "generate_panorama_geometry"
     starting_message = "Preparing panorama conversion"
 
-    input_path: bpy.props.StringProperty(options=_HIDDEN)
-    color_path: bpy.props.StringProperty(options=_HIDDEN)
+    _input_path = None
+    crop_bounds: bpy.props.IntVectorProperty(size=4, options=_HIDDEN)
     source_object_name: bpy.props.StringProperty(options=_HIDDEN)
     model: bpy.props.StringProperty(default=DEFAULT_GEOMETRY_MODEL_KEY, options=_HIDDEN)
     resolution_level: bpy.props.IntProperty(default=3, min=0, max=9, options=_HIDDEN)
     max_input_size: bpy.props.IntProperty(default=DEFAULT_MAX_AI_INPUT_SIZE,
         min=MIN_MAX_AI_INPUT_SIZE, max=MAX_MAX_AI_INPUT_SIZE, options=_HIDDEN)
 
-    def execute(self, context):
-        try:
-            self._source_object = require_image_empty(self.source_object_name)
-            self._source_image = self._source_object.data
-            self._source_signature = image_content_signature(self._source_image)
-        except RuntimeError as error:
-            cleanup_material_color_input(self.color_path)
-            report_ai_error(self, error)
-            return {"CANCELLED"}
-        return super().execute(context)
-
     def request(self, context):
         require_environment()
         require_model(self.model)
+        self._source_object = require_image_empty(self.source_object_name)
+        image = self._source_image = self._source_object.data
+        pixels = image_pixels(image)
+        self._source_signature = image_content_signature(image, pixels)
+        left, top, right, bottom = self.crop_bounds
+        cropped = image_rgba(image, pixels)[top:bottom, left:right]
+        self._input_path = prepare_recognition_input(image, cropped)
         return {
-            **geometry_job_parameters(require_input_path(self.input_path), self.model, self.resolution_level),
+            **geometry_job_parameters(self._input_path, self.model, self.resolution_level),
             "max_input_size": int(self.max_input_size),
         }
 
@@ -56,7 +55,7 @@ class GeneratePanorama(JobOperator, bpy.types.Operator):
         return "Panorama is ready"
 
     def cleanup(self):
-        cleanup_material_color_input(self.color_path)
+        cleanup_image_input(self._input_path)
         self._source_object = self._source_image = self._source_signature = None
 
 
@@ -88,22 +87,15 @@ class ConvertToPanorama(bpy.types.Operator):
         if setup is not None:
             return setup
         report_panorama_crop(self, image.size, bounds)
-        color_path = None
         try:
             preferences = addon_preferences(context)
-            color_path = prepare_material_color_input(image, bounds)
-            path = material_analysis_input(color_path)
             result = bpy.ops.anyimage.generate_panorama(
-                input_path=str(path), color_path=str(color_path), source_object_name=source.name,
+                source_object_name=source.name, crop_bounds=bounds,
                 model=configured_geometry_model(context),
                 resolution_level=int(getattr(preferences, "geometry_resolution_level", 3)),
                 max_input_size=configured_max_ai_input_size(context),
             )
         except (OSError, RuntimeError, ValueError) as error:
-            cleanup_material_color_input(color_path)
             report_ai_error(self, error)
             return {"CANCELLED"}
-        if "CANCELLED" in result:
-            cleanup_material_color_input(color_path)
-            return {"CANCELLED"}
-        return {"FINISHED"}
+        return {"CANCELLED"} if "CANCELLED" in result else {"FINISHED"}

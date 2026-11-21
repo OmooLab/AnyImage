@@ -188,28 +188,6 @@ class PreferencesTest(BlenderTestCase):
         return operators
 
 
-    def test_depth_plane_request_includes_the_global_ai_input_limit(self):
-        operator = self.depth_plane_operators.GeneratePlaneGeometry()
-        operator.plane_type = "DEPTH"
-        operator.input_path = __file__
-        operator.source_object_name = "Source"
-        operator.model = self.anyimage.ai_preferences.DEFAULT_GEOMETRY_MODEL_KEY
-        operator.resolution_level = 5
-        operator.max_input_size = 1536
-        context = SimpleNamespace(
-            scene=SimpleNamespace(anyimage_settings=SimpleNamespace())
-        )
-        with (
-            patch.object(self.depth_plane_operators, "require_environment"),
-            patch.object(self.depth_plane_operators, "require_model"),
-            patch.object(self.depth_plane_operators, "require_input_path", return_value=Path("input.png")),
-            patch.object(self.ai, "configured_device", return_value="cpu"),
-        ):
-            parameters = operator.request(context)
-
-        self.assertEqual(parameters["max_input_size"], 1536)
-
-
     def test_upscale_execute_reads_model_and_size_from_preferences(self):
         source_image = SimpleNamespace(
             name="Original",

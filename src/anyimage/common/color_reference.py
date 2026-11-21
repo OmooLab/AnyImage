@@ -7,7 +7,10 @@ import numpy as np
 
 from .color_match import ColorReference, prepare_color_reference, resize_rgba_proxy
 from .color_space import image_rgba_to_linear, linear_rgb_to_srgb
-from .image import image_rgba, is_color_reference_candidate, pixel_digest
+from .image import (
+    CLIPBOARD_HASH_PROPERTY, COLOR_REFERENCE_PROPERTY, IMAGE_EMPTY_REFERENCE_PROPERTY,
+    TEMPORARY_IMAGE_PREVIEW_PROPERTY, image_rgba, is_image_empty, is_static_image, pixel_digest,
+)
 
 
 class PreparedReference(NamedTuple):
@@ -19,6 +22,23 @@ class PreparedReference(NamedTuple):
 
 _references = {}
 _previews = None
+
+
+def is_color_reference_candidate(image, *, empty_images=None):
+    """Return whether a static image is eligible for the scene reference gallery."""
+    if not is_static_image(image) or image.get(TEMPORARY_IMAGE_PREVIEW_PROPERTY):
+        return False
+    if image.get(COLOR_REFERENCE_PROPERTY) or image.get(CLIPBOARD_HASH_PROPERTY) or image.get(IMAGE_EMPTY_REFERENCE_PROPERTY):
+        return True
+    if empty_images is not None:
+        return image in empty_images
+    return any(is_image_empty(obj) and obj.data == image for obj in bpy.data.objects)
+
+
+def color_reference_candidates():
+    """Collect reference images in Blender order with one scan of the objects."""
+    empty_images = {obj.data for obj in bpy.data.objects if is_image_empty(obj)}
+    return [image for image in bpy.data.images if is_color_reference_candidate(image, empty_images=empty_images)]
 
 
 def color_reference_preview_icon(image):

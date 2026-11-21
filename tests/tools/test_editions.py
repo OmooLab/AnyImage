@@ -121,7 +121,7 @@ shape_object = importlib.import_module('second_repo.anyimage.operators.cutout_to
 mesh = SimpleNamespace(vertices=np.array([[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1]]),
                        faces=[(0, 1, 2, 3)], uv=np.array([[0, 0], [1, 0], [1, 1], [0, 1]]), balloon=np.zeros(4))
 for shape in ('FLAT', 'SOLID'):
-    result = shape_object.create_shape_object(bpy.context, source, shape, (0, 0, 4, 4), mesh, color_image=image)
+    result = shape_object.create_shape_object(bpy.context, source, shape, (-1, 1, -1, 1), mesh, color_image=image)
     assert len(result.data.vertices) == 4
     assert result.modifiers[0].node_group.name == 'O Cutout'
 bpy.context.view_layer.objects.active = result

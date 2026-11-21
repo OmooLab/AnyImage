@@ -3,7 +3,8 @@
 import bpy
 
 from ...common.object import get_modifier_input
-from .materialization import PROTOCOL_ATTRIBUTES, materialize_mesh_and_textures, mesh_bake_modifiers
+from .geometry import PROTOCOL_ATTRIBUTES, mesh_bake_modifiers
+from .materialization import materialize_mesh_and_textures
 
 
 class BakeMesh(bpy.types.Operator):
@@ -32,6 +33,7 @@ class BakeMesh(bpy.types.Operator):
         except (RuntimeError, ValueError, TypeError, MemoryError, ReferenceError) as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
+        source_mesh = obj.data
         obj.data = mesh
         for modifier in modifiers:
             obj.modifiers.remove(modifier)
@@ -40,6 +42,8 @@ class BakeMesh(bpy.types.Operator):
             if name in PROTOCOL_ATTRIBUTES:
                 del obj[name]
         obj.update_tag(refresh={"DATA"})
+        if source_mesh.users == 0:
+            bpy.data.meshes.remove(source_mesh)
         for image in depth_images:
             if image.users == 0:
                 bpy.data.images.remove(image)

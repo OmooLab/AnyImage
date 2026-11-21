@@ -49,6 +49,30 @@ def apply(context, sources):
     return image_rgba(result.data)[0, 0]
 
 
+def test_frame_outside_active_image_skips_pixel_reads(frame_context, monkeypatch):
+    active = image_empty((1, 0, 0, 1))
+    other = image_empty((0, 1, 0, 1))
+    frame_context.active_object = active
+    monkeypatch.setattr(operators, "image_pixels", lambda _: pytest.fail("Unexpected pixel read"))
+    with pytest.raises(operators.ImageEditWarning, match="does not overlap"):
+        operators.apply_frame(frame_context, (other, active), ((4, 6), (6, 6), (6, 4), (4, 4)))
+
+
+def test_frame_composites_two_empties_sharing_one_image(frame_context, monkeypatch):
+    from unittest.mock import Mock
+
+    active = image_empty((1, 0, 0, .5), floating=True)
+    other = active.copy()
+    bpy.context.collection.objects.link(other)
+    read = Mock(wraps=operators.image_pixels)
+    monkeypatch.setattr(operators, "image_pixels", read)
+
+    result = apply(frame_context, (other, active))
+
+    read.assert_called_once()
+    np.testing.assert_allclose(result[3], .75, atol=1e-6)
+
+
 def test_byte_resampling_averages_light_in_linear_space(frame_context):
     source = image_empty([[(0, 0, 0, 1), (1, 1, 1, 1)]])
     result = apply(frame_context, (source,))

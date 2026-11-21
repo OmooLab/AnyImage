@@ -2,7 +2,8 @@
 
 import bpy
 
-from ...common.geometry_image import (
+from ...common.geometry_image import camera_depth_values
+from ...common.depth_geometry import (
     depth_limit_preset,
     depth_node_direction,
     depth_uniform_scale,
@@ -82,7 +83,7 @@ def create_shape_object(
     context,
     source_object,
     shape,
-    content_bounds,
+    bounds,
     base_shape,
     *,
     content_values=None,
@@ -94,11 +95,6 @@ def create_shape_object(
 ):
     from mathutils import Matrix
 
-    bounds = crop_plane_bounds(
-        source_object,
-        content_bounds,
-        tuple(source_object.data.size),
-    )
     material = None
     mesh = None
     mesh_object = None
@@ -119,19 +115,17 @@ def create_shape_object(
                 raise ValueError("Depth Shape requires a Depth texture and metadata")
             front_size = depth_metadata["image_size"]
             reference_mask = build_reference_mask(content_values, front_size)
-            model_reference, model_median = reference_and_median_depth(depth_image, reference_mask)
-            uniform_scale = depth_uniform_scale(
-                source_object,
-                depth_metadata,
-                model_reference,
-                bounds,
-            )
+            depth, valid = camera_depth_values(depth_image)
+            if reference_mask.shape != depth.shape:
+                raise ValueError("Depth reference mask dimensions do not match")
+            model_reference, model_median = reference_and_median_depth(depth[valid & reference_mask])
+            uniform_scale = depth_uniform_scale(bounds, depth_metadata, model_reference)
             depth_reference = model_reference * uniform_scale
             depth_limit = depth_limit_preset(model_median, model_reference, uniform_scale)
             if shape == "DEPTH_SYMMETRY":
                 depth_direction = depth_node_direction(
                     fit_symmetry_depth_direction(
-                        depth_image,
+                        depth, valid,
                         base_shape.vertices,
                         base_shape.uv,
                         uniform_scale,
@@ -221,8 +215,9 @@ def create_cutout_shape(
     gesture="LASSO",
     report=None,
 ):
+    bounds = crop_plane_bounds(source_object, content_bounds, source_object.data.size)
     base_shape = build_cutout_shape(
-        context, source_object, edge_length, content_values, content_bounds,
+        context, source_object, edge_length, content_values, bounds,
         alpha_threshold, fine_outline, report,
     )
     pad_cutout_images(
@@ -230,14 +225,13 @@ def create_cutout_shape(
         depth_image,
         depth_metadata,
         base_shape.mask,
-        0.5,
         boundary_padding,
     )
     result = create_shape_object(
         context,
         source_object,
         shape,
-        content_bounds,
+        bounds,
         base_shape,
         content_values=content_values,
         depth_image=depth_image,

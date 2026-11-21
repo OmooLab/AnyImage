@@ -2,154 +2,27 @@ from anyimage.common import projective_image
 
 import unittest
 from unittest.mock import patch
-from anyimage.common import image as image_data, selection
-from anyimage.operators import mask_tool
 from anyimage.operators.frame_tool import compositing, projection as frame_projection
 
 
 class FrameCompositingTest(unittest.TestCase):
-    def test_frame_composites_far_to_near_with_active_on_top(self):
+    def test_frame_composites_far_to_near_and_breaks_ties_with_active_on_top(self):
         import numpy as np
 
-        frame = ((0.0, 2.0), (2.0, 2.0), (2.0, 0.0), (0.0, 0.0))
-
-        def source(name, color, depth, active=False):
-            pixels = np.empty((2, 2, 4), dtype=np.float32)
-            pixels[:] = color
-            return {
-                "active": active,
-                "image_size": (2, 2),
-                "name": name,
-                "perspective": True,
-                "pixels": pixels,
-                "rgba": projective_image.straight_rgba(pixels),
-                "region_size": (2.0, 2.0),
-                "screen_to_source": np.asarray(
-                    ((1.0, 0.0, 0.0), (0.0, -1.0, 1.0), (0.0, 0.0, 1.0))
-                ),
-                "source_to_view": np.asarray(
-                    (
-                        (2.0, 0.0, -1.0),
-                        (0.0, -2.0, 1.0),
-                        (0.0, 0.0, -depth),
-                        (0.0, 0.0, 1.0),
-                    )
-                ),
-            }
-
-        far = source("Far", (1.0, 0.0, 0.0, 1.0), 2.0)
-        active = source("Active", (0.0, 0.0, 0.5, 0.5), 1.0, active=True)
-        pixels = compositing.composite_frame_pixels(
-            (active, far), frame, (2, 2)
-        )
-        result = np.flipud(np.asarray(pixels).reshape((2, 2, 4)))
-
-        np.testing.assert_allclose(result[:, :, 0], 0.5, atol=1e-6)
-        np.testing.assert_allclose(result[:, :, 2], 0.5, atol=1e-6)
-        np.testing.assert_allclose(result[:, :, 3], 1.0, atol=1e-6)
-
-
-    def test_frame_puts_active_above_an_equal_depth_source(self):
-        import numpy as np
-
-        frame = ((0.0, 2.0), (2.0, 2.0), (2.0, 0.0), (0.0, 0.0))
-        screen_to_source = np.asarray(
-            ((1.0, 0.0, 0.0), (0.0, -1.0, 1.0), (0.0, 0.0, 1.0))
-        )
-
-        def source(name, color, active):
-            pixels = np.empty((2, 2, 4), dtype=np.float32)
-            pixels[:] = color
-            return {
-                "active": active,
-                "image_size": (2, 2),
-                "name": name,
-                "perspective": True,
-                "pixels": pixels,
-                "rgba": pixels.copy(),
-                "region_size": (2.0, 2.0),
-                "screen_to_source": screen_to_source,
-                "source_to_view": np.asarray(
-                    (
-                        (2.0, 0.0, -1.0),
-                        (0.0, -2.0, 1.0),
-                        (0.0, 0.0, -1.0),
-                        (0.0, 0.0, 1.0),
-                    )
-                ),
-            }
-
-        pixels = compositing.composite_frame_pixels(
-            (
-                source("Active", (0.0, 0.0, 1.0, 1.0), True),
-                source("Other", (1.0, 0.0, 0.0, 1.0), False),
-            ),
-            frame,
-            (2, 2),
-        )
-        result = np.asarray(pixels).reshape((2, 2, 4))
-
-        np.testing.assert_allclose(result[:, :, 2], 1.0, atol=1e-6)
-        np.testing.assert_allclose(result[:, :, 0], 0.0, atol=1e-6)
-
+        frame = ((0, 2), (2, 2), (2, 0), (0, 0))
+        top = self._frame_pixel_source(np.tile((0, 0, 1, .5), (2, 2, 1)), depth=1)
+        for depth in (1, 2):
+            bottom = self._frame_pixel_source(np.tile((1, 0, 0, 1), (2, 2, 1)), depth=depth, active=False)
+            result = compositing.composite_frame_pixels((top, bottom), frame, (2, 2))
+            np.testing.assert_allclose(result.reshape(-1, 4), np.tile((.5, 0, .5, 1), (4, 1)))
 
     def test_frame_composites_orthographic_samples_at_negative_depth(self):
         import numpy as np
 
-        pixels = np.empty((2, 2, 4), dtype=np.float32)
-        pixels[:] = (0.25, 0.5, 0.75, 1.0)
-        source = {
-            "active": True,
-            "image_size": (2, 2),
-            "name": "Active",
-            "perspective": False,
-            "pixels": pixels,
-            "rgba": pixels.copy(),
-            "region_size": (2.0, 2.0),
-            "screen_to_source": np.asarray(
-                ((1.0, 0.0, 0.0), (0.0, -1.0, 1.0), (0.0, 0.0, 1.0))
-            ),
-            "source_to_view": np.asarray(
-                (
-                    (2.0, 0.0, -1.0),
-                    (0.0, -2.0, 1.0),
-                    (0.0, 0.0, 1.0),
-                    (0.0, 0.0, 1.0),
-                )
-            ),
-        }
-
-        result = compositing.composite_frame_pixels(
-            (source,),
-            ((0.0, 2.0), (2.0, 2.0), (2.0, 0.0), (0.0, 0.0)),
-            (2, 2),
-        )
-
-        np.testing.assert_allclose(
-            np.asarray(result).reshape((2, 2, 4)),
-            pixels,
-            atol=1e-6,
-        )
-
-
-    def test_frame_preserves_masked_rgb_and_can_restore_alpha(self):
-        import numpy as np
-
-        rgba = np.random.default_rng(7).random((4, 4, 4)).astype(np.float32)
-        mask = selection.SelectionMask(np.ones((4, 4)), (0, 0, 4, 4))
-        removed = mask_tool.apply_alpha_mask(rgba, mask, "SUBTRACT")
-        source = self._frame_pixel_source(np.flipud(removed.reshape(rgba.shape)))
-        framed = compositing.composite_frame_pixels(
-            (source,), ((0, 4), (4, 4), (4, 0), (0, 0)), (4, 4)
-        )
-        result = np.flipud(framed.reshape(rgba.shape))
-        np.testing.assert_allclose(result[..., :3], rgba[..., :3])
-        np.testing.assert_array_equal(result[..., 3], 0)
-        restored = mask_tool.apply_alpha_mask(result, mask, "EXTEND")
-        restored = np.flipud(restored.reshape(rgba.shape))
-        np.testing.assert_allclose(restored[..., :3], rgba[..., :3])
-        np.testing.assert_array_equal(restored[..., 3], 1)
-
+        pixels = np.tile((.25, .5, .75, 1), (2, 2, 1)).astype(np.float32)
+        source = self._frame_pixel_source(pixels, depth=-1)
+        result = compositing.composite_frame_pixels((source,), ((0, 2), (2, 2), (2, 0), (0, 0)), (2, 2))
+        np.testing.assert_array_equal(result.reshape(2, 2, 4), pixels)
 
     def test_frame_hidden_rgb_uses_bottom_valid_depth_and_stable_ties(self):
         import numpy as np

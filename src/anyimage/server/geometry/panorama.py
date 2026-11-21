@@ -37,15 +37,19 @@ def view_rays(size):
     return np.stack((x, y, np.ones_like(x)), axis=-1)
 
 
-def sample_panorama(image, directions, *, order=1):
-    from scipy.ndimage import map_coordinates
-
+def panorama_sample_coordinates(directions, image_shape):
+    """Map view directions to row and column coordinates in a seam-padded panorama."""
     directions = directions / np.linalg.norm(directions, axis=-1, keepdims=True)
     u = np.arctan2(directions[..., 1], directions[..., 0]) / (2 * np.pi) % 1
     v = np.arccos(np.clip(directions[..., 2], -1, 1)) / np.pi
-    height, width = image.shape[:2]
+    height, width = image_shape
+    return np.clip(v * height - 0.5, 0, height - 1), u * width + 0.5
+
+
+def sample_panorama(image, coords, *, order=1):
+    from scipy.ndimage import map_coordinates
+
     padded = np.concatenate((image[:, -1:], image, image[:, :1]), axis=1)
-    coords = (np.clip(v * height - 0.5, 0, height - 1), u * width + 0.5)
     if image.ndim == 2:
         return map_coordinates(padded, coords, order=order, mode="nearest")
     return np.stack([map_coordinates(padded[..., c], coords, order=order,

@@ -21,13 +21,6 @@ def create_session(model_directory, requested_device="auto"):
     return create_runtime_session(path, requested_device)
 
 
-def preprocess(image):
-    import numpy as np
-
-    image_array = np.asarray(image.convert("RGB"), dtype=np.float32) / 255.0
-    return np.ascontiguousarray(image_array.transpose(2, 0, 1)[None])
-
-
 def _run(session, input_tensor, *, release_memory=True):
     import numpy as np
 
@@ -86,6 +79,7 @@ def infer(session, image, cancel_check=None, *, tile_border=TILE_BORDER):
     if not 0 <= tile_border < TILE_SIZE // 2:
         raise ValueError("Invalid upscale tile border")
     core_size = TILE_SIZE - 2 * tile_border
+    border = tile_border * SCALE
     extra_height = (-height) % core_size
     extra_width = (-width) % core_size
     padded = _pad_source(source, extra_height, extra_width, tile_border)
@@ -96,27 +90,19 @@ def infer(session, image, cancel_check=None, *, tile_border=TILE_BORDER):
             core_width = min(core_size, width - left)
             if cancel_check is not None:
                 cancel_check()
-            tile = Image.fromarray(
-                padded[top : top + TILE_SIZE, left : left + TILE_SIZE],
-                mode="RGB",
-            )
+            tile = padded[top : top + TILE_SIZE, left : left + TILE_SIZE]
+            tensor = np.ascontiguousarray(tile.transpose(2, 0, 1)[None], dtype=np.float32)
+            tensor /= 255.0
             final_tile = (
                 top + core_size >= height
                 and left + core_size >= width
             )
-            pixels = _prediction_pixels(
-                _run(
-                    session,
-                    preprocess(tile),
-                    release_memory=final_tile,
-                )
-            )
-            border = tile_border * SCALE
+            prediction = _run(session, tensor, release_memory=final_tile)
+            core = prediction[:, :, border : border + core_height * SCALE,
+                              border : border + core_width * SCALE]
             output[
                 top * SCALE : (top + core_height) * SCALE,
                 left * SCALE : (left + core_width) * SCALE,
-            ] = pixels[
-                border : border + core_height * SCALE,
-                border : border + core_width * SCALE,
-            ]
+            ] = _prediction_pixels(core)
+            del core, prediction
     return Image.fromarray(output, mode="RGB")

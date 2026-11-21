@@ -8,7 +8,6 @@ from PIL import Image
 from anyimage.common import color_image as color_images
 from anyimage.common import image as images
 from anyimage.common import material
-from tests.support.color_image import color_image
 
 
 @pytest.fixture
@@ -141,7 +140,7 @@ def test_material_configures_the_image_selected_by_its_caller(color_data, entry,
         key: (image.colorspace_settings.name, image.alpha_mode, images.image_pixels(image))
         for key, image in data_textures.items()
     }
-    color = color_image(source, (0, 0, 2, 2), images.image_rgba(source))
+    color = color_images.create_material_color_image(source, (0, 0, 2, 2), images.image_rgba(source))
     first = material.create_image_material(source, color, shadeless=shadeless, scene=scene, **data_textures)
     original_color = color_texture(first)
     assert original_color.colorspace_settings.name == "AgX Base sRGB"

@@ -2,7 +2,7 @@ import bpy
 
 from ..common.image import image_empty_bounds, is_image_empty
 from ..common.material import create_image_material
-from ..common.color_image import material_color_image, require_static_color_image
+from ..common.color_image import material_color_image
 from ..common.image_plane import IMAGE_PLANE_NODE_GROUP_NAME, build_image_plane_matrix, create_image_plane_mesh
 from ..common.node import load_node_group
 from ..common.object import finalize_object_result
@@ -47,17 +47,13 @@ class ConvertToPlane(bpy.types.Operator):
 
     def execute(self, context):
         source_object = context.object
-        try:
-            require_static_color_image(source_object.data)
-        except ValueError as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
         material = None
         try:
             with material_color_image(source_object.data) as color_image:
                 material = create_image_material(
                     source_object.data,
                     color_image,
+                    color_is_full_source=True,
                     scene=context.scene,
                 )
                 create_plane_object(context, source_object, material)

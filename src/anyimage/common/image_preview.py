@@ -100,39 +100,17 @@ def preview_draw_bounds(region_size, aspect_ratio):
     )
 
 
-def draw_preview_frame(bounds):
-    import gpu
-    from gpu_extras.batch import batch_for_shader
-
-    left, bottom, width, height = bounds
-    vertices = (
-        (left, bottom),
-        (left + width, bottom),
-        (left + width, bottom + height),
-        (left, bottom + height),
-        (left, bottom),
-    )
-    shader = gpu.shader.from_builtin("UNIFORM_COLOR")
-    batch = batch_for_shader(shader, "LINE_STRIP", {"pos": vertices})
-    gpu.state.blend_set("ALPHA")
-    gpu.state.line_width_set(2.0)
-    shader.bind()
-    shader.uniform_float("color", (0.12, 0.52, 1.0, 1.0))
-    batch.draw(shader)
-    gpu.state.line_width_set(1.0)
-    gpu.state.blend_set("NONE")
-
-
-def draw_centered_text(text, center_x, baseline_y, size, color):
+def draw_preview_caption(region, text):
     import blf
 
     font_id = 0
-    blf.size(font_id, size)
+    blf.size(font_id, 18)
     width, _height = blf.dimensions(font_id, text)
-    x = center_x - width * 0.5
+    x = (region.width - width) * 0.5
+    baseline_y = 32
     blf.position(font_id, x + 1.0, baseline_y - 1.0, 0.0)
     blf.color(font_id, 0.0, 0.0, 0.0, 0.9)
     blf.draw(font_id, text)
     blf.position(font_id, x, baseline_y, 0.0)
-    blf.color(font_id, *color)
+    blf.color(font_id, 1.0, 1.0, 1.0, 1.0)
     blf.draw(font_id, text)

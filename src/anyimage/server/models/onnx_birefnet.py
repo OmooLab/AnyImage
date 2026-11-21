@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from .image_tensor import imagenet_rgb_tensor
 from .onnx_runtime import create_session as create_runtime_session
 from .onnx_runtime import run_session
 
@@ -11,15 +12,10 @@ def create_session(model_directory, requested_device="auto"):
 
 
 def preprocess(image, size):
-    import numpy as np
     from PIL import Image
 
     resized = image.convert("RGB").resize((size, size), Image.Resampling.BILINEAR)
-    array = np.asarray(resized, dtype=np.float32) / 255.0
-    array = (array - np.array((0.485, 0.456, 0.406), dtype=np.float32)) / np.array(
-        (0.229, 0.224, 0.225), dtype=np.float32,
-    )
-    return np.ascontiguousarray(array.transpose(2, 0, 1)[None])
+    return imagenet_rgb_tensor(resized)
 
 
 def infer_alpha(session, image):

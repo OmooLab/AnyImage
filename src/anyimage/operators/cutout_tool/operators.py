@@ -9,7 +9,8 @@ from ...properties import (
 from ...common.image import image_rgba, require_image_empty, is_animated_image
 from ...common.color_image import material_color_image
 from ...common.selection import ImageEditWarning, SelectionPath, rasterize_selection_path
-from ...common.viewport import ImageGesture, deserialize_matrix, report_image_edit_exception
+from ...common.image_gesture import ImageGesture
+from ...common.viewport import report_image_edit_exception
 from .geometry import cutout_content_values
 from .object import create_cutout_shape
 from .interaction import open_shape_pie
@@ -73,12 +74,11 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
         "Select an Image Empty area with a lasso or polyline, then choose its mesh shape"
     )
     bl_options = {"INTERNAL"}
+    finish_label = "Choose Shape"
     active_tool_id = "anyimage.cutout_lasso"
-    resolve_on_press = True
     gesture: cutout_gesture_property()
 
     source_object_name: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
-    source_matrix_data: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
 
     show_shape_menu = staticmethod(open_shape_pie)
 
@@ -92,7 +92,7 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
             transform = screen_to_grid_matrix(
                 (context.region.width, context.region.height),
                 context.region_data.perspective_matrix,
-                deserialize_matrix(self.source_matrix_data),
+                self._source_matrix,
                 context.scene.anyimage_settings.cutout_edge_length,
             )
         except ValueError:
@@ -108,21 +108,6 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
 
     def _read_gesture_settings(self, context):
         self.gesture = context.scene.anyimage_settings.cutout_gesture
-
-    def _set_status(self, context):
-        action = (
-            "click points; click start, double-click, or Enter for shapes; Backspace removes"
-            if self.gesture == "POLYLINE"
-            else "drag and release for shapes"
-        )
-        context.workspace.status_text_set(
-            bpy.app.translations.pgettext_iface(
-                "Cutout {gesture}: {action}; RMB or Esc cancels"
-            ).format(
-                gesture=bpy.app.translations.pgettext_iface(self.gesture.title()),
-                action=bpy.app.translations.pgettext_iface(action),
-            )
-        )
 
     def invoke(self, context, event):
         self._polyline_confirm_type = None
@@ -146,12 +131,7 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
             return {"RUNNING_MODAL"}
         return ImageGesture._modal_polyline(self, context, event)
 
-    def _submit_selection_path(self, context, selection_path):
-        try:
-            source_object = require_image_empty(self.source_object_name)
-        except RuntimeError as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
+    def _submit_selection_path(self, context, source_object, selection_path):
         self.show_shape_menu(
             context,
             self._pie_event,

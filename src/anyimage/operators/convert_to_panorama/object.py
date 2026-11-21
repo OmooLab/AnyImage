@@ -7,12 +7,13 @@ import bpy
 
 from ...common.color_image import material_color_image
 from ...common.geometry_image import load_depth_result_image, normal_data_name
+from ...common.image import image_rgba
 from ...common.material import create_image_material
 from ...common.node import load_node_group
 from ...common.object import (
     finalize_object_result,
     modifier_input_identifier,
-    require_conversion_source,
+    read_conversion_source,
     set_modifier_input,
 )
 from ...common.panorama import create_panorama_world
@@ -33,11 +34,13 @@ def load_panorama_metadata(path):
 
 
 def create_panorama_from_result(context, result, operator):
-    source = require_conversion_source(operator)
+    source, pixels = read_conversion_source(operator)
     depth = relief = normal = material = mesh = obj = world = None
     previous_world = context.scene.world
     try:
-        with material_color_image(input_path=operator.color_path) as color:
+        with material_color_image(
+            source.data, bounds=operator.crop_bounds, rgba=image_rgba(source.data, pixels),
+        ) as color:
             metadata = load_panorama_metadata(result.file("depth_metadata"))
             group = load_node_group("O Depth Panorama")
             depth = load_depth_result_image(result.file("depth"), source, metadata)
@@ -45,6 +48,7 @@ def create_panorama_from_result(context, result, operator):
             relief.colorspace_settings.is_data = True
             material = create_image_material(
                 source.data, color,
+                color_is_full_source=tuple(color.size) == tuple(source.data.size),
                 normal_image=relief, normal_space="OBJECT",
                 scene=context.scene, texture_extension="REPEAT", emission_strength=1.0, panorama=True)
             material.use_backface_culling = True

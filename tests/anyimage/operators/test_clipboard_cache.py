@@ -8,9 +8,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from anyimage.common.color_reference import is_color_reference_candidate
 from anyimage.common import image as images
 from anyimage.common.selection import SelectionMask
-from anyimage.operators.clipboard_image import actions
+from anyimage.operators.clipboard_image import actions, cache
 from anyimage.operators.mask_tool import EditImageAlpha
 
 
@@ -25,11 +26,12 @@ def clipboard():
 
 @pytest.mark.parametrize("edit", ["paint", "packed", "hidden_rgb", "size", "space", "alpha", "unreadable"])
 def test_changed_cache_is_skipped_without_modifying_candidate(clipboard, edit, monkeypatch):
-    original, reused = actions.acquire_packed_image(clipboard, ".png")
-    assert images.is_color_reference_candidate(original)
+    original, reused = cache.acquire_packed_image(clipboard, ".png")
+    assert original.name == "Clipboard" and original.packed_file
+    assert is_color_reference_candidate(original)
     expected = images.image_pixels(original)
     assert not reused
-    assert actions.acquire_packed_image(clipboard, ".png") == (original, True)
+    assert cache.acquire_packed_image(clipboard, ".png") == (original, True)
     if edit in {"paint", "packed"}:
         original.pixels[0] = 1
         if edit == "packed":
@@ -43,15 +45,15 @@ def test_changed_cache_is_skipped_without_modifying_candidate(clipboard, edit, m
     elif edit == "alpha":
         original.alpha_mode = "PREMUL"
     else:
-        read = actions._clipboard_content_hash
+        read = cache._clipboard_content_hash
         def fail_candidate(image):
             if image == original:
                 raise RuntimeError("Unreadable candidate")
             return read(image)
-        monkeypatch.setattr(actions, "_clipboard_content_hash", fail_candidate)
+        monkeypatch.setattr(cache, "_clipboard_content_hash", fail_candidate)
     state = images.image_content_state(original)
     current_pixels = original.pixels[:]
-    replacement, reused = actions.acquire_packed_image(clipboard, ".png")
+    replacement, reused = cache.acquire_packed_image(clipboard, ".png")
     assert replacement != original and not reused
     np.testing.assert_array_equal(images.image_pixels(replacement), expected)
     assert (original.colorspace_settings.name, original.alpha_mode) == (state["colorspace"], state["alpha_mode"])
@@ -61,7 +63,7 @@ def test_changed_cache_is_skipped_without_modifying_candidate(clipboard, edit, m
 
 @pytest.mark.parametrize("shared", [False, True])
 def test_mask_edit_then_paste_preserves_original_clipboard_content(clipboard, shared):
-    original, _ = actions.acquire_packed_image(clipboard, ".png")
+    original, _ = cache.acquire_packed_image(clipboard, ".png")
     expected = images.image_pixels(original)
     owner = bpy.data.objects.new("Clipboard Empty", None)
     owner.empty_display_type = "IMAGE"
@@ -76,7 +78,7 @@ def test_mask_edit_then_paste_preserves_original_clipboard_content(clipboard, sh
     edited_pixels = images.image_pixels(edited)
     assert edited.packed_file
     assert (edited == original) == (not shared)
-    pasted, reused = actions.acquire_packed_image(clipboard, ".png")
+    pasted, reused = cache.acquire_packed_image(clipboard, ".png")
     assert reused == shared
     assert pasted != edited
     np.testing.assert_array_equal(images.image_pixels(pasted), expected)
@@ -84,7 +86,7 @@ def test_mask_edit_then_paste_preserves_original_clipboard_content(clipboard, sh
 
 
 def test_failed_clipboard_reference_placement_releases_created_data(clipboard, monkeypatch):
-    original, _ = actions.acquire_packed_image(clipboard, ".png")
+    original, _ = cache.acquire_packed_image(clipboard, ".png")
     before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials")}
     def fail(*_):
         raise RuntimeError("Placement failed")
@@ -97,7 +99,7 @@ def test_failed_clipboard_reference_placement_releases_created_data(clipboard, m
 
 @pytest.mark.parametrize("same_input", [False, True])
 def test_replacement_invalidates_cache_without_exchanging_target(clipboard, same_input):
-    original, _ = actions.acquire_packed_image(clipboard, ".png")
+    original, _ = cache.acquire_packed_image(clipboard, ".png")
     original_pixels = images.image_pixels(original)
     owner = bpy.data.objects.new("Reference", None)
     owner.empty_display_type = "IMAGE"
@@ -114,16 +116,16 @@ def test_replacement_invalidates_cache_without_exchanging_target(clipboard, same
     actions.replace_pasted_image(SimpleNamespace(), target, incoming)
     assert owner.data == original and original.packed_file
     assert actions.CLIPBOARD_HASH_PROPERTY not in original
-    assert actions.CLIPBOARD_CONTENT_PROPERTY not in original
+    assert cache.CLIPBOARD_CONTENT_PROPERTY not in original
     np.testing.assert_array_equal(images.image_pixels(original), expected)
-    pasted, reused = actions.acquire_packed_image(clipboard, ".png")
+    pasted, reused = cache.acquire_packed_image(clipboard, ".png")
     assert pasted != original and not reused
     np.testing.assert_array_equal(images.image_pixels(pasted), original_pixels)
     np.testing.assert_array_equal(images.image_pixels(original), expected)
 
 
 def test_shared_cached_target_keeps_original_cache_and_creates_independent_result(clipboard):
-    original, _ = actions.acquire_packed_image(clipboard, ".png")
+    original, _ = cache.acquire_packed_image(clipboard, ".png")
     owner = bpy.data.objects.new("Selected", None)
     owner.empty_display_type = "IMAGE"
     owner.data = original
@@ -131,12 +133,12 @@ def test_shared_cached_target_keeps_original_cache_and_creates_independent_resul
     bpy.context.collection.objects.link(owner)
     bpy.context.collection.objects.link(other)
     pixels = images.image_pixels(original)
-    baseline = original[actions.CLIPBOARD_CONTENT_PROPERTY]
+    baseline = original[cache.CLIPBOARD_CONTENT_PROPERTY]
     target = actions.ClipboardImageTarget(original, owner)
     actions.replace_pasted_image(SimpleNamespace(), target, original)
     assert target.image == owner.data and target.image != original
-    assert other.data == original and original[actions.CLIPBOARD_CONTENT_PROPERTY] == baseline
-    assert actions.acquire_packed_image(clipboard, ".png") == (original, True)
+    assert other.data == original and original[cache.CLIPBOARD_CONTENT_PROPERTY] == baseline
+    assert cache.acquire_packed_image(clipboard, ".png") == (original, True)
     assert actions.CLIPBOARD_HASH_PROPERTY not in target.image
     np.testing.assert_array_equal(images.image_pixels(original), pixels)
     np.testing.assert_array_equal(images.image_pixels(target.image), pixels)

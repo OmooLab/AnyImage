@@ -9,7 +9,7 @@ import pytest
 from PIL import Image
 
 from anyimage.common import image as images
-from anyimage.operators.clipboard_image import actions, operators
+from anyimage.operators.clipboard_image import actions, cache, operators
 from anyimage.operators.clipboard_image.brush import BrushPreviewError
 
 
@@ -49,7 +49,7 @@ def paste(context, monkeypatch, data=None, *, location=None):
     ))
     reports = []
     operator = SimpleNamespace(
-        location=location, location_set=location is not None,
+        location=location, properties=SimpleNamespace(is_property_set=lambda key: location is not None),
         report=lambda level, message: reports.append((level, message)),
     )
     result = operators.PasteClipboardImage.execute(operator, context)
@@ -82,7 +82,7 @@ def test_last_image_user_preserves_identity_and_saved_content(monkeypatch, tmp_p
     image.use_fake_user = True
     image["custom"] = "keep"
     image[actions.CLIPBOARD_HASH_PROPERTY] = "old"
-    image[actions.CLIPBOARD_CONTENT_PROPERTY] = "old baseline"
+    image[cache.CLIPBOARD_CONTENT_PROPERTY] = "old baseline"
     obj = image_empty(image)
     area = bpy.context.screen.areas[0]
     area.type = "IMAGE_EDITOR"
@@ -107,7 +107,7 @@ def test_last_image_user_preserves_identity_and_saved_content(monkeypatch, tmp_p
     assert image.as_pointer() == identity and image.name == "Original.png"
     assert obj.data == image and area.spaces.active.image == image
     assert image.use_fake_user and image["custom"] == "keep"
-    assert actions.CLIPBOARD_HASH_PROPERTY not in image and actions.CLIPBOARD_CONTENT_PROPERTY not in image
+    assert actions.CLIPBOARD_HASH_PROPERTY not in image and cache.CLIPBOARD_CONTENT_PROPERTY not in image
     assert (obj.matrix_basis, obj.empty_display_size, tuple(obj.empty_image_offset)) == before
     assert not obj.use_empty_image_alpha
     assert image.filepath_raw != str(original_file)
@@ -268,19 +268,26 @@ def test_mixed_multiselection_creates_without_replacing(kind, monkeypatch):
 
 
 @pytest.mark.parametrize("editor", ["VIEW_3D", "NODE_EDITOR"])
-def test_redo_places_image_at_captured_location(editor, monkeypatch):
+@pytest.mark.parametrize("location", [(0.0, 0.0, 0.0), (10.0, 20.0, 3.0)])
+def test_redo_places_image_at_captured_location(editor, location, monkeypatch):
     if editor == "NODE_EDITOR":
         node, context = node_context("ShaderNodeTexImage", None)
         node.select = False
     else:
         context = view_context()
-    location = (10.0, 20.0, 3.0)
     result, _, _ = paste(context, monkeypatch, location=location)
     assert result == {"FINISHED"}
     if editor == "NODE_EDITOR":
         assert tuple(context.space_data.edit_tree.nodes.active.location) == location[:2]
     else:
         assert tuple(context.view_layer.objects.active.location) == location
+
+
+def test_failed_node_assignment_removes_new_node():
+    existing, context = node_context("ShaderNodeTexImage", None)
+    with pytest.raises(TypeError):
+        actions.add_image_node(context, object())
+    assert list(context.space_data.edit_tree.nodes) == [existing]
 
 
 def test_linked_geometry_input_and_empty_image_slots_are_not_targets():
@@ -300,7 +307,7 @@ def test_view_creation_only_adds_image_empty(monkeypatch):
     before_meshes, before_materials = set(bpy.data.meshes), set(bpy.data.materials)
     result, _, _ = paste(view_context(), monkeypatch)
     assert result == {"FINISHED"}
-    cached, reused = actions.acquire_packed_image(clipboard_bytes(), ".png")
+    cached, reused = cache.acquire_packed_image(clipboard_bytes(), ".png")
     created = bpy.context.view_layer.objects.active
     assert reused and cached.users == 1
     assert created.type == "EMPTY" and created.empty_display_type == "IMAGE"
@@ -365,7 +372,7 @@ def test_failed_replacement_keeps_original_content_and_cleans_input(failure, sha
 
 
 def test_operator_reuses_target_as_input_without_removing_it(monkeypatch):
-    image, _ = actions.acquire_packed_image(clipboard_bytes(), ".png")
+    image, _ = cache.acquire_packed_image(clipboard_bytes(), ".png")
     obj = image_empty(image)
     before = set(bpy.data.images)
     pixels = images.image_pixels(image)
@@ -391,7 +398,7 @@ def test_existing_brush_replaces_content_without_changing_settings(mode, monkeyp
     state = (tuple(brush.color), tuple(brush.stencil_dimension), brush.texture_slot.map_mode)
     previews = []
     monkeypatch.setattr(actions, "set_brush_preview", lambda *args: previews.append(args))
-    original, _ = actions.acquire_packed_image(clipboard_bytes(), ".png")
+    original, _ = cache.acquire_packed_image(clipboard_bytes(), ".png")
     pixels = images.image_pixels(original)
     original_state = images.image_content_state(original)
     before = {kind: set(getattr(bpy.data, kind)) for kind in ("images", "brushes", "textures")}
@@ -408,6 +415,18 @@ def test_existing_brush_replaces_content_without_changing_settings(mode, monkeyp
         for kind, items in before.items():
             assert set(getattr(bpy.data, kind)) == items
     assert len(previews) == (2 if mode == "PAINT_TEXTURE" else 0)
+
+
+def test_new_brush_paste_after_switching_previous_texture_to_clouds(monkeypatch):
+    brush = bpy.data.brushes.new("Paint", mode="SCULPT")
+    context = view_context(mode="SCULPT", brush=brush)
+    assert paste(context, monkeypatch)[0] == {"FINISHED"}
+    previous_name = brush.texture.name
+    brush.texture.type = "CLOUDS"
+    assert paste(context, monkeypatch)[0] == {"FINISHED"}
+    assert bpy.data.textures[previous_name].type == "CLOUDS"
+    assert brush.texture.type == "IMAGE" and brush.texture.image.packed_file
+    assert tuple(brush.texture.image.size) == (3, 2)
 
 
 def test_brush_replacement_preserves_linear_hdr(monkeypatch):

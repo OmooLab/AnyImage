@@ -1,11 +1,12 @@
 """Prepare and commit image files for server jobs."""
 
 from pathlib import Path
+import tempfile
 import bpy
 
-from .color_image import load_material_color_image, save_color_png
-from .image import COLOR_NORMALIZED_PROPERTY, image_rgba
-from .image_input import prepare_image_input
+from .color_image import save_color_png
+from .image import COLOR_NORMALIZED_PROPERTY
+from .image_input import cleanup_image_input, prepare_image_input
 from .hdr_image import build_recognition_rgba
 
 
@@ -40,17 +41,16 @@ def apply_image_result(target, path):
     return target.commit(load_image_edit_result(target.image, path))
 
 
-def material_analysis_input(color_path):
-    """Return the byte color file or an HDR recognition preview in the same directory."""
-
-    path = Path(color_path)
-    if path.suffix == ".png":
-        return path
-    image = load_material_color_image(path)
+def prepare_recognition_input(image, rgba):
+    """Write a cropped sRGB PNG for inference, retaining source opacity."""
+    color_space = image.colorspace_settings.name
+    if image.is_float:
+        rgba = build_recognition_rgba(rgba, image.alpha_mode, preserve_alpha=True)
+        color_space = "sRGB"
+    path = Path(tempfile.mkdtemp(prefix="anyimage-input-")) / "input.png"
     try:
-        preview = build_recognition_rgba(image_rgba(image), image.alpha_mode)
-        output = path.parent / "analysis.png"
-        save_color_png(preview, output, "sRGB")
-        return output
-    finally:
-        bpy.data.images.remove(image)
+        save_color_png(rgba, path, color_space, as_srgb=True)
+    except Exception:
+        cleanup_image_input(path)
+        raise
+    return path

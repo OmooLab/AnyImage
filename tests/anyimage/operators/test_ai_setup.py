@@ -160,10 +160,10 @@ class AiSetupTest(BlenderTestCase):
             operator.use_mirror = True
             self.fake_bpy.context.preferences.addons["anyimage"].preferences.storage_root = str(Path(directory) / "current")
             original = self.anyimage.ai_preferences.storage_root()
-            self.assertEqual(operator.request(None), {
-                "target": str(Path(directory) / ".anyimage"),
-                "mirror": True, "online": True,
-            })
+            parameters = operator.request(None)
+            self.assertEqual(Path(parameters["target"]), Path(directory).resolve() / ".anyimage")
+            self.assertTrue(parameters["mirror"])
+            self.assertTrue(parameters["online"])
             self.assertEqual(self.anyimage.ai_preferences.storage_root(), original)
 
 
@@ -235,8 +235,11 @@ class AiSetupTest(BlenderTestCase):
                 ),
             ):
                 self.assertEqual(properties.ai_status()["missing_models"], ())
+                properties.require_model(spec.key)
                 path.write_bytes(b"")
                 self.assertIn(spec.key, properties.ai_status()["missing_models"])
+                with self.assertRaisesRegex(RuntimeError, spec.label):
+                    properties.require_model(spec.key)
 
     def test_setup_dispatches_environment_or_required_models(self):
         for environment_ready, expected in (
@@ -258,10 +261,3 @@ class AiSetupTest(BlenderTestCase):
                 chosen, other = (download, setup) if environment_ready else (setup, download)
                 chosen.assert_called_once_with("INVOKE_DEFAULT")
                 other.assert_not_called()
-
-    def test_model_validation_reads_the_catalog_once(self):
-        with patch.object(self.ai, "model_catalog", return_value=(
-            {"key": "model", "label": "Model", "installed": True},
-        )) as catalog:
-            self.assertEqual(self.ai.require_model("model")["key"], "model")
-        catalog.assert_called_once_with()

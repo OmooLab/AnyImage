@@ -5,7 +5,6 @@ from ..common.image import (
     image_empty_bounds,
     image_rgba,
     replace_empty_image,
-    require_image_empty,
 )
 from ..common.selection import (
     rasterize_selection_path,
@@ -13,7 +12,8 @@ from ..common.selection import (
     SelectionPath,
 )
 from ..common.polygon import brush_footprint_polygons
-from ..common.viewport import ImageGesture, report_image_edit_exception, screen_path_to_image_pixels
+from ..common.image_gesture import ImageGesture
+from ..common.viewport import report_image_edit_exception, screen_path_to_image_pixels
 from ..properties import (
     mask_gesture_property,
     mask_mode_property,
@@ -57,8 +57,8 @@ def apply_alpha_mask(source_rgba, selection_mask, mode):
 
 def rasterize_brush_path(image_size, path, radius, project_path):
     """Project the shared Brush footprint and antialias its complete union."""
-    paths = tuple(
-        SelectionPath(points=tuple(project_path(polygon)))
+    paths = (
+        SelectionPath(points=project_path(polygon))
         for polygon in brush_footprint_polygons(path, radius)
     )
     return rasterize_selection_union(image_size, paths, antialias=True)
@@ -69,11 +69,10 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
     bl_label = "Edit Image Alpha"
     bl_description = "Hide or reveal image areas with a lasso, brush, or polyline."
     bl_options = {"UNDO"}
+    finish_label = "Apply Mask"
     active_tool_id = MASK_TOOL_ID
-    resolve_on_press = True
 
     source_object_name: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
-    source_matrix_data: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
     gesture: mask_gesture_property()
     mode: mask_mode_property()
     radius: mask_radius_property()
@@ -84,28 +83,7 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
         self.mode = str(settings.mask_mode)
         self.radius = int(settings.mask_radius)
 
-    def _set_status(self, context):
-        if self.gesture == "BRUSH":
-            action = bpy.app.translations.pgettext_iface("paint with radius {radius} px").format(radius=self.radius)
-        elif self.gesture == "POLYLINE":
-            action = (
-                "click points; click start, double-click, or Enter to finish; "
-                "Backspace removes"
-            )
-        else:
-            action = "draw and release"
-        context.workspace.status_text_set(
-            bpy.app.translations.pgettext_iface(
-                "Mask {gesture}: {action}; {mode}; RMB or Esc cancels"
-            ).format(
-                gesture=bpy.app.translations.pgettext_iface(self.gesture.title()),
-                action=bpy.app.translations.pgettext_iface(action),
-                mode=bpy.app.translations.pgettext_iface(self.mode.title()),
-            )
-        )
-
-    def _submit_selection_path(self, context, selection_path):
-        source_object = require_image_empty(self.source_object_name)
+    def _submit_selection_path(self, context, source_object, selection_path):
         selection_mask = rasterize_selection_path(
             tuple(source_object.data.size),
             selection_path,

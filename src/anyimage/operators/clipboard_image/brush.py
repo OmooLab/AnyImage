@@ -31,7 +31,7 @@ def set_tool_texture(context, image):
         raise RuntimeError("The active tool does not provide an editable brush")
     brush = _ensure_editable_brush(context, brush)
 
-    content = image_content_state(image)
+    content = None
     previous = (
         brush.texture, brush.texture_slot.texture,
         brush.texture_slot.map_mode, tuple(brush.stencil_dimension),
@@ -41,6 +41,7 @@ def set_tool_texture(context, image):
         if not image.is_float:
             normalized = create_normalized_color_image(image)
             try:
+                content = image_content_state(image)
                 replace_image_content(image, normalized)
             finally:
                 bpy.data.images.remove(normalized)
@@ -63,7 +64,8 @@ def set_tool_texture(context, image):
         ) = previous
         if is_new:
             bpy.data.textures.remove(texture)
-        restore_image_content(image, content)
+        if content is not None:
+            restore_image_content(image, content)
         raise RuntimeError(
             f"The active brush could not use the image texture: {error}"
         ) from error
@@ -164,9 +166,7 @@ def _copy_and_activate_library_brush(context, brush):
 
 def _find_or_create_image_texture(image):
     for texture in bpy.data.textures:
-        if not texture.get(CLIPBOARD_TEXTURE_PROPERTY, False):
-            continue
-        if texture.image == image:
+        if texture.type == "IMAGE" and texture.get(CLIPBOARD_TEXTURE_PROPERTY) and texture.image == image:
             return texture, False
 
     texture = bpy.data.textures.new(name=f"{image.name} Texture", type="IMAGE")

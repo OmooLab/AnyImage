@@ -1,58 +1,39 @@
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from tests.support.blender import BlenderTestCase
+import bpy
+import pytest
+from PIL import Image
 
-
-class InputPreparationTest(BlenderTestCase):
-
-    def test_packed_image_export_saves_a_copy_and_restores_format(self):
-        with tempfile.TemporaryDirectory() as directory:
-            output_directory = Path(directory)
-            calls = []
-
-            class Image:
-                file_format = "JPEG"
-
-                def save(self, **options):
-                    calls.append(options)
-                    Path(options["filepath"]).write_bytes(b"raw image")
-
-            image = Image()
-            with patch.object(
-                self.image_input.tempfile,
-                "mkdtemp",
-                return_value=str(output_directory),
-            ):
-                output = self.image_input.save_image_input(image)
-
-            self.assertEqual(output, output_directory / "input.png")
-            self.assertEqual(
-                calls,
-                [{"filepath": str(output), "save_copy": True}],
-            )
-            self.assertEqual(image.file_format, "JPEG")
+from anyimage.common import image_input
 
 
-    def test_packed_export_failure_removes_temporary_directory(self):
-        for failure in (OSError("disk full"), None):
-            with tempfile.TemporaryDirectory() as directory:
-                output = Path(directory) / "export"
-                output.mkdir()
-                image = SimpleNamespace(file_format="OPEN_EXR", save=Mock(side_effect=failure))
-                with patch.object(self.image_input.tempfile, "mkdtemp", return_value=str(output)):
-                    with self.assertRaises(RuntimeError):
-                        self.image_input.save_image_input(image)
-                self.assertEqual(image.file_format, "OPEN_EXR")
-                self.assertFalse(output.exists())
+def test_packed_image_exports_a_png_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(image_input.tempfile, "tempdir", str(tmp_path))
+    image = bpy.data.images.new("Input", width=3, height=2)
+    image.pack()
+    image.file_format = "JPEG"
+    try:
+        path = image_input.prepare_image_input(image)
+        with Image.open(path) as exported:
+            assert exported.format == "PNG" and exported.size == (3, 2)
+        assert image.file_format == "JPEG"
+        image_input.cleanup_image_input(path)
+        assert not list(tmp_path.iterdir())
+    finally:
+        bpy.data.images.remove(image)
 
 
-    def test_animated_inputs_are_rejected_before_export(self):
-        for source in ("MOVIE", "SEQUENCE"):
-            with self.subTest(source=source), patch.object(self.image_input, "save_image_input") as export:
-                image = SimpleNamespace(source=source, packed_file=object())
-                with self.assertRaisesRegex(RuntimeError, "Only still images"):
-                    self.image_input.prepare_image_input(image)
-                export.assert_not_called()
+def test_failed_export_restores_format_and_cleans_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(image_input.tempfile, "tempdir", str(tmp_path))
+    image = SimpleNamespace(file_format="OPEN_EXR", save=Mock(side_effect=OSError("disk full")))
+    with pytest.raises(RuntimeError, match="Unable to export"):
+        image_input.save_image_input(image)
+    assert image.file_format == "OPEN_EXR"
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("source", ["MOVIE", "SEQUENCE"])
+def test_animated_inputs_are_rejected_before_export(source):
+    with pytest.raises(RuntimeError, match="Only still images"):
+        image_input.prepare_image_input(SimpleNamespace(source=source))

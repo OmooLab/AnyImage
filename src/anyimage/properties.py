@@ -1,12 +1,14 @@
 import bpy
 from .common.color_reference import (
     clear_color_references,
+    color_reference_candidates,
+    is_color_reference_candidate,
     color_reference_preview_icon,
     get_color_reference,
     invalidate_color_reference,
     release_unused_color_references,
 )
-from .common.image import image_content_handlers, is_color_reference_candidate
+from .common.image import image_content_handlers
 
 # Blender requires Python to keep dynamic enum strings alive.
 _COLOR_REFERENCE_ITEMS = []
@@ -17,10 +19,6 @@ COLOR_REFERENCE_PALETTE_PROPERTIES = tuple(
 COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES = tuple(
     f"color_reference_palette_weight_{index}" for index in range(COLOR_REFERENCE_PALETTE_SIZE)
 )
-
-
-def color_reference_candidates():
-    return [image for image in bpy.data.images if is_color_reference_candidate(image)]
 
 
 def color_reference_items(_settings, _context):

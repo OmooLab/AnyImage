@@ -1,17 +1,15 @@
 # 转为面片、转为凹凸面与转为浮雕
 
-普通面片入口位于 `operators/convert_to_plane.py`，通过 `common/image_plane.py` 创建基础矩形网格与面片。凹凸面与浮雕集中在 `operators/depth_plane/`：`operators.py` 定义两个转换入口和内部任务 `GeneratePlaneGeometry`，准备输入快照并提交几何 Job；`object.py` 导入深度产物、创建对象并提交 Undo；`__init__.py` 导出 Operator。两个转换入口分别指定固定的 Depth 或 Relief 类型。
+普通面片入口位于 `operators/convert_to_plane.py`。`operators/depth_plane/operators.py` 为凹凸面与浮雕提交整图的 sRGB PNG，`object.py` 在结果返回后从原图创建材质，并用深度与法线创建对象。三种面片共用 `common/image_plane.py` 的基础矩形网格。
 
 ```mermaid
 flowchart TD
-    A[Image Empty] --> B[准备材质颜色]
-    B --> C{转换类型}
-    C -- 面片 --> D[四边形与 O Plane]
-    C -- Depth 或 Relief --> E[静态图提交几何 Job]
-    E --> F[加载深度、元数据与法线]
-    F --> G[对应节点修改器与材质]
-    D --> H[创建对象并替换源 Empty]
-    G --> H
+    source["整张原图"] --> type{"转换类型"}
+    type -->|面片| material["从原图创建材质"]
+    type -->|凹凸面或浮雕| ai["sRGB PNG → AI 深度与法线"]
+    ai --> checked["校验原图"]
+    checked --> material
+    material --> result["创建面片和对应的节点修改器"]
 ```
 
 三种转换都只接受静态图片。基础网格以局部中心为原点，对象矩阵补偿源 Empty 的显示范围。

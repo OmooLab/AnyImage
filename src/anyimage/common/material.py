@@ -15,6 +15,7 @@ def create_image_material(
     source_image,
     color_image,
     *,
+    color_is_full_source=False,
     shadeless=False,
     normal_image=None,
     normal_space="TANGENT",
@@ -58,7 +59,7 @@ def create_image_material(
         material_inputs.node_tree = load_node_group(IMAGE_MATERIAL_NODE_GROUP_NAME)
         material_inputs.width = material_inputs.node_tree.default_group_node_width
         material_inputs.location = (-300.0, 300.0)
-        if source_image == material_image:
+        if color_is_full_source or source_image == material_image:
             threshold = color_images.estimate_highlight_threshold(material_image, panorama=panorama)
         else:
             # Use the complete source in the same color interpretation as the crop.

@@ -2,12 +2,10 @@
 
 import math
 
-import bpy
-
-from ...common.image_preview import draw_centered_text
 from .geometry import (
     MAX_INTERACTIVE_ASPECT,
     MIN_INTERACTIVE_ASPECT,
+    corners_in_cyclic_order,
 )
 
 
@@ -22,17 +20,6 @@ ASPECT_PRESETS = (
 )
 
 
-def preview_polygon(points):
-    """Return a non-crossing preview hull for the current unordered clicks."""
-    import numpy as np
-
-    points = np.asarray(points, dtype=np.float64)
-    if len(points) < 3:
-        return points
-    center = points.mean(axis=0)
-    return points[np.argsort(np.arctan2(points[:, 1] - center[1], points[:, 0] - center[0]))]
-
-
 def interactive_preview_polygon(points, cursor):
     """Return the clicked points plus one distinct moving cursor point."""
     vertices = list(points)
@@ -43,7 +30,7 @@ def interactive_preview_polygon(points, cursor):
         and math.dist(vertices[-1], cursor) >= 2.0
     ):
         vertices.append(cursor)
-    return preview_polygon(vertices)
+    return corners_in_cyclic_order(vertices)
 
 
 def aspect_ratio_from_mouse(initial_ratio, horizontal_delta):
@@ -67,24 +54,3 @@ def aspect_ratio_label(aspect_ratio, preset_label=None):
     if aspect_ratio >= 1.0:
         return f"{aspect_ratio:.2f} : 1"
     return f"1 : {1.0 / aspect_ratio:.2f}"
-
-
-def draw_aspect_hud(bounds, aspect_ratio, preset_label=None):
-    left, bottom, width, height = bounds
-    center_x = left + width * 0.5
-    draw_centered_text(
-        aspect_ratio_label(aspect_ratio, preset_label),
-        center_x,
-        bottom + height * 0.5 - 10.0,
-        22,
-        (0.25, 0.65, 1.0, 1.0),
-    )
-    draw_centered_text(
-        bpy.app.translations.pgettext_iface(
-            "Move horizontally  •  Ctrl snap  •  LMB confirm  •  Backspace edit"
-        ),
-        center_x,
-        bottom - 26.0,
-        13,
-        (0.85, 0.9, 1.0, 1.0),
-    )

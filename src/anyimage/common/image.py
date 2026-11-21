@@ -124,21 +124,6 @@ def mark_image_empty_reference(image):
         image[IMAGE_EMPTY_REFERENCE_PROPERTY] = True
 
 
-def is_color_reference_candidate(image):
-    """Return whether a static Image is selectable as a color reference."""
-    if not is_static_image(image):
-        return False
-    try:
-        get = getattr(image, "get", None)
-        if get is not None and get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
-            return False
-        if get is not None and (get(COLOR_REFERENCE_PROPERTY) or get(CLIPBOARD_HASH_PROPERTY) or get(IMAGE_EMPTY_REFERENCE_PROPERTY)):
-            return True
-        return any(is_image_empty(owner) and owner.data == image for owner in bpy.data.objects)
-    except (AttributeError, ReferenceError, TypeError, ValueError):
-        return False
-
-
 def create_image_edit_result(source_image, pixels, output_size, *, pack=True):
     """Create an Image datablock from edited RGBA pixels."""
     output_width, output_height = (int(value) for value in output_size)

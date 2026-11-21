@@ -11,7 +11,7 @@ def _run_model_job(handler, context, parameters):
     try:
         return handler(context, parameters)
     except (OnnxResourceError, MemoryError) as error:
-        context.resource("model_manager").clear()
+        context.resource("model_manager").sessions.close()
         if isinstance(error, MemoryError):
             raise RuntimeError(
                 "Model processing exceeded available system memory. "

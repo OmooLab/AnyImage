@@ -10,6 +10,7 @@ import pytest
 
 @pytest.mark.parametrize("change", ["rename", "binding", "pixels", "colorspace", "alpha_mode"])
 def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
+    from anyimage.common.color_space import image_rgba_to_linear
     from anyimage.common.image import image_content_signature, image_pixels
     from anyimage.operators.rectify_tool import operators
 
@@ -23,7 +24,8 @@ def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
     bpy.context.collection.objects.link(source)
     pixels = image_pixels(image)
     operator = SimpleNamespace(
-        _source_object=source, _source_image=image, _source_pixels=pixels,
+        _source_object=source, _source_image=image,
+        _source_linear=image_rgba_to_linear(image, pixels.reshape(-1, 4)).ravel(),
         _source_signature=image_content_signature(image, pixels),
         source_object_name=source.name, quad_json="[[0,0],[2,0],[2,2],[0,2]]",
         aspect_ratio=1.0, report=Mock(),
@@ -45,6 +47,7 @@ def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
     if change == "rename":
         assert result == {"FINISHED"}
         assert operator.source_object_name == "Renamed during preview"
+        np.testing.assert_array_equal(image_pixels(source.data), before)
     else:
         assert result == {"CANCELLED"}
         assert source.data == current
@@ -52,110 +55,71 @@ def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
+@pytest.mark.parametrize("floating", [False, True])
+def test_rectify_preview_and_confirm_use_the_same_linear_image(monkeypatch, floating):
+    from anyimage.common.color_space import linear_rgb_to_srgb, srgb_to_linear_rgb
+    from anyimage.common.image import image_content_signature, image_pixels
+    from anyimage.operators.rectify_tool import operators
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = bpy.data.images.new("Rectify", width=5, height=4, alpha=True, float_buffer=floating)
+    rgba = np.ones((4, 5, 4), dtype=np.float32)
+    rgba[:, ::2, :3] = .25
+    image.pixels.foreach_set(rgba.ravel())
+    source = bpy.data.objects.new("Rectify", None)
+    source.empty_display_type = "IMAGE"
+    source.data = image
+    bpy.context.collection.objects.link(source)
+    original = image_pixels(image)
+    quad = ((0, 0), (4, 0), (4, 4), (0, 4))
+    image_quad = np.asarray(quad) + (.5, 0)
+    class PreviewOperator(SimpleNamespace):
+        _begin_aspect_preview = operators.RectifyImagePerspective._begin_aspect_preview
+
+    operator = PreviewOperator(
+        _source_object=source, _source_image=image, _source_signature=image_content_signature(image),
+        _source_matrix=source.matrix_world.copy(), _points=list(quad[:3]), _phase="POINTS",
+        _area_pointer=0, _region_pointer=0, _set_aspect_status=Mock(), _finish=Mock(),
+        report=Mock(),
+    )
+    context = SimpleNamespace(region=SimpleNamespace(width=100, height=100), region_data=None,
+                              window=Mock(), area=Mock())
+    event = SimpleNamespace(type="LEFTMOUSE", value="PRESS", mouse_x=0, mouse_y=4, mouse_region_x=0, mouse_region_y=4)
+    monkeypatch.setattr(operators, "drawing_in_region", lambda *_: True)
+    monkeypatch.setattr(operators, "screen_path_to_image_pixels", lambda *_: image_quad)
+    monkeypatch.setattr(operators, "create_preview_texture", lambda pixels: pixels)
+    assert operators.RectifyImagePerspective.modal(operator, context, event) == {"RUNNING_MODAL"}
+    dark = original[0] if floating else srgb_to_linear_rgb(original[0])
+    np.testing.assert_allclose(operator._preview_texture[256, 0, :3], dark + (1 - dark) / 256, atol=1e-6)
+    assert operators.RectifyImagePerspective.execute(operator, context) == {"FINISHED"}
+    average = (1 + dark) * .5
+    expected = average if floating else linear_rgb_to_srgb(average)
+    np.testing.assert_allclose(image_pixels(source.data).reshape(-1, 4)[:, :3], expected, atol=1/255)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+
 class RectifyToolTest(BlenderTestCase):
-    def test_rectify_preview_uses_shared_linear_pixels_and_cleans_up_on_failure(self):
-        import numpy as np
-
-        quad = ((0, 0), (4, 0), (4, 4), (0, 4))
-        for floating, fails in ((False, False), (True, False), (True, True)):
-            with self.subTest(floating=floating, fails=fails):
-                image = SimpleNamespace(is_float=floating, size=(4, 4))
-                owner = SimpleNamespace(data=image, name="Source")
-                operator = self.rectify.RectifyImagePerspective()
-                operator.source_object_name = "Source"
-                operator._source_matrix = object()
-                operator._points = list(quad[:3])
-                operator._phase = "POINTS"
-                operator._area_pointer = operator._region_pointer = 0
-                operator.report = Mock()
-                operator._set_aspect_status = Mock()
-                context = SimpleNamespace(
-                    region=SimpleNamespace(width=100, height=100), region_data=None,
-                    window=SimpleNamespace(cursor_warp=Mock()),
-                    workspace=SimpleNamespace(status_text_set=Mock()),
-                    area=SimpleNamespace(tag_redraw=Mock()),
-                )
-                event = SimpleNamespace(type="LEFTMOUSE", value="PRESS", mouse_x=0, mouse_y=4, mouse_region_x=0, mouse_region_y=4)
-                source_pixels = np.tile([.5, .5, .5, .25], 16).astype(np.float32)
-                preview_pixels = np.tile([.18, .18, .18, .25], 512 * 512).astype(np.float32)
-                texture = object()
-                with (
-                    patch.object(self.rectify, "active_view3d_tool_id", return_value=None),
-                    patch.object(self.rectify, "drawing_in_region", return_value=True),
-                    patch.object(self.rectify, "require_conversion_source", return_value=owner),
-                    patch.object(self.rectify, "image_empty_bounds"),
-                    patch.object(self.rectify, "screen_path_to_image_pixels", return_value=quad),
-                    patch.object(self.rectify, "image_pixels", return_value=source_pixels),
-                    patch.object(self.rectify, "image_content_signature", return_value=None),
-                    patch.object(self.rectify, "warp_projective_pixels", return_value=preview_pixels) as warp,
-                    patch.object(self.rectify, "create_preview_texture", return_value=texture,
-                                 side_effect=RuntimeError("GPU failed") if fails else None) as create,
-                ):
-                    result = operator.modal(context, event)
-                expected = .5 if floating else .21404114
-                np.testing.assert_allclose(warp.call_args.args[0].reshape((-1, 4))[0], [expected] * 3 + [.25], atol=1e-6)
-                np.testing.assert_allclose(create.call_args.args[0][0, 0], [.18, .18, .18, .25])
-                if fails:
-                    self.assertEqual(result, {"CANCELLED"})
-                    self.assertIsNone(operator._preview_texture)
-                    self.assertTrue(operator.report.called)
-                else:
-                    self.assertEqual(result, {"RUNNING_MODAL"})
-                    self.assertIs(operator._preview_texture, texture)
-                    operator._remove_preview()
-
-    def test_rectify_output_samples_linear_rgb_and_keeps_source_settings(self):
-        import numpy as np
-        from anyimage.common.color_space import linear_rgb_to_srgb
-
-        for floating in (False, True):
-            with self.subTest(floating=floating):
-                image = SimpleNamespace(
-                    is_float=floating, size=(2, 1), pixels=np.zeros(8),
-                    colorspace_settings=SimpleNamespace(name="Custom OCIO"), alpha_mode="PREMUL",
-                )
-                owner = SimpleNamespace(data=image, name="Source")
-                operator = self.rectify.RectifyImagePerspective()
-                operator.source_object_name = "Source"
-                operator.quad_json = "[[0,0],[2,0],[2,1],[0,1]]"
-                operator.aspect_ratio = 1.0
-                operator._source_pixels = np.asarray([0, 0, 0, 1, 1, 1, 1, 1], dtype=np.float32)
-                operator.report = Mock()
-
-                def sample_center(pixels, source_size, quad, _aspect):
-                    sampled = projective_image.warp_projective_pixels(pixels, source_size, quad, (1, 1))
-                    return sampled, (1, 1), (0, 0, 2, 1)
-
-                with (
-                    patch.object(self.rectify, "require_image_empty", return_value=owner),
-                    patch.object(self.rectify, "is_animated_image", return_value=False),
-                    patch.object(self.rectify, "image_content_signature", return_value=None),
-                    patch.object(self.rectify, "validate_perspective_quad", return_value=((0, 0), (2, 0), (2, 1), (0, 1))),
-                    patch.object(self.rectify, "perspective_quad_overlaps_image", return_value=True),
-                    patch.object(self.rectify, "extract_perspective_pixels", side_effect=sample_center),
-                    patch.object(self.rectify, "create_image_edit_result") as create,
-                    patch.object(self.rectify, "replace_empty_image"),
-                ):
-                    self.assertEqual(operator.execute(SimpleNamespace()), {"FINISHED"})
-                expected = .5 if floating else float(linear_rgb_to_srgb(.5))
-                np.testing.assert_allclose(create.call_args.args[1], [expected, expected, expected, 1], atol=1e-6)
-                self.assertEqual((image.colorspace_settings.name, image.alpha_mode), ("Custom OCIO", "PREMUL"))
-
-    def test_rectify_backspace_releases_preview_and_returns_to_points(self):
+    def test_concave_screen_selection_is_rejected_before_reading_pixels(self):
         operator = self.rectify.RectifyImagePerspective()
-        operator._phase = "ASPECT"
-        operator._preview_texture = object()
-        operator._source_pixels = object()
-        operator._points = [(0, 0), (10, 0), (10, 10), (0, 10)]
+        operator._points = [(0, 0), (20, 0), (4, 4), (0, 20)]
+        with patch.object(self.rectify, "read_conversion_source") as read:
+            with self.assertRaisesRegex(ValueError, "convex"):
+                operator._begin_aspect_preview(None, None)
+        read.assert_not_called()
+
+    def test_right_click_removes_corners_then_cancels_at_first_point(self):
+        operator = self.rectify.RectifyImagePerspective()
+        operator._phase = "POINTS"
+        operator._points = [(0, 0), (10, 0)]
         operator._set_point_status = Mock()
-        context = SimpleNamespace(area=SimpleNamespace(tag_redraw=Mock()))
+        operator._finish = Mock()
+        context = SimpleNamespace(area=Mock())
+        event = SimpleNamespace(type="RIGHTMOUSE", value="PRESS")
         with patch.object(self.rectify, "active_view3d_tool_id", return_value=None):
-            result = operator.modal(context, SimpleNamespace(type="BACK_SPACE", value="PRESS"))
-        self.assertEqual(result, {"RUNNING_MODAL"})
-        self.assertIsNone(operator._preview_texture)
-        self.assertIsNone(operator._source_pixels)
-        self.assertEqual(operator._phase, "POINTS")
-        self.assertEqual(len(operator._points), 3)
+            self.assertEqual(operator.modal(context, event), {"RUNNING_MODAL"})
+            self.assertEqual(operator._points, [(0, 0)])
+            self.assertEqual(operator.modal(context, event), {"CANCELLED"})
+        operator._finish.assert_called_once_with(context)
 
     def test_rectify_rectifies_identity_pixels(self):
         import numpy as np

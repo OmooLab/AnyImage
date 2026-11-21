@@ -56,6 +56,22 @@ def transform_homography(points, matrix):
     return mapped.reshape(points.shape)
 
 
+def quad_edge_dimensions(quad):
+    """Estimate a quad's width and height from the lengths of opposing edges."""
+    import numpy as np
+
+    quad = np.asarray(quad, dtype=np.float64)
+    if quad.shape != (4, 2) or not np.isfinite(quad).all():
+        raise ValueError("Projective output requires four valid corners")
+    width_pixels = 0.5 * (
+        np.linalg.norm(quad[1] - quad[0]) + np.linalg.norm(quad[2] - quad[3])
+    )
+    height_pixels = 0.5 * (
+        np.linalg.norm(quad[2] - quad[1]) + np.linalg.norm(quad[3] - quad[0])
+    )
+    return width_pixels, height_pixels
+
+
 def projective_output_size(
     quad,
     aspect_ratio,
@@ -63,19 +79,9 @@ def projective_output_size(
     max_pixels=MAX_PROJECTIVE_OUTPUT_PIXELS,
 ):
     """Choose a detail-preserving output size for a source-space quad."""
-    import numpy as np
-
-    quad = np.asarray(quad, dtype=np.float64)
-    if quad.shape != (4, 2) or not np.isfinite(quad).all():
-        raise ValueError("Projective output requires four valid corners")
+    width_pixels, height_pixels = quad_edge_dimensions(quad)
     if not math.isfinite(aspect_ratio) or aspect_ratio <= 0.0:
         raise ValueError("Projective output aspect ratio must be greater than zero")
-    width_pixels = 0.5 * (
-        np.linalg.norm(quad[1] - quad[0]) + np.linalg.norm(quad[2] - quad[3])
-    )
-    height_pixels = 0.5 * (
-        np.linalg.norm(quad[2] - quad[1]) + np.linalg.norm(quad[3] - quad[0])
-    )
     if min(width_pixels, height_pixels) <= 1e-8:
         raise ValueError("Projective output corners are too close together")
     height = (aspect_ratio * width_pixels + height_pixels) / (

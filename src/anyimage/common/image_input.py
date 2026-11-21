@@ -50,11 +50,12 @@ def cleanup_image_input(path):
     if not path:
         return
     path = Path(path)
+    directory = path.parent.resolve()
+    if (directory.parent != Path(tempfile.gettempdir()).resolve()
+            or not directory.name.startswith(("anyimage-input-", "anyimage-hdr-"))):
+        return
     try:
-        if path.is_dir():
-            shutil.rmtree(path, ignore_errors=True)
-        else:
-            path.unlink(missing_ok=True)
-            path.parent.rmdir()
+        path.unlink(missing_ok=True)
+        directory.rmdir()
     except OSError:
         pass

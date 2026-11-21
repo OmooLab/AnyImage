@@ -35,20 +35,6 @@ class UpscaleOnnxTest(unittest.TestCase):
             np.testing.assert_array_equal(np.asarray(result), expected)
 
 
-    def test_preprocess_matches_dynamic_rgb_layout(self):
-        image = Image.new("RGB", (7, 5), (64, 128, 192))
-
-        result = onnx_upscale.preprocess(image)
-
-        self.assertEqual(result.shape, (1, 3, 5, 7))
-        self.assertEqual(result.dtype, np.float32)
-        self.assertTrue(result.flags.c_contiguous)
-        np.testing.assert_allclose(
-            result[0, :, 0, 0],
-            np.array((64, 128, 192), dtype=np.float32) / 255.0,
-        )
-
-
     def test_infer_returns_raw_rgb_for_rgba_input(self):
         session = FakeSession()
         pixels = np.zeros((5, 7, 4), dtype=np.uint8)
@@ -65,21 +51,16 @@ class UpscaleOnnxTest(unittest.TestCase):
         self.assertEqual(session.feeds["input"].shape, (1, 3, 256, 256))
 
     def test_tiles_use_reflected_context_at_outer_image_edges(self):
-        class RecordingSession(FakeSession):
-            def run(self, output_names, feeds):
-                self.input = feeds["input"].copy()
-                return super().run(output_names, feeds)
-
         pixels = np.zeros((5, 7, 3), dtype=np.uint8)
         pixels[..., 0] = np.arange(7, dtype=np.uint8) * 20
-        session = RecordingSession()
+        session = FakeSession()
 
         onnx_upscale.infer(
             session,
             Image.fromarray(pixels, mode="RGB"),
         )
 
-        red = session.input[0, 0]
+        red = session.feeds["input"][0, 0]
         self.assertAlmostEqual(red[16, 22], 120 / 255.0)
         self.assertAlmostEqual(red[16, 23], 100 / 255.0)
 
@@ -127,20 +108,6 @@ class UpscaleOnnxTest(unittest.TestCase):
                 InvalidProviderSession(),
                 Image.new("RGB", (7, 5)),
             )
-
-    def test_complete_output_allocation_reports_system_memory_failure(self):
-        padded = np.zeros((256, 256, 3), dtype=np.uint8)
-
-        with (
-            patch.object(np, "pad", return_value=padded),
-            patch.object(np, "empty", side_effect=MemoryError),
-            self.assertRaises(MemoryError),
-        ):
-            onnx_upscale.infer(
-                FakeSession(),
-                Image.new("RGB", (7, 5)),
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

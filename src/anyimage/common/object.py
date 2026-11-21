@@ -2,7 +2,7 @@
 
 import bpy
 
-from .image import image_content_signature, is_image_empty, mark_image_empty_reference
+from .image import image_content_signature, image_pixels, is_image_empty, mark_image_empty_reference
 
 
 def modifier_input_identifier(node_group, name, *, subtype=None):
@@ -43,16 +43,22 @@ def get_modifier_input(modifier, identifier):
     return modifier.get(identifier)
 
 
-def require_conversion_source(operator):
-    """Validate the live object and image captured before conversion."""
+def read_conversion_source(operator):
+    """Return the captured source and the pixels used to validate it."""
     try:
         source = operator._source_object
-        if (is_image_empty(source) and source.data == operator._source_image
-                and image_content_signature(source.data) == operator._source_signature):
-            return source
+        if is_image_empty(source) and source.data == operator._source_image:
+            pixels = image_pixels(source.data)
+            if image_content_signature(source.data, pixels) == operator._source_signature:
+                return source, pixels
     except ReferenceError:
         pass
     raise RuntimeError("The conversion source image has changed")
+
+
+def require_conversion_source(operator):
+    """Validate the live object and image captured before conversion."""
+    return read_conversion_source(operator)[0]
 
 
 def remove_conversion_source(source_object):

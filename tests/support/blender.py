@@ -54,6 +54,7 @@ class BlenderTestCase(unittest.TestCase):
             FloatProperty=lambda **options: options,
             FloatVectorProperty=lambda **options: options,
             IntProperty=lambda **options: options,
+            IntVectorProperty=lambda **options: options,
             PointerProperty=lambda **options: options,
             StringProperty=lambda **options: options,
         )

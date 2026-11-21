@@ -1,6 +1,3 @@
-import hashlib
-import os
-import tempfile
 from dataclasses import dataclass
 
 import bpy
@@ -9,16 +6,15 @@ from ...common.color_image import create_normalized_color_image
 from ...common.image import (
     CLIPBOARD_HASH_PROPERTY,
     image_content_state,
-    image_pixels,
     is_image_empty,
     restore_image_content,
     mark_image_empty_reference,
     has_other_image_user,
 )
 from ...common.viewport import redraw_area
+from .cache import CLIPBOARD_CONTENT_PROPERTY
 from .brush import PAINT_SETTINGS_BY_MODE, active_brush, set_brush_preview, set_tool_texture
 
-CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 REFERENCE_IMAGE_SIZE = 5.0
 NODE_HEADER_HEIGHT = 20.0
 NODE_TYPES = {
@@ -176,62 +172,6 @@ def replace_pasted_image(context, target, image):
         redraw_area(context)
 
 
-def acquire_packed_image(image_data, suffix):
-    image_hash = hashlib.sha256(image_data).hexdigest()
-    existing_image = _find_packed_clipboard_image(image_hash)
-    if existing_image is not None:
-        return existing_image, True
-
-    file_descriptor, temporary_path = tempfile.mkstemp(
-        prefix="blender-clipboard-",
-        suffix=suffix,
-    )
-    image = None
-    try:
-        with os.fdopen(file_descriptor, "wb") as temporary_file:
-            temporary_file.write(image_data)
-        image = bpy.data.images.load(temporary_path, check_existing=False)
-        image.name = "Clipboard"
-        image.pack()
-        image[CLIPBOARD_HASH_PROPERTY] = image_hash
-        image[CLIPBOARD_CONTENT_PROPERTY] = _clipboard_content_hash(image)
-        return image, False
-    except Exception:
-        if image is not None:
-            bpy.data.images.remove(image)
-        raise
-    finally:
-        try:
-            os.unlink(temporary_path)
-        except FileNotFoundError:
-            pass
-
-
-def _find_packed_clipboard_image(image_hash):
-    for image in bpy.data.images:
-        if image.get(CLIPBOARD_HASH_PROPERTY) != image_hash:
-            continue
-        if not image.packed_files:
-            continue
-        baseline = image.get(CLIPBOARD_CONTENT_PROPERTY)
-        if not baseline:
-            continue
-        try:
-            if _clipboard_content_hash(image) == baseline:
-                return image
-        except (RuntimeError, ValueError, ReferenceError, OSError):
-            continue
-    return None
-
-
-def _clipboard_content_hash(image):
-    """Fingerprint current pixels and interpretation without changing the image."""
-    digest = hashlib.sha256()
-    digest.update(repr((tuple(image.size), image.colorspace_settings.name, image.alpha_mode)).encode())
-    digest.update(image_pixels(image).tobytes())
-    return digest.hexdigest()
-
-
 def paste_image(context, image, location=None):
     target = target_for_context(context)
     if target == "IMAGE_EMPTY":
@@ -297,9 +237,13 @@ def add_image_node(context, image, location=None):
         raise RuntimeError(f"Unsupported node tree: {space.tree_type}")
 
     node = node_tree.nodes.new(node_type)
-    _assign_node_image(node, image)
-    node.location = _node_location(context, None) if location is None else location[:2]
-    _select_only_node(node_tree, node)
+    try:
+        _assign_node_image(node, image)
+        node.location = _node_location(context, None) if location is None else location[:2]
+        _select_only_node(node_tree, node)
+    except Exception:
+        node_tree.nodes.remove(node)
+        raise
     return node
 
 

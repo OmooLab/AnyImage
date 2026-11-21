@@ -194,6 +194,53 @@ def _read_windows_clipboard_image():
     raise ClipboardImageUnavailable("The clipboard does not contain an image")
 
 
+def _configure_windows_api(user32, kernel32):
+    user32.OpenClipboard.argtypes = [wintypes.HWND]
+    user32.OpenClipboard.restype = wintypes.BOOL
+    user32.CloseClipboard.argtypes = []
+    user32.CloseClipboard.restype = wintypes.BOOL
+    user32.IsClipboardFormatAvailable.argtypes = [wintypes.UINT]
+    user32.IsClipboardFormatAvailable.restype = wintypes.BOOL
+    user32.GetClipboardData.argtypes = [wintypes.UINT]
+    user32.GetClipboardData.restype = wintypes.HANDLE
+    user32.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
+    user32.RegisterClipboardFormatW.restype = wintypes.UINT
+
+    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalLock.restype = ctypes.c_void_p
+    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalUnlock.restype = wintypes.BOOL
+    kernel32.GlobalSize.argtypes = [wintypes.HGLOBAL]
+    kernel32.GlobalSize.restype = ctypes.c_size_t
+
+
+def _read_windows_clipboard_data(user32, kernel32, clipboard_format):
+    data_handle = user32.GetClipboardData(clipboard_format)
+    if not data_handle:
+        error_code = ctypes.get_last_error()
+        raise ClipboardImageError(
+            f"Unable to read clipboard image data (error {error_code})"
+        )
+
+    data_size = kernel32.GlobalSize(data_handle)
+    if data_size <= 0:
+        raise ClipboardImageError("Clipboard image data is empty")
+    if data_size > MAX_CLIPBOARD_IMAGE_SIZE:
+        raise ClipboardImageError("Clipboard image is larger than 512 MiB")
+
+    data_pointer = kernel32.GlobalLock(data_handle)
+    if not data_pointer:
+        error_code = ctypes.get_last_error()
+        raise ClipboardImageError(
+            f"Unable to lock clipboard image data (error {error_code})"
+        )
+
+    try:
+        return ctypes.string_at(data_pointer, data_size)
+    finally:
+        kernel32.GlobalUnlock(data_handle)
+
+
 def _read_macos_clipboard_image():
     osascript = shutil.which("osascript")
     if osascript is None:
@@ -337,50 +384,3 @@ def _read_image_file(image_file):
     if image_size > MAX_CLIPBOARD_IMAGE_SIZE:
         raise ClipboardImageError("Clipboard image is larger than 512 MiB")
     return image_file.read_bytes()
-
-
-def _configure_windows_api(user32, kernel32):
-    user32.OpenClipboard.argtypes = [wintypes.HWND]
-    user32.OpenClipboard.restype = wintypes.BOOL
-    user32.CloseClipboard.argtypes = []
-    user32.CloseClipboard.restype = wintypes.BOOL
-    user32.IsClipboardFormatAvailable.argtypes = [wintypes.UINT]
-    user32.IsClipboardFormatAvailable.restype = wintypes.BOOL
-    user32.GetClipboardData.argtypes = [wintypes.UINT]
-    user32.GetClipboardData.restype = wintypes.HANDLE
-    user32.RegisterClipboardFormatW.argtypes = [wintypes.LPCWSTR]
-    user32.RegisterClipboardFormatW.restype = wintypes.UINT
-
-    kernel32.GlobalLock.argtypes = [wintypes.HGLOBAL]
-    kernel32.GlobalLock.restype = ctypes.c_void_p
-    kernel32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
-    kernel32.GlobalUnlock.restype = wintypes.BOOL
-    kernel32.GlobalSize.argtypes = [wintypes.HGLOBAL]
-    kernel32.GlobalSize.restype = ctypes.c_size_t
-
-
-def _read_windows_clipboard_data(user32, kernel32, clipboard_format):
-    data_handle = user32.GetClipboardData(clipboard_format)
-    if not data_handle:
-        error_code = ctypes.get_last_error()
-        raise ClipboardImageError(
-            f"Unable to read clipboard image data (error {error_code})"
-        )
-
-    data_size = kernel32.GlobalSize(data_handle)
-    if data_size <= 0:
-        raise ClipboardImageError("Clipboard image data is empty")
-    if data_size > MAX_CLIPBOARD_IMAGE_SIZE:
-        raise ClipboardImageError("Clipboard image is larger than 512 MiB")
-
-    data_pointer = kernel32.GlobalLock(data_handle)
-    if not data_pointer:
-        error_code = ctypes.get_last_error()
-        raise ClipboardImageError(
-            f"Unable to lock clipboard image data (error {error_code})"
-        )
-
-    try:
-        return ctypes.string_at(data_pointer, data_size)
-    finally:
-        kernel32.GlobalUnlock(data_handle)

@@ -1,6 +1,5 @@
 """Prepare, interpret and normalize material color images."""
 
-import json
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,7 +13,6 @@ from .image import (
     is_animated_image,
     image_pixels,
 )
-from .image_input import cleanup_image_input
 
 
 VIEW_TRANSFORM_COLOR_SPACES = (
@@ -226,26 +224,37 @@ def require_static_color_image(image):
         raise ValueError("Material conversion supports static images only")
 
 
-def save_color_png(rgba, path, color_space):
+def save_color_png(rgba, path, color_space, *, as_srgb=False):
     """Save top-down RGBA pixels with their Blender color interpretation."""
     import numpy as np
 
     height, width = rgba.shape[:2]
     image = bpy.data.images.new("Material Color Export", width=width, height=height, alpha=True)
+    scene = None
     try:
         image.colorspace_settings.name = color_space
         image.alpha_mode = "STRAIGHT"
         image.pixels.foreach_set(np.flipud(rgba).ravel())
         image.file_format = "PNG"
-        image.save(filepath=str(path), save_copy=True)
+        if as_srgb and color_space != "sRGB":
+            scene = bpy.data.scenes.new("sRGB Export")
+            scene.display_settings.display_device = "sRGB"
+            scene.view_settings.view_transform = "Standard"
+            scene.view_settings.look = "None"
+            scene.render.dither_intensity = 0
+            image.save_render(str(path), scene=scene)
+        else:
+            image.save(filepath=str(path), save_copy=True)
         if not path.is_file():
             raise RuntimeError("Unable to export the material color image")
     finally:
+        if scene is not None:
+            bpy.data.scenes.remove(scene)
         bpy.data.images.remove(image)
 
 
-def prepare_material_color_input(source, bounds=None, rgba=None):
-    """Export source bounds with interpretation matching the encoded color file."""
+def create_material_color_image(source, bounds=None, rgba=None):
+    """Pack the selected source pixels as a material PNG or scene-linear EXR."""
     import numpy as np
     from .hdr_image import save_hdr_image
 
@@ -269,71 +278,36 @@ def prepare_material_color_input(source, bounds=None, rgba=None):
         raise ValueError("The material color bounds are outside the image")
     cropped = rgba[top:bottom, left:right]
     suffix = ".exr" if source.is_float else ".png"
-    path = Path(tempfile.mkdtemp(prefix="anyimage-color-")) / ("color" + suffix)
-    try:
+    with tempfile.TemporaryDirectory(prefix="anyimage-color-") as directory:
+        path = Path(directory) / ("color" + suffix)
         if source.is_float:
             # Store float colors directly; the EXR interpretation is applied on load.
             save_hdr_image(cropped, path)
         else:
             save_color_png(cropped, path, source.colorspace_settings.name)
-        metadata = {
-            "name": f"{image_base_name(source)}_color{suffix}",
-            "color_space": "Linear Rec.709" if source.is_float else source.colorspace_settings.name,
-            "alpha_mode": "PREMUL" if source.is_float and source.alpha_mode == "STRAIGHT" else source.alpha_mode,
-            "color_normalized": bool(source.get(COLOR_NORMALIZED_PROPERTY)),
-        }
-        path.with_suffix(".json").write_text(json.dumps(metadata), encoding="utf-8")
-        return path
-    except Exception:
-        cleanup_material_color_input(path)
-        raise
-
-
-def cleanup_material_color_input(path):
-    """Release the directory owned by a prepared material color input."""
-    if path:
-        cleanup_image_input(Path(path).parent)
-
-
-def load_material_color_image(path):
-    """Load an independent packed Color image using its file interpretation."""
-    path = Path(path)
-    metadata = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
-    image = bpy.data.images.load(str(path), check_existing=False)
-    try:
-        image.name = metadata["name"]
-        image.colorspace_settings.name = metadata["color_space"]
-        image.alpha_mode = metadata["alpha_mode"]
-        if metadata["color_normalized"]:
-            image[COLOR_NORMALIZED_PROPERTY] = True
-        image.pack()
-        return image
-    except Exception:
-        bpy.data.images.remove(image)
-        raise
+        image = bpy.data.images.load(str(path), check_existing=False)
+        try:
+            image.name = f"{image_base_name(source)}_color{suffix}"
+            image.colorspace_settings.name = "Linear Rec.709" if source.is_float else source.colorspace_settings.name
+            image.alpha_mode = "PREMUL" if source.is_float and source.alpha_mode == "STRAIGHT" else source.alpha_mode
+            if source.get(COLOR_NORMALIZED_PROPERTY):
+                image[COLOR_NORMALIZED_PROPERTY] = True
+            image.pack()
+            return image
+        except Exception:
+            bpy.data.images.remove(image)
+            raise
 
 
 @contextmanager
-def material_color_image(
-    source=None, *, bounds=None, rgba=None, input_path=None,
-):
-    """Own a prepared color image through material creation and clean failed results."""
-    owned = input_path is None
-    path = (
-        prepare_material_color_input(source, bounds, rgba)
-        if owned else Path(input_path)
-    )
-    image = None
+def material_color_image(source, *, bounds=None, rgba=None):
+    """Keep the packed image when the result uses it."""
+    image = create_material_color_image(source, bounds, rgba)
     try:
-        image = load_material_color_image(path)
         yield image
     except Exception:
-        if image is not None:
-            bpy.data.images.remove(image, do_unlink=True)
-            image = None
+        bpy.data.images.remove(image, do_unlink=True)
         raise
-    finally:
-        if image is not None and image.users == 0:
+    else:
+        if image.users == 0:
             bpy.data.images.remove(image)
-        if owned:
-            cleanup_material_color_input(path)

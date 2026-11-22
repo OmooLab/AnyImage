@@ -1,7 +1,8 @@
 """Pack clipboard images and reuse unchanged cached images."""
 
 import hashlib
-import os
+from contextlib import contextmanager
+from pathlib import Path
 import tempfile
 
 import bpy
@@ -12,35 +13,26 @@ from ...common.image import CLIPBOARD_HASH_PROPERTY, image_pixels
 CLIPBOARD_CONTENT_PROPERTY = "anyimage_clipboard_content_sha256"
 
 
-def acquire_packed_image(image_data, suffix):
+@contextmanager
+def clipboard_source(image_data, suffix):
+    """Keep the source file available until the pasted image is committed."""
     image_hash = hashlib.sha256(image_data).hexdigest()
-    existing_image = _find_packed_clipboard_image(image_hash)
-    if existing_image is not None:
-        return existing_image, True
-
-    file_descriptor, temporary_path = tempfile.mkstemp(
-        prefix="blender-clipboard-",
-        suffix=suffix,
-    )
-    image = None
-    try:
-        with os.fdopen(file_descriptor, "wb") as temporary_file:
-            temporary_file.write(image_data)
-        image = bpy.data.images.load(temporary_path, check_existing=False)
-        image.name = "Clipboard"
-        image.pack()
-        image[CLIPBOARD_HASH_PROPERTY] = image_hash
-        image[CLIPBOARD_CONTENT_PROPERTY] = _clipboard_content_hash(image)
-        return image, False
-    except Exception:
-        if image is not None:
-            bpy.data.images.remove(image)
-        raise
-    finally:
+    existing = _find_packed_clipboard_image(image_hash)
+    if existing is not None:
+        yield existing
+        return
+    with tempfile.TemporaryDirectory(prefix="blender-clipboard-") as directory:
+        path = Path(directory) / ("clipboard" + suffix)
+        path.write_bytes(image_data)
+        image = bpy.data.images.load(str(path), check_existing=False)
         try:
-            os.unlink(temporary_path)
-        except FileNotFoundError:
-            pass
+            image.name = "Clipboard"
+            image[CLIPBOARD_HASH_PROPERTY] = image_hash
+            image[CLIPBOARD_CONTENT_PROPERTY] = _clipboard_content_hash(image)
+            yield image
+        finally:
+            if image.users == 0:
+                bpy.data.images.remove(image)
 
 
 def _find_packed_clipboard_image(image_hash):

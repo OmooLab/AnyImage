@@ -5,9 +5,12 @@ from pathlib import Path
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-def validate_input_path(value):
-    """Validate one supported image file without importing image libraries."""
-    path = Path(value)
+@contextmanager
+def open_image(path):
+    """Validate and decode a still image before handing it to a job."""
+    from PIL import Image
+
+    path = Path(path)
     if not path.is_file():
         raise RuntimeError(f"Source image file does not exist: {path}")
     suffix = path.suffix.lower()
@@ -16,13 +19,6 @@ def validate_input_path(value):
             f"Unsupported input format: {suffix or '(no extension)'}. "
             f"Supported images: {', '.join(sorted(IMAGE_SUFFIXES))}."
         )
-    return path
-
-
-@contextmanager
-def open_image(path):
-    """Decode an image before handing it to processing code."""
-    from PIL import Image
 
     opened = None
     try:

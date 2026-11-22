@@ -1,4 +1,4 @@
-from anyimage.common.color_reference import is_color_reference_candidate
+from anyimage.operators.remove_background.image import BackgroundInput
 from anyimage.common.job_image import apply_image_result
 from contextlib import ExitStack
 from pathlib import Path
@@ -11,7 +11,7 @@ import pytest
 
 import anyimage
 from anyimage import ai_menus as menu
-from anyimage.common import image as images
+from anyimage.common import ai, image as images
 from anyimage.common.image_target import ImageEditTarget, active_texture_node
 from anyimage.operators import upscale
 from anyimage.operators.remove_background import operators as remove_background
@@ -44,7 +44,6 @@ def test_set_color_reference_from_texture(shader_editor):
     assert SetColorReference.poll(context)
     assert SetColorReference.execute(None, context) == {"FINISHED"}
     assert settings.color_reference == node.image
-    assert is_color_reference_candidate(node.image)
 
 
 @pytest.mark.parametrize("node_type", ["ShaderNodeTexEnvironment", "ShaderNodeTexImage"])
@@ -63,7 +62,7 @@ def test_world_texture_menu_and_result(texture, node_type, tmp_path):
     anyimage.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_called_once_with(menu.TextureNodeMenu.bl_idname)
     write_result(tmp_path)
-    apply_image_result(ImageEditTarget.capture(context), tmp_path / "foreground.png")
+    apply_image_result(ImageEditTarget.capture(context)[0], tmp_path / "foreground.png")
     assert tuple(node.image.size) == (8, 6)
     assert tuple(texture.image.size) == (4, 3)
 
@@ -75,7 +74,7 @@ def test_shader_editor_edits_the_shared_material(shader_editor, tmp_path):
     bpy.context.collection.objects.link(other)
     node = active_texture_node(shader_editor)
 
-    apply_image_result(ImageEditTarget.capture(shader_editor), write_result(tmp_path))
+    apply_image_result(ImageEditTarget.capture(shader_editor)[0], write_result(tmp_path))
 
     assert obj.active_material == other.active_material == material
     assert tuple(node.image.size) == (8, 6)
@@ -100,7 +99,7 @@ def test_shader_editor_pin_and_shared_group_target(shader_editor, tmp_path):
     second_instance = context.space_data.node_tree.nodes.new("ShaderNodeGroup")
     second_instance.node_tree = group
     source = nested.image
-    target = ImageEditTarget.capture(context)
+    target, _ = ImageEditTarget.capture(context)
     write_result(tmp_path)
     apply_image_result(target, tmp_path / "foreground.png")
     assert nested.image == source
@@ -158,7 +157,7 @@ def test_texture_poll_applies_busy_and_size_limits(texture, busy, limit, expecte
 
 @pytest.mark.parametrize("operation,filename,shared", [
     (upscale.UpscaleImage, "upscale.png", True),
-    (remove_background.RunBackgroundRemoval, "foreground.png", False),
+    (remove_background.RemoveImageBackground, "alpha.npy", False),
 ])
 def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, operation, filename, shared):
     source_name = texture.image.name
@@ -171,10 +170,12 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
 
     def execute(operator, context):
         node = bpy.data.materials["Texture material"].node_tree.nodes["Source texture"]
-        operator._image_target = ImageEditTarget.capture(texture_context(node))
+        operator._image_target, rgba = ImageEditTarget.capture(texture_context(node))
         if operation == upscale.UpscaleImage:
-            operator.model = "HAT_GAN_X4_SHARPER"
-        operator.response(context, SimpleNamespace(file=lambda key: tmp_path / f"{key}.png"))
+            operator._model = "HAT_GAN_X4_SHARPER"
+        else:
+            operator._background_input = BackgroundInput(rgba, operator._image_target.image.alpha_mode, tmp_path / "input.png")
+        operator.response(context, SimpleNamespace(file=lambda key: tmp_path / filename))
         return {"FINISHED"}
 
     bpy.context.preferences.edit.use_global_undo = True
@@ -187,7 +188,11 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
             call = getattr(bpy.ops.anyimage, operation.bl_idname.split(".")[1])
             assert call("EXEC_DEFAULT", True) == {"FINISHED"}
             result_pixels = images.image_pixels(texture.image)
-            assert tuple(texture.image.size) == (8, 6)
+            if filename == "alpha.npy":
+                before, after = source_pixels.reshape(-1, 4), result_pixels.reshape(-1, 4)
+                np.testing.assert_array_equal(after[:, :3], before[:, :3])
+                np.testing.assert_allclose(after[:, 3], before[:, 3] * 0.5, atol=1 / 255)
+            assert tuple(texture.image.size) == ((8, 6) if operation == upscale.UpscaleImage else (4, 3))
             assert bpy.ops.ed.undo() == {"FINISHED"}
             restored = bpy.data.materials["Texture material"].node_tree.nodes["Source texture"]
             assert restored.image.name == source_name
@@ -195,7 +200,7 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
             np.testing.assert_array_equal(images.image_pixels(restored.image), source_pixels)
             assert bpy.ops.ed.redo() == {"FINISHED"}
             redone = bpy.data.materials["Texture material"].node_tree.nodes["Source texture"]
-            assert tuple(redone.image.size) == (8, 6)
+            assert tuple(redone.image.size) == ((8, 6) if operation == upscale.UpscaleImage else (4, 3))
             np.testing.assert_array_equal(images.image_pixels(redone.image), result_pixels)
             if shared:
                 other = redone.id_data.nodes["Other texture"]
@@ -205,14 +210,14 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
             bpy.utils.unregister_class(operation)
 
 
-@pytest.mark.parametrize("operation,module,filename,outcome", [
-    (upscale.UpscaleImage, upscale, "upscale.png", "succeeded"),
-    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png", "succeeded"),
-    (upscale.UpscaleImage, upscale, "upscale.png", "failed"),
-    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png", "cancelled"),
-    (remove_background.RunBackgroundRemoval, remove_background, "foreground.png", "invalid_target"),
+@pytest.mark.parametrize("operation,filename,outcome", [
+    (upscale.UpscaleImage, "upscale.png", "succeeded"),
+    (remove_background.RemoveImageBackground, "alpha.npy", "succeeded"),
+    (upscale.UpscaleImage, "upscale.png", "failed"),
+    (remove_background.RemoveImageBackground, "alpha.npy", "cancelled"),
+    (remove_background.RemoveImageBackground, "alpha.npy", "invalid_target"),
 ])
-def test_texture_job_request_and_completion(texture, tmp_path, operation, module, filename, outcome):
+def test_texture_job_request_and_completion(texture, tmp_path, operation, filename, outcome):
     context = texture_context(texture)
     context.window = bpy.context.window
     context.window_manager = SimpleNamespace(
@@ -233,8 +238,8 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
     def execute(operator, _context):
         with ExitStack() as stack:
             for name in ("require_environment", "require_model"):
-                stack.enter_context(patch.object(module, name))
-            stack.enter_context(patch.object(module, "configured_device", return_value="cpu"))
+                stack.enter_context(patch.object(ai, name))
+            stack.enter_context(patch.object(ai, "configured_device", return_value="cpu"))
             stack.enter_context(patch.object(runtime, "server", server))
             stack.enter_context(patch.object(runtime, "enable"))
             stack.enter_context(patch.object(runtime._config, "environment_ready", return_value=True))
@@ -250,7 +255,9 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
             assert "start_frame" not in parameters and "video_frames" not in parameters
             assert parameters["device"] == "cpu"
             assert parameters["model"] == ("HAT_GAN_X4_SHARPER" if operation == upscale.UpscaleImage else "BIREFNET_LITE")
-            input_path = operator.input_path
+            if operation == upscale.UpscaleImage:
+                assert parameters["max_input_size"] == 2048
+            input_path = parameters["input"]
             assert Path(input_path).is_file()
             # Selection changes must not redirect completion.
             other = texture.id_data.nodes.new("ShaderNodeTexImage")
@@ -267,7 +274,7 @@ def test_texture_job_request_and_completion(texture, tmp_path, operation, module
             assert not Path(input_path).exists()
             assert other.image is None
             if outcome == "succeeded":
-                assert tuple(texture.image.size) == (8, 6)
+                assert tuple(texture.image.size) == ((8, 6) if operation == upscale.UpscaleImage else (4, 3))
             elif outcome != "invalid_target":
                 np.testing.assert_array_equal(images.image_pixels(texture.image), original_pixels)
             context.window_manager.event_timer_remove.assert_called_once()

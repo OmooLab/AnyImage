@@ -7,8 +7,8 @@ import pytest
 
 from tests.support.color_reference import create_clipboard_image, create_image_empty, registered_color_reference, isolate_reference_cache
 from anyimage.common import color_reference as reference_cache
-from anyimage.common.color_match import build_color_match, apply_color_match
-from anyimage.common.color_space import image_rgba_to_linear, linear_rgba_to_image, srgb_to_linear_rgb
+from anyimage.common.color_match import build_color_mapping, build_color_match, apply_color_match
+from anyimage.common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from anyimage.common.image import image_rgba
 from anyimage.operators import color_match
 from anyimage.operators.color_match import (
@@ -45,7 +45,7 @@ def _modal_operator():
     for name in (
         "_update_preview",
         "_restore_preview",
-        "_commit",
+        "_confirm_preview",
         "_add_preview_handler",
         "_tag_redraw",
         "_finish",
@@ -113,29 +113,32 @@ def test_match_transforms_all_rgb_and_preserves_target_alpha():
 @pytest.mark.parametrize("space", ["sRGB", "AgX Base sRGB", "Non-Color"])
 def test_match_preview_and_full_size_result_preserve_color_settings(space):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    reference = create_clipboard_image("Reference", np.full((4, 4, 4), (.7, .3, .1, 1)))
-    source = create_clipboard_image("Target_color", np.full((8, 1024, 4), (.1, .2, .6, .5)))
+    reference_rgba = np.full((4, 4, 4), (.7, .3, .1, 1))
+    reference_rgba[:, ::2] = (.1, .8, .1, 1)
+    reference = create_clipboard_image("Reference", reference_rgba)
+    stripes = np.full((8, 1023, 4), (.1, .2, .6, .5))
+    stripes[:, ::2] = (.7, .1, .2, .5)
+    source = create_clipboard_image("Target_color", stripes)
     source.colorspace_settings.name = space
     source.alpha_mode = "CHANNEL_PACKED"
     reference.colorspace_settings.name = space
     before = image_rgba(source)
-    prepared = reference_cache.get_color_reference(reference, refresh=True)
-    expected_linear = apply_color_match(build_color_match(
-        prepared.transfer, np.concatenate((srgb_to_linear_rgb(before[..., :3]), before[..., 3:4]), axis=-1),
-        target_float=False,
-    ), color=.5, lightness=0)
+    direct = create_image_empty("Direct", source)
     owner = create_image_empty("Owner", source)
+    assert _execute(MatchColorReference, _context(direct, reference)) == {"FINISHED"}
+    expected = image_rgba(direct.data)
+    assert not np.array_equal(expected, before)
     context = _modal_context(owner, reference)
     operator, reports = _modal_operator()
     assert MatchColorReference.invoke(operator, context, _event("LEFTMOUSE")) == {"RUNNING_MODAL"}
     preview = image_rgba(owner.data)
     assert preview.shape[1] < before.shape[1]
-    np.testing.assert_allclose(preview[0, 0], linear_rgba_to_image(source, expected_linear)[0, 0], atol=1 / 255)
+    np.testing.assert_allclose(preview[0, 0], expected[0, 0], atol=1 / 255)
     assert (source.colorspace_settings.name, source.alpha_mode) == (space, "CHANNEL_PACKED")
     np.testing.assert_array_equal(image_rgba(source), before)
     assert MatchColorReference.modal(operator, context, _event("RET")) == {"FINISHED"}
     assert (owner.data.colorspace_settings.name, owner.data.alpha_mode) == (space, "CHANNEL_PACKED")
-    np.testing.assert_allclose(image_rgba(owner.data), linear_rgba_to_image(source, expected_linear), atol=1 / 255)
+    np.testing.assert_array_equal(image_rgba(owner.data), expected)
     assert not reports
 
 
@@ -167,12 +170,9 @@ def test_repeated_match_uses_current_pixels():
 
     assert _execute(MatchColorReference, _context(owner, green)) == {"FINISHED"}
     assert owner.data == source
-    expected = linear_rgba_to_image(source, apply_color_match(
-        build_color_match(
-            reference_cache.get_color_reference(green).transfer,
-            image_rgba_to_linear(source, first_result),
-        ), color=0.5, lightness=0.0,
-    ))
+    linear = image_rgba_to_linear(source, first_result)
+    mapping = build_color_mapping(reference_cache.get_color_reference(green).transfer, linear)
+    expected = linear_rgba_to_image(source, apply_color_match(build_color_match(mapping, linear)))
     np.testing.assert_allclose(image_rgba(owner.data), expected, atol=1 / 255)
 
 

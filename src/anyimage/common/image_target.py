@@ -9,9 +9,12 @@ import bpy
 from .image import (
     TEMPORARY_IMAGE_PREVIEW_PROPERTY,
     image_content_state,
+    pack_image_result,
     image_content_signature,
     has_other_image_user,
     image_pixels,
+    image_rgba,
+    is_static_image,
     owner_image,
     image_user_settings,
     is_animated_image,
@@ -131,6 +134,12 @@ def image_edit_owner(context):
     return owner
 
 
+def editable_still_image(context):
+    """Return the current image when it can be edited as a still."""
+    image = owner_image(image_edit_owner(context))
+    return image if is_static_image(image) else None
+
+
 def replace_texture_image(node, result_image):
     """Commit one texture image transaction while preserving other users."""
     try:
@@ -140,11 +149,11 @@ def replace_texture_image(node, result_image):
         original_content = None
         try:
             if has_other_image_user(node):
+                pack_image_result(result_image)
                 final_image = result_image
             else:
-                result_content = image_content_state(result_image)
                 original_content = image_content_state(source_image)
-                restore_image_content(source_image, result_content)
+                pack_image_result(result_image, source_image)
                 final_image = source_image
             node.image = final_image
         except Exception:
@@ -176,13 +185,7 @@ class ImageEditTarget:
 
     @classmethod
     def capture(cls, context):
-        """Share the live binding across pending edits of the same target."""
-        target, _ = cls.capture_with_pixels(context)
-        return target
-
-    @classmethod
-    def capture_with_pixels(cls, context):
-        """Return the target and the Blender-order pixels used for its signature."""
+        """Return the target and its current top-down RGBA from one pixel read."""
         owner = image_edit_owner(context)
         if owner is None:
             raise RuntimeError("Select an Image Empty or a shader texture with an image")
@@ -207,9 +210,10 @@ class ImageEditTarget:
                      image_content_signature(image, pixels))
         pending = _image_targets.get(key)
         if pending == target:
-            return pending, pixels
-        _image_targets[key] = target
-        return target, pixels
+            target = pending
+        else:
+            _image_targets[key] = target
+        return target, image_rgba(image, pixels)
 
     def validate_binding(self):
         """Reject a removed owner or a changed image assignment."""
@@ -277,6 +281,7 @@ class ImageEditTarget:
         try:
             material = self.material.copy()
             node = material.node_tree.nodes[self.owner.name]
+            pack_image_result(result_image)
             node.image = result_image
             if self.object_owner.data.users > 1:
                 slot.link = "OBJECT"

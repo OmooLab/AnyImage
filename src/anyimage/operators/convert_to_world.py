@@ -4,7 +4,6 @@ import bpy
 
 from ..common.color_image import configure_material_color_image, material_color_image
 from ..common.image import is_image_empty, is_static_image
-from ..common.object import remove_conversion_source
 from ..common.panorama import create_panorama_world, panorama_crop_bounds, report_panorama_crop
 
 
@@ -30,7 +29,7 @@ class ConvertToWorld(bpy.types.Operator):
                 world = create_panorama_world(source.data, color)
                 try:
                     context.scene.world = world
-                    remove_conversion_source(source)
+                    bpy.data.objects.remove(source, do_unlink=True)
                 except Exception:
                     context.scene.world = previous_world
                     bpy.data.worlds.remove(world)

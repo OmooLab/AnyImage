@@ -27,7 +27,6 @@ def context(monkeypatch):
         texture=None, texture_slot=SimpleNamespace(texture=None, map_mode="VIEW_PLANE"),
         stencil_dimension=(256, 256), update_tag=lambda: None,
     )
-    monkeypatch.setattr(brush_tools, "set_brush_preview", lambda *args: None)
     return SimpleNamespace(mode="PAINT_TEXTURE", brush=brush, scene=bpy.context.scene)
 
 
@@ -41,7 +40,7 @@ def test_brush_color_preserves_hdr_and_normalizes_byte_images(source, context, k
     elif kind == "inverse":
         source.colorspace_settings.name = "AgX Base sRGB"
     elif kind == "normalized":
-        source[images.COLOR_NORMALIZED_PROPERTY] = True
+        source = color_image.create_normalized_color_image(source)
     source.pixels.foreach_set(pixels)
     source.update()
     source.pack()
@@ -49,18 +48,18 @@ def test_brush_color_preserves_hdr_and_normalizes_byte_images(source, context, k
         normalize_color_rgba(color_image.decode_color_image(source, source.colorspace_settings.name))
         if kind == "inverse" else images.image_rgba(source)
     )
-    identity = (source.as_pointer(), source.name, source.filepath_raw)
-    resources = (set(bpy.data.images), set(bpy.data.scenes))
+    source_settings = source.colorspace_settings.name, source.alpha_mode
+    before = images.image_pixels(source)
     texture = brush_tools.set_tool_texture(context, source)
-    assert texture.image == source
-    assert source.is_float == (kind == "hdr")
-    assert source.colorspace_settings.name == ("Linear Rec.709" if kind == "hdr" else "sRGB")
+    bound = texture.image
+    assert (bound == source) == (kind in {"hdr", "normalized"})
+    assert (source.colorspace_settings.name, source.alpha_mode) == source_settings
+    np.testing.assert_array_equal(images.image_pixels(source), before)
+    assert bound.colorspace_settings.name == ("Linear Rec.709" if kind == "hdr" else "sRGB")
     if kind != "hdr":
-        assert source.alpha_mode == "PREMUL" and source.file_format == "PNG"
-        assert source[images.COLOR_NORMALIZED_PROPERTY]
-    assert (source.as_pointer(), source.name, source.filepath_raw) == identity
-    assert (set(bpy.data.images), set(bpy.data.scenes)) == resources
-    np.testing.assert_allclose(images.image_rgba(source), expected, atol=1 / 255)
+        assert bound.alpha_mode == "PREMUL" and bound.file_format == "PNG"
+        assert bound[images.COLOR_NORMALIZED_PROPERTY]
+    np.testing.assert_allclose(images.image_rgba(bound), expected, atol=1 / 255)
 
 
 @pytest.mark.parametrize("mode", ["SCULPT", "PAINT_TEXTURE", "PAINT_VERTEX"])
@@ -81,10 +80,9 @@ def test_brush_cache_and_saved_texture_preserve_normalized_content(source, conte
     source[actions.CLIPBOARD_HASH_PROPERTY] = "original"
     source[cache.CLIPBOARD_CONTENT_PROPERTY] = cache._clipboard_content_hash(source)
     texture = brush_tools.set_tool_texture(context, source)
-    assert cache._find_packed_clipboard_image("original") is None
-    before = images.image_pixels(source)
-    assert brush_tools.set_tool_texture(context, source) == texture
-    np.testing.assert_array_equal(images.image_pixels(source), before)
+    assert cache._find_packed_clipboard_image("original") == source
+    before = images.image_pixels(texture.image)
+    assert brush_tools.set_tool_texture(context, texture.image) == texture
     library = tmp_path / "brush-color.blend"
     bpy.data.libraries.write(str(library), {texture})
     with bpy.data.libraries.load(str(library)) as (_, loaded):
@@ -112,7 +110,7 @@ def test_brush_failure_rolls_back_normalized_image_and_binding(source, context, 
 
     brush = context.brush
     brush.update_tag = fail
-    textures = set(bpy.data.textures)
+    resources = set(bpy.data.images), set(bpy.data.textures)
     with pytest.raises(RuntimeError, match="Brush failed"):
         brush_tools.set_tool_texture(context, source)
     np.testing.assert_array_equal(images.image_pixels(source), before)
@@ -122,4 +120,4 @@ def test_brush_failure_rolls_back_normalized_image_and_binding(source, context, 
     assert not source.get(images.COLOR_NORMALIZED_PROPERTY)
     assert brush.texture is None and brush.texture_slot.texture is None
     assert brush.texture_slot.map_mode == "VIEW_PLANE"
-    assert set(bpy.data.textures) == textures
+    assert (set(bpy.data.images), set(bpy.data.textures)) == resources

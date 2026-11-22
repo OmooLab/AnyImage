@@ -188,6 +188,7 @@ def test_normalized_color_is_bounded_repeatable_and_preserves_source(space, is_f
     original = images.image_pixels(source).copy()
     expected = image_rgba(source) if space == "sRGB" else normalize_color_rgba(decode_color_image(source, space))
     result = create_normalized_color_image(source)
+    result.pack()
     try:
         assert not result.is_float and result.colorspace_settings.name == "sRGB"
         assert result[COLOR_NORMALIZED_PROPERTY]

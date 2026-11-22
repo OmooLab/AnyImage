@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass
 
-from . import model_adapter
-
 
 @dataclass
 class GeometryFrame:
@@ -47,20 +45,11 @@ def _pixel_intrinsics(intrinsics, image_size):
     return result
 
 
-def infer_geometry(model_manager, parameters, image, *, include_points, cancel_check=None):
-    """Infer RGB geometry with camera intrinsics expressed in pixels."""
+def infer_geometry(adapter, session, rgb, resolution_level, **options):
+    """Infer full geometry with camera intrinsics expressed in pixels."""
     import numpy as np
 
-    if cancel_check is not None:
-        cancel_check()
-    model, _load_ms = model_manager.get_session(parameters["model"], parameters["device"])
-    prediction = model_adapter(parameters["model"]).infer(
-        model,
-        np.asarray(image, dtype=np.float32) / 255.0,
-        int(parameters["resolution_level"]),
-        include_points=include_points,
-        **({"refine_steps": parameters["refine_steps"]} if "refine_steps" in parameters else {}),
-    )
+    prediction = adapter.infer(session, rgb, resolution_level, **options)
     depth = np.asarray(prediction["depth"], dtype=np.float32)
     height, width = depth.shape
     return GeometryFrame(
@@ -68,8 +57,5 @@ def infer_geometry(model_manager, parameters, image, *, include_points, cancel_c
         normal=np.asarray(prediction["normal"], dtype=np.float32),
         validity=np.asarray(prediction["mask"], dtype=np.float32),
         intrinsics=_pixel_intrinsics(prediction["intrinsics"], (width, height)),
-        points=(
-            np.asarray(prediction["points"], dtype=np.float32)
-            if include_points else None
-        ),
+        points=np.asarray(prediction["points"], dtype=np.float32),
     )

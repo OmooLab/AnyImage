@@ -1,3 +1,4 @@
+from anyimage.operators.remove_background.image import BackgroundInput
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -54,8 +55,8 @@ def test_pending_edits_follow_shared_material_replacement(tmp_path):
     material, image = _material()
     first_owner = _image_object(material, "First")
     second_owner = _image_object(material, "Second")
-    first = ImageEditTarget.capture(_context(first_owner))
-    second = ImageEditTarget.capture(_context(first_owner))
+    first, _ = ImageEditTarget.capture(_context(first_owner))
+    second, _ = ImageEditTarget.capture(_context(first_owner))
     write_result(tmp_path)
     apply_image_result(first, tmp_path / "foreground.png")
     apply_image_result(second, tmp_path / "foreground.png")
@@ -74,7 +75,7 @@ def test_marked_object_resolves_material_color(kind):
     node = object_image_texture(obj)
     assert node is not None and node.image == color
     assert image_edit_owner(_context(obj)) == node
-    target = ImageEditTarget.capture(_context(obj))
+    target, _ = ImageEditTarget.capture(_context(obj))
     assert target.object_owner == obj
     assert target.material == material
     assert target.material_slot == 0
@@ -102,7 +103,8 @@ def test_ordinary_object_uses_first_texture_of_current_material():
     obj.active_material_index = 0
     assert image_edit_owner(context) == texture
     assert not material.texture_paint_images
-    ImageEditTarget.capture(context).validate()
+    target, _ = ImageEditTarget.capture(context)
+    target.validate()
     bpy.context.tool_settings.image_paint.mode = "MATERIAL"
     material.paint_active_slot = 1
     tree.nodes.active = other
@@ -122,7 +124,7 @@ def test_object_color_target_survives_shader_edits(edit):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, color = _material()
     obj = _image_object(material)
-    target = ImageEditTarget.capture(_context(obj))
+    target, _ = ImageEditTarget.capture(_context(obj))
     tree = material.node_tree
     shader = next(node for node in tree.nodes if node.bl_idname == "ShaderNodeBsdfPrincipled")
     if edit == "reroute":
@@ -147,7 +149,7 @@ def test_object_target_rejects_changed_material_slot():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, _color = _material()
     obj = _image_object(material)
-    target = ImageEditTarget.capture(_context(obj))
+    target, _ = ImageEditTarget.capture(_context(obj))
     replacement, _replacement_color = _material("PANORAMA")
     obj.material_slots[0].material = replacement
 
@@ -161,7 +163,7 @@ def test_object_commit_isolates_shared_material():
     first = _image_object(material, "First")
     second = first.copy()
     bpy.context.collection.objects.link(second)
-    target = ImageEditTarget.capture(_context(first))
+    target, _ = ImageEditTarget.capture(_context(first))
     result = bpy.data.images.new("Result", width=8, height=6, alpha=True)
     result.pixels.foreach_set(
         np.tile((0.8, 0.4, 0.2, 0.5), 48).astype(np.float32)
@@ -185,7 +187,7 @@ def test_object_commit_isolates_shared_image():
     other.empty_display_type = "IMAGE"
     other.data = source
     bpy.context.collection.objects.link(other)
-    target = ImageEditTarget.capture(_context(obj))
+    target, _ = ImageEditTarget.capture(_context(obj))
     result = bpy.data.images.new("Result", width=8, height=6, alpha=True)
 
     committed = target.commit(result)
@@ -200,7 +202,7 @@ def test_object_commit_isolates_shared_image():
     "operation,filename",
     [
         (upscale.UpscaleImage, "upscale.png"),
-        (remove_background.RunBackgroundRemoval, "foreground.png"),
+        (remove_background.RemoveImageBackground, "alpha.npy"),
     ],
 )
 def test_object_action_undo_redo_restores_shared_material(
@@ -217,12 +219,14 @@ def test_object_action_undo_redo_restores_shared_material(
 
     def execute(operator, context):
         current = bpy.data.objects["First"]
-        operator._image_target = ImageEditTarget.capture(_context(current))
+        operator._image_target, rgba = ImageEditTarget.capture(_context(current))
         if operation == upscale.UpscaleImage:
-            operator.model = "HAT_GAN_X4_SHARPER"
+            operator._model = "HAT_GAN_X4_SHARPER"
+        else:
+            operator._background_input = BackgroundInput(rgba, operator._image_target.image.alpha_mode, tmp_path / "input.png")
         operator.response(
             context,
-            SimpleNamespace(file=lambda key: tmp_path / f"{key}.png"),
+            SimpleNamespace(file=lambda key: tmp_path / filename),
         )
         return {"FINISHED"}
 
@@ -241,7 +245,7 @@ def test_object_action_undo_redo_restores_shared_material(
             first = bpy.data.objects["First"]
             second = bpy.data.objects["Second"]
             assert first.active_material != second.active_material
-            assert tuple(object_image_texture(first).image.size) == (8, 6)
+            assert tuple(object_image_texture(first).image.size) == ((8, 6) if operation == upscale.UpscaleImage else (4, 3))
             assert tuple(object_image_texture(second).image.size) == (4, 3)
 
             assert bpy.ops.ed.undo() == {"FINISHED"}
@@ -257,7 +261,7 @@ def test_object_action_undo_redo_restores_shared_material(
             first = bpy.data.objects["First"]
             second = bpy.data.objects["Second"]
             assert first.active_material != second.active_material
-            assert tuple(object_image_texture(first).image.size) == (8, 6)
+            assert tuple(object_image_texture(first).image.size) == ((8, 6) if operation == upscale.UpscaleImage else (4, 3))
             assert tuple(object_image_texture(second).image.size) == (4, 3)
         finally:
             bpy.utils.unregister_class(operation)

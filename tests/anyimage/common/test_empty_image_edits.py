@@ -102,7 +102,7 @@ def test_empty_edit_isolates_material_references(source, tmp_path, entry):
     if entry == "replace":
         images.replace_empty_image(source, edit_result(source))
     else:
-        target = ImageEditTarget.capture(SimpleNamespace(object=source, space_data=None))
+        target, _ = ImageEditTarget.capture(SimpleNamespace(object=source, space_data=None))
         apply_image_result(target, write_result(tmp_path))
     assert source.data != original
     assert node.image == original
@@ -145,7 +145,6 @@ def test_frame_sharing_uses_surviving_objects(source, outside):
     assert images.has_other_image_user(source, removed_objects=(merged,)) == outside
     result = edit_result(source)
     final = images.replace_empty_image(source, result, removed_objects=(merged,))
-    assert original.get(images.IMAGE_EMPTY_REFERENCE_PROPERTY)
     assert not original.use_fake_user
     bpy.data.objects.remove(merged, do_unlink=True)
     assert (final == original) == (not outside)

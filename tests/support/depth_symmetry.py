@@ -3,18 +3,14 @@
 import bpy
 import numpy as np
 import pytest
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_cutout import ODepthCutout
 from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout_symmetry import OCutoutSymmetry
 
 
-def _set_value(obj, modifier, group):
+def _set_value(obj, modifier):
     def setter(name, value, subtype=None):
-        set_modifier_input(
-            modifier,
-            modifier_input_identifier(group, name, subtype=subtype),
-            value,
-        )
+        set_modifier_input(modifier, name, value, subtype=subtype)
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
 
@@ -72,8 +68,8 @@ def symmetry():
     mirror = obj.modifiers.new(mirror_group.name, "NODES")
     mirror.node_group = mirror_group
 
-    cutout_setter = _set_value(obj, cutout, cutout_group)
-    mirror_setter = _set_value(obj, mirror, mirror_group)
+    cutout_setter = _set_value(obj, cutout)
+    mirror_setter = _set_value(obj, mirror)
     mirror_setter("Smooth", 0)
     for name, value in (
         ("Depth Image", image),

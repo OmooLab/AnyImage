@@ -155,7 +155,7 @@ class MaskToolTest(BlenderTestCase):
 
         for mode, expected in expected_alpha.items():
             with self.subTest(mode=mode):
-                pixels = self.edit_mask.apply_alpha_mask(source, mask, mode)
+                pixels = self.edit_mask.apply_alpha_mask(source.copy(), mask, mode)
                 result = np.flipud(pixels.reshape(source.shape))
                 np.testing.assert_allclose(result[:, :, :3], source[:, :, :3])
                 np.testing.assert_allclose(result[:, :, 3], expected)

@@ -3,6 +3,7 @@
 from io import BytesIO
 from types import SimpleNamespace
 
+from tests.support.image_objects import packed_clipboard_image
 import bpy
 import numpy as np
 import pytest
@@ -10,7 +11,6 @@ from PIL import Image
 
 from anyimage.common import image as images
 from anyimage.operators.clipboard_image import actions, cache, operators
-from anyimage.operators.clipboard_image.brush import BrushPreviewError
 
 
 @pytest.fixture(autouse=True)
@@ -307,7 +307,7 @@ def test_view_creation_only_adds_image_empty(monkeypatch):
     before_meshes, before_materials = set(bpy.data.meshes), set(bpy.data.materials)
     result, _, _ = paste(view_context(), monkeypatch)
     assert result == {"FINISHED"}
-    cached, reused = cache.acquire_packed_image(clipboard_bytes(), ".png")
+    cached, reused = packed_clipboard_image(clipboard_bytes(), ".png")
     created = bpy.context.view_layer.objects.active
     assert reused and cached.users == 1
     assert created.type == "EMPTY" and created.empty_display_type == "IMAGE"
@@ -353,7 +353,7 @@ def test_failed_replacement_keeps_original_content_and_cleans_input(failure, sha
     pixels = images.image_pixels(image)
     resources = set(bpy.data.images)
     if failure == "commit":
-        restore = actions.restore_image_content
+        restore = images.restore_image_content
         failed = False
         def fail(destination, content):
             nonlocal failed
@@ -361,7 +361,7 @@ def test_failed_replacement_keeps_original_content_and_cleans_input(failure, sha
             if not failed:
                 failed = True
                 raise RuntimeError("Commit failed")
-        monkeypatch.setattr(actions, "restore_image_content", fail)
+        monkeypatch.setattr(images, "restore_image_content", fail)
     result, _, _ = paste(view_context(obj), monkeypatch, b"invalid image" if failure == "decode" else None)
     assert result == {"CANCELLED"}
     assert set(bpy.data.images) == resources and obj.data == image
@@ -372,7 +372,7 @@ def test_failed_replacement_keeps_original_content_and_cleans_input(failure, sha
 
 
 def test_operator_reuses_target_as_input_without_removing_it(monkeypatch):
-    image, _ = cache.acquire_packed_image(clipboard_bytes(), ".png")
+    image, _ = packed_clipboard_image(clipboard_bytes(), ".png")
     obj = image_empty(image)
     before = set(bpy.data.images)
     pixels = images.image_pixels(image)
@@ -381,6 +381,23 @@ def test_operator_reuses_target_as_input_without_removing_it(monkeypatch):
     assert obj.data == image and set(bpy.data.images) == before
     np.testing.assert_array_equal(images.image_pixels(image), pixels)
     assert actions.CLIPBOARD_HASH_PROPERTY not in image
+
+
+def test_new_brush_paste_preserves_cached_reference_image(monkeypatch):
+    assert paste(view_context(), monkeypatch)[0] == {"FINISHED"}
+    reference = bpy.context.view_layer.objects.active
+    source = reference.data
+    pixels = images.image_pixels(source)
+    alpha_mode = source.alpha_mode
+    brush = bpy.data.brushes.new("Clipboard Brush", mode="SCULPT")
+    context = view_context(mode="SCULPT", brush=brush)
+
+    assert paste(context, monkeypatch)[0] == {"FINISHED"}
+    assert reference.data == source and source.alpha_mode == alpha_mode
+    np.testing.assert_array_equal(images.image_pixels(source), pixels)
+    assert brush.texture.image != source and brush.texture.image.alpha_mode == "PREMUL"
+    np.testing.assert_allclose(images.image_pixels(brush.texture.image), pixels, atol=1 / 255)
+    assert packed_clipboard_image(clipboard_bytes(), ".png") == (source, True)
 
 
 @pytest.mark.parametrize("mode", ["SCULPT", "PAINT_TEXTURE", "PAINT_VERTEX"])
@@ -397,8 +414,8 @@ def test_existing_brush_replaces_content_without_changing_settings(mode, monkeyp
     brush.color = (.2, .5, .7)
     state = (tuple(brush.color), tuple(brush.stencil_dimension), brush.texture_slot.map_mode)
     previews = []
-    monkeypatch.setattr(actions, "set_brush_preview", lambda *args: previews.append(args))
-    original, _ = cache.acquire_packed_image(clipboard_bytes(), ".png")
+    monkeypatch.setattr(operators, "set_brush_preview", lambda *args: previews.append(args))
+    original, _ = packed_clipboard_image(clipboard_bytes(), ".png")
     pixels = images.image_pixels(original)
     original_state = images.image_content_state(original)
     before = {kind: set(getattr(bpy.data, kind)) for kind in ("images", "brushes", "textures")}
@@ -442,9 +459,9 @@ def test_brush_replacement_preserves_linear_hdr(monkeypatch):
     pixels = np.array([8, 2, .5, .25, 12, 3, 1, 0], np.float32)
     source.pixels.foreach_set(pixels)
     source.pack()
-    monkeypatch.setattr(actions, "set_brush_preview", lambda *args: None)
+    monkeypatch.setattr(operators, "set_brush_preview", lambda *args: None)
     context = view_context(mode="PAINT_TEXTURE", brush=brush)
-    actions.replace_pasted_image(context, actions.replacement_for_context(context), source)
+    actions.replace_pasted_image(actions.replacement_for_context(context), source)
     assert brush.texture == texture and texture.image == destination
     assert destination.is_float and destination.colorspace_settings.name == "Linear Rec.709"
     assert destination.alpha_mode == "PREMUL"
@@ -460,8 +477,8 @@ def test_preview_failure_keeps_committed_content_and_cleans_temporary_images(mon
     brush = bpy.data.brushes.new("Brush", mode="TEXTURE_PAINT")
     brush.texture = texture
     def fail(*args):
-        raise BrushPreviewError("Preview failed")
-    monkeypatch.setattr(actions, "set_brush_preview", fail)
+        raise RuntimeError("Preview failed")
+    monkeypatch.setattr(operators, "set_brush_preview", fail)
     before = set(bpy.data.images)
     result, _, reports = paste(view_context(mode="PAINT_TEXTURE", brush=brush), monkeypatch)
     assert result == {"FINISHED"} and reports[-1] == ({"WARNING"}, "Preview failed")
@@ -490,7 +507,7 @@ def test_brush_replacement_isolates_shared_image_and_texture(reference, monkeypa
         brush.mask_texture = texture
     state = (tuple(brush.color), tuple(brush.stencil_dimension), brush.texture_slot.map_mode)
     texture_count = len(bpy.data.textures)
-    monkeypatch.setattr(actions, "set_brush_preview", lambda *_: None)
+    monkeypatch.setattr(operators, "set_brush_preview", lambda *_: None)
     context = view_context(mode="PAINT_TEXTURE", brush=brush)
     result, _, _ = paste(context, monkeypatch)
     replacement = brush.texture.image

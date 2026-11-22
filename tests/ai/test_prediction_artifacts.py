@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from unittest.mock import patch
 import numpy as np
 import pytest
@@ -6,8 +5,13 @@ from PIL import Image
 
 
 from server.geometry import prediction_artifacts as artifacts
+from tests.anyimage.server.support import FakeJobContext
+from server.models import onnx_moge2
 from server.models.geometry import GeometryFrame
 from server.models.moge_geometry import depth_to_points
+
+
+MODEL = {"model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 0}
 
 
 def make_frame(depth):
@@ -40,18 +44,12 @@ def test_alpha_resize_retains_threshold_values(tmp_path):
     rgba[0, :, 3] = [25, 26, 242, 243]
     path = tmp_path / "alpha.png"
     Image.fromarray(rgba).save(path)
-    context = SimpleNamespace(
-        directory=tmp_path,
-        resource=lambda _: None,
-        progress=lambda *_: None,
-        check_cancelled=lambda: None,
-    )
+    context = FakeJobContext(tmp_path, "generate_cutout_artifacts")
     with (
         patch.object(artifacts, "infer_geometry", return_value=make_frame(np.ones((2, 8)))),
         patch.object(artifacts, "write_depth_texture") as depth,
-        patch.object(artifacts, "write_depth_metadata"),
     ):
-        artifacts.generate_moge_artifacts(context, {}, path, generate_depth=True)
+        artifacts.generate_moge_artifacts(context, {**MODEL, "input": str(path)}, generate_depth=True)
     alpha = depth.call_args.kwargs["alpha"]
     np.testing.assert_array_equal(
         alpha >= 0.1, [[False] * 2 + [True] * 6] * 2
@@ -64,12 +62,7 @@ def test_alpha_resize_retains_threshold_values(tmp_path):
 def test_source_is_closed_before_cancelled_inference(tmp_path):
     path = tmp_path / "source.png"
     Image.new("RGBA", (4, 4)).save(path)
-    context = SimpleNamespace(
-        directory=tmp_path,
-        resource=lambda _: None,
-        progress=lambda *_: None,
-        check_cancelled=lambda: None,
-    )
+    context = FakeJobContext(tmp_path, "generate_cutout_artifacts")
     with Image.open(path) as source:
         def cancel(*_args, **_kwargs):
             assert source.fp is None
@@ -77,10 +70,10 @@ def test_source_is_closed_before_cancelled_inference(tmp_path):
 
         with (
             patch.object(artifacts, "open_image", return_value=source),
-            patch.object(artifacts, "infer_geometry", side_effect=cancel),
+            patch.object(context, "check_cancelled", side_effect=cancel),
             pytest.raises(RuntimeError, match="cancelled"),
         ):
-            artifacts.generate_moge_artifacts(context, {}, path, generate_depth=True)
+            artifacts.generate_moge_artifacts(context, {**MODEL, "input": str(path)}, generate_depth=True)
     assert list(tmp_path.iterdir()) == [path]
 
 
@@ -91,38 +84,34 @@ def test_artifacts_write_normals_and_optional_depth(tmp_path, generate_depth):
     rgba[..., 3] = np.round(alpha * 255).astype(np.uint8)
     path = tmp_path / "source.png"
     Image.fromarray(rgba).save(path)
-    context = SimpleNamespace(
-        directory=tmp_path,
-        resource=lambda _: None,
-        progress=lambda *_: None,
-        check_cancelled=lambda: None,
-    )
+    context = FakeJobContext(tmp_path, "generate_cutout_artifacts")
     with (
         patch.object(artifacts, "infer_geometry", return_value=frame) as infer,
+        patch.object(onnx_moge2, "infer_normal", return_value=frame.normal) as infer_normal,
         patch.object(
             artifacts, "write_depth_texture",
             return_value=tmp_path / "depth.exr",
         ) as depth,
         patch.object(
-            artifacts, "write_depth_metadata", return_value=tmp_path / "depth.json"
-        ) as metadata,
-        patch.object(
             artifacts, "write_normal_texture", return_value=tmp_path / "normal.png"
         ) as normal,
     ):
-        artifacts.generate_moge_artifacts(
-            context, {}, path, generate_depth=generate_depth,
+        result = artifacts.generate_moge_artifacts(
+            context, {**MODEL, "input": str(path)}, generate_depth=generate_depth,
         )
-    infer.assert_called_once()
-    assert normal.call_args.args[0] is frame
+    assert normal.call_args.args[0] is frame.normal
     np.testing.assert_array_equal(normal.call_args.args[1], alpha >= 0.1)
     assert normal.call_args.args[2] == (35, 25)
     if generate_depth:
+        infer.assert_called_once()
+        infer_normal.assert_not_called()
         written_frame = depth.call_args.args[0]
         np.testing.assert_array_equal(depth.call_args.kwargs["alpha"], alpha)
-        assert metadata.call_args.args[0] is written_frame
+        assert result["intrinsics"] == frame.intrinsics.tolist()
         assert written_frame is frame
         assert frame.depth[12, 24] == 20
     else:
-        metadata.assert_not_called()
+        infer_normal.assert_called_once()
+        infer.assert_not_called()
+        assert "intrinsics" not in result
         depth.assert_not_called()

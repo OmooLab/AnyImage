@@ -13,7 +13,7 @@ from tests.support.image_texture import texture, texture_context, write_result
 
 @pytest.mark.parametrize("change", ["pixels", "colorspace", "alpha_mode"])
 def test_external_content_changes_reject_old_job_and_allow_new_capture(texture, tmp_path, change):
-    old = targets.ImageEditTarget.capture(texture_context(texture))
+    old, _ = targets.ImageEditTarget.capture(texture_context(texture))
     if change == "pixels":
         texture.image.pixels[0] = 0.9
         texture.image.update()
@@ -21,7 +21,7 @@ def test_external_content_changes_reject_old_job_and_allow_new_capture(texture, 
         texture.image.colorspace_settings.name = "Non-Color"
     else:
         texture.image.alpha_mode = "CHANNEL_PACKED"
-    current = targets.ImageEditTarget.capture(texture_context(texture))
+    current, _ = targets.ImageEditTarget.capture(texture_context(texture))
     assert current is not old
     before = images.image_pixels(texture.image)
     path = write_result(tmp_path)
@@ -37,7 +37,7 @@ def test_external_content_changes_reject_old_job_and_allow_new_capture(texture, 
 
 def test_target_uses_edit_tree_and_survives_renaming(texture, tmp_path):
     context = texture_context(texture, pin=True)
-    target = targets.ImageEditTarget.capture(context)
+    target, _ = targets.ImageEditTarget.capture(context)
     texture.name = "Renamed texture"
     bpy.data.materials["Texture material"].name = "Renamed material"
     other = texture.id_data.nodes.new("ShaderNodeTexImage")
@@ -64,7 +64,7 @@ def test_image_actions_preserve_source_color_space_and_alpha(texture, tmp_path, 
     if shared:
         other = texture.id_data.nodes.new("ShaderNodeTexImage")
         other.image = original
-    target = targets.ImageEditTarget.capture(texture_context(texture))
+    target, _ = targets.ImageEditTarget.capture(texture_context(texture))
     write_result(tmp_path, filename)
     apply_image_result(target, tmp_path / filename)
     result = texture.image
@@ -104,7 +104,7 @@ def test_invalid_node_context_does_not_fall_back_to_empty(texture, invalid):
 
 @pytest.mark.parametrize("change", ["delete", "recreate", "rebind", "delete_material", "delete_image", "identity"])
 def test_target_rejects_changed_identity_before_loading_result(texture, tmp_path, change):
-    target = targets.ImageEditTarget.capture(texture_context(texture))
+    target, _ = targets.ImageEditTarget.capture(texture_context(texture))
     tree = texture.id_data
     if change in {"delete", "recreate"}:
         name = texture.name
@@ -135,7 +135,7 @@ def test_texture_commit_preserves_structure_and_isolates_users(texture, tmp_path
     expected_source = images.image_pixels(original)
     source_packed = bytes(original.packed_file.data)
     original.use_fake_user = reference == "fake_user"
-    target = targets.ImageEditTarget.capture(texture_context(texture))
+    target, _ = targets.ImageEditTarget.capture(texture_context(texture))
     # Add users after capture to exercise changes while an AI job is pending.
     if reference == "same_tree":
         other = texture.id_data.nodes.new("ShaderNodeTexImage")

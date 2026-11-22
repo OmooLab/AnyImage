@@ -22,8 +22,8 @@ def test_upscale_result_replacement_undo_restores_source(tmp_path):
     Image.new("RGBA", (16,16), (32,64,96,128)).save(tmp_path / "upscale.png")
 
     def execute(operator, context):
-        operator._image_target = ImageEditTarget.capture(SimpleNamespace(object=owner))
-        operator.model = "HAT_GAN_X4_SHARPER"
+        operator._image_target, _ = ImageEditTarget.capture(SimpleNamespace(object=owner))
+        operator._model = "HAT_GAN_X4_SHARPER"
         operator.response(context, SimpleNamespace(file=lambda key: tmp_path / f"{key}.png"))
         return {"FINISHED"}
 

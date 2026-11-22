@@ -1,9 +1,6 @@
 import bpy
 
-from anyimage.common.object import (
-    modifier_input_identifier,
-    set_modifier_input,
-)
+from anyimage.common.object import set_modifier_input
 
 from anyimage.common.image_plane import create_image_plane_mesh
 from anyimage.common.node import load_node_group
@@ -62,7 +59,7 @@ def test_saved_image_plane_evaluation():
     finally:
         evaluated.to_mesh_clear()
 
-    set_modifier_input(modifier, modifier_input_identifier(group, "Subdivide"), 3)
+    set_modifier_input(modifier, "Subdivide", 3)
     obj.update_tag(refresh={"DATA"})
     evaluated, result = evaluated_mesh(obj)
     try:
@@ -71,8 +68,8 @@ def test_saved_image_plane_evaluation():
     finally:
         evaluated.to_mesh_clear()
 
-    set_modifier_input(modifier, modifier_input_identifier(group, "Subdivide"), 2)
-    set_modifier_input(modifier, modifier_input_identifier(group, "Thickness"), 1.2)
+    set_modifier_input(modifier, "Subdivide", 2)
+    set_modifier_input(modifier, "Thickness", 1.2)
     obj.update_tag(refresh={"DATA"})
     evaluated, result = evaluated_mesh(obj)
     try:
@@ -91,8 +88,8 @@ def test_saved_image_plane_evaluation():
     finally:
         evaluated.to_mesh_clear()
 
-    set_modifier_input(modifier, modifier_input_identifier(group, "Subdivide"), 0)
-    set_modifier_input(modifier, modifier_input_identifier(group, "Thickness"), 0.01)
+    set_modifier_input(modifier, "Subdivide", 0)
+    set_modifier_input(modifier, "Thickness", 0.01)
     obj.update_tag(refresh={"DATA"})
     evaluated, result = evaluated_mesh(obj)
     try:

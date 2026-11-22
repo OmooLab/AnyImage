@@ -109,7 +109,9 @@ def perspective_quad_aspect(quad):
 
 def perspective_placement_bounds(quad, output_size, trim_bounds):
     """Map a rectified Alpha trim back to an approximate source-image rectangle."""
-    quad = validate_perspective_quad(quad)
+    import numpy as np
+
+    quad = np.asarray(quad)
     source_left = math.floor(float(quad[:, 0].min()))
     source_top = math.floor(float(quad[:, 1].min()))
     source_right = math.ceil(float(quad[:, 0].max()))
@@ -126,30 +128,11 @@ def perspective_placement_bounds(quad, output_size, trim_bounds):
     )
 
 
-def _trim_pixels_to_alpha(pixels, output_size):
-    """Trim Blender-order RGBA pixels to their nonzero Alpha bounds."""
-    import numpy as np
-
-    width, height = output_size
-    rgba = np.flipud(
-        np.asarray(pixels, dtype=np.float32).reshape((height, width, 4))
-    )
+def extract_perspective_pixels(premultiplied, quad, aspect_ratio):
+    output_size = projective_output_size(quad, aspect_ratio)
+    rgba = warp_projective_pixels(premultiplied, quad, output_size)
     bounds = visible_pixel_bounds(rgba[..., 3] > 0.0)
     if bounds is None:
         raise ImageEditWarning("The edit contains no visible image pixels")
     left, top, right, bottom = bounds
-    return np.flipud(rgba[top:bottom, left:right]).ravel(), (left, top, right, bottom)
-
-
-def extract_perspective_pixels(premultiplied, quad, aspect_ratio):
-    output_size = projective_output_size(quad, aspect_ratio)
-    pixels = warp_projective_pixels(premultiplied, quad, output_size)
-    pixels, trim_bounds = _trim_pixels_to_alpha(pixels, output_size)
-    trimmed_size = (
-        trim_bounds[2] - trim_bounds[0],
-        trim_bounds[3] - trim_bounds[1],
-    )
-    placement_bounds = perspective_placement_bounds(
-        quad, output_size, trim_bounds
-    )
-    return pixels, trimmed_size, placement_bounds
+    return rgba[top:bottom, left:right], perspective_placement_bounds(quad, output_size, bounds)

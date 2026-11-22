@@ -30,8 +30,8 @@ def save_hdr_image(rgba, path):
         bpy.data.images.remove(image)
 
 
-def create_packed_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
-    """Create a self-contained float image and verify its encoded pixels."""
+def create_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
+    """Create a float image and verify its encoded pixels."""
     result = None
     save_hdr_image(rgba, path)
     try:
@@ -41,7 +41,6 @@ def create_packed_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
                 or result.colorspace_settings.name != "Linear Rec.709"
                 or not np.allclose(image_rgba(result), rgba, rtol=2e-6, atol=1e-7)):
             raise RuntimeError("The HDR result did not preserve float colors")
-        result.pack()
         result.name = name
         return result
     except Exception:
@@ -50,7 +49,7 @@ def create_packed_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
         raise
 
 
-def build_recognition_rgba(rgba, alpha_mode, *, preserve_alpha=False):
+def build_recognition_rgba(rgba, alpha_mode):
     """Tone-map scene-linear pixels for sRGB recognition without changing the source."""
     alpha = 1.0 if alpha_mode == "NONE" else rgba[..., 3:4]
     rgb = rgba[..., :3].astype(np.float64)
@@ -60,10 +59,7 @@ def build_recognition_rgba(rgba, alpha_mode, *, preserve_alpha=False):
     luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
     rgb /= 1 + luminance[..., None]
     encoded = linear_rgb_to_srgb(rgb)
-    preview = np.ones(rgba.shape, dtype=np.float32)
+    preview = np.empty(rgba.shape, dtype=np.float32)
     preview[..., :3] = np.clip(encoded, 0, 1)
-    if preserve_alpha:
-        preview[..., 3:4] = alpha
-    else:
-        preview[..., :3] *= alpha
+    preview[..., 3:4] = alpha
     return preview

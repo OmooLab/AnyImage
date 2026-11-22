@@ -6,14 +6,13 @@ from ..common.image import (
     image_empty_bounds,
     image_rgba,
     replace_empty_image,
-    require_image_empty,
 )
 from ..common.selection import (
     rasterize_selection_path,
     rasterize_selection_union,
     SelectionPath,
 )
-from ..common.image_gesture import ImageGesture
+from ..common.image_gesture import ImageGesture, gesture_source
 from ..common.viewport import report_image_edit_exception, screen_path_to_image_pixels
 from ..properties import (
     mask_gesture_property,
@@ -25,10 +24,10 @@ MASK_TOOL_ID = "anyimage.mask"
 
 
 def apply_alpha_mask(source_rgba, selection_mask, mode):
-    """Apply one Selection Mask to current Alpha without changing the canvas."""
+    """Edit alpha in the supplied RGBA buffer and return Blender-order pixels."""
     import numpy as np
 
-    rgba = np.asarray(source_rgba, dtype=np.float32).copy()
+    rgba = np.asarray(source_rgba, dtype=np.float32)
     if rgba.ndim != 3 or rgba.shape[2] != 4:
         raise ValueError("The source image must contain RGBA pixels")
     alpha = rgba[..., 3]
@@ -168,7 +167,6 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
     active_tool_id = MASK_TOOL_ID
     _brush_preview = None
 
-    source_object_name: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
     gesture: mask_gesture_property()
     mode: mask_mode_property()
     radius: mask_radius_property()
@@ -202,7 +200,7 @@ class EditImageAlpha(ImageGesture, bpy.types.Operator):
     def _complete(self, context):
         if self.gesture != "BRUSH":
             return super()._complete(context)
-        source_object = require_image_empty(self.source_object_name)
+        source_object = gesture_source(self)
         image_size = tuple(source_object.data.size)
         local_bounds = image_empty_bounds(source_object)
         selection_mask = rasterize_brush_path(

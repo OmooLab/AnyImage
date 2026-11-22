@@ -49,7 +49,8 @@ class MaterialInputs:
     layer: object = None
     normal: object = None
     channels: tuple = ()
-    emission_strengths: dict = field(default_factory=dict)
+    emitters_to_bake: tuple = ()
+    color_emission_strengths: dict = field(default_factory=dict)
 
 
 def material_inputs(obj, modifiers):
@@ -74,7 +75,8 @@ def material_inputs(obj, modifiers):
     require_static_color_image(color.image)
     if not color.image.is_editable or color.image.library is not None:
         raise ValueError("Bake Mesh requires an editable local Color image")
-    layers = [node for node in tree.nodes
+    used = active_material_nodes(tree)
+    layers = [node for node in used
               if node.type == "GROUP" and node.node_tree is not None
               and node.node_tree.name == IMAGE_MATERIAL_NODE_GROUP_NAME]
     single_region = modifiers[0].node_group.name in SINGLE_REGION_GROUPS
@@ -86,36 +88,42 @@ def material_inputs(obj, modifiers):
         raise ValueError("Bake Mesh requires one O Texture to Layer")
     layer = layers[0]
     validate_layer(layer, color)
+    connections = {
+        socket.name: [link for link in socket.links if link.to_node in used]
+        for socket in layer.outputs
+    }
     normal = None
-    if layer.inputs["Normal Texture"].is_linked:
+    if connections["Normal"] and layer.inputs["Normal Texture"].is_linked:
         normal = layer.inputs["Normal Texture"].links[0].from_node
         if (normal.type != "TEX_IMAGE" or normal.image is None or normal == color
                 or layer.inputs["Normal Texture"].links[0].from_socket != normal.outputs["Color"]):
             raise ValueError("Bake Mesh requires an image Normal input")
-    elif layer.inputs["Object Space"].default_value or tuple(layer.inputs["Normal Texture"].default_value) != (.5, .5, 1, 1):
+    elif connections["Normal"] and (layer.inputs["Object Space"].default_value or tuple(layer.inputs["Normal Texture"].default_value) != (.5, .5, 1, 1)):
         raise ValueError("Bake Mesh requires an existing Normal image for static normals")
     if normal is not None and normal.image == color.image:
         raise ValueError("Bake Mesh requires separate Color and Normal images")
-    emitters = emission_shaders(layer, color)
-    emission_strengths = {}
+    emitters = emission_shaders(layer, color, used)
+    emitters_to_bake = []
+    color_emission_strengths = {}
     for shader in emitters:
         strength = shader.inputs["Emission Strength"]
         transformed = shader.inputs["Emission Color"].links[0].from_socket == layer.outputs["Emission"]
-        emission_strengths[shader.name] = (
-            None if strength.is_linked or (transformed and strength.default_value != 0)
-            else strength.default_value
-        )
-    channels = [name for name in ("Roughness", "Alpha") if layer.outputs[name].is_linked]
-    if layer.outputs["Normal"].is_linked and (normal is not None or layer.inputs["Bump Scale"].default_value):
+        if strength.is_linked or (transformed and strength.default_value != 0):
+            emitters_to_bake.append(shader.name)
+        else:
+            color_emission_strengths[shader.name] = strength.default_value
+    channels = [name for name in ("Roughness", "Alpha") if connections[name]]
+    if connections["Normal"] and (normal is not None or layer.inputs["Bump Scale"].default_value):
         channels.append("Normal")
     if any(link.to_node not in emitters or link.to_socket.name != "Emission Color"
-           for link in layer.outputs["Emission"].links):
+           for link in connections["Emission"]):
         channels.append("Emission")
     inputs = MaterialInputs(
         material, color, layer=layer, normal=normal,
-        channels=tuple(channels), emission_strengths=emission_strengths,
+        channels=tuple(channels), emitters_to_bake=tuple(emitters_to_bake),
+        color_emission_strengths=color_emission_strengths,
     )
-    if single_region and not channels and None not in emission_strengths.values():
+    if single_region and not channels and not emitters_to_bake:
         return inputs
     extensions = {"EXTEND", "REPEAT"} if single_region else {"EXTEND"}
     for node in (color, normal):
@@ -159,17 +167,16 @@ def validate_layer(layer, color):
         raise ValueError("Unsupported texture layer Color output")
 
 
-def emission_shaders(layer, color):
+def emission_shaders(layer, color, used):
     """Return Principled shaders receiving the image color as emission."""
     return {link.to_node for socket in (layer.outputs["Emission"], layer.outputs["Color"], color.outputs["Color"])
-            for link in socket.links if link.to_node.type == "BSDF_PRINCIPLED"
+            for link in socket.links if link.to_node in used and link.to_node.type == "BSDF_PRINCIPLED"
             and link.to_socket.name == "Emission Color"}
 
 
-def remove_unused_material_nodes(material):
-    """Keep only nodes feeding an active material output."""
-    nodes = material.node_tree.nodes
-    pending = [node for node in nodes if node.type == "OUTPUT_MATERIAL" and node.is_active_output]
+def active_material_nodes(tree):
+    """Return all nodes feeding active material outputs."""
+    pending = [node for node in tree.nodes if node.type == "OUTPUT_MATERIAL" and node.is_active_output]
     used = set()
     while pending:
         node = pending.pop()
@@ -177,14 +184,20 @@ def remove_unused_material_nodes(material):
             continue
         used.add(node)
         pending.extend(link.from_node for socket in node.inputs for link in socket.links)
-    for node in tuple(nodes):
-        if node not in used:
-            nodes.remove(node)
+    return used
 
 
-def arrange_material_textures(material):
-    """Align texture rows in the order of their Principled inputs."""
+def finish_material_nodes(material, *, arrange):
     nodes = material.node_tree.nodes
+    used = active_material_nodes(material.node_tree)
+    if arrange:
+        arrange_material_textures([node for node in nodes if node in used])
+    for node in set(nodes) - used:
+        nodes.remove(node)
+
+
+def arrange_material_textures(nodes):
+    """Align texture rows in the order of their Principled inputs."""
     shaders = [node for node in nodes if node.type == "BSDF_PRINCIPLED"]
     if not shaders:
         return
@@ -214,10 +227,11 @@ def arrange_material_textures(material):
 
 
 @contextmanager
-def static_material_outputs(material, layer, color, normal, output_images, emission_images, emission_strengths):
+def static_material_outputs(material, layer, color, normal, output_images, emission_outputs):
     """Stage replacement nodes and restore original links on any failure."""
     if layer is None:
         yield
+        finish_material_nodes(material, arrange=False)
         return
     normal_image, normal_node = normal
     nodes, links = material.node_tree.nodes, material.node_tree.links
@@ -225,7 +239,7 @@ def static_material_outputs(material, layer, color, normal, output_images, emiss
     positions = {node: (tuple(node.location), node.width) for node in nodes}
     original_links = [(link.from_socket, link.to_socket) for link in links]
     active = nodes.active
-    original_strengths = {name: nodes[name].inputs["Emission Strength"].default_value for name in emission_strengths}
+    original_strengths = {name: nodes[name].inputs["Emission Strength"].default_value for name in emission_outputs}
 
     def create(kind, offset):
         node = nodes.new(kind)
@@ -254,20 +268,22 @@ def static_material_outputs(material, layer, color, normal, output_images, emiss
         for name, source in sources.items():
             for link in tuple(layer.outputs[name].links):
                 links.new(source, link.to_socket)
-        emission_sources = {image: texture(image, (-400, -1400)) for image in set(emission_images.values())}
-        for name, strength in emission_strengths.items():
+        emission_sources = {}
+        for name, (image, strength) in emission_outputs.items():
             socket = nodes[name].inputs["Emission Color"]
-            if strength == 0:
+            if image is None:
                 for link in tuple(socket.links):
                     links.remove(link)
-            elif strength > 0:
-                links.new(emission_sources[emission_images[name]], socket)
+            else:
+                if image not in emission_sources:
+                    emission_sources[image] = texture(image, (-400, -1400))
+                links.new(emission_sources[image], socket)
             strength_socket = nodes[name].inputs["Emission Strength"]
             for link in tuple(strength_socket.links):
                 links.remove(link)
             strength_socket.default_value = strength
         yield
-        arrange_material_textures(material)
+        finish_material_nodes(material, arrange=True)
     except Exception:
         for node in set(nodes) - original_nodes:
             nodes.remove(node)

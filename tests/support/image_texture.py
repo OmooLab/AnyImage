@@ -41,5 +41,8 @@ def texture_context(node, **space_options):
 
 def write_result(directory, filename="foreground.png"):
     path = directory / filename
-    Image.new("RGBA", (8, 6), (128, 64, 32, 80)).save(path)
+    if filename == "alpha.npy":
+        np.save(path, np.full((3, 4), 0.5, dtype=np.float32))
+    else:
+        Image.new("RGBA", (8, 6), (128, 64, 32, 80)).save(path)
     return path

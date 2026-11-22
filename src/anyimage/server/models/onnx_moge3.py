@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
-from .moge_geometry import MAX_TOKENS, MIN_TOKENS, postprocess
+from .moge_geometry import model_inputs, postprocess
 from .onnx_runtime import create_session as create_runtime_session
 from .onnx_runtime import run_session
 
@@ -107,6 +107,19 @@ def _resize(array, height, width):
     )
 
 
+def _image_normals(normal, image_shape):
+    import numpy as np
+
+    normal = _resize(normal[0].transpose(1, 2, 0), *image_shape)
+    normal /= np.maximum(np.linalg.norm(normal, axis=-1, keepdims=True), 1e-12)
+    return normal
+
+
+def infer_normal(session, image, resolution_level):
+    normal, = run_session(session.backbone, ["normal"], model_inputs(image, resolution_level))
+    return _image_normals(normal, image.shape[:2])
+
+
 def infer(
     session,
     image,
@@ -115,21 +128,13 @@ def infer(
     refine_steps=1,
     fov_x=None,
     source_valid=None,
-    include_points=True,
 ):
     import numpy as np
 
-    level = min(max(int(resolution_level), 0), 9)
-    tokens = int(MIN_TOKENS + level / 9.0 * (MAX_TOKENS - MIN_TOKENS))
     coord, encoder, normal, mask, scale = run_session(
         session.backbone,
         ["coord", "encoder", "normal", "mask", "scale"],
-        {
-            "image": np.ascontiguousarray(
-                image.transpose(2, 0, 1)[None], dtype=np.float32
-            ),
-            "num_tokens": np.asarray(tokens, dtype=np.int64),
-        },
+        model_inputs(image, resolution_level),
     )
     for step in range(refine_steps):
         if not np.isfinite(coord).all():
@@ -148,8 +153,7 @@ def infer(
     coord = _resize(coord[0], height, width)
     depth = np.exp(coord[..., 2:])
     points = np.concatenate((coord[..., :2] * depth, depth), axis=-1)
-    normal = _resize(normal[0].transpose(1, 2, 0), height, width)
-    normal /= np.maximum(np.linalg.norm(normal, axis=-1, keepdims=True), 1e-12)
+    normal = _image_normals(normal, (height, width))
     mask = 1.0 / (1.0 + np.exp(-np.clip(_resize(mask[0, 0], height, width), -80, 80)))
     return postprocess(
         {
@@ -160,5 +164,4 @@ def infer(
         },
         fov_x=fov_x,
         source_valid=source_valid,
-        include_points=include_points,
     )

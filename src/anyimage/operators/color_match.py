@@ -9,23 +9,24 @@ from ..common.color_match import (
     COLOR_LIMITS,
     LIGHTNESS_LIMITS,
     apply_color_match,
+    build_color_mapping,
     build_color_match,
     resize_rgba_proxy,
 )
-from ..common.color_reference import get_color_reference, is_color_reference_candidate
+from ..common.color_reference import get_color_reference, invalidate_color_reference
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
     TEMPORARY_IMAGE_PREVIEW_PROPERTY,
-    COLOR_REFERENCE_PROPERTY,
     create_image_edit_result,
-    owner_image,
+    create_linear_image_edit_result,
     image_rgba,
     is_static_image,
+    owner_image,
 )
 from ..common.image_target import (
     ImageEditTarget,
     material_has_other_object_user,
-    image_edit_owner,
+    editable_still_image,
 )
 from ..common.tool_status import draw_tool_status
 from ..common.viewport import drawing_in_region
@@ -53,25 +54,38 @@ def current_color_reference(context):
     """Return the current Scene color reference when it remains valid."""
     settings = getattr(getattr(context, "scene", None), "anyimage_settings", None)
     reference = getattr(settings, "color_reference", None)
-    return reference if is_color_reference_candidate(reference) else None
+    return reference if is_static_image(reference) else None
 
 
-def _context_image(context):
-    return owner_image(image_edit_owner(context))
+def _prepare_match_reference(reference, target_image):
+    if reference is None:
+        raise ValueError("Set a color reference before matching")
+    if reference == target_image:
+        raise ValueError("The color reference and target must be different images")
+    prepared = get_color_reference(reference, refresh=True)
+    if prepared.transfer is None:
+        raise ValueError("The color reference contains no visible pixels")
+    return prepared
+
+
+def _commit_color_match(target, linear, mapping, color, lightness):
+    image = target.image
+    match = build_color_match(mapping, linear, target_float=image.is_float)
+    matched = apply_color_match(match, color=color, lightness=lightness)
+    target.commit(create_linear_image_edit_result(image, matched))
 
 
 class SetColorReference(bpy.types.Operator):
     bl_idname = "anyimage.set_color_reference"
     bl_label = "Set Color Reference"
-    bl_options = {"UNDO"}
 
     @classmethod
     def poll(cls, context):
-        return is_static_image(_context_image(context))
+        return editable_still_image(context) is not None
 
     def execute(self, context):
-        image = _context_image(context)
-        image[COLOR_REFERENCE_PROPERTY] = True
+        image = editable_still_image(context)
+        invalidate_color_reference(image)
         context.scene.anyimage_settings.color_reference = image
         return {"FINISHED"}
 
@@ -89,20 +103,28 @@ class MatchColorReference(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         reference = current_color_reference(context)
-        target = _context_image(context)
+        target = editable_still_image(context)
         return (
             reference is not None
-            and is_static_image(target)
+            and target is not None
             and target != reference
         )
 
     def execute(self, context):
         """Apply the default full-resolution match for direct execution."""
-        return MatchColorReference._commit(self, context, 0.5, 0.0)
+        try:
+            target, rgba = ImageEditTarget.capture(context)
+            reference = _prepare_match_reference(current_color_reference(context), target.image)
+            linear = image_rgba_to_linear(target.image, rgba)
+            mapping = build_color_mapping(reference.transfer, linear)
+            _commit_color_match(target, linear, mapping, 0.5, 0.0)
+        except (ReferenceError, RuntimeError, TypeError, ValueError) as error:
+            self.report({"ERROR"}, str(error))
+            return {"CANCELLED"}
+        return {"FINISHED"}
 
     def invoke(self, context, event):
         """Start an interactive proxy preview."""
-        reference = current_color_reference(context)
         self._preview_image = None
         space = context.space_data
         self._preview_world = space.id if getattr(space, "shader_type", None) == "WORLD" else None
@@ -114,19 +136,13 @@ class MatchColorReference(bpy.types.Operator):
         self._timer = None
         self._window_manager = context.window_manager
         try:
-            if reference is None:
-                raise ValueError("Set a color reference before matching")
-            self._target, pixels = ImageEditTarget.capture_with_pixels(context)
-            if self._target.image == reference:
-                raise ValueError("The color reference and target must be different images")
-            prepared = get_color_reference(reference, refresh=True)
-            self._reference = prepared
+            self._target, rgba = ImageEditTarget.capture(context)
+            self._reference = _prepare_match_reference(current_color_reference(context), self._target.image)
             self._preview_signature = self._target.content_signature
-            target_rgba = image_rgba(self._target.image, pixels)
+            linear = image_rgba_to_linear(self._target.image, rgba)
+            self._mapping = build_color_mapping(self._reference.transfer, linear)
             self._preview_match = build_color_match(
-                prepared.transfer,
-                resize_rgba_proxy(image_rgba_to_linear(self._target.image, target_rgba)),
-                target_float=bool(self._target.image.is_float),
+                self._mapping, resize_rgba_proxy(linear), target_float=self._target.image.is_float,
             )
             self._color = 0.5
             self._lightness = 0.0
@@ -158,7 +174,11 @@ class MatchColorReference(bpy.types.Operator):
         if event.value == "PRESS" and event.type in {"LEFTMOUSE", "RET", "NUMPAD_ENTER"}:
             try:
                 self._restore_preview()
-                return self._commit(context, self._color, self._lightness, target=self._target)
+                self._confirm_preview(context)
+                return {"FINISHED"}
+            except (ReferenceError, RuntimeError, TypeError, ValueError) as error:
+                self.report({"ERROR"}, str(error))
+                return {"CANCELLED"}
             finally:
                 self._finish()
         if event.type not in {"MOUSEMOVE", "TIMER"}:
@@ -207,7 +227,7 @@ class MatchColorReference(bpy.types.Operator):
                 self._preview_image.update_tag()
                 self._preview_world.update_tag()
             return
-        self._preview_image = create_image_edit_result(target.image, pixels, rgba.shape[1::-1], pack=False)
+        self._preview_image = create_image_edit_result(target.image, pixels, rgba.shape[1::-1])
         self._preview_image[TEMPORARY_IMAGE_PREVIEW_PROPERTY] = True
         owner = target.owner
         if target.object_owner is not None and material_has_other_object_user(target.material, target.object_owner):
@@ -257,48 +277,22 @@ class MatchColorReference(bpy.types.Operator):
     def cancel(self, context):
         self._finish()
 
-    def _commit(self, context, color, lightness, *, target=None):
+    def _confirm_preview(self, context):
         reference = current_color_reference(context)
-        try:
-            interactive = target is not None
-            pixels = None
-            if target is None:
-                target, pixels = ImageEditTarget.capture_with_pixels(context)
-            if reference is None:
-                raise ValueError("Set a color reference before matching")
-            if interactive and reference != self._reference.image:
-                raise RuntimeError("The color reference changed during preview")
-            if target.image == reference:
-                raise ValueError("The color reference and target must be different images")
-            prepared = get_color_reference(reference, refresh=True)
-            if interactive:
-                if target.content_signature != self._preview_signature:
-                    raise RuntimeError("The source image content or settings have changed")
-                if (prepared.content_digest != self._reference.content_digest
-                        or prepared.metadata != self._reference.metadata):
-                    raise RuntimeError("The color reference changed during preview")
-            if color == 0.0 and lightness == 0.0:
-                target.validate()
-                return {"FINISHED"}
-            matched = apply_color_match(
-                build_color_match(
-                    prepared.transfer, image_rgba_to_linear(target.image, image_rgba(target.image, pixels)),
-                    target_float=bool(target.image.is_float),
-                    prepared_match=self._preview_match if interactive else None,
-                ),
-                color=color,
-                lightness=lightness,
-            )
-            result = create_image_edit_result(
-                target.image,
-                np.flipud(linear_rgba_to_image(target.image, matched)).ravel(),
-                tuple(target.image.size),
-            )
-            target.commit(result)
-        except (ReferenceError, RuntimeError, TypeError, ValueError) as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
-        return {"FINISHED"}
+        if reference != self._reference.image:
+            raise RuntimeError("The color reference changed during preview")
+        prepared = _prepare_match_reference(reference, self._target.image)
+        if (prepared.content_digest != self._reference.content_digest
+                or prepared.metadata != self._reference.metadata):
+            raise RuntimeError("The color reference changed during preview")
+        if self._target.content_signature != self._preview_signature:
+            raise RuntimeError("The source image content or settings have changed")
+        if self._color == 0.0 and self._lightness == 0.0:
+            self._target.validate()
+            return
+        image = self._target.image
+        linear = image_rgba_to_linear(image, image_rgba(image))
+        _commit_color_match(self._target, linear, self._mapping, self._color, self._lightness)
 
     def _draw_overlay(self):
         if self._preview_image is None or not drawing_in_region(
@@ -342,6 +336,7 @@ class MatchColorReference(bpy.types.Operator):
             self._status_workspace = None
         self._restore_preview()
         self._preview_match = None
+        self._mapping = None
         self._reference = None
         self._target = None
         if self._timer is not None:

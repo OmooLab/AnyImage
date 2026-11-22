@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from anyimage.common.color_match import (
-    ColorReference, _transport_palette, apply_color_match, build_color_match,
+    ColorReference, _transport_palette, apply_color_match, build_color_mapping, build_color_match,
     prepare_color_reference, resize_rgba_proxy,
 )
 from anyimage.common.color_space import linear_rgb_to_oklab
@@ -15,12 +15,16 @@ def _rgba(rgb, alpha=1.0):
     return np.concatenate((rgb, np.broadcast_to(alpha, rgb.shape[:-1])[..., None]), axis=-1).astype(np.float32)
 
 
+def _match(reference, source, *, target_float=False):
+    return build_color_match(build_color_mapping(reference, source), source, target_float=target_float)
+
+
 def test_controls_are_independent_and_preserve_alpha_and_original():
     rng = np.random.default_rng(10)
     source = _rgba(rng.uniform(.2, .6, (10, 12, 3)), rng.random((10, 12)))
     original = source.copy()
     reference = _rgba(rng.uniform(.2, .6, (8, 8, 3)))
-    match = build_color_match(prepare_color_reference(reference), source, target_float=True)
+    match = _match(prepare_color_reference(reference), source, target_float=True)
     np.testing.assert_array_equal(apply_color_match(match, color=0, lightness=0), source)
     color_only = apply_color_match(match, color=1, lightness=0)
     lightness_only = apply_color_match(match, color=0, lightness=1)
@@ -36,8 +40,8 @@ def test_reference_alpha_excludes_hidden_rgb():
     visible = _rgba([[[.8, .1, .05]]])
     hidden = np.concatenate((visible, _rgba([[[0, 0, 1]]], 0)), axis=1)
     target = _rgba(np.full((8, 8, 3), .25))
-    a = apply_color_match(build_color_match(prepare_color_reference(visible), target), color=1, lightness=1)
-    b = apply_color_match(build_color_match(prepare_color_reference(hidden), target), color=1, lightness=1)
+    a = apply_color_match(_match(prepare_color_reference(visible), target), color=1, lightness=1)
+    b = apply_color_match(_match(prepare_color_reference(hidden), target), color=1, lightness=1)
     np.testing.assert_allclose(a, b, atol=1e-6)
 
 
@@ -45,7 +49,7 @@ def test_reference_alpha_excludes_hidden_rgb():
 def test_constant_images_and_hidden_target_rgb(shape):
     reference = _rgba(np.full((*shape, 3), (.6, .25, .08)))
     source = _rgba(np.full((*shape, 3), (.05, .15, .5)), 0)
-    result = apply_color_match(build_color_match(prepare_color_reference(reference), source), color=1, lightness=1)
+    result = apply_color_match(_match(prepare_color_reference(reference), source), color=1, lightness=1)
     np.testing.assert_allclose(result[..., :3], reference[..., :3], atol=.005)
     np.testing.assert_array_equal(result[..., 3], source[..., 3])
 
@@ -54,22 +58,11 @@ def test_lightness_curve_is_monotonic_and_matching_is_deterministic():
     gradient = np.broadcast_to(np.linspace(.1, .9, 100)[None, :, None], (4, 100, 3))
     reference = prepare_color_reference(_rgba(gradient ** 2))
     source = _rgba(gradient)
-    a = apply_color_match(build_color_match(reference, source), color=0, lightness=1)
-    b = apply_color_match(build_color_match(reference, source), color=0, lightness=1)
+    a = apply_color_match(_match(reference, source), color=0, lightness=1)
+    b = apply_color_match(_match(reference, source), color=0, lightness=1)
     assert np.isfinite(a).all()
     assert np.min(np.diff(linear_rgb_to_oklab(a[..., :3])[0, :, 0])) >= -1e-6
     np.testing.assert_array_equal(a, b)
-
-
-def test_full_resolution_reuses_preview_mapping():
-    rng = np.random.default_rng(11)
-    reference = prepare_color_reference(_rgba(rng.random((8, 8, 3))))
-    proxy = _rgba(rng.random((12, 16, 3)))
-    preview = build_color_match(reference, proxy)
-    full = np.repeat(np.repeat(proxy, 2, axis=0), 2, axis=1)
-    match = build_color_match(reference, full, prepared_match=preview)
-    expected = np.repeat(np.repeat(apply_color_match(preview, color=.7, lightness=.3), 2, axis=0), 2, axis=1)
-    np.testing.assert_allclose(apply_color_match(match, color=.7, lightness=.3), expected, atol=1e-6)
 
 
 def test_reference_area_weights_control_palette_transport():
@@ -87,9 +80,9 @@ def test_reference_area_weights_control_palette_transport():
 def test_lightness_can_retain_hdr_range():
     reference = prepare_color_reference(_rgba([[[2, 3, 4]]]))
     target = _rgba([[[.1, .2, .3]]])
-    floating = apply_color_match(build_color_match(reference, target, target_float=True), color=0, lightness=1)
+    floating = apply_color_match(_match(reference, target, target_float=True), color=0, lightness=1)
     assert np.isfinite(floating).all() and floating[..., :3].max() > 1
-    byte = apply_color_match(build_color_match(reference, target), color=0, lightness=1)
+    byte = apply_color_match(_match(reference, target), color=0, lightness=1)
     assert byte[..., :3].max() <= 1
 
 
@@ -98,7 +91,7 @@ def test_invalid_pixels_are_rejected(invalid):
     with pytest.raises(ValueError):
         prepare_color_reference(invalid)
     with pytest.raises(ValueError):
-        build_color_match(prepare_color_reference(np.ones((1, 1, 4))), invalid)
+        build_color_mapping(prepare_color_reference(np.ones((1, 1, 4))), invalid)
 
 
 def test_empty_visible_reference_is_rejected():

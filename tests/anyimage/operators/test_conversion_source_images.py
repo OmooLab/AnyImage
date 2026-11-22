@@ -40,9 +40,6 @@ def run_conversion(source, entry, monkeypatch):
     if entry == "PLANE":
         operators.ConvertToPlane.execute(SimpleNamespace(), bpy.context)
     else:
-        metadata = {"image_size": (2, 1),
-                    "intrinsics": ((2, 0, 1), (0, 2, 0.5), (0, 0, 1))}
-        monkeypatch.setattr(conversion, "load_depth_metadata", lambda _: metadata)
         def load_depth(*_):
             image = bpy.data.images.new("Depth", width=2, height=1, float_buffer=True)
             image.colorspace_settings.name = "Non-Color"
@@ -53,10 +50,10 @@ def run_conversion(source, entry, monkeypatch):
         monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data,
             ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **_: {"FINISHED"}))))
         operator = SimpleNamespace(_source_object=source, _source_image=source.data,
+                                   plane_type=entry, bl_label="Convert to Depth Plane",
                                    _source_signature=images.image_content_signature(source.data))
         conversion.create_depth_plane_from_result(
-            bpy.context, SimpleNamespace(file=lambda key: key), operator,
-            plane_type=entry, undo_label="Convert to Depth Plane",
+            bpy.context, SimpleNamespace(file=lambda key: key, value={"intrinsics": [[2, 0, 1], [0, 2, 0.5], [0, 0, 1]]}), operator,
         )
     return bpy.context.object
 
@@ -140,11 +137,11 @@ def test_conversion_pixels_survive_library_reload(source, tmp_path, monkeypatch,
 
 @pytest.mark.parametrize("entry", ["DEPTH", "RELIEF"])
 def test_depth_result_rejects_replaced_source_image(source, entry):
-    operator = SimpleNamespace(source_object_name=source.name, _source_object=source,
+    operator = SimpleNamespace(_source_object=source,
                                _source_image=source.data, _source_signature=images.image_content_signature(source.data), plane_type=entry)
     source.data = source.data.copy()
     with pytest.raises(RuntimeError, match="source image has changed"):
-        conversion.create_depth_plane_from_result(bpy.context, None, operator, plane_type=entry, undo_label="Convert to Depth Plane")
+        conversion.create_depth_plane_from_result(bpy.context, None, operator)
 
 
 @pytest.mark.parametrize("shared", [False, True])

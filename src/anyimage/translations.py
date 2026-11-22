@@ -67,7 +67,6 @@ COLOR = {
     'Set Color Reference': '设为色彩参考图',
     'Match Color Reference': '匹配参考图色彩',
     'Match this image to the current color reference': '将此图像的色彩匹配到当前参考图',
-    'Use {name} as the color reference': '使用 {name} 作为色彩参考图',
 }
 
 
@@ -97,7 +96,6 @@ RECTIFY = {
     'Rectify Image Perspective': '校正图像透视',
     'Rectify only supports a still image': '透视校正仅支持静态图像',
     'Rectify quad does not overlap the source image': '校正区域与原图没有重叠',
-    'Rectify quad contains no visible image pixels': '校正区域不包含可见的图像像素',
     'Rectify': '透视校正',
     'Select four corners of an image area to correct its perspective into a rectangle.': '选择图像区域的四个角，将其透视校正为矩形。',
 }

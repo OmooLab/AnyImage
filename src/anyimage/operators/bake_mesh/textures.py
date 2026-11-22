@@ -8,21 +8,23 @@ from ...common.color_image import linear_color_rgba
 from ...common.image import image_pixels
 
 
-def create_emission_color_image(image):
+def create_emission_color_image(image, rgba=None, *, alpha_mode=None):
     """Encode nonnegative linear emission as sRGB PNG and constant strength."""
-    pixels = np.flipud(linear_color_rgba(image)).reshape(-1, 4)
-    if not np.isfinite(pixels).all():
+    linear = linear_color_rgba(image, rgba, alpha_mode=alpha_mode)
+    if not np.isfinite(linear).all():
         raise ValueError("Emission baking requires finite RGBA values")
-    pixels[:, :3] = np.maximum(pixels[:, :3], 0)
-    strength = max(1.0, float(pixels[:, :3].max()))
-    pixels[:, :3] = linear_rgb_to_srgb(pixels[:, :3] / strength)
-    pixels[:, 3] = 1
-    result = bpy.data.images.new(image.name, width=image.size[0], height=image.size[1], alpha=True)
+    rgb = linear[..., :3]
+    np.maximum(rgb, 0, out=rgb)
+    strength = max(1.0, float(rgb.max()))
+    rgb[:] = linear_rgb_to_srgb(rgb / strength)
+    linear[..., 3] = 1
+    height, width = linear.shape[:2]
+    result = bpy.data.images.new(image.name, width=width, height=height, alpha=True)
     try:
         result.colorspace_settings.name = "sRGB"
         result.alpha_mode = "PREMUL"
         result.file_format = "PNG"
-        result.pixels.foreach_set(pixels.ravel())
+        result.pixels.foreach_set(linear[::-1].ravel())
         result.update()
         result.pack()
         return result, strength

@@ -34,8 +34,8 @@ class PlaneOperatorsTest(BlenderTestCase):
             normal_key = f"{normal_space.lower()}_normal"
             module = self.depth_plane
             source = SimpleNamespace(data=SimpleNamespace(name="Source"))
-            result = SimpleNamespace(file=lambda key: Path("result") / key)
-            operator = SimpleNamespace(source_object_name="Source", plane_type=plane_type)
+            result = SimpleNamespace(file=lambda key: Path("result") / key, value={"intrinsics": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]})
+            operator = SimpleNamespace(plane_type=plane_type, bl_label=plane_type)
             context = SimpleNamespace(scene=object())
             ops = SimpleNamespace(
                 ed=SimpleNamespace(undo_push=Mock(return_value={"FINISHED"}))
@@ -45,14 +45,13 @@ class PlaneOperatorsTest(BlenderTestCase):
                 patch.object(module, "read_conversion_source", return_value=(source, None)),
                 patch.object(module, "image_rgba"),
                 patch.object(module, "material_color_image", return_value=nullcontext(object())),
-                patch.object(module, "load_depth_metadata"),
                 patch.object(module, "load_depth_result_image"),
                 patch.object(module, "load_normal_result_image") as load_normal,
                 patch.object(module, "create_image_material") as create_material,
                 patch.object(module, "create_depth_plane_object"),
                 patch.object(module.bpy, "ops", ops, create=True),
             ):
-                module.create_depth_plane_from_result(context, result, operator, plane_type=plane_type, undo_label=plane_type)
+                module.create_depth_plane_from_result(context, result, operator)
 
             load_normal.assert_called_once_with(Path("result") / normal_key, source)
             self.assertIs(create_material.call_args.kwargs["normal_image"], load_normal.return_value)
@@ -63,17 +62,17 @@ class PlaneOperatorsTest(BlenderTestCase):
         module = self.depth_plane
         source = SimpleNamespace(data=SimpleNamespace(name="Source"))
         color_image = SimpleNamespace(name="", users=0)
-        depth_image = SimpleNamespace(users=0)
+        depth_image = SimpleNamespace(users=0, pack=Mock())
         normal_image = SimpleNamespace(users=0)
         material = SimpleNamespace(users=0)
         files = {
-            "depth_metadata": Path("depth.json"),
             "depth": Path("depth.exr"),
             "object_normal": Path("object-normal.png"),
         }
         result = SimpleNamespace(
             directory=Path("result"),
             file=lambda key: files[key],
+            value={"intrinsics": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]},
         )
         remove_material = Mock()
         remove_image = Mock()
@@ -86,14 +85,6 @@ class PlaneOperatorsTest(BlenderTestCase):
             patch.object(module, "read_conversion_source", return_value=(source, None)),
             patch.object(module, "image_rgba"),
             patch.object(module, "material_color_image", return_value=nullcontext(color_image)),
-            patch.object(
-                module,
-                "load_depth_metadata",
-                return_value={
-                    "image_size": (2, 1),
-                    "intrinsics": ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
-                },
-            ),
             patch.object(module, "load_depth_result_image", return_value=depth_image),
             patch.object(module, "load_normal_result_image", return_value=normal_image),
             patch.object(module, "create_image_material", return_value=material),
@@ -108,8 +99,7 @@ class PlaneOperatorsTest(BlenderTestCase):
             module.create_depth_plane_from_result(
                 SimpleNamespace(scene=object()),
                 result,
-                SimpleNamespace(source_object_name="Source"),
-                plane_type="DEPTH", undo_label="Convert to Depth Plane",
+                SimpleNamespace(plane_type="DEPTH"),
             )
 
         remove_material.assert_called_once_with(material, do_unlink=True)

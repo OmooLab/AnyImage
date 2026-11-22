@@ -1,8 +1,6 @@
 import bpy
-from .properties import (
-    COLOR_REFERENCE_PALETTE_PROPERTIES,
-    COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES,
-)
+from .common.color_reference import get_color_reference
+from .common.image import is_static_image
 
 
 class ColorMatchPanel(bpy.types.Panel):
@@ -14,21 +12,17 @@ class ColorMatchPanel(bpy.types.Panel):
     bl_order = 10
 
     def draw(self, context):
-        settings = context.scene.anyimage_settings
-        self.layout.template_icon_view(
-            settings,
-            "color_reference_choice",
-            show_labels=False,
-            scale=6.0,
-            scale_popup=5.0,
-        )
-        row = self.layout.row(align=True)
-        weights = [
-            getattr(settings, name) ** 0.5
-            for name in COLOR_REFERENCE_PALETTE_WEIGHT_PROPERTIES[:settings.color_reference_palette_count]
-        ] or [1.0]
-        total = sum(weights) or 1.0
-        for name, weight in zip(COLOR_REFERENCE_PALETTE_PROPERTIES, weights):
-            cell = row.row(align=True)
-            cell.scale_x = max(weight / total * len(weights), 0.1)
-            cell.prop(settings, name, text="")
+        image = context.scene.anyimage_settings.color_reference
+        if not is_static_image(image):
+            self.layout.label(text="No color reference")
+            return
+        self.layout.label(text=image.name, translate=False)
+        try:
+            reference = get_color_reference(image)
+        except (RuntimeError, ValueError):
+            return
+        self.layout.template_icon(icon_value=reference.icon_id, scale=6.0)
+        if reference.transfer is not None:
+            row = self.layout.row(align=True)
+            for color in reference.transfer.colors:
+                row.template_node_socket(color=(*color, 1.0))

@@ -1,5 +1,5 @@
 from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, limit_image
-from ..media.input import open_image, validate_input_path
+from ..media.input import open_image
 from ..model_catalog import UPSCALE_MODELS
 from ..models import model_adapter
 
@@ -15,15 +15,14 @@ def run(context, parameters):
     )
     context.progress(0.02, "Preparing upscale input")
     context.check_cancelled()
-    input_path = validate_input_path(parameters["input"])
     context.directory.mkdir(parents=True, exist_ok=True)
     context.progress(0.08, "Upscaling image")
     if parameters["model"] not in UPSCALE_MODELS:
         raise ValueError(f"Unknown upscale model: {parameters['model']}")
-    model, _load_ms = context.resource("model_manager").get_session(
-        parameters["model"], parameters["device"],
-    )
-    with open_image(input_path) as opened:
+    with open_image(parameters["input"]) as opened:
+        model, _load_ms = context.resource("model_manager").get_session(
+            parameters["model"], parameters["device"],
+        )
         source = limit_image(
             opened,
             parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE),

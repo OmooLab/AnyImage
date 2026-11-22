@@ -11,8 +11,7 @@ from tests.anyimage.server.support import FakeJobContext
 
 
 @pytest.mark.parametrize("checkpoint", [1, 2, 3])
-@pytest.mark.parametrize("output_kind", ["alpha", "foreground"])
-def test_background_job_propagates_cancellation(tmp_path, checkpoint, output_kind):
+def test_background_job_propagates_cancellation(tmp_path, checkpoint):
     path = tmp_path / "input.png"
     Image.new("RGBA", (2, 2)).save(path)
     manager = Mock()
@@ -30,7 +29,6 @@ def test_background_job_propagates_cancellation(tmp_path, checkpoint, output_kin
         ):
             remove_background.run(context, {
                 "input": str(path), "model": "BEN2_BASE", "device": "cpu",
-                "output_kind": output_kind,
             })
         assert source.fp is None
     finally:
@@ -40,20 +38,18 @@ def test_background_job_propagates_cancellation(tmp_path, checkpoint, output_kin
     assert list(context.directory.iterdir()) == []
 
 
-@pytest.mark.parametrize("failure", ["cancel", "prediction", "sequence", "output_kind"])
+@pytest.mark.parametrize("failure", ["cancel", "prediction", "sequence"])
 def test_alpha_job_failure_does_not_write_result(tmp_path, failure):
     source = tmp_path / "input.png"
     Image.new("RGB", (2, 2)).save(source)
     context = FakeJobContext(tmp_path / "job", "remove_background")
-    parameters = {"input": str(source), "model": "BEN2_BASE", "device": "cpu", "output_kind": "alpha"}
+    parameters = {"input": str(source), "model": "BEN2_BASE", "device": "cpu"}
     if failure == "sequence":
         frames = tmp_path / "frames"
         frames.mkdir()
         for i in (1, 2):
             Image.new("RGB", (2, 2)).save(frames / f"{i}.png")
         parameters["input"] = str(frames)
-    if failure == "output_kind":
-        parameters["output_kind"] = "invalid"
 
     def infer(*args, **kwargs):
         if failure == "prediction":

@@ -66,7 +66,6 @@ PROCESSING = {
 
 # 深度与法线
 AI_GEOMETRY = {
-    'Generate Plane Geometry': '生成面片几何',
     'Depth & Normal Model': '深度与法线模型',
     'Choose the AI model used to generate depth and surface normals.': '选择用于生成深度和表面法线的 AI 模型。',
     'Generate depth and surface normals with the fastest MoGe-2 option.': '使用速度最快的 MoGe-2 模型生成深度和表面法线。',
@@ -99,11 +98,10 @@ AI_GEOMETRY = {
 
 # 全景
 PANORAMA = {
-    'Generate Panorama': '生成全景',
     'Convert to Panorama': '转为立体全景',
     'Turn a still panoramic image into a surrounding 3D surface using AI-estimated depth.': '使用 AI 估计的深度，将静态全景图像转换为环绕的三维表面。',
     'Panorama conversion requires a static image': '全景转换需要静态图像',
-    'Not enough memory to prepare the HDR image': '内存不足，无法准备 HDR 图像',
+    'Not enough memory to prepare the image': '内存不足，无法准备图像',
     'Preparing panorama conversion': '全景转换准备中',
     'Generating panorama view {index}/{total}': '全景视角生成中 {index}/{total}',
     'Merging panorama depth maps': '全景深度图合并中',
@@ -123,8 +121,7 @@ UPSCALE = {
     'Upscale Image': '2倍高清',
     'Upscale': '2倍高清',
     'Upscale the image by 2x with an AI model': '使用 AI 模型生成2倍高清图像',
-    'Max AI Input Size': '处理分辨率上限',
-    'Maximum input long edge used for AI upscale analysis': '用于 AI 2倍高清分析的输入图像最长边上限',
+    'Upscale requires a non-HDR image': '2倍高清仅支持非 HDR 图像',
     'Upscale ({width} × {height})': '2倍高清（{width} × {height}）',
     'Starting image upscale': '2倍高清启动中',
     'Preparing upscale input': '2倍高清输入图像准备中',
@@ -144,7 +141,6 @@ BACKGROUND_REMOVAL = {
     'AI Remove Background': 'AI 移除背景',
     'Remove Background': '移除背景',
     'Remove the image background with the selected AI model': '使用所选 AI 模型移除图像背景',
-    'Run Background Removal': '执行背景移除',
     'Starting image background removal': '背景移除启动中',
     'Removing background': '背景移除中',
     'Writing transparent PNG': '透明 PNG 写入中',

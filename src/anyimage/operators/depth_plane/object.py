@@ -12,7 +12,6 @@ from ...common.depth_geometry import (
 )
 from ...common.geometry_image import (
     camera_depth_values,
-    load_depth_metadata,
     load_depth_result_image,
     load_normal_result_image,
 )
@@ -20,7 +19,6 @@ from ...common.material import create_image_material
 from ...common.color_image import material_color_image
 from ...common.object import (
     finalize_object_result,
-    modifier_input_identifier,
     read_conversion_source,
     set_modifier_input,
 )
@@ -37,7 +35,7 @@ def create_depth_plane_object(
     subdivisions,
     material,
     depth_image,
-    depth_metadata,
+    intrinsics,
     plane_type,
 ):
     node_group = load_node_group({
@@ -60,10 +58,10 @@ def create_depth_plane_object(
         modifier = plane.modifiers.new(name=node_group.name, type="NODES")
         modifier.node_group = node_group
         modifier.show_group_selector = False
-        depth, valid = camera_depth_values(depth_image)
+        depth, valid = camera_depth_values(image_rgba(depth_image))
         values = depth[valid]
         model_reference, model_median = reference_and_median_depth(values)
-        uniform_scale = depth_uniform_scale(bounds, depth_metadata, model_reference)
+        uniform_scale = depth_uniform_scale(bounds, depth_image.size, intrinsics, model_reference)
         inputs = [
             ("Subdivide", max(0, min(8, int(subdivisions)))),
             ("Reference Depth", model_reference * uniform_scale),
@@ -82,11 +80,7 @@ def create_depth_plane_object(
                 depth_direction,
             ))
         for name, value in inputs:
-            set_modifier_input(
-                modifier,
-                modifier_input_identifier(node_group, name),
-                value,
-            )
+            set_modifier_input(modifier, name, value)
         return finalize_object_result(context, source_object, plane)
     except Exception:
         if plane is not None:
@@ -96,7 +90,8 @@ def create_depth_plane_object(
         raise
 
 
-def create_depth_plane_from_result(context, result, operator, *, plane_type, undo_label):
+def create_depth_plane_from_result(context, result, operator):
+    plane_type = operator.plane_type
     normal_space = {"DEPTH": "OBJECT", "RELIEF": "TANGENT"}[plane_type]
     source_object, pixels = read_conversion_source(operator)
     material = None
@@ -104,10 +99,8 @@ def create_depth_plane_from_result(context, result, operator, *, plane_type, und
     normal_image = None
     try:
         with material_color_image(source_object.data, rgba=image_rgba(source_object.data, pixels)) as color_image:
-            depth_metadata = load_depth_metadata(result.file("depth_metadata"))
-            depth_image = load_depth_result_image(
-                result.file("depth"), source_object, depth_metadata,
-            )
+            depth_image = load_depth_result_image(result.file("depth"), source_object)
+            depth_image.pack()
             normal_image = load_normal_result_image(
                 result.file(f"{normal_space.lower()}_normal"), source_object,
             )
@@ -119,7 +112,7 @@ def create_depth_plane_from_result(context, result, operator, *, plane_type, und
             )
             create_depth_plane_object(
                 context, source_object, 6, material,
-                depth_image, depth_metadata, plane_type,
+                depth_image, result.value["intrinsics"], plane_type,
             )
     except Exception:
         if material is not None and material.users == 0:
@@ -128,5 +121,5 @@ def create_depth_plane_from_result(context, result, operator, *, plane_type, und
             if image is not None and image.users == 0:
                 bpy.data.images.remove(image, do_unlink=True)
         raise
-    if "FINISHED" not in bpy.ops.ed.undo_push(message=undo_label):
-        raise RuntimeError(f"Unable to create the {undo_label} Undo step")
+    if "FINISHED" not in bpy.ops.ed.undo_push(message=operator.bl_label):
+        raise RuntimeError(f"Unable to create the {operator.bl_label} Undo step")

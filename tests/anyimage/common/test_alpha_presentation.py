@@ -18,6 +18,7 @@ def test_business_pixels_ignore_premul_read_interpretation():
     expected = np.array([0.4, 0.25, 0.1, 0.5], dtype=np.float32)
     result = images.create_image_edit_result(original, expected, (1, 1))
     try:
+        result.pack()
         result.reload()
         interpreted = np.empty(4, dtype=np.float32)
         result.pixels.foreach_get(interpreted)
@@ -38,6 +39,7 @@ def test_business_read_preserves_shared_packed_source(dirty):
     owner.empty_display_type = "IMAGE"
     owner.data = result
     try:
+        result.pack()
         result.reload()
         if dirty:
             result.pixels.foreach_set([0.9, 0.1, 0.3, 0.5])
@@ -159,7 +161,8 @@ def test_mask_pack_reopen_extend_and_repeat_frame_preserve_hidden_color(tmp_path
     source = bpy.data.images.new("Roundtrip source", width=2, height=2, alpha=True)
     rgba = np.tile(np.array([0.2, 0.4, 0.8, 1], dtype=np.float32), (2, 2, 1))
     full = SelectionMask(np.ones((2, 2)), (0, 0, 2, 2))
-    result = images.create_image_edit_result(source, apply_alpha_mask(rgba, full, "SUBTRACT"), (2, 2))
+    result = images.create_image_edit_result(source, apply_alpha_mask(rgba.copy(), full, "SUBTRACT"), (2, 2))
+    result.pack()
     result.use_fake_user = True
     name = result.name
     bpy.data.images.remove(source)
@@ -183,6 +186,7 @@ def test_mask_pack_reopen_extend_and_repeat_frame_preserve_hidden_color(tmp_path
             next_result = images.create_image_edit_result(result, pixels, (2, 2))
             bpy.data.images.remove(result)
             result = next_result
+            result.pack()
             result.reload()
             assert result.alpha_mode == "STRAIGHT" and result.packed_file is not None
             np.testing.assert_allclose(images.image_rgba(result), rgba, atol=1 / 255)
@@ -198,7 +202,7 @@ def test_job_loader_reads_only_the_returned_file(tmp_path):
     try:
         assert tuple(result.size) == (4, 4)
         assert result.source == "FILE"
-        assert result.packed_file is not None
+        assert result.packed_file is None
         with pytest.raises(RuntimeError, match="Color result image does not exist"):
             load_image_edit_result(original, tmp_path / "missing.png")
     finally:

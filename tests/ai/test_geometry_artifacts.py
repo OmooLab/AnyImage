@@ -1,10 +1,12 @@
 import importlib
-import json
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+from tests.anyimage.server.support import FakeJobContext
+
 
 class GeometryArtifactsTest(unittest.TestCase):
     def setUp(self):
@@ -35,48 +37,11 @@ class GeometryArtifactsTest(unittest.TestCase):
                 depth.write_depth_texture(frame, output, alpha=np.ones((4, 1)))
             self.assertEqual(write.call_count, 1)
 
-    def test_depth_artifacts_store_texture_and_compact_metadata(self):
-        import numpy as np
-
-        depth = importlib.import_module("server.geometry.depth_texture")
-        GeometryFrame = importlib.import_module(
-            "server.models.geometry"
-        ).GeometryFrame
-        texture_path = self.storage_root / "depth.exr"
-        metadata_path = self.storage_root / "depth.json"
-        validity = np.asarray(
-            ((1.0, 1.0, 0.0), (1.0, 1.0, 1.0)),
-            dtype=np.float32,
-        )
-        frame = GeometryFrame(
-            depth=np.asarray(
-                ((1.0, 2.0, 3.0), (4.0, 5.0, 6.0)),
-                dtype=np.float32,
-            ),
-            validity=validity,
-            points=np.ones((2, 3, 3), dtype=np.float32),
-            intrinsics=np.eye(3, dtype=np.float32),
-        )
-
-        depth.write_depth_texture(frame, texture_path, alpha=np.ones_like(validity))
-        depth.write_depth_metadata(frame, metadata_path)
-
-        self.assertTrue(texture_path.is_file())
-        self.assertEqual(texture_path.read_bytes()[:4], b"v/1\x01")
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        self.assertEqual(metadata["image_size"], [3, 2])
-        self.assertEqual(metadata["intrinsics"], np.eye(3).tolist())
-        self.assertEqual(set(metadata), {"image_size", "intrinsics"})
-
-
     def test_normal_texture_matches_tangent_and_object_axes(self):
         import numpy as np
         from PIL import Image
 
         normal_texture = importlib.import_module("server.geometry.normal_texture")
-        GeometryFrame = importlib.import_module(
-            "server.models.geometry"
-        ).GeometryFrame
         output_path = self.storage_root / "tangent-normal.png"
         camera_normals = np.asarray(
             [[
@@ -88,15 +53,8 @@ class GeometryArtifactsTest(unittest.TestCase):
             dtype=np.float32,
         )
         valid = np.asarray([[True, True, True, False]], dtype=bool)
-        frame = GeometryFrame(
-            depth=np.ones((1, 4), dtype=np.float32),
-            validity=np.ones((1, 4), dtype=np.float32),
-            intrinsics=np.eye(3, dtype=np.float32),
-            normal=camera_normals,
-        )
-
         normal_texture.write_normal_texture(
-            frame,
+            camera_normals,
             valid,
             (4, 1),
             output_path,
@@ -119,7 +77,7 @@ class GeometryArtifactsTest(unittest.TestCase):
 
 
         normal_texture.write_normal_texture(
-            frame, valid, (4, 1), output_path, normal_space="OBJECT",
+            camera_normals, valid, (4, 1), output_path, normal_space="OBJECT",
         )
         with Image.open(output_path) as opened:
             encoded = np.asarray(opened, dtype=np.uint8)
@@ -146,32 +104,26 @@ class GeometryArtifactsTest(unittest.TestCase):
         second[..., 3] = 255
         Image.fromarray(first, mode="RGBA").save(first_path)
         Image.fromarray(second, mode="RGBA").save(second_path)
-        context = SimpleNamespace(
-            directory=self.storage_root,
-            resource=lambda _: None,
-            progress=lambda *_: None,
-            check_cancelled=lambda: None,
-        )
-        frame = SimpleNamespace(depth=np.ones((1, 3), dtype=np.float32))
+        context = FakeJobContext(self.storage_root, "generate_cutout_artifacts")
+        moge = importlib.import_module("server.models.onnx_moge2")
+        parameters = {"model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 0}
 
         for max_size in (2048, 2):
             with self.subTest(max_size=max_size):
                 outputs = []
                 for source in (first_path, second_path):
                     with (
-                        patch.object(artifacts, "infer_geometry", return_value=frame) as infer,
+                        patch.object(moge, "infer_normal", side_effect=lambda session, rgb, level: rgb) as infer,
                         patch.object(artifacts, "write_normal_texture"),
                     ):
                         artifacts.generate_moge_artifacts(
-                            context, {"max_input_size": max_size}, source, generate_depth=False,
+                            context, {**parameters, "input": str(source), "max_input_size": max_size}, generate_depth=False,
                         )
-                    model_image = infer.call_args.args[2]
-                    self.assertEqual(model_image.mode, "RGB")
-                    outputs.append(np.asarray(model_image))
+                    outputs.append(infer.call_args.args[1])
                 np.testing.assert_array_equal(*outputs)
                 self.assertEqual(outputs[0].shape[1], min(3, max_size))
                 if max_size == 2048:
-                    np.testing.assert_array_equal(outputs[0], first[..., :3])
+                    np.testing.assert_allclose(outputs[0], first[..., :3] / 255)
 
 
     def test_moge_artifact_orchestration_uses_one_geometry_frame(self):
@@ -188,12 +140,7 @@ class GeometryArtifactsTest(unittest.TestCase):
         source.save(input_path)
         output_directory = self.storage_root / "job"
         output_directory.mkdir()
-        context = SimpleNamespace(
-            directory=output_directory,
-            resource=lambda _name: object(),
-            progress=lambda *_args: None,
-            check_cancelled=lambda: None,
-        )
+        context = FakeJobContext(output_directory, "generate_depth_plane_geometry")
         frame = GeometryFrame(
             depth=np.ones((2, 2), dtype=np.float32),
             validity=np.ones((2, 2), dtype=np.float32),
@@ -209,70 +156,36 @@ class GeometryArtifactsTest(unittest.TestCase):
         ):
             result = artifacts.generate_moge_artifacts(
                 context,
-                {"max_input_size": 2048},
-                input_path,
+                {"input": str(input_path), "model": "MOGE2_VITS_NORMAL", "resolution_level": 1, "device": "cpu"},
                 generate_depth=True,
             )
 
         np.testing.assert_array_equal(write.call_args.args[0][..., 3], [[1, 0], [1, 1]])
         np.testing.assert_array_equal(frame.validity, np.ones((2, 2)))
-        metadata = json.loads(result["depth_metadata"].read_text())
-        self.assertEqual(metadata["image_size"], [2, 2])
-        self.assertNotIn("reference_depth", metadata)
+        self.assertEqual(result, {"depth": "depth.exr", "intrinsics": frame.intrinsics.tolist(),
+                                  "tangent_normal": "tangent-normal.png"})
+        self.assertEqual({path.name for path in output_directory.iterdir()}, {"depth.exr", "tangent-normal.png"})
         infer.assert_called_once()
-        self.assertEqual(
-            set(result),
-            {"depth", "depth_metadata", "tangent_normal"},
-        )
-        self.assertFalse((output_directory / "model-input.png").exists())
-        self.assertTrue(all(path.is_file() for path in result.values()))
-        self.assertTrue(infer.call_args.kwargs["include_points"])
 
 
     def test_generate_cutout_artifacts_only_returns_requested_outputs(self):
         job = importlib.import_module("server.jobs.cutout")
         input_path = self.storage_root / "input.png"
-        input_path.write_bytes(b"selection")
         context = SimpleNamespace(
             directory=self.storage_root / "job",
             progress=lambda *_args: None,
             check_cancelled=lambda: None,
         )
-        depth_texture = context.directory / "depth.exr"
-        metadata = context.directory / "depth.json"
-        normal = context.directory / "object-normal.png"
-        with patch.object(
-            job,
-            "generate_moge_artifacts",
-            return_value={
-                "depth": depth_texture,
-                "depth_metadata": metadata,
-                "object_normal": normal,
-            },
-        ) as generate:
-            result = job.run(
-                context,
-                {
-                    "input": str(input_path),
-                    "generate_depth": True,
-                },
-            )
+        parameters = {"input": str(input_path), "generate_depth": True}
+        with patch.object(job, "generate_moge_artifacts") as generate:
+            self.assertIs(job.run(context, parameters), generate.return_value)
 
-        self.assertEqual(
-            result,
-            {
-                "depth": "depth.exr",
-                "depth_metadata": "depth.json",
-                "object_normal": "object-normal.png",
-            },
-        )
         generate.assert_called_once_with(
             context,
             {
                 "input": str(input_path),
                 "generate_depth": True,
             },
-            input_path,
             generate_depth=True,
             normal_space="OBJECT",
         )

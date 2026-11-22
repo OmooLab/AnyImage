@@ -1,6 +1,7 @@
 """Shared Blender Image and Image Empty lifecycle helpers."""
 
 import hashlib
+from pathlib import Path
 
 import bpy
 
@@ -8,8 +9,6 @@ image_content_handlers = []
 
 TEMPORARY_IMAGE_PREVIEW_PROPERTY = "anyimage_temporary_preview"
 CLIPBOARD_HASH_PROPERTY = "anyimage_clipboard_sha256"
-IMAGE_EMPTY_REFERENCE_PROPERTY = "anyimage_image_empty_reference"
-COLOR_REFERENCE_PROPERTY = "anyimage_color_reference"
 COLOR_NORMALIZED_PROPERTY = "anyimage_color_normalized"
 
 IMAGE_NAME_SUFFIXES = (
@@ -120,13 +119,15 @@ def is_static_image(image):
         return False
 
 
-def mark_image_empty_reference(image):
-    """Record that an image was used by an Image Empty."""
-    if is_static_image(image) and not image.get(TEMPORARY_IMAGE_PREVIEW_PROPERTY, False):
-        image[IMAGE_EMPTY_REFERENCE_PROPERTY] = True
+def create_linear_image_edit_result(source_image, linear_rgba):
+    """Create an edited image from top-down scene-linear RGBA."""
+    from .color_space import linear_rgba_to_image
+
+    rgba = linear_rgba_to_image(source_image, linear_rgba)
+    return create_image_edit_result(source_image, rgba[::-1].ravel(), rgba.shape[1::-1])
 
 
-def create_image_edit_result(source_image, pixels, output_size, *, pack=True):
+def create_image_edit_result(source_image, pixels, output_size):
     """Create an Image datablock from edited RGBA pixels."""
     output_width, output_height = (int(value) for value in output_size)
     if output_width <= 0 or output_height <= 0:
@@ -146,8 +147,6 @@ def create_image_edit_result(source_image, pixels, output_size, *, pack=True):
         if source_image.get(COLOR_NORMALIZED_PROPERTY):
             image[COLOR_NORMALIZED_PROPERTY] = True
         image.pixels.foreach_set(pixels)
-        if pack:
-            image.pack()
         image.update()
     except Exception:
         bpy.data.images.remove(image, do_unlink=True)
@@ -270,6 +269,22 @@ def restore_image_content(image, state):
     refresh_image_content(image)
 
 
+def pack_image_result(result, destination=None, *, filepath=None):
+    """Pack the finished edit on its final Image datablock."""
+    if destination is None or destination == result:
+        if not result.packed_file or result.is_dirty:
+            result.pack()
+        return
+    state = image_content_state(result)
+    if state["packed"] is None and result.source == "FILE" and not result.is_dirty:
+        state["packed"] = Path(bpy.path.abspath(result.filepath_raw)).read_bytes()
+    if filepath is not None:
+        state["filepath"] = filepath
+    restore_image_content(destination, state)
+    if state["packed"] is None:
+        destination.pack()
+
+
 def replace_image_content(image, result):
     """Write packed result pixels while retaining the destination ID and path."""
     filepath = image.filepath_raw
@@ -331,11 +346,11 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
         try:
             shared = has_other_image_user(source_object, removed_objects=removed_objects)
             if shared:
+                pack_image_result(result_image)
                 final_image = result_image
             else:
-                result_content = image_content_state(result_image)
                 original_content = image_content_state(source_image)
-                restore_image_content(source_image, result_content)
+                pack_image_result(result_image, source_image)
                 final_image = source_image
             source_object.data = final_image
             source_object.use_empty_image_alpha = True
@@ -356,11 +371,6 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
             raise
 
         source_image.use_fake_user = original_fake_user
-        if final_image != source_image:
-            mark_image_empty_reference(source_image)
-        for owner in removed_objects:
-            if is_image_empty(owner):
-                mark_image_empty_reference(owner.data)
         return final_image
     finally:
         if result_image.users == 0:

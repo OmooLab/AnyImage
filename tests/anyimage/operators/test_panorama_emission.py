@@ -155,12 +155,12 @@ def test_emission_encoding_clamps_negative_rgb_and_preserves_hdr_ratios(image_ob
 
 
 def test_inverse_mask_emission_survives_baking(image_object, tmp_path):
-    from anyimage.common.object import modifier_input_identifier, set_modifier_input
+    from anyimage.common.object import set_modifier_input
     from scipy.ndimage import binary_erosion
 
     obj = image_object
     modifier = obj.modifiers[0]
-    set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Depth Mask"), False)
+    set_modifier_input(modifier, "Depth Mask", False)
     depth = bpy.data.images["Radial Depth"]
     pixels = image_pixels(depth).reshape(64, 128, 4)
     pixels[..., 3] = np.linspace(0, 1, 128)[None, :]

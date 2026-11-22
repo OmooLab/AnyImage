@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.common.job_image import apply_image_result
+from anyimage.operators.remove_background.image import BackgroundInput
 from anyimage.common.image import image_rgba
 from anyimage.common.image_input import cleanup_image_input, prepare_input_png
 from anyimage.common.image_target import ImageEditTarget
@@ -40,27 +40,26 @@ def test_queued_edits_capture_inputs_and_apply_in_order(tmp_path, same_target, s
 
     class Edit(runtime.JobOperator):
         job_type = "remove_background"
-        input_path = None
 
         def request(self, context):
-            self.target, pixels = ImageEditTarget.capture_with_pixels(context)
-            self.input_path = prepare_input_png(image_rgba(self.target.image, pixels))
-            inputs.append(self.input_path)
-            return {"input": str(self.input_path)}
+            self.target, rgba = ImageEditTarget.capture(context)
+            self.source = BackgroundInput.prepare(self.target.image, rgba)
+            inputs.append(self.source.path)
+            return {"input": str(self.source.path)}
 
         def response(self, context, result):
-            apply_image_result(self.target, result.file("foreground"))
+            self.source.apply(self.target, result.file("alpha"))
             completed.append(self.target.owner)
 
         def cleanup(self):
-            cleanup_image_input(self.input_path)
+            cleanup_image_input(self.source.path)
 
     states = {}
 
     def submit(obj, index):
         output = tmp_path / str(index)
         output.mkdir()
-        write_result(output, "foreground.png")
+        write_result(output, "alpha.npy")
         runtime.server.submit.return_value = {"job_id": str(index), "directory": str(output)}
         states[str(index)] = {"state": "running"}
         operator = Edit()
@@ -83,12 +82,12 @@ def test_queued_edits_capture_inputs_and_apply_in_order(tmp_path, same_target, s
         assert inputs[0] != inputs[1]
         assert all(path.exists() for path in inputs)
         # Runtime waits for the earlier result even when the second is ready.
-        states["2"] = {"state": "succeeded", "result": {"foreground": "foreground.png"}}
+        states["2"] = {"state": "succeeded", "result": {"alpha": "alpha.npy"}}
         runtime._tick()
         assert completed == [] and inputs[1].exists()
         if delete_target:
             bpy.data.objects.remove(a, do_unlink=True)
-        states["1"] = {"state": "succeeded", "result": {"foreground": "foreground.png"}}
+        states["1"] = {"state": "succeeded", "result": {"alpha": "alpha.npy"}}
         runtime._tick()
         assert first._job.state == ("failed" if delete_target else "succeeded")
         assert second._job.state == "succeeded"

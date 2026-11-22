@@ -2,8 +2,6 @@
 
 import bpy
 
-from ..server.media.input import validate_input_path
-
 from ..ai_preferences import configured_device, configured_geometry_model, configured_max_ai_input_size
 from ..preferences import addon_preferences
 from ..runtime import runtime
@@ -57,15 +55,6 @@ def draw_ai_setup(layout, status=None):
     return status
 
 
-def require_input_path(value):
-    return validate_input_path(bpy.path.abspath(value))
-
-
-def report_ai_error(operator, error):
-    """Report the underlying reason from a nested Blender operator."""
-    operator.report({"ERROR"}, str(error).removeprefix("Error: ").strip())
-
-
 def require_environment():
     if not runtime.is_ready():
         raise RuntimeError("Install the Any Image Environment first")
@@ -80,7 +69,7 @@ def invoke_ai_setup_if_needed(operator):
             return bpy.ops.anyimage.download_required_models("INVOKE_DEFAULT")
         return bpy.ops.anyimage.setup_ai_server("INVOKE_DEFAULT")
     except RuntimeError as error:
-        report_ai_error(operator, error)
+        operator.report({"ERROR"}, str(error).removeprefix("Error: ").strip())
         return {"CANCELLED"}
 
 
@@ -93,17 +82,20 @@ def require_model(model_key):
         raise RuntimeError(f"Download {model.label} first")
 
 
-def geometry_job_parameters(context):
+def model_job_parameters(model):
     require_environment()
-    model = configured_geometry_model(context)
     require_model(model)
+    return {"model": model, "device": configured_device()}
+
+
+def geometry_job_parameters(context):
+    model = configured_geometry_model(context)
+    parameters = model_job_parameters(model)
     preferences = addon_preferences(context)
-    parameters = {
-        "model": model,
+    parameters.update({
         "resolution_level": int(getattr(preferences, "geometry_resolution_level", 3)),
         "max_input_size": configured_max_ai_input_size(context),
-        "device": configured_device(),
-    }
+    })
     if model == "MOGE3_VITL":
         parameters["refine_steps"] = int(getattr(preferences, "geometry_refine_steps", 1))
     return parameters

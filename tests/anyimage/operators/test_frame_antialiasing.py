@@ -119,6 +119,7 @@ def test_packed_frame_mask_extend_keeps_boundary_color(background):
     original = bpy.data.images.new("Boundary source", width=1, height=1, alpha=True)
     result = create_image_edit_result(original, rgba.ravel(), (1, 1))
     try:
+        result.pack()
         packed = np.asarray(Image.open(BytesIO(result.packed_file.data))) / 255
         expected = (np.array([1, 0, 0]) + background) / 2
         np.testing.assert_allclose(packed[0, 0, :3], expected, atol=1 / 255)

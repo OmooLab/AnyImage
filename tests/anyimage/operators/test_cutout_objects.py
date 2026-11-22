@@ -12,19 +12,16 @@ from anyimage.common.color_image import create_material_color_image
 from anyimage.common import image as image_data
 from anyimage.common import material as material_data
 from anyimage.common import object as object_data
-from anyimage.common.selection import ImageEditWarning, SelectionPath, rasterize_selection_path
+from anyimage.common.selection import ImageEditWarning, SelectionPath
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
 from anyimage.operators.cutout_tool import object as cutout_main
 from anyimage.operators.cutout_tool import shape as cutout_shape
-from anyimage.operators.cutout_tool.boundary_padding import (
-    image_rgba_buffer,
-    pad_cutout_images,
-)
+from anyimage.operators.cutout_tool.boundary_padding import pad_cutout_images
 from anyimage.server.geometry.depth_texture import (
     write_depth_texture,
 )
 from anyimage.server.models.geometry import GeometryFrame
-from tests.support.image_objects import _create_cutout_shape, _depth_image, _depth_metadata, _evaluated_positions, _group_node
+from tests.support.image_objects import _create_cutout_shape, _depth_image, _evaluated_positions, _group_node
 
 
 def test_depth_result_image_loads_camera_exr_and_keeps_data_name(tmp_path):
@@ -43,16 +40,15 @@ def test_depth_result_image_loads_camera_exr_and_keeps_data_name(tmp_path):
     path = tmp_path / "depth.exr"
     alpha = np.asarray(((0.8, 1.0), (0.75, 0.0)), dtype=np.float32)
     write_depth_texture(frame, path, alpha=alpha)
-    metadata = _depth_metadata(np.eye(3), (2, 2))
 
-    image = geometry_image.load_depth_result_image(path, source, metadata)
+    image = geometry_image.load_depth_result_image(path, source)
 
     packed = np.empty(16, dtype=np.float32)
     image.pixels.foreach_get(packed)
     packed = np.flipud(packed.reshape((2, 2, 4)))
     assert np.array_equal(packed[..., :3], points)
     assert np.array_equal(packed[..., 3], alpha * validity)
-    camera_depth, valid = geometry_image.camera_depth_values(image)
+    camera_depth, valid = geometry_image.camera_depth_values(image_data.image_rgba(image))
     np.testing.assert_array_equal(camera_depth, points[..., 2])
     np.testing.assert_array_equal(
         valid,
@@ -77,12 +73,11 @@ def test_cutout_depth_result_keeps_the_single_server_image(tmp_path):
     )
     path = tmp_path / "depth.exr"
     write_depth_texture(frame, path, alpha=np.ones((2, 2)))
-    metadata = _depth_metadata(np.eye(3), (2, 2))
 
-    image = geometry_image.load_depth_result_image(path, source, metadata)
+    image = geometry_image.load_depth_result_image(path, source)
 
     assert tuple(image.size) == (2, 2)
-    camera_depth, valid = geometry_image.camera_depth_values(image)
+    camera_depth, valid = geometry_image.camera_depth_values(image_data.image_rgba(image))
     np.testing.assert_array_equal(camera_depth, points[..., 2])
     assert valid.all()
 
@@ -101,11 +96,7 @@ def test_depth_texture_keeps_points_outside_positive_validity(tmp_path):
     path = tmp_path / "depth.exr"
     write_depth_texture(frame, path, alpha=np.ones_like(frame.validity))
 
-    image = geometry_image.load_depth_result_image(
-        path,
-        source,
-        _depth_metadata(np.eye(3), (2, 1)),
-    )
+    image = geometry_image.load_depth_result_image(path, source)
 
     packed = np.empty(8, dtype=np.float32)
     image.pixels.foreach_get(packed)
@@ -170,14 +161,13 @@ def test_depth_surface_object_evaluates(gesture):
     points[..., 2] = depth
     valid = np.ones((size, size), dtype=bool)
     depth_image = _depth_image(points, valid)
-    depth_metadata = _depth_metadata(intrinsics, (size, size))
 
     result = _create_cutout_shape(
         source,
         "DEPTH_SOLID",
         0.25,
         depth_image=depth_image,
-        depth_metadata=depth_metadata,
+        intrinsics=intrinsics,
         gesture=gesture,
     )
 
@@ -190,13 +180,9 @@ def test_depth_surface_object_evaluates(gesture):
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Mode")) == (1 if gesture == "POLYLINE" else 0)
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.1)
     assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE")) == 1.0
-    object_data.set_modifier_input(
-        modifier,
-        object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"),
-        0.0,
-    )
+    object_data.set_modifier_input(modifier, "Thickness", 0.0, subtype="DISTANCE")
     for name, value in (("Mode", 1), ("Front Inflation", 0.0)):
-        object_data.set_modifier_input(modifier, object_data.modifier_input_identifier(modifier.node_group, name), value)
+        object_data.set_modifier_input(modifier, name, value)
     scale_id = object_data.modifier_input_identifier(
         modifier.node_group,
         "Uniform Scale",
@@ -216,11 +202,9 @@ def test_depth_surface_object_evaluates(gesture):
         (DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
         * modifier_value(modifier, scale_id)
     )
-    object_data.set_modifier_input(
-        modifier,
-        object_data.modifier_input_identifier(modifier.node_group, "Boundary Smooth"),
-        0,
-    )
+    object_data.set_modifier_input(modifier, "Boundary Smooth", 0)
+    result.update_tag(refresh={"DATA"})
+    bpy.context.view_layer.update()
     evaluated = result.evaluated_get(bpy.context.evaluated_depsgraph_get())
     baseline_mesh = evaluated.to_mesh()
     try:
@@ -232,11 +216,7 @@ def test_depth_surface_object_evaluates(gesture):
     finally:
         evaluated.to_mesh_clear()
 
-    object_data.set_modifier_input(
-        modifier,
-        object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"),
-        1.0,
-    )
+    object_data.set_modifier_input(modifier, "Thickness", 1.0, subtype="DISTANCE")
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     evaluated = result.evaluated_get(bpy.context.evaluated_depsgraph_get())
@@ -278,14 +258,10 @@ def test_depth_surface_keeps_continuous_points_across_zero_validity_edge():
         "DEPTH_SOLID",
         0.1,
         depth_image=_depth_image(points, validity),
-        depth_metadata=_depth_metadata(intrinsics, (size, size)),
+        intrinsics=intrinsics,
     )
     modifier = result.modifiers[0]
-    object_data.set_modifier_input(
-        modifier,
-        object_data.modifier_input_identifier(modifier.node_group, "Thickness"),
-        0.0,
-    )
+    object_data.set_modifier_input(modifier, "Thickness", 0.0)
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     positions = _evaluated_positions(result)
@@ -325,7 +301,6 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     )
     valid = np.ones((61, 41), dtype=bool)
     depth_image = _depth_image(points, valid)
-    depth_metadata = _depth_metadata(intrinsics, (41, 61))
 
     selection_values = np.ones((60, 40), dtype=np.float32)
     selection_values[:, :2] = 0.0
@@ -334,7 +309,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
         "DEPTH_SYMMETRY",
         0.1,
         depth_image=depth_image,
-        depth_metadata=depth_metadata,
+        intrinsics=intrinsics,
         bounds=crop_bounds,
         selection_values=selection_values,
         gesture=gesture,
@@ -381,7 +356,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
         selection_values, depth_image.size, cutout_geometry.CUTOUT_ALPHA_THRESHOLD,
     )
     model_reference = value(modifier, "Reference Depth") / value(modifier, "Uniform Scale")
-    depth, valid = geometry_image.camera_depth_values(depth_image)
+    depth, valid = geometry_image.camera_depth_values(image_data.image_rgba(depth_image))
     model_median = np.median(depth[valid & reference_mask])
     expected_limit = max(
         (
@@ -402,9 +377,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert len(positions) and np.isfinite(positions).all()
     assert cKDTree(positions).query(positions * (-1, 1, 1))[0].max() < 1e-5
     # Both modes preserve symmetric geometry after changing the menu.
-    object_data.set_modifier_input(modifier,
-        object_data.modifier_input_identifier(modifier.node_group, "Mode"),
-        0 if gesture == "POLYLINE" else 1)
+    object_data.set_modifier_input(modifier, "Mode", 0 if gesture == "POLYLINE" else 1)
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     changed = _evaluated_positions(result)
@@ -413,62 +386,49 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
 
 
 @pytest.mark.parametrize("float_buffer", (False, True))
-def test_boundary_padding_preserves_independent_blender_image_interpretation(float_buffer):
+def test_boundary_padding_preserves_independent_blender_image_interpretation(float_buffer, tmp_path):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     source = bpy.data.images.new(
         "Padding Source", width=9, height=9, alpha=True, float_buffer=float_buffer
     )
-    padded = bpy.data.images.new(
-        "Padding Color", width=9, height=9, alpha=True, float_buffer=float_buffer
-    )
-    source.alpha_mode = padded.alpha_mode = "CHANNEL_PACKED"
+    source.alpha_mode = "CHANNEL_PACKED"
     values = np.zeros((9, 9, 4), dtype=np.float32)
-    values[2:7, 2:7] = (0.25, 0.5, 0.75, 1.0)
+    values[2:7, 2:7] = (4.0 if float_buffer else 0.25, 0.5, 0.75, 0.6)
     source.pixels.foreach_set(np.flipud(values).ravel())
-    padded.pixels.foreach_set(np.flipud(values).ravel())
-    original = image_rgba_buffer(source)
-
-    pad_cutout_images(padded, None, None, values[..., 3] >= 0.5, 2.0)
-
-    np.testing.assert_array_equal(image_rgba_buffer(source), original)
-    assert image_rgba_buffer(padded)[1, 4, 3] == pytest.approx(1.0)
-    assert padded.is_float is float_buffer
-    assert padded.alpha_mode == "CHANNEL_PACKED"
-    assert padded.packed_file is not None
+    original = image_data.image_rgba(source)
+    rgba = image_data.image_rgba(source)
+    pad_cutout_images(rgba, None, None, rgba[..., 3] >= 0.5, 2.0)
+    padded = create_material_color_image(source, rgba=rgba)
+    try:
+        library = str(tmp_path / "cutout.blend")
+        bpy.data.libraries.write(library, {padded})
+        with bpy.data.libraries.load(library) as (saved, restored):
+            restored.images = saved.images
+        restored_image = restored.images[0]
+        try:
+            np.testing.assert_allclose(image_data.image_rgba(restored_image)[1, 4], original[4, 4], atol=1e-6)
+        finally:
+            bpy.data.images.remove(restored_image)
+        np.testing.assert_array_equal(image_data.image_rgba(source), original)
+        assert padded.file_format == ("OPEN_EXR" if float_buffer else "PNG")
+        assert padded.alpha_mode == "CHANNEL_PACKED" and padded.packed_file
+    finally:
+        bpy.data.images.remove(padded)
+        bpy.data.images.remove(source)
 
 
 def test_local_cutout_selection_matches_uint8_tenth_alpha_boundary():
     top_down = np.ones((4, 4, 4), dtype=np.float32)
     top_down[1, 1, 3] = 25.0 / 255.0
     top_down[1, 2, 3] = 26.0 / 255.0
-    selection_mask = rasterize_selection_path(
-        (4, 4),
-        SelectionPath(
-            points=((0, 0), (4, 0), (4, 4), (0, 4)),
-        ),
-    )
-    selection = cutout_geometry.cutout_content_values(
-        top_down[:, :, 3],
-        selection_mask.values,
-    )
+    path = SelectionPath(points=((0, 0), (4, 0), (4, 4), (0, 4)))
+    selection = cutout_geometry.cutout_selection_mask(top_down, path)
 
-    assert selection[1, 1] <= cutout_geometry.CUTOUT_ALPHA_THRESHOLD
-    assert selection[1, 2] > 0.1
-
-
-def test_cutout_content_merge_keeps_the_geometric_selection_unchanged():
-    selection = np.asarray(((0.25, 1.0), (0.5, 0.75)), dtype=np.float32)
-    original = selection.copy()
-    alpha = np.asarray(((1.0, 0.5), (0.0, 0.25)), dtype=np.float32)
-
-    content = cutout_geometry.cutout_content_values(
-        alpha, selection, alpha_threshold=0.5
-    )
-
-    np.testing.assert_array_equal(selection, original)
-    np.testing.assert_allclose(content, alpha * original)
+    assert selection.values[1, 1] <= cutout_geometry.CUTOUT_ALPHA_THRESHOLD
+    assert selection.values[1, 2] > 0.1
+    top_down[..., 3] = 0
     with pytest.raises(ImageEditWarning, match="no visible image pixels"):
-        cutout_geometry.cutout_content_values(np.zeros((2, 2)), selection)
+        cutout_geometry.cutout_selection_mask(top_down, path)
 
 
 def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
@@ -494,32 +454,16 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
         wraps=image_data.image_rgba,
     ) as read_rgba:
         rgba = image_data.image_rgba(image)
-        selection_mask = rasterize_selection_path(
-            tuple(image.size),
-            selection_path,
-            antialias=True,
-        )
-        left, top, right, bottom = selection_mask.bounds
-        content_values = cutout_geometry.cutout_content_values(
-            rgba[top:bottom, left:right, 3],
-            selection_mask.values,
-            alpha_threshold=0.5,
-        )
-        color_image = create_material_color_image(
-            source.data,
-            selection_mask.bounds,
-            rgba,
-        )
+        selection_mask = cutout_geometry.cutout_selection_mask(rgba, selection_path, alpha_threshold=0.5)
         cutout_main.create_cutout_shape(
             bpy.context,
             source,
             "FLAT",
             0.1,
-            content_values,
-            selection_mask.bounds,
+            selection_mask,
             alpha_threshold=0.5,
             boundary_padding=0.0,
-            color_image=color_image,
+            source_rgba=rgba,
         )
 
     read_rgba.assert_called_once_with(image)

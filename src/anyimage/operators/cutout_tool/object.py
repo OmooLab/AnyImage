@@ -2,6 +2,7 @@
 
 import bpy
 
+from ...common.color_image import material_color_image
 from ...common.geometry_image import camera_depth_values
 from ...common.depth_geometry import (
     depth_limit_preset,
@@ -15,7 +16,6 @@ from ...common.material import create_image_material
 from ...common.node import load_node_group
 from ...common.object import (
     finalize_object_result,
-    modifier_input_identifier,
     set_modifier_input,
 )
 from .geometry import (
@@ -61,21 +61,18 @@ def create_cutout_mesh_object(context, source_object, bounds, base_shape, materi
         raise
 
 
-def create_cutout_modifier(obj, group, shape, gesture, *, thickness_subtype=None):
+def create_cutout_modifier(obj, group, shape, gesture):
     modifier = obj.modifiers.new(name=group.name, type="NODES")
     modifier.node_group = group
     modifier.show_group_selector = False
     set_modifier_input(
-        modifier,
-        modifier_input_identifier(group, "Thickness", subtype=thickness_subtype),
-        0.0 if shape == "FLAT" else 1.0,
+        modifier, "Thickness", 0.0 if shape == "FLAT" else 1.0,
+        subtype="NONE" if shape in DEPTH_CUTOUT_SHAPES else None,
     )
     if gesture == "POLYLINE":
-        set_modifier_input(modifier, modifier_input_identifier(group, "Mode"), 1)
+        set_modifier_input(modifier, "Mode", 1)
         if shape == "SOLID":
-            set_modifier_input(
-                modifier, modifier_input_identifier(group, "Thickness", subtype="DISTANCE"), 0.5
-            )
+            set_modifier_input(modifier, "Thickness", 0.5, subtype="DISTANCE")
     return modifier
 
 
@@ -86,10 +83,11 @@ def create_shape_object(
     bounds,
     base_shape,
     *,
+    depth_pixels=None,
     content_values=None,
     alpha_threshold=CUTOUT_ALPHA_THRESHOLD,
     depth_image=None,
-    depth_metadata=None,
+    intrinsics=None,
     normal_image=None,
     color_image,
     gesture="LASSO",
@@ -107,75 +105,42 @@ def create_shape_object(
             normal_space="OBJECT",
             scene=context.scene,
         )
-        depth_reference = None
-        depth_limit = None
-        uniform_scale = None
-        depth_direction = None
-        if shape in DEPTH_CUTOUT_SHAPES:
-            if depth_image is None or depth_metadata is None:
-                raise ValueError("Depth Shape requires a Depth texture and metadata")
-            front_size = depth_metadata["image_size"]
-            reference_mask = build_reference_mask(content_values, front_size, alpha_threshold)
-            depth, valid = camera_depth_values(depth_image)
-            if reference_mask.shape != depth.shape:
-                raise ValueError("Depth reference mask dimensions do not match")
-            model_reference, model_median = reference_and_median_depth(depth[valid & reference_mask])
-            uniform_scale = depth_uniform_scale(bounds, depth_metadata, model_reference)
-            depth_reference = model_reference * uniform_scale
-            depth_limit = depth_limit_preset(model_median, model_reference, uniform_scale)
-            if shape == "DEPTH_SYMMETRY":
-                depth_direction = depth_node_direction(
-                    fit_symmetry_depth_direction(
-                        depth, valid,
-                        base_shape.vertices,
-                        base_shape.uv,
-                        uniform_scale,
-                    )
-                )
-
         mesh_object = create_cutout_mesh_object(
             context, source_object, bounds, base_shape, material
         )
         mesh = mesh_object.data
-        if shape == "DEPTH_SYMMETRY":
-            mesh_object.matrix_world = mesh_object.matrix_world @ Matrix.Rotation(
-                -1.5707963267948966, 4, "Z"
-            )
         node_group = load_node_group(
             CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID" if shape == "DEPTH_SYMMETRY" else shape]
         )
-        modifier = create_cutout_modifier(
-            mesh_object, node_group, shape, gesture,
-            thickness_subtype="NONE" if shape in DEPTH_CUTOUT_SHAPES else None,
-        )
+        modifier = create_cutout_modifier(mesh_object, node_group, shape, gesture)
+
         if shape in DEPTH_CUTOUT_SHAPES:
-            for name, value in (
-                ("Depth Scale", 1.0),
-                ("Uniform Scale", uniform_scale),
-                ("Reference Depth", depth_reference),
-                ("Depth Limit", depth_limit),
-                ("Depth Image", depth_image),
-            ):
-                set_modifier_input(
-                    modifier,
-                    modifier_input_identifier(node_group, name),
-                    value,
+            if depth_image is None or intrinsics is None:
+                raise ValueError("Depth Shape requires a Depth texture and camera intrinsics")
+            reference_mask = build_reference_mask(content_values, depth_image.size, alpha_threshold)
+            depth, valid = camera_depth_values(depth_pixels)
+            model_reference, model_median = reference_and_median_depth(depth[valid & reference_mask])
+            uniform_scale = depth_uniform_scale(bounds, depth_image.size, intrinsics, model_reference)
+            depth_limit = depth_limit_preset(model_median, model_reference, uniform_scale)
+            set_modifier_input(modifier, "Depth Scale", 1.0)
+            set_modifier_input(modifier, "Uniform Scale", uniform_scale)
+            set_modifier_input(modifier, "Reference Depth", model_reference * uniform_scale)
+            set_modifier_input(modifier, "Depth Limit", depth_limit)
+            set_modifier_input(modifier, "Depth Image", depth_image)
+
+            if shape == "DEPTH_SYMMETRY":
+                direction = fit_symmetry_depth_direction(
+                    depth, valid, base_shape.vertices, base_shape.uv, uniform_scale,
                 )
-        if shape == "DEPTH_SYMMETRY":
-            set_modifier_input(
-                modifier,
-                modifier_input_identifier(node_group, "Front Inflation"),
-                0.0,
-            )
-            symmetry_group = load_node_group(CUTOUT_NODE_GROUP_NAMES["DEPTH_SYMMETRY"])
-            symmetry = mesh_object.modifiers.new(name=symmetry_group.name, type="NODES")
-            symmetry.node_group = symmetry_group
-            symmetry.show_group_selector = False
-            set_modifier_input(
-                symmetry,
-                modifier_input_identifier(symmetry_group, "Direction"),
-                depth_direction,
-            )
+                mesh_object.matrix_world = mesh_object.matrix_world @ Matrix.Rotation(
+                    -1.5707963267948966, 4, "Z"
+                )
+                set_modifier_input(modifier, "Front Inflation", 0.0)
+                symmetry_group = load_node_group(CUTOUT_NODE_GROUP_NAMES[shape])
+                symmetry = mesh_object.modifiers.new(name=symmetry_group.name, type="NODES")
+                symmetry.node_group = symmetry_group
+                symmetry.show_group_selector = False
+                set_modifier_input(symmetry, "Direction", depth_node_direction(direction))
         return finalize_object_result(
             context,
             source_object,
@@ -203,44 +168,46 @@ def create_cutout_shape(
     source_object,
     shape,
     edge_length,
-    content_values,
-    content_bounds,
+    selection,
     *,
     alpha_threshold=CUTOUT_ALPHA_THRESHOLD,
     fine_outline=False,
     depth_image=None,
-    depth_metadata=None,
+    intrinsics=None,
     normal_image=None,
     boundary_padding=DEFAULT_CUTOUT_BOUNDARY_PADDING,
-    color_image,
+    source_rgba,
     gesture="LASSO",
     report=None,
 ):
-    bounds = crop_plane_bounds(source_object, content_bounds, source_object.data.size)
+    bounds = crop_plane_bounds(source_object, selection.bounds, source_object.data.size)
     base_shape = build_cutout_shape(
-        context, source_object, edge_length, content_values, bounds,
+        context, source_object, edge_length, selection.values, bounds,
         alpha_threshold, fine_outline, report,
     )
-    pad_cutout_images(
-        color_image,
+    left, top, right, bottom = selection.bounds
+    depth_pixels = pad_cutout_images(
+        source_rgba[top:bottom, left:right],
         depth_image,
-        depth_metadata,
+        intrinsics,
         base_shape.mask,
         boundary_padding,
     )
-    result = create_shape_object(
-        context,
-        source_object,
-        shape,
-        bounds,
-        base_shape,
-        content_values=content_values,
-        alpha_threshold=alpha_threshold,
-        depth_image=depth_image,
-        depth_metadata=depth_metadata,
-        normal_image=normal_image,
-        color_image=color_image,
-        gesture=gesture,
-    )
+    with material_color_image(source_object.data, bounds=selection.bounds, rgba=source_rgba) as color_image:
+        result = create_shape_object(
+            context,
+            source_object,
+            shape,
+            bounds,
+            base_shape,
+            content_values=selection.values,
+            depth_pixels=depth_pixels,
+            alpha_threshold=alpha_threshold,
+            depth_image=depth_image,
+            intrinsics=intrinsics,
+            normal_image=normal_image,
+            color_image=color_image,
+            gesture=gesture,
+        )
     push_cutout_undo(shape)
     return result

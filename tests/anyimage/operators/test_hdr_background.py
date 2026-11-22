@@ -6,8 +6,8 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.image import image_pixels, image_rgba
+from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.common.image import image_rgba
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators.remove_background import operators
@@ -44,22 +44,21 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
     def execute(operator, context):
         owner = current_owner()
         target_context = SimpleNamespace(object=owner, space_data=None) if owner_kind == "empty" else texture_context(owner)
-        operator._image_target, pixels = ImageEditTarget.capture_with_pixels(target_context)
-        operator._hdr_input = HdrBackgroundInput.prepare(operator._image_target.image, pixels)
-        operator.input_path = str(operator._hdr_input.path)
+        operator._image_target, rgba = ImageEditTarget.capture(target_context)
+        operator._background_input = BackgroundInput.prepare(operator._image_target.image, rgba)
         try:
             operator.response(context, SimpleNamespace(file=lambda key: alpha_path))
         finally:
             operator.cleanup()
         return {"FINISHED"}
 
-    operation = operators.RunBackgroundRemoval
+    operation = operators.RemoveImageBackground
     bpy.context.preferences.edit.use_global_undo = True
     with patch.object(operation, "execute", execute), patch.object(operation, "poll", classmethod(lambda cls, context: True), create=True):
         bpy.utils.register_class(operation)
         try:
             bpy.ops.ed.undo_push(message="Before HDR removal")
-            assert bpy.ops.anyimage.run_background_removal("EXEC_DEFAULT", True) == {"FINISHED"}
+            assert bpy.ops.anyimage.remove_image_background("EXEC_DEFAULT", True) == {"FINISHED"}
             after = image_rgba(current_image()).copy()
             np.testing.assert_array_equal(after[..., :3], before[..., :3])
             np.testing.assert_allclose(after[..., 3], before[..., 3] * np.float32(0.37123), atol=1e-7)
@@ -74,9 +73,9 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
 
 @pytest.mark.parametrize("outcome", ["cancel", "raise"])
 def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outcome):
-    capture = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
+    capture = ImageEditTarget.capture(texture_context(hdr_texture))
     paths = []
-    operation = operators.RunBackgroundRemoval
+    operation = operators.RemoveImageBackground
     original_cleanup = operation.cleanup
     original_execute = operation.execute
     context = SimpleNamespace(window_manager=Mock(), window=None)
@@ -89,26 +88,27 @@ def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outco
         return result
 
     def cleanup(operator):
-        paths.append(Path(operator.input_path))
+        paths.append(operator._background_input.path)
         assert paths[-1].is_file()
         original_cleanup(operator)
 
     from anyimage.runtime import runtime
     with (
-        patch.object(ImageEditTarget, "capture_with_pixels", return_value=capture),
+        patch.object(ImageEditTarget, "capture", return_value=capture),
         patch.object(runtime, "can_submit", return_value=outcome == "raise"),
         patch.object(runtime, "enable"),
         patch.object(runtime.server, "poll"),
         patch.object(runtime.server, "submit", side_effect=RuntimeError("Submission failed")),
         patch.object(operation, "execute", execute),
-        patch.object(operation, "request", return_value={}),
+        patch.object(operation, "poll", classmethod(lambda cls, context: True)),
+        patch.object(operators, "model_job_parameters", return_value={}),
         patch.object(operation, "cleanup", cleanup),
     ):
         bpy.utils.register_class(operation)
         try:
             message = "Submission failed" if outcome == "raise" else "Cannot submit"
             with pytest.raises(RuntimeError, match=message):
-                bpy.ops.anyimage.run_background_removal("EXEC_DEFAULT")
+                bpy.ops.anyimage.remove_image_background("EXEC_DEFAULT")
         finally:
             bpy.utils.unregister_class(operation)
     assert len(paths) == 1 and not paths[0].parent.exists()
@@ -116,15 +116,35 @@ def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outco
 
 
 def test_hdr_request_uses_alpha_output_and_current_still(hdr_texture):
-    operation = operators.RunBackgroundRemoval
-    snapshot = HdrBackgroundInput.prepare(hdr_texture.image, image_pixels(hdr_texture.image))
-    operator = SimpleNamespace(input_path=str(snapshot.path), _hdr_input=snapshot,
-                               _image_target=SimpleNamespace())
-    context = SimpleNamespace(scene=SimpleNamespace(anyimage_settings=SimpleNamespace()))
+    operation = operators.RemoveImageBackground
+    operator = SimpleNamespace(_input_path=None)
     try:
-        with patch.object(operators, "require_environment"), patch.object(operators, "require_model"), patch.object(operators, "configured_device", return_value="cpu"):
-            parameters = operation.request(operator, context)
-        assert parameters["output_kind"] == "alpha"
+        with patch.object(operators, "model_job_parameters", return_value={}):
+            parameters = operation.request(operator, texture_context(hdr_texture))
+        assert Path(parameters["input"]).is_file()
         assert "start_frame" not in parameters and "video_frames" not in parameters
+    finally:
+        cleanup_image_input(operator._background_input.path)
+
+
+@pytest.mark.parametrize("mode", ["STRAIGHT", "NONE"])
+def test_byte_background_mask_keeps_submitted_rgb_after_reload(texture, tmp_path, mode):
+    image = texture.image
+    image.alpha_mode = mode
+    pixels = np.tile(np.array((.2, .5, .8, .6), np.float32), (3, 4, 1))
+    pixels[:, 0, 3] = 0
+    image.pixels.foreach_set(pixels[::-1].ravel())
+    target, submitted = ImageEditTarget.capture(texture_context(texture))
+    snapshot = BackgroundInput.prepare(image, submitted)
+    alpha = np.linspace(0, 1, 12, dtype=np.float32).reshape(3, 4)
+    path = tmp_path / "alpha.npy"
+    np.save(path, alpha)
+    try:
+        result = snapshot.apply(target, path)
+        result.reload()
+        restored = image_rgba(result)
+        np.testing.assert_allclose(restored[..., :3], submitted[..., :3], atol=1 / 255)
+        expected = alpha if mode == "NONE" else submitted[..., 3] * alpha
+        np.testing.assert_allclose(restored[..., 3], expected, atol=1 / 255)
     finally:
         cleanup_image_input(snapshot.path)

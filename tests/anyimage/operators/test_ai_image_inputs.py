@@ -6,9 +6,29 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from anyimage.common import ai
 from anyimage.operators import upscale
 from anyimage.operators.remove_background import operators as background
 from anyimage.runtime import runtime
+
+
+def test_remove_background_exports_linear_gray_as_srgb():
+    from anyimage.common.image_input import cleanup_image_input
+    from anyimage.common.image import image_rgba
+    from anyimage.operators.remove_background.image import BackgroundInput
+
+    image = bpy.data.images.new("Linear gray", width=1, height=1, alpha=True)
+    try:
+        image.colorspace_settings.name = "Linear Rec.709"
+        image.pixels[:] = (.5, .5, .5, 1)
+        snapshot = BackgroundInput.prepare(image, image_rgba(image))
+        try:
+            with Image.open(snapshot.path) as png:
+                assert png.getpixel((0, 0)) == (188, 188, 188, 255)
+        finally:
+            cleanup_image_input(snapshot.path)
+    finally:
+        bpy.data.images.remove(image)
 
 
 @pytest.mark.parametrize("module", [upscale, background], ids=["upscale", "remove_background"])
@@ -31,8 +51,8 @@ def test_job_submits_visible_pixels_after_external_overwrite(module, tmp_path, m
     bpy.context.collection.objects.link(owner)
     bpy.context.view_layer.objects.active = owner
     monkeypatch.setattr(runtime, "can_submit", lambda: True)
-    monkeypatch.setattr(module, "require_environment", lambda: None)
-    monkeypatch.setattr(module, "require_model", lambda _model: None)
+    monkeypatch.setattr(ai, "require_environment", lambda: None)
+    monkeypatch.setattr(ai, "require_model", lambda _model: None)
     submitted = []
 
     def submit(job_type, parameters, **kwargs):
@@ -44,22 +64,33 @@ def test_job_submits_visible_pixels_after_external_overwrite(module, tmp_path, m
         raise RuntimeError("End of submission check")
 
     monkeypatch.setattr(runtime, "submit", submit)
-    classes = ((upscale.UpscaleImage,) if module is upscale else
-               (background.RunBackgroundRemoval, background.RemoveImageBackground))
-    for cls in classes:
-        bpy.utils.register_class(cls)
+    cls = upscale.UpscaleImage if module is upscale else background.RemoveImageBackground
+    bpy.utils.register_class(cls)
     try:
-        action = getattr(bpy.ops.anyimage, classes[-1].bl_idname.split(".")[1])
+        action = getattr(bpy.ops.anyimage, cls.bl_idname.split(".")[1])
         with pytest.raises(RuntimeError, match="End of submission check"):
             action()
         assert len(submitted) == 1 and not submitted[0].parent.exists()
         with Image.open(source) as disk:
             assert disk.size == (8, 4) and disk.getpixel((0, 0)) == (0, 0, 255)
     finally:
-        for cls in reversed(classes):
-            bpy.utils.unregister_class(cls)
+        bpy.utils.unregister_class(cls)
         bpy.data.objects.remove(owner, do_unlink=True)
         bpy.data.images.remove(image)
+
+
+@pytest.mark.parametrize("operation", [background.RemoveImageBackground, upscale.UpscaleImage])
+def test_missing_model_stops_before_image_capture(operation, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    capture = Mock()
+    monkeypatch.setattr(background.ImageEditTarget, "capture", capture)
+    monkeypatch.setattr(ai, "require_environment", lambda: None)
+    monkeypatch.setattr(ai, "require_model", Mock(side_effect=RuntimeError("Download model first")))
+    with pytest.raises(RuntimeError, match="Download model first"):
+        operation.request(SimpleNamespace(), bpy.context)
+    capture.assert_not_called()
 
 
 @pytest.mark.parametrize("kind", ["external", "packed", "generated"])

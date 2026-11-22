@@ -189,12 +189,11 @@ def fit_image_depth_direction(depth, valid, bounds, uniform_scale):
     )
 
 
-def depth_uniform_scale(bounds, metadata, model_reference):
+def depth_uniform_scale(bounds, image_size, intrinsics, model_reference):
     """Convert model camera units uniformly into Image Empty local distance."""
     import numpy as np
 
-    intrinsics = metadata["intrinsics"]
-    width, height = metadata["image_size"]
+    width, height = image_size
     x_min, x_max, y_min, y_max = bounds
     plane_width = x_max - x_min
     plane_height = y_max - y_min

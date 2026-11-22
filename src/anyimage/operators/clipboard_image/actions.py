@@ -6,14 +6,13 @@ from ...common.color_image import create_normalized_color_image
 from ...common.image import (
     CLIPBOARD_HASH_PROPERTY,
     image_content_state,
+    pack_image_result,
     is_image_empty,
     restore_image_content,
-    mark_image_empty_reference,
     has_other_image_user,
 )
-from ...common.viewport import redraw_area
 from .cache import CLIPBOARD_CONTENT_PROPERTY
-from .brush import PAINT_SETTINGS_BY_MODE, active_brush, set_brush_preview, set_tool_texture
+from .brush import PAINT_SETTINGS_BY_MODE, active_brush, set_tool_texture
 
 REFERENCE_IMAGE_SIZE = 5.0
 NODE_HEADER_HEIGHT = 20.0
@@ -105,7 +104,7 @@ def replacement_for_context(context):
     return ClipboardImageTarget(image, owner, brush)
 
 
-def replace_pasted_image(context, target, image):
+def replace_pasted_image(target, image):
     """Replace one owner's content, isolating images used by other owners."""
     if min(image.size) <= 0:
         raise RuntimeError("The clipboard image has invalid dimensions")
@@ -129,10 +128,7 @@ def replace_pasted_image(context, target, image):
         else:
             content = image_content_state(source)
         try:
-            incoming = image_content_state(normalized if normalized is not None else image)
-            incoming["filepath"] = image.filepath_raw
-            # Install packed content before reloading a file-backed destination.
-            restore_image_content(destination, incoming)
+            pack_image_result(normalized if normalized is not None else image, destination, filepath=image.filepath_raw)
             if shared_texture:
                 texture = target.owner.copy()
                 texture.use_fake_user = False
@@ -155,32 +151,27 @@ def replace_pasted_image(context, target, image):
         for key in (CLIPBOARD_HASH_PROPERTY, CLIPBOARD_CONTENT_PROPERTY):
             if key in destination:
                 del destination[key]
-        target.image = destination
-        if destination != source and is_image_empty(target.owner):
-            mark_image_empty_reference(source)
-        if texture is not None:
-            target.owner = texture
+        return destination
     finally:
         if destination != source and destination.users == 0:
             bpy.data.images.remove(destination)
         if normalized is not None:
             bpy.data.images.remove(normalized)
-    try:
-        if target.brush is not None and context.mode == "PAINT_TEXTURE":
-            set_brush_preview(context, target.brush, target.image)
-    finally:
-        redraw_area(context)
 
 
 def paste_image(context, image, location=None):
     target = target_for_context(context)
+    if target in {"IMAGE_EMPTY", "NODE"} and not image.packed_file:
+        image.pack()
     if target == "IMAGE_EMPTY":
-        return add_reference_image(context, image, location=location)
-    if target == "NODE":
-        return add_image_node(context, image, location=location)
-    if target == "TOOL_TEXTURE":
-        return set_tool_texture(context, image)
-    raise RuntimeError("Paste images from a 3D View or Node Editor")
+        add_reference_image(context, image, location=location)
+    elif target == "NODE":
+        add_image_node(context, image, location=location)
+    elif target == "TOOL_TEXTURE":
+        return set_tool_texture(context, image).image
+    else:
+        raise RuntimeError("Paste images from a 3D View or Node Editor")
+    return image
 
 
 def add_reference_image(context, image, location=None):

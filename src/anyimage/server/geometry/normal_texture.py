@@ -3,14 +3,12 @@
 from pathlib import Path
 
 
-def write_normal_texture(frame, visibility, output_size, output_path, *, normal_space="TANGENT"):
+def write_normal_texture(normal, visibility, output_size, output_path, *, normal_space="TANGENT"):
     """Encode camera normals in flat tangent or image-object space."""
     import numpy as np
     from PIL import Image
 
-    if frame.normal is None:
-        raise ValueError("Normal texture requires a normal field")
-    normal = np.asarray(frame.normal, dtype=np.float32)
+    normal = np.asarray(normal, dtype=np.float32)
     if not np.isfinite(normal).all():
         raise ValueError("Normal field contains non-finite values")
     if normal_space == "OBJECT":

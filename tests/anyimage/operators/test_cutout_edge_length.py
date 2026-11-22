@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -7,6 +8,7 @@ import pytest
 from mathutils import Matrix
 
 from anyimage import properties
+from anyimage.common.selection import SelectionMask
 from anyimage.operators.cutout_tool import geometry as g
 from anyimage.operators.cutout_tool import object as operators
 
@@ -124,10 +126,11 @@ def test_effective_length_report_and_geometry_build_share_value():
     report = Mock()
     context = SimpleNamespace(scene=SimpleNamespace(unit_settings=SimpleNamespace(system="METRIC", scale_length=0.01)))
     source = source_plane(display_size=1000)
-    content = np.ones((10, 10))
+    selection = SelectionMask(np.ones((10, 10)), (0, 0, 10, 10))
     from anyimage.operators.cutout_tool import geometry
     with patch.object(geometry, "effective_cutout_edge_length", return_value=20), \
          patch.object(geometry, "build_mesh", wraps=geometry.build_mesh) as build, \
+         patch.object(operators, "material_color_image", return_value=nullcontext(object())), \
          patch.object(operators, "create_shape_object") as create, \
          patch.object(operators.bpy.ops.ed, "undo_push", return_value={"FINISHED"}):
         operators.create_cutout_shape(
@@ -135,16 +138,15 @@ def test_effective_length_report_and_geometry_build_share_value():
             source,
             "FLAT",
             10,
-            content,
-            (0, 0, 10, 10),
+            selection,
             boundary_padding=0.0,
-            color_image=object(),
+            source_rgba=np.ones((100, 100, 4)),
             report=report,
         )
     assert build.call_args.args[1] == 20
     assert create.call_args.args[0] is context
     assert create.call_args.args[1] is source
     assert create.call_args.args[2] == "FLAT"
-    assert create.call_args.kwargs["content_values"] is content
+    assert create.call_args.kwargs["content_values"] is selection.values
     assert report.call_args.args[0] == {"INFO"}
     assert "20 cm" in report.call_args.args[1]

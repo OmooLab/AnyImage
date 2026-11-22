@@ -25,6 +25,15 @@ class ColorReference(NamedTuple):
     lightness: np.ndarray
 
 
+class ColorMapping(NamedTuple):
+    """Chroma anchors and lightness curve shared by preview and full resolution."""
+
+    anchors: np.ndarray
+    anchor_delta: np.ndarray
+    source_lightness: np.ndarray
+    reference_lightness: np.ndarray
+
+
 class ColorMatch(NamedTuple):
     """Cache original perceptual pixels and independent adjustment fields."""
 
@@ -33,9 +42,6 @@ class ColorMatch(NamedTuple):
     chroma_delta: np.ndarray
     lightness_delta: np.ndarray
     target_float: bool
-    anchors: np.ndarray
-    anchor_delta: np.ndarray
-    source_lightness: np.ndarray
 
 
 def resize_rgba_proxy(rgba, max_size=PREVIEW_MAX_SIZE):
@@ -104,22 +110,23 @@ def _transport_palette(anchors, weights, reference):
     return (mapped / np.maximum(weights[:, None], 1e-8) - source_chroma).astype(np.float32)
 
 
-def build_color_match(reference, target_rgba, *, target_float=False, prepared_match=None):
-    """Prepare palette chroma and the original nine-point lightness curve once."""
+def build_color_mapping(reference, target_rgba):
+    """Sample the original target to determine chroma and lightness transfer."""
+    pixels = _require_rgba(target_rgba).reshape(-1, 4)
+    indices = np.linspace(0, len(pixels) - 1, min(len(pixels), _ANALYSIS_SAMPLES), dtype=np.intp)
+    samples = pixels[indices, :3]
+    colors, weights = extract_color_palette(samples)
+    anchors = linear_rgb_to_oklab(colors)
+    delta = _transport_palette(anchors, weights, reference)
+    lightness = np.quantile(linear_rgb_to_oklab(samples)[:, 0], _QUANTILES, method="hazen")
+    keep = np.concatenate(([True], np.diff(lightness) > 1e-6))
+    return ColorMapping(anchors, delta, lightness[keep], reference.lightness[keep])
+
+
+def build_color_match(mapping, target_rgba, *, target_float=False):
+    """Evaluate a color mapping on the supplied pixels."""
     rgba = _require_rgba(target_rgba)
-    if prepared_match is None:
-        pixels = rgba.reshape(-1, 4)
-        indices = np.linspace(0, len(pixels) - 1, min(len(pixels), _ANALYSIS_SAMPLES), dtype=np.intp)
-        samples = pixels[indices, :3]
-        colors, weights = extract_color_palette(samples)
-        anchors = linear_rgb_to_oklab(colors)
-        delta = _transport_palette(anchors, weights, reference)
-        lightness = linear_rgb_to_oklab(samples)[:, 0]
-        source_quantiles = np.quantile(lightness, _QUANTILES, method="hazen")
-    else:
-        anchors = prepared_match.anchors
-        delta = prepared_match.anchor_delta
-        source_quantiles = prepared_match.source_lightness
+    anchors = mapping.anchors
     lab = linear_rgb_to_oklab(rgba[..., :3])
     flat = lab.reshape(-1, 3)
     chroma_delta = np.empty((len(flat), 2), dtype=np.float32)
@@ -130,10 +137,8 @@ def build_color_match(reference, target_rgba, *, target_float=False, prepared_ma
         distance -= distance.min(axis=1, keepdims=True)
         membership = np.exp(-distance / (2 * 0.085**2))
         membership /= membership.sum(axis=1, keepdims=True)
-        chroma_delta[start:start + len(chunk)] = membership @ delta
-    source = source_quantiles
-    keep = np.concatenate(([True], np.diff(source) > 1e-6))
-    source, destination = source[keep], reference.lightness[keep]
+        chroma_delta[start:start + len(chunk)] = membership @ mapping.anchor_delta
+    source, destination = mapping.source_lightness, mapping.reference_lightness
     values = lab[..., 0]
     if len(source) == 1:
         lightness_delta = np.full_like(values, destination[0] - source[0])
@@ -145,7 +150,7 @@ def build_color_match(reference, target_rgba, *, target_float=False, prepared_ma
         lightness_delta = mapped - values
     return ColorMatch(
         rgba.copy(), lab, chroma_delta.reshape(lab.shape[:2] + (2,)),
-        lightness_delta, target_float, anchors, delta, source_quantiles,
+        lightness_delta, target_float,
     )
 
 

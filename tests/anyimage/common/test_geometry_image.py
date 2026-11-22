@@ -1,6 +1,5 @@
 """Verify geometry image loading and depth calibration."""
 
-import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -17,7 +16,6 @@ from anyimage.common.depth_geometry import (
     depth_plane_limit_preset,
     reference_and_median_depth,
 )
-from tests.support.image_objects import _depth_image
 
 
 def _camera_depth(depth, alpha=None):
@@ -26,27 +24,7 @@ def _camera_depth(depth, alpha=None):
     points[..., 2] = depth
     if alpha is None:
         alpha = np.ones(depth.shape, dtype=np.float32)
-    return geometry_image.camera_depth_values(_depth_image(points, alpha))
-
-
-def test_depth_metadata_loader_reads_only_size_and_intrinsics(tmp_path):
-    path = tmp_path / "depth.json"
-    path.write_text(
-        json.dumps(
-            {
-                "image_size": [3, 2],
-                "intrinsics": np.eye(3).tolist(),
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    metadata = geometry_image.load_depth_metadata(path)
-
-    assert metadata == {
-        "image_size": (3, 2),
-        "intrinsics": ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
-    }
+    return geometry_image.camera_depth_values(np.dstack((points, alpha)))
 
 
 def test_base_plane_fit_is_stable_for_a_slender_diagonal_domain():
@@ -214,12 +192,9 @@ def test_symmetry_depth_direction_returns_the_flat_direction_without_samples():
 
 
 def test_depth_uniform_scale_converts_model_units_at_the_reference_depth():
-    metadata = {
-        "intrinsics": ((100.0, 0.0, 50.0), (0.0, 100.0, 25.0), (0.0, 0.0, 1.0)),
-        "image_size": (101, 51),
-    }
+    intrinsics = ((100.0, 0.0, 50.0), (0.0, 100.0, 25.0), (0.0, 0.0, 1.0))
 
-    uniform_scale = depth_uniform_scale((-2.0, 2.0, -1.0, 1.0), metadata, 2.0)
+    uniform_scale = depth_uniform_scale((-2.0, 2.0, -1.0, 1.0), (101, 51), intrinsics, 2.0)
 
     assert uniform_scale == pytest.approx(2.0)
 

@@ -19,25 +19,18 @@ from ...common.image_input import cleanup_image_input
 from ...common.ai import (
     invoke_ai_setup_if_needed,
     geometry_job_parameters,
-    require_input_path,
 )
 from ...common.image import image_content_signature, image_rgba, require_image_empty, is_animated_image
 from ...common.object import read_conversion_source
 from ...common.geometry_image import (
-    load_depth_metadata,
     load_depth_result_image,
     load_normal_result_image,
 )
-from ...common.color_image import material_color_image
 from ...common.viewport import (
     report_image_edit_exception,
 )
-from ...common.selection import (
-    ImageEditWarning,
-    SelectionPath,
-    rasterize_selection_path,
-)
-from .geometry import cutout_content_values
+from ...common.selection import ImageEditWarning, SelectionPath
+from .geometry import cutout_selection_mask
 from .object import create_cutout_shape
 from .shape import CUTOUT_NODE_GROUP_NAMES, DEPTH_CUTOUT_SHAPES
 
@@ -52,7 +45,7 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
     job_type = "generate_cutout_artifacts"
     starting_message = "Generating Cutout artifacts"
 
-    input_path: bpy.props.StringProperty(options=_HIDDEN)
+    _input_path = None
     source_object_name: bpy.props.StringProperty(options=_HIDDEN)
     selection_path_json: bpy.props.StringProperty(options=_HIDDEN)
     shape: bpy.props.StringProperty(default="SOLID", options=_HIDDEN)
@@ -76,19 +69,9 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
                 raise ValueError("Cutout currently supports still images")
             if self.shape not in CUTOUT_NODE_GROUP_NAMES:
                 raise ValueError(f"Unsupported Cutout shape: {self.shape}")
-            selection_path = SelectionPath.from_json(self.selection_path_json)
-            selection_mask = rasterize_selection_path(
-                tuple(source_object.data.size),
-                selection_path,
-                antialias=True,
-            )
             source_rgba = image_rgba(source_object.data)
-            left, top, right, bottom = selection_mask.bounds
-            cropped = source_rgba[top:bottom, left:right]
-            content_values = cutout_content_values(
-                cropped[..., 3],
-                selection_mask.values,
-                alpha_threshold=self.alpha_threshold,
+            self._selection = cutout_selection_mask(
+                source_rgba, SelectionPath.from_json(self.selection_path_json), alpha_threshold=self.alpha_threshold,
             )
             setup_result = invoke_ai_setup_if_needed(self)
             if setup_result is not None:
@@ -97,9 +80,8 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             context.view_layer.objects.active = source_object
             source_object.select_set(True)
             self.boundary_padding = configured_cutout_boundary_padding(context)
-            self._content_values = content_values
-            self._content_bounds = selection_mask.bounds
-            self.input_path = str(prepare_recognition_input(source_object.data, cropped))
+            left, top, right, bottom = self._selection.bounds
+            self._input_rgba = source_rgba[top:bottom, left:right]
         except (
             ImageEditWarning,
             OSError,
@@ -112,9 +94,12 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         return super().execute(context)
 
     def request(self, context):
+        parameters = geometry_job_parameters(context)
+        self._input_path = prepare_recognition_input(self._source_image, self._input_rgba)
+        self._input_rgba = None
         return {
-            **geometry_job_parameters(context),
-            "input": str(require_input_path(self.input_path)),
+            **parameters,
+            "input": str(self._input_path),
             "generate_depth": self.shape in DEPTH_CUTOUT_SHAPES,
         }
 
@@ -127,24 +112,17 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         except (FileNotFoundError, RuntimeError):
             pass
         try:
-            depth_metadata = None
+            intrinsics = None
             if self.shape in DEPTH_CUTOUT_SHAPES:
-                depth_metadata = load_depth_metadata(result.file("depth_metadata"))
-                depth_image = load_depth_result_image(
-                    result.file("depth"),
-                    source_object,
-                    depth_metadata,
-                )
-            with material_color_image(
-                source_object.data, bounds=self._content_bounds, rgba=image_rgba(source_object.data, pixels),
-            ) as color:
-                create_cutout_shape(
-                    context, source_object, self.shape, self.edge_length, self._content_values,
-                    self._content_bounds, depth_image=depth_image, depth_metadata=depth_metadata,
-                    normal_image=normal_image, alpha_threshold=self.alpha_threshold,
-                    fine_outline=self.fine_outline, boundary_padding=self.boundary_padding,
-                    color_image=color, gesture=self.gesture, report=self.report,
-                )
+                intrinsics = result.value["intrinsics"]
+                depth_image = load_depth_result_image(result.file("depth"), source_object)
+            create_cutout_shape(
+                context, source_object, self.shape, self.edge_length, self._selection,
+                depth_image=depth_image, intrinsics=intrinsics,
+                normal_image=normal_image, alpha_threshold=self.alpha_threshold,
+                fine_outline=self.fine_outline, boundary_padding=self.boundary_padding,
+                source_rgba=image_rgba(source_object.data, pixels), gesture=self.gesture, report=self.report,
+            )
             if normal_image is None:
                 self.report({"WARNING"}, "The normal texture is missing; the shape was created without it")
         except Exception:
@@ -156,9 +134,9 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         return f"{self.shape.replace('_', ' ').title()} is ready"
 
     def cleanup(self):
-        cleanup_image_input(self.input_path)
-        self._content_values = None
-        self._content_bounds = None
+        self._input_rgba = None
+        cleanup_image_input(self._input_path)
+        self._selection = None
         self._source_object = None
         self._source_image = None
         self._source_signature = None

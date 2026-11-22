@@ -9,7 +9,7 @@ from .hdr_image import build_recognition_rgba
 
 
 def load_image_edit_result(source_image, output_path):
-    """Load and pack the image file returned by a Job."""
+    """Load the image file returned by a Job."""
     output_path = Path(output_path)
     if not output_path.is_file():
         raise RuntimeError(f"Color result image does not exist: {output_path}")
@@ -20,7 +20,6 @@ def load_image_edit_result(source_image, output_path):
         result_image.alpha_mode = source_image.alpha_mode
         if source_image.get(COLOR_NORMALIZED_PROPERTY):
             result_image[COLOR_NORMALIZED_PROPERTY] = True
-        result_image.pack()
         result_image.name = source_image.name
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         if result_image is not None:
@@ -35,8 +34,8 @@ def apply_image_result(target, path):
 
 
 def prepare_recognition_input(image, rgba):
-    """Write a cropped sRGB PNG for inference, retaining source opacity."""
+    """Write the supplied pixels as an sRGB PNG, retaining source opacity."""
     if image.is_float:
-        rgba = build_recognition_rgba(rgba, image.alpha_mode, preserve_alpha=True)
+        rgba = build_recognition_rgba(rgba, image.alpha_mode)
         return prepare_input_png(rgba)
     return prepare_input_png(rgba, color_space=image.colorspace_settings.name)

@@ -13,14 +13,16 @@ def media():
 @pytest.mark.parametrize("suffix", [".PNG", ".JPG", ".webp", ".jpeg"])
 def test_supported_format_is_case_insensitive(media, tmp_path, suffix):
     path = tmp_path / f"input{suffix}"
-    path.touch()
-    assert media.validate_input_path(path) == path
+    Image.new("RGB", (2, 1)).save(path)
+    with media.open_image(path) as image:
+        assert image.size == (2, 1)
 
 
 @pytest.mark.parametrize("suffix,kind", [(".png", "image"), (".mp4", "image")])
 def test_missing_path_precedes_format_validation(media, tmp_path, suffix, kind):
     with pytest.raises(RuntimeError, match=f"Source {kind} file does not exist"):
-        media.validate_input_path(tmp_path / f"missing{suffix}")
+        with media.open_image(tmp_path / f"missing{suffix}"):
+            pass
 
 
 def test_image_decode_error_keeps_cause(media, tmp_path):
@@ -47,13 +49,15 @@ def test_unsupported_formats_are_rejected(media, tmp_path, suffix):
     path = tmp_path / f"input{suffix}"
     path.touch()
     with pytest.raises(RuntimeError, match="Unsupported input format"):
-        media.validate_input_path(path)
+        with media.open_image(path):
+            pass
 
 
 def test_frame_directory_is_rejected(media, tmp_path):
     Image.new("RGB", (2, 2)).save(tmp_path / "frame.png")
     with pytest.raises(RuntimeError, match="Source image file does not exist"):
-        media.validate_input_path(tmp_path)
+        with media.open_image(tmp_path):
+            pass
 
 
 def test_animated_png_is_rejected(media, tmp_path):

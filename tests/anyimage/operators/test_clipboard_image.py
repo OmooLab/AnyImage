@@ -188,7 +188,7 @@ class ClipboardImageTest(BlenderTestCase):
             patch.object(self.clipboard_image, "read_clipboard_image",
                          side_effect=self.clipboard.ClipboardImageUnavailable),
             patch.object(self.clipboard_image, "replacement_for_context") as resolve,
-            patch.object(self.clipboard_image, "acquire_packed_image") as acquire,
+            patch.object(self.clipboard_image, "clipboard_source") as acquire,
         ):
             self.assertEqual(operator.execute(self.make_context("VIEW_3D")), {"PASS_THROUGH"})
         resolve.assert_not_called()

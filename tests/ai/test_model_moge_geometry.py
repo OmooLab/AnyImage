@@ -51,17 +51,3 @@ class MogeGeometryTest(unittest.TestCase):
         np.testing.assert_array_equal(recover.call_args.args[1], mask[0] > 0.5)
         np.testing.assert_array_equal(result["mask"], mask[0])
         self.assertTrue((result["depth"] < 0).all())
-
-
-def test_postprocess_can_skip_point_reconstruction():
-
-    raw = {
-        "points": np.ones((1, 2, 2, 3), np.float32),
-        "normal": np.ones((1, 2, 2, 3), np.float32),
-        "mask": np.ones((1, 2, 2), np.float32),
-        "metric_scale": np.ones(1, np.float32),
-    }
-    with patch.object(moge_geometry, "recover_focal_shift", return_value=(1.0, 0.0)), patch.object(moge_geometry, "depth_to_points", side_effect=AssertionError("Unexpected point reconstruction")):
-        result = moge_geometry.postprocess(raw, include_points=False)
-    assert result["points"] is None
-    assert result["depth"].shape == (2, 2)

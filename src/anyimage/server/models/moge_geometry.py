@@ -4,6 +4,18 @@ MIN_TOKENS = 1200
 MAX_TOKENS = 3600
 
 
+def model_inputs(image, resolution_level):
+    """Prepare the image tensor and token budget shared by both MoGe models."""
+    import numpy as np
+
+    level = min(max(int(resolution_level), 0), 9)
+    tokens = int(MIN_TOKENS + level / 9.0 * (MAX_TOKENS - MIN_TOKENS))
+    return {
+        "image": np.ascontiguousarray(image.transpose(2, 0, 1)[None], dtype=np.float32),
+        "num_tokens": np.asarray(tokens, dtype=np.int64),
+    }
+
+
 def normalized_view_plane_uv(width, height, dtype):
     import numpy as np
 
@@ -116,7 +128,7 @@ def recover_known_fov_shift(points, mask, fx, fy):
     return fitted.x[0], valid
 
 
-def postprocess(raw_output, *, fov_x=None, source_valid=None, include_points=True):
+def postprocess(raw_output, *, fov_x=None, source_valid=None):
     import numpy as np
 
     points = np.asarray(raw_output["points"][0], dtype=np.float32)
@@ -150,10 +162,7 @@ def postprocess(raw_output, *, fov_x=None, source_valid=None, include_points=Tru
         mask = np.where(valid, mask, 0.0)
         depth = np.where(valid, depth, 1.0)
     return {
-        "points": (
-            depth_to_points(depth, intrinsics).astype(np.float32)
-            if include_points else None
-        ),
+        "points": depth_to_points(depth, intrinsics).astype(np.float32),
         "depth": depth.astype(np.float32),
         "normal": normal,
         "mask": mask,

@@ -5,7 +5,7 @@ import bmesh
 import numpy as np
 import pytest
 
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 from tests.support.boundary import boundary_neighbors
 from tests.support.depth_surface import evaluated, surface
 
@@ -131,18 +131,8 @@ def test_depth_cutout_leaf_controls_preserve_valid_solid(mode, boundary_smooth, 
     profile = obj.data.attributes.new("o_balloon", "FLOAT", "POINT")
     profile.data.foreach_set("value", np.ones(len(obj.data.vertices), dtype=np.float32))
     modifier = obj.modifiers[0]
-    set_modifier_input(
-        modifier,
-        modifier_input_identifier(modifier.node_group, "Mode"),
-        mode,
-    )
-    set_modifier_input(
-        modifier,
-        modifier_input_identifier(
-            modifier.node_group, "Thickness", subtype="NONE" if mode == 0 else "DISTANCE",
-        ),
-        0.2,
-    )
+    set_modifier_input(modifier, "Mode", mode)
+    set_modifier_input(modifier, "Thickness", 0.2, subtype="NONE" if mode == 0 else "DISTANCE")
     set_value("Boundary Smooth", boundary_smooth)
     set_value("Rear Smooth", rear_smooth)
     points, faces = evaluated(obj)

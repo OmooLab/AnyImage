@@ -81,18 +81,19 @@ def configure_material_color_image(image, scene=None):
     return image
 
 
-def create_normalized_color_image(image):
+def create_normalized_color_image(image, rgba=None):
     """Build a bounded sRGB color image independently of shading preferences."""
     import numpy as np
     from .color_space import normalize_color_rgba
 
-    if not image.get(COLOR_NORMALIZED_PROPERTY) and (image.is_float or image.colorspace_settings.name != "sRGB"):
-        rgba = normalize_color_rgba(decode_color_image(image, image.colorspace_settings.name))
-    else:
+    if rgba is None:
         rgba = image_rgba(image)
-        if not np.isfinite(rgba).all():
-            raise ValueError("Color normalization requires finite RGBA values")
-    result = bpy.data.images.new(image.name, width=image.size[0], height=image.size[1], alpha=True)
+    if not image.get(COLOR_NORMALIZED_PROPERTY) and (image.is_float or image.colorspace_settings.name != "sRGB"):
+        rgba = normalize_color_rgba(decode_color_image(image, image.colorspace_settings.name, rgba))
+    elif not np.isfinite(rgba).all():
+        raise ValueError("Color normalization requires finite RGBA values")
+    height, width = rgba.shape[:2]
+    result = bpy.data.images.new(image.name, width=width, height=height, alpha=True)
     try:
         result.colorspace_settings.name = "sRGB"
         result.alpha_mode = "PREMUL"
@@ -100,7 +101,6 @@ def create_normalized_color_image(image):
         result[COLOR_NORMALIZED_PROPERTY] = True
         result.pixels.foreach_set(np.flipud(np.clip(rgba, 0, 1)).ravel())
         result.update()
-        result.pack()
         return result
     except Exception:
         bpy.data.images.remove(result)
@@ -133,8 +133,9 @@ def decode_color_image(image, color_space, rgba=None):
             path = Path(directory) / "linear.exr"
             reader.save_render(str(path), scene=scene)
             decoded = bpy.data.images.load(str(path), check_existing=False)
-            rgba[..., :3] = image_rgba(decoded)[..., :3]
-        return rgba
+            linear = image_rgba(decoded)
+            linear[..., 3] = rgba[..., 3]
+        return linear
     finally:
         if decoded is not None:
             bpy.data.images.remove(decoded)
@@ -162,14 +163,14 @@ def _material_png_colors(rgba, source_space):
     return palette[indices].reshape(rgb.shape).astype(np.float32) / 255.0
 
 
-def linear_color_rgba(image, *, material_image=None):
+def linear_color_rgba(image, rgba=None, *, material_image=None, alpha_mode=None):
     """Read straight-alpha linear RGB while preserving the image alpha."""
     import numpy as np
     from .color_space import srgb_to_linear_rgb
 
     interpretation = material_image if material_image is not None else image
     space = interpretation.colorspace_settings
-    rgba = image_rgba(image)
+    rgba = image_rgba(image) if rgba is None else rgba.copy()
     if interpretation != image:
         source_space = image.colorspace_settings
         if not image.is_float and not source_space.is_data and source_space.name != "sRGB":
@@ -180,7 +181,7 @@ def linear_color_rgba(image, *, material_image=None):
         rgba[..., :3] = srgb_to_linear_rgb(rgba[..., :3])
     elif not (image.is_float and (space.is_data or space.name == "Linear Rec.709")):
         rgba = decode_color_image(image, space.name, rgba)
-    if image.is_float and interpretation.alpha_mode in {"STRAIGHT", "PREMUL"}:
+    if image.is_float and (alpha_mode or interpretation.alpha_mode) in {"STRAIGHT", "PREMUL"}:
         rgba[..., :3] /= np.where(rgba[..., 3:4] > 0, rgba[..., 3:4], 1)
     return rgba
 

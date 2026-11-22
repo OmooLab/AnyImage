@@ -1,3 +1,4 @@
+from anyimage.common.image import image_rgba
 import bpy
 import numpy as np
 import pytest
@@ -24,10 +25,9 @@ def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surf
     bounds = image_empty_bounds(source)
     matrix = source.matrix_world.copy()
     material = bpy.data.materials.new("Conversion")
-    metadata = {"image_size": (16, 8),
-                "intrinsics": ((4, 0, 5), (0, 4, 3), (0, 0, 1))}
+    intrinsics = ((4, 0, 5), (0, 4, 3), (0, 0, 1))
     result = conversion.create_depth_plane_object(
-        bpy.context, source, 2, material, image, metadata, "DEPTH")
+        bpy.context, source, 2, material, image, intrinsics, "DEPTH")
     assert result.name == "Offset Image"
     assert result["o_image_object"] is True
     assert "anyimage_mesh_shape" not in result
@@ -42,7 +42,7 @@ def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surf
     assert modifier[inputs["Thickness"].identifier] == 0
     assert modifier[inputs["Depth Image"].identifier] == image
     assert modifier[inputs["Depth Mask"].identifier] is True
-    depth, valid = camera_depth_values(image)
+    depth, valid = camera_depth_values(image_rgba(image))
     reference, _ = reference_and_median_depth(depth[valid])
     assert modifier[inputs["Reference Depth"].identifier] == pytest.approx(
         reference * modifier[inputs["Uniform Scale"].identifier])
@@ -65,10 +65,9 @@ def test_failed_modifier_initialization_removes_partial_object(surface, monkeypa
         raise RuntimeError("input failed")
 
     monkeypatch.setattr(conversion, "set_modifier_input", fail)
-    metadata = {"image_size": (16, 8),
-                "intrinsics": ((4, 0, 5), (0, 4, 3), (0, 0, 1))}
+    intrinsics = ((4, 0, 5), (0, 4, 3), (0, 0, 1))
     with pytest.raises(RuntimeError, match="input failed"):
-        conversion.create_depth_plane_object(bpy.context, source, 2, material, image, metadata, "DEPTH")
+        conversion.create_depth_plane_object(bpy.context, source, 2, material, image, intrinsics, "DEPTH")
     assert set(bpy.data.objects) == before_objects
     assert set(bpy.data.meshes) == before_meshes
     assert material.users == 0

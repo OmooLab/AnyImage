@@ -6,7 +6,7 @@ import time
 import bpy
 
 from . import polygon as polygon_geometry
-from .image import image_empty_bounds, is_animated_image, require_image_empty
+from .image import image_empty_bounds, is_animated_image, is_image_empty
 from .selection import ImageEditWarning, SelectionPath
 from .tool_status import set_tool_status
 from .viewport import (
@@ -106,6 +106,17 @@ def draw_polyline_close_indicator(center, radius, ui_scale=1.0):
     )
 
 
+def gesture_source(operator):
+    """Resolve the original gesture binding, including after an object rename."""
+    source = operator._source_object
+    try:
+        if is_image_empty(source) and source.data == operator._source_image:
+            return source
+    except ReferenceError:
+        pass
+    raise ImageEditWarning("The source image target is no longer available or has changed")
+
+
 class ImageGesture:
     active_tool_id = None
     _path = None
@@ -184,6 +195,7 @@ class ImageGesture:
         if self._handle is not None:
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, "WINDOW")
             self._handle = None
+        self._source_object = self._source_image = None
         self._source_matrix = None
         self._path = None
         self._path_samples = None
@@ -222,7 +234,8 @@ class ImageGesture:
         if is_animated_image(source_object.data):
             self.report({"WARNING"}, "Image gestures only support a still image")
             return {"CANCELLED"}
-        self.source_object_name = source_object.name
+        self._source_object = source_object
+        self._source_image = source_object.data
         self._source_matrix = source_object.matrix_world.copy()
         self._path = [point]
         self._cursor = point
@@ -252,7 +265,7 @@ class ImageGesture:
         return {"RUNNING_MODAL"}
 
     def _complete(self, context):
-        source_object = require_image_empty(self.source_object_name)
+        source_object = gesture_source(self)
         path = tuple(self._path)
         if len(path) < 3:
             self._finish(context)

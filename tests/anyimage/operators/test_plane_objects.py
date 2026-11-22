@@ -9,7 +9,7 @@ from anyimage.common.depth_geometry import depth_node_direction
 from anyimage.operators.convert_to_plane import create_plane_object
 from anyimage.operators.depth_plane import object as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
-from tests.support.image_objects import _depth_image, _depth_metadata, _evaluated_positions
+from tests.support.image_objects import _depth_image, _evaluated_positions
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_plane import ODepthPlane
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_relief import ODepthRelief
 
@@ -116,10 +116,7 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
         0,
         depth_material,
         depth_image,
-        _depth_metadata(
-            ((0.5, 0.0, 0.5), (0.0, 0.5, 0.5), (0.0, 0.0, 1.0)),
-            (2, 2),
-        ),
+        ((0.5, 0.0, 0.5), (0.0, 0.5, 0.5), (0.0, 0.0, 1.0)),
         "DEPTH",
     )
     assert_centered(depth_plane, depth_bounds, depth_matrix)
@@ -169,10 +166,7 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
         2,
         material,
         depth_image,
-        _depth_metadata(
-            ((1.5, 0.0, 1.5), (0.0, 1.5, 1.5), (0.0, 0.0, 1.0)),
-            (4, 4),
-        ),
+        ((1.5, 0.0, 1.5), (0.0, 1.5, 1.5), (0.0, 0.0, 1.0)),
         "RELIEF",
     )
     assert result["o_image_object"] is True
@@ -191,11 +185,7 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
     ] == 0.0
 
     def set_input(name, value):
-        object_data.set_modifier_input(
-            modifier,
-            object_data.modifier_input_identifier(group, name),
-            value,
-        )
+        object_data.set_modifier_input(modifier, name, value)
         result.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
 
@@ -276,17 +266,14 @@ def test_relief_plane_initializes_a_fitted_depth_direction():
         np.repeat(depth[..., None], 3, axis=2),
         np.ones(depth.shape, dtype=bool),
     )
-    metadata = _depth_metadata(
-        ((2.0, 0.0, 2.0), (0.0, 2.0, 1.0), (0.0, 0.0, 1.0)),
-        (5, 3),
-    )
+    intrinsics = ((2.0, 0.0, 2.0), (0.0, 2.0, 1.0), (0.0, 0.0, 1.0))
     result = plane_object.create_depth_plane_object(
         bpy.context,
         source,
         2,
         bpy.data.materials.new("Sloped Relief Material"),
         depth_image,
-        metadata,
+        intrinsics,
         "RELIEF",
     )
     modifier = result.modifiers[0]

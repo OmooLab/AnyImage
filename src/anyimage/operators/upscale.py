@@ -1,25 +1,12 @@
-from ..common.job_image import apply_image_result
 import bpy
 
-from ..ai_preferences import configured_device, configured_max_ai_input_size, configured_upscale_model
+from ..ai_preferences import configured_max_ai_input_size, configured_upscale_model
 from ..server.model_catalog import UPSCALE_MODELS
-from ..server.media.resolution import (
-    DEFAULT_MAX_AI_INPUT_SIZE,
-    MAX_MAX_AI_INPUT_SIZE,
-    MIN_MAX_AI_INPUT_SIZE,
-)
 from ..runtime import JobOperator
-from ..common.ai import (
-    require_input_path,
-    invoke_ai_setup_if_needed,
-    require_environment,
-    require_model,
-)
-from ..common.image import image_rgba, owner_image
+from ..common.ai import invoke_ai_setup_if_needed, model_job_parameters
+from ..common.job_image import apply_image_result
 from ..common.image_input import cleanup_image_input, prepare_input_png
-from ..common.image_target import ImageEditTarget, image_edit_owner
-
-_HIDDEN = {"HIDDEN", "SKIP_SAVE"}
+from ..common.image_target import ImageEditTarget, editable_still_image
 
 UPSCALE_FACTOR = 2
 
@@ -46,32 +33,16 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
     job_type = "upscale_image"
     starting_message = "Starting image upscale"
 
-    model: bpy.props.StringProperty(
-        default="REALESRGAN_GENERAL_WDN_X4V3",
-        options=_HIDDEN,
-    )
-    max_input_size: bpy.props.IntProperty(
-        name="Max AI Input Size",
-        description="Maximum input long edge used for AI upscale analysis",
-        default=DEFAULT_MAX_AI_INPUT_SIZE,
-        min=MIN_MAX_AI_INPUT_SIZE,
-        max=MAX_MAX_AI_INPUT_SIZE,
-        step=256,
-        subtype="PIXEL",
-        options=_HIDDEN,
-    )
-    input_path: bpy.props.StringProperty(options=_HIDDEN)
+    _input_path = None
 
     @classmethod
     def poll(cls, context):
         from ..runtime import runtime
 
-        owner = image_edit_owner(context)
-        if owner is None:
-            return False
-        image = owner_image(owner)
+        image = editable_still_image(context)
         return (
-            not image.is_float
+            image is not None
+            and not image.is_float
             and upscale_input_size_allowed(image, configured_max_ai_input_size(context))
             and runtime.can_submit()
         )
@@ -82,49 +53,30 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
             return setup_result
         return self.execute(context)
 
-    def execute(self, context):
-        self.model = configured_upscale_model(context)
-        self.max_input_size = configured_max_ai_input_size(context)
-        try:
-            self._image_target, pixels = ImageEditTarget.capture_with_pixels(context)
-        except (OSError, RuntimeError, ValueError) as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
+    def request(self, context):
+        self._model = configured_upscale_model(context)
+        parameters = model_job_parameters(self._model)
+        max_input_size = configured_max_ai_input_size(context)
+        self._image_target, rgba = ImageEditTarget.capture(context)
         source_image = self._image_target.image
         if source_image.is_float:
-            return {"CANCELLED"}
-        if not upscale_input_size_allowed(source_image, self.max_input_size):
-            self.report(
-                {"ERROR"},
-                bpy.app.translations.pgettext_rpt(
-                    "Image long edge must be smaller than Maximum AI Input Size ({size} px)"
-                ).format(size=self.max_input_size),
-            )
-            return {"CANCELLED"}
-        try:
-            source_path = prepare_input_png(image_rgba(source_image, pixels))
-        except (OSError, RuntimeError, ValueError) as error:
-            self.report({"ERROR"}, str(error))
-            return {"CANCELLED"}
-
-        self.input_path = str(source_path)
-        return super().execute(context)
-
-    def request(self, context):
-        require_environment()
-        require_model(self.model)
+            raise ValueError("Upscale requires a non-HDR image")
+        if not upscale_input_size_allowed(source_image, max_input_size):
+            raise ValueError(bpy.app.translations.pgettext_rpt(
+                "Image long edge must be smaller than Maximum AI Input Size ({size} px)"
+            ).format(size=max_input_size))
+        self._input_path = prepare_input_png(rgba)
         return {
-            "input": str(require_input_path(self.input_path)),
-            "model": self.model,
-            "device": configured_device(),
-            "max_input_size": int(self.max_input_size),
+            **parameters,
+            "input": str(self._input_path),
+            "max_input_size": max_input_size,
         }
 
     def response(self, _context, result):
         apply_image_result(self._image_target, result.file("upscale"))
-        model_label = UPSCALE_MODELS[self.model].label
+        model_label = UPSCALE_MODELS[self._model].label
         return bpy.app.translations.pgettext_iface("Image is upscaled with {model}").format(model=model_label)
 
     def cleanup(self):
-        cleanup_image_input(self.input_path)
+        cleanup_image_input(self._input_path)
         self._image_target = None

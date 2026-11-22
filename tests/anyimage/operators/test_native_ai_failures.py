@@ -28,12 +28,12 @@ def test_native_server_controls_are_disabled_during_migration():
             bpy.utils.unregister_class(operator)
 
 
-@pytest.mark.parametrize("module,outer,inner,plane_type", [
-    (conversion, conversion.ConvertToDepthPlane, conversion.GeneratePlaneGeometry, "DEPTH"),
-    (conversion, conversion.ConvertToReliefPlane, conversion.GeneratePlaneGeometry, "RELIEF"),
-    (panorama, panorama.ConvertToPanorama, panorama.GeneratePanorama, None),
+@pytest.mark.parametrize("module,operator,plane_type", [
+    (conversion, conversion.ConvertToDepthPlane, "DEPTH"),
+    (conversion, conversion.ConvertToReliefPlane, "RELIEF"),
+    (panorama, panorama.ConvertToPanorama, None),
 ])
-def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, inner, plane_type, monkeypatch, capfd):
+def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, operator, plane_type, monkeypatch, capfd):
     from anyimage.common import ai
     from anyimage.runtime import runtime
 
@@ -61,7 +61,7 @@ def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, 
     monkeypatch.setattr(ai, "configured_max_ai_input_size", lambda context: 1024)
     monkeypatch.setattr(ai, "configured_geometry_model", lambda context: "MOGE3_VITL")
     monkeypatch.setattr(ai, "addon_preferences", lambda context: SimpleNamespace(geometry_resolution_level=2, geometry_refine_steps=3))
-    monkeypatch.setattr(outer, "poll", classmethod(lambda cls, context: True))
+    monkeypatch.setattr(operator, "poll", classmethod(lambda cls, context: True))
     monkeypatch.setattr(module, "invoke_ai_setup_if_needed", lambda _operator: None)
     owner = bpy.data.objects.new("Native validation source", None)
     image = bpy.data.images.new("Native validation image", width=4, height=3, alpha=True, float_buffer=True)
@@ -74,10 +74,9 @@ def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, 
     owner.data = image
     bpy.context.collection.objects.link(owner)
     bpy.context.view_layer.objects.active = owner
-    bpy.utils.register_class(inner)
-    bpy.utils.register_class(outer)
+    bpy.utils.register_class(operator)
     try:
-        action = getattr(bpy.ops.anyimage, outer.bl_idname.split(".")[1])
+        action = getattr(bpy.ops.anyimage, operator.bl_idname.split(".")[1])
         with pytest.raises(RuntimeError) as error:
             action()
         assert str(error.value).strip() == f"Error: {reason}"
@@ -85,8 +84,7 @@ def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, outer, 
         assert len(inputs) == 1 and not inputs[0].parent.exists()
         assert owner.data == image
     finally:
-        bpy.utils.unregister_class(outer)
-        bpy.utils.unregister_class(inner)
+        bpy.utils.unregister_class(operator)
         bpy.data.objects.remove(owner, do_unlink=True)
         bpy.data.images.remove(image)
 

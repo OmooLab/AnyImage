@@ -1,3 +1,3 @@
-from .operators import RemoveImageBackground, RunBackgroundRemoval
+from .operators import RemoveImageBackground
 
-__all__ = ("RemoveImageBackground", "RunBackgroundRemoval")
+__all__ = ("RemoveImageBackground",)

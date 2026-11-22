@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import ndimage
 
+from ...common.image import image_rgba
+
 
 @dataclass(frozen=True)
 class BoundaryMapping:
@@ -78,51 +80,35 @@ def apply_depth_boundary_mapping(rgba, mapping, intrinsics):
     target_y, target_x = target_y[usable], target_x[usable]
     depth, validity = depth[usable], validity[usable]
     rgba[target_y, target_x, 0] = (
-        (target_x - camera[0, 2]) / camera[0, 0] * depth
+        (target_x + 0.5 - camera[0, 2]) / camera[0, 0] * depth
     )
     rgba[target_y, target_x, 1] = (
-        (target_y - camera[1, 2]) / camera[1, 1] * depth
+        (target_y + 0.5 - camera[1, 2]) / camera[1, 1] * depth
     )
     rgba[target_y, target_x, 2] = depth
     rgba[target_y, target_x, 3] = validity
 
 
-def image_rgba_buffer(image):
-    """Read one Blender Image buffer as a top-down RGBA array without reinterpretation."""
-    width, height = (int(value) for value in image.size)
-    pixels = np.empty(width * height * 4, dtype=np.float32)
-    image.pixels.foreach_get(pixels)
-    return np.flipud(pixels.reshape((height, width, 4)))
-
-
-def write_image_rgba_buffer(image, rgba):
-    """Replace and pack one Blender Image buffer."""
-    values = np.asarray(rgba, dtype=np.float32)
-    width, height = (int(value) for value in image.size)
-    if values.shape != (height, width, 4) or not np.isfinite(values).all():
-        raise ValueError("Cutout texture padding produced invalid RGBA")
-    image.pixels.foreach_set(np.flipud(values).ravel())
-    image.update()
-    image.pack()
-
-
-def pad_cutout_images(color_image, depth_image, depth_metadata, mask, padding):
+def pad_cutout_images(color_rgba, depth_image, intrinsics, mask, padding):
     """Apply the mesh's final mask to color and depth before material creation."""
-    if padding <= 0:
-        return
-    color_shape = tuple(reversed(color_image.size))
+    color_shape = color_rgba.shape[:2]
     mapping = build_boundary_mapping(mask, padding, color_shape)
     if mapping is not None:
-        color = image_rgba_buffer(color_image)
-        apply_boundary_mapping(color, mapping)
-        write_image_rgba_buffer(color_image, color)
+        apply_boundary_mapping(color_rgba, mapping)
+        if not np.isfinite(color_rgba).all():
+            raise ValueError("Cutout texture padding produced invalid RGBA")
 
     if depth_image is None:
         return
     depth_shape = tuple(reversed(depth_image.size))
     if depth_shape != color_shape:
         mapping = build_boundary_mapping(mask, padding, depth_shape)
+    depth = image_rgba(depth_image)
     if mapping is not None:
-        depth = image_rgba_buffer(depth_image)
-        apply_depth_boundary_mapping(depth, mapping, depth_metadata["intrinsics"])
-        write_image_rgba_buffer(depth_image, depth)
+        apply_depth_boundary_mapping(depth, mapping, intrinsics)
+        if not np.isfinite(depth).all():
+            raise ValueError("Cutout texture padding produced invalid RGBA")
+        depth_image.pixels.foreach_set(depth[::-1].ravel())
+        depth_image.update()
+    depth_image.pack()
+    return depth

@@ -2,7 +2,7 @@
 
 import bpy
 
-from .image import image_content_signature, image_pixels, is_image_empty, mark_image_empty_reference
+from .image import image_content_signature, image_pixels, is_image_empty
 
 
 def modifier_input_identifier(node_group, name, *, subtype=None):
@@ -22,8 +22,9 @@ def _modifier_input_slots(modifier):
     return getattr(properties, "inputs", None)
 
 
-def set_modifier_input(modifier, identifier, value):
-    """Assign a value to a Geometry Nodes modifier input socket."""
+def set_modifier_input(modifier, name, value, *, subtype=None):
+    """Set a named Geometry Nodes input, using its subtype to distinguish duplicates."""
+    identifier = modifier_input_identifier(modifier.node_group, name, subtype=subtype)
     inputs = _modifier_input_slots(modifier)
     if inputs is not None:
         input_slot = getattr(inputs, identifier)
@@ -61,13 +62,6 @@ def require_conversion_source(operator):
     return read_conversion_source(operator)[0]
 
 
-def remove_conversion_source(source_object):
-    """Preserve the image reference when removing a converted object."""
-    if is_image_empty(source_object):
-        mark_image_empty_reference(source_object.data)
-    bpy.data.objects.remove(source_object, do_unlink=True)
-
-
 def finalize_object_result(
     context,
     source_object,
@@ -82,6 +76,6 @@ def finalize_object_result(
     result_object.select_set(True)
     context.view_layer.objects.active = result_object
     if not keep_source:
-        remove_conversion_source(source_object)
+        bpy.data.objects.remove(source_object, do_unlink=True)
         result_object.name = source_name
     return result_object

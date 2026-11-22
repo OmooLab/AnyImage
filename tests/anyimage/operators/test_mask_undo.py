@@ -30,7 +30,8 @@ def test_mask_commit_is_one_undo_transaction(gesture, alpha_mode):
     def execute(operator, context):
         """Drive gesture completion without a window event in background bpy."""
         operator.gesture, operator.mode, operator.radius = gesture, "SUBTRACT", 2
-        operator.source_object_name = owner_name
+        operator._source_object = owner
+        operator._source_image = owner.data
         operator._source_matrix = owner.matrix_world.copy()
         operator._path = [(2, 2), (6, 2), (6, 6), (2, 6)]
         operator._path_samples = list(operator._path)
@@ -64,3 +65,24 @@ def test_mask_commit_is_one_undo_transaction(gesture, alpha_mode):
             source = bpy.data.images.get(source_name)
             if source is not None:
                 bpy.data.images.remove(source)
+
+
+def test_gesture_follows_renamed_empty_and_rejects_a_rebound_image():
+    from types import SimpleNamespace
+
+    image_a = bpy.data.images.new("Gesture source", width=2, height=2)
+    image_b = bpy.data.images.new("Other image", width=2, height=2)
+    owner = bpy.data.objects.new("Gesture owner", None)
+    owner.empty_display_type = "IMAGE"
+    owner.data = image_a
+    gesture = SimpleNamespace(_source_object=owner, _source_image=image_a)
+    try:
+        owner.name = "Renamed during gesture"
+        assert image_gesture.gesture_source(gesture) == owner
+        owner.data = image_b
+        with pytest.raises(ValueError, match="changed"):
+            image_gesture.gesture_source(gesture)
+    finally:
+        bpy.data.objects.remove(owner)
+        bpy.data.images.remove(image_a)
+        bpy.data.images.remove(image_b)

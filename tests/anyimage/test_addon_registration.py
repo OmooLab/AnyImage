@@ -104,8 +104,8 @@ class AddonRegistrationTest(BlenderTestCase):
             self.registered_translations[self.anyimage.__package__],
             self.anyimage.TRANSLATIONS,
         )
-        cache = self.anyimage.properties
-        self.assertIn(cache.restore_color_references, self.fake_bpy.app.handlers.load_post)
+        cache = self.anyimage.common.color_reference
+        self.assertIn(cache.clear_color_references, self.fake_bpy.app.handlers.load_post)
         system_classes = self.anyimage.runtime.operator_classes()
 
         self.assertTrue(set(system_classes) <= set(self.registered))

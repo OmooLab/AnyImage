@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from anyimage.common.image import image_pixels
 from anyimage.common.material import create_image_material
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh.geometry import PROTOCOL_ATTRIBUTES, mesh_bake_modifiers
 from anyimage.operators.bake_mesh import materialization
@@ -158,7 +158,7 @@ def test_single_region_normal_render_survives_attribute_cleanup(image_object, tm
     from scipy.ndimage import binary_erosion
 
     modifier = obj.modifiers[0]
-    set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Depth Scale"), depth_scale)
+    set_modifier_input(modifier, "Depth Scale", depth_scale)
     obj.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     layer = next(n for n in obj.active_material.node_tree.nodes if n.type == "GROUP")

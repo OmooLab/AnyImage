@@ -7,11 +7,10 @@ from ...properties import (
     cutout_gesture_property,
 )
 from ...common.image import image_rgba, require_image_empty, is_animated_image
-from ...common.color_image import material_color_image
-from ...common.selection import ImageEditWarning, SelectionPath, rasterize_selection_path
+from ...common.selection import ImageEditWarning, SelectionPath
 from ...common.image_gesture import ImageGesture
 from ...common.viewport import report_image_edit_exception
-from .geometry import cutout_content_values
+from .geometry import cutout_selection_mask
 from .object import create_cutout_shape
 from .interaction import open_shape_pie
 from .preview import CutoutGridPreview, screen_to_grid_matrix
@@ -39,28 +38,19 @@ class CreateCutoutShape(bpy.types.Operator):
                 raise ValueError("Cutout currently supports still images")
             if self.shape not in {"FLAT", "SOLID"}:
                 raise ValueError(f"Unsupported Cutout shape: {self.shape}")
-            selection = rasterize_selection_path(
-                tuple(source.data.size),
-                SelectionPath.from_json(self.selection_path_json),
-                antialias=True,
-            )
             rgba = image_rgba(source.data)
+            selection = cutout_selection_mask(
+                rgba, SelectionPath.from_json(self.selection_path_json), alpha_threshold=self.alpha_threshold,
+            )
             context.view_layer.objects.active = source
             source.select_set(True)
-            left, top, right, bottom = selection.bounds
-            values = cutout_content_values(
-                rgba[top:bottom, left:right, 3],
-                selection.values,
+            create_cutout_shape(
+                context, source, self.shape, self.edge_length, selection,
                 alpha_threshold=self.alpha_threshold,
+                fine_outline=self.fine_outline,
+                boundary_padding=configured_cutout_boundary_padding(context),
+                source_rgba=rgba, gesture=self.gesture, report=self.report,
             )
-            with material_color_image(source.data, bounds=selection.bounds, rgba=rgba) as color:
-                create_cutout_shape(
-                    context, source, self.shape, self.edge_length, values, selection.bounds,
-                    alpha_threshold=self.alpha_threshold,
-                    fine_outline=self.fine_outline,
-                    boundary_padding=configured_cutout_boundary_padding(context),
-                    color_image=color, gesture=self.gesture, report=self.report,
-                )
         except (ImageEditWarning, OSError, RuntimeError, TypeError, ValueError) as error:
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
@@ -78,7 +68,6 @@ class SelectCutoutSelection(ImageGesture, bpy.types.Operator):
     active_tool_id = "anyimage.cutout_lasso"
     gesture: cutout_gesture_property()
 
-    source_object_name: bpy.props.StringProperty(options={"HIDDEN", "SKIP_SAVE"})
 
     show_shape_menu = staticmethod(open_shape_pie)
 

@@ -4,7 +4,8 @@ import bpy
 
 from . import keymaps
 from .preferences import PreferencesLite
-from .properties import SettingsLite, register_color_references, unregister_color_references
+from .properties import SettingsLite
+from .common.color_reference import register_color_references, unregister_color_references
 
 from .operators.clipboard_image import PasteClipboardImage
 from .operators.bake_mesh import BakeMesh

@@ -7,55 +7,27 @@ import numpy as np
 
 from .color_match import ColorReference, prepare_color_reference, resize_rgba_proxy
 from .color_space import image_rgba_to_linear, linear_rgb_to_srgb
-from .image import (
-    CLIPBOARD_HASH_PROPERTY, COLOR_REFERENCE_PROPERTY, IMAGE_EMPTY_REFERENCE_PROPERTY,
-    TEMPORARY_IMAGE_PREVIEW_PROPERTY, image_rgba, is_image_empty, is_static_image, pixel_digest,
-)
+from .image import image_rgba, image_content_handlers, pixel_digest
 
 
 class PreparedReference(NamedTuple):
     image: object
     content_digest: bytes
     metadata: tuple
-    transfer: ColorReference
+    transfer: ColorReference | None
+    icon_id: int
 
 
 _references = {}
 _previews = None
 
 
-def is_color_reference_candidate(image, *, empty_images=None):
-    """Return whether a static image is eligible for the scene reference gallery."""
-    if not is_static_image(image) or image.get(TEMPORARY_IMAGE_PREVIEW_PROPERTY):
-        return False
-    if image.get(COLOR_REFERENCE_PROPERTY) or image.get(CLIPBOARD_HASH_PROPERTY) or image.get(IMAGE_EMPTY_REFERENCE_PROPERTY):
-        return True
-    if empty_images is not None:
-        return image in empty_images
-    return any(is_image_empty(obj) and obj.data == image for obj in bpy.data.objects)
-
-
-def color_reference_candidates():
-    """Collect reference images in Blender order with one scan of the objects."""
-    empty_images = {obj.data for obj in bpy.data.objects if is_image_empty(obj)}
-    return [image for image in bpy.data.images if is_color_reference_candidate(image, empty_images=empty_images)]
-
-
-def color_reference_preview_icon(image):
-    """Return the gallery icon, preparing it on first use."""
-    key = str(image.session_uid)
-    if _previews is None or key not in _previews:
-        _prepare_reference_preview(image, image_rgba_to_linear(image, image_rgba(image)))
-    return _previews[key].icon_id
-
-
-def _prepare_reference_preview(image, linear):
+def _prepare_reference_preview(key, linear):
     from bpy.utils import previews
 
     global _previews
     if _previews is None:
         _previews = previews.new()
-    key = str(image.session_uid)
     preview = _previews[key] if key in _previews else _previews.new(key)
     premultiplied = linear.copy()
     premultiplied[..., 3] = np.clip(premultiplied[..., 3], 0.0, 1.0)
@@ -67,29 +39,7 @@ def _prepare_reference_preview(image, linear):
         rgba[..., :3] *= rgba[..., 3:4]
         setattr(preview, f"{prefix}_size", (rgba.shape[1], rgba.shape[0]))
         setattr(preview, f"{prefix}_pixels_float", np.flipud(rgba).ravel())
-
-
-def invalidate_color_reference(image):
-    """Release derived reference data after a known image content replacement."""
-    key = str(image.session_uid)
-    _references.pop(key, None)
-    if _previews is not None and key in _previews:
-        del _previews[key]
-
-
-def release_unused_color_references(candidates):
-    """Keep selected reference data and gallery candidate previews."""
-    selected = set()
-    for scene in bpy.data.scenes:
-        settings = getattr(scene, "anyimage_settings", None)
-        if settings is not None and settings.color_reference is not None:
-            selected.add(str(settings.color_reference.session_uid))
-    for key in _references.keys() - selected:
-        del _references[key]
-    if _previews is not None:
-        keep = selected.union(str(image.session_uid) for image in candidates)
-        for key in _previews.keys() - keep:
-            del _previews[key]
+    return preview.icon_id
 
 
 def _metadata(image):
@@ -100,32 +50,39 @@ def _metadata(image):
 def get_color_reference(image, *, refresh=False):
     """Reuse prepared data, optionally checking the current pixel buffer."""
     key = str(image.session_uid)
-    if not is_color_reference_candidate(image):
-        invalidate_color_reference(image)
-        raise ValueError("The color reference is no longer available")
     cached = _references.get(key)
     metadata = _metadata(image)
     if cached is not None and cached.image == image and cached.metadata == metadata and not refresh:
         return cached
-    try:
-        rgba = image_rgba(image)
-    except (AttributeError, ReferenceError, RuntimeError, TypeError, ValueError):
-        invalidate_color_reference(image)
-        raise
+    rgba = image_rgba(image)
     content_digest = pixel_digest(rgba)
     if cached is not None and cached.image == image and cached.metadata == metadata and cached.content_digest == content_digest:
         return cached
-    invalidate_color_reference(image)
     linear = image_rgba_to_linear(image, rgba)
-    transfer = prepare_color_reference(linear)
-    _prepare_reference_preview(image, linear)
-    cached = PreparedReference(image, content_digest, metadata, transfer)
-    _references[key] = cached
-    return cached
+    transfer = prepare_color_reference(linear) if np.any(linear[..., 3] > 0) else None
+    icon_id = _prepare_reference_preview(key, linear)
+    prepared = PreparedReference(image, content_digest, metadata, transfer, icon_id)
+    _references[key] = prepared
+    return prepared
 
 
-def clear_color_references():
-    """Release all reference resources at a global data lifecycle boundary."""
+def invalidate_color_reference(image):
+    key = str(image.session_uid)
+    _references.pop(key, None)
+    if _previews is not None and key in _previews:
+        del _previews[key]
+
+
+def release_unused_references(_settings, _context):
+    selected = {scene.anyimage_settings.color_reference for scene in bpy.data.scenes}
+    keep = {str(image.session_uid) for image in selected if image is not None}
+    for key in _references.keys() - keep:
+        del _references[key]
+        if _previews is not None and key in _previews:
+            del _previews[key]
+
+
+def clear_color_references(*_args):
     global _previews
     _references.clear()
     if _previews is not None:
@@ -133,3 +90,29 @@ def clear_color_references():
 
         previews.remove(_previews)
         _previews = None
+
+
+def register_color_references():
+    clear_color_references._bpy_persistent = True
+    for handlers in (
+        bpy.app.handlers.load_post,
+        bpy.app.handlers.undo_post,
+        bpy.app.handlers.redo_post,
+    ):
+        if clear_color_references not in handlers:
+            handlers.append(clear_color_references)
+    if invalidate_color_reference not in image_content_handlers:
+        image_content_handlers.append(invalidate_color_reference)
+
+
+def unregister_color_references():
+    for handlers in (
+        bpy.app.handlers.load_post,
+        bpy.app.handlers.undo_post,
+        bpy.app.handlers.redo_post,
+    ):
+        if clear_color_references in handlers:
+            handlers.remove(clear_color_references)
+    if invalidate_color_reference in image_content_handlers:
+        image_content_handlers.remove(invalidate_color_reference)
+    clear_color_references()

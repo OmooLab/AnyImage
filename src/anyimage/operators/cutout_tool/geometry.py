@@ -7,38 +7,9 @@ import bpy
 
 from ...preferences import addon_preferences, configured_min_cutout_relative_edge_length
 from ...common.image import image_empty_bounds
-from ...common.selection import ImageEditWarning, visible_pixel_bounds
+from ...common.selection import ImageEditWarning, SelectionMask, rasterize_selection_path, visible_pixel_bounds
 from . import balloon
 from .mesh import build_mesh
-
-
-def _resize_values(values, size):
-    import numpy as np
-
-    target_width, target_height = (int(value) for value in size)
-    source_height, source_width = values.shape
-    if (target_width, target_height) == (source_width, source_height):
-        return values
-    x = (np.arange(target_width, dtype=np.float32) + 0.5) * (
-        source_width / target_width
-    ) - 0.5
-    y = (np.arange(target_height, dtype=np.float32) + 0.5) * (
-        source_height / target_height
-    ) - 0.5
-    x0_unclipped = np.floor(x).astype(np.int32)
-    y0_unclipped = np.floor(y).astype(np.int32)
-    x_weight = x - x0_unclipped
-    y_weight = y - y0_unclipped
-    x0 = np.clip(x0_unclipped, 0, source_width - 1)
-    y0 = np.clip(y0_unclipped, 0, source_height - 1)
-    x1 = np.clip(x0_unclipped + 1, 0, source_width - 1)
-    y1 = np.clip(y0_unclipped + 1, 0, source_height - 1)
-    horizontal = (
-        values[:, x0] * (1.0 - x_weight)[None, :] + values[:, x1] * x_weight[None, :]
-    )
-    return (
-        horizontal[y0] * (1.0 - y_weight)[:, None] + horizontal[y1] * y_weight[:, None]
-    )
 
 
 def metric_transform(world_metric=None):
@@ -182,7 +153,12 @@ def build_reference_mask(content_values, image_size, alpha_threshold):
     import numpy as np
 
     values = np.asarray(content_values, dtype=np.float32)
-    values = _resize_values(values, image_size)
+    from scipy import ndimage
+
+    width, height = image_size
+    if values.shape != (height, width):
+        values = ndimage.zoom(values, (height / values.shape[0], width / values.shape[1]),
+                              order=1, mode="nearest", grid_mode=True)
     return visible_cutout_pixels(values, alpha_threshold)
 
 
@@ -249,22 +225,14 @@ def build_cutout_shape(
     )
 
 
-def cutout_content_values(
-    source_alpha, selection_values=None, *, alpha_threshold=CUTOUT_ALPHA_THRESHOLD
-):
-    """Combine local image Alpha with optional pure Selection geometry."""
+def cutout_selection_mask(source_rgba, path, *, alpha_threshold=CUTOUT_ALPHA_THRESHOLD):
+    """Combine path coverage with the source opacity inside its pixel bounds."""
     import numpy as np
 
-    alpha = np.asarray(source_alpha, dtype=np.float32)
-    if alpha.ndim != 2:
-        raise ValueError("The Cutout source Alpha must be two-dimensional")
-    if selection_values is None:
-        values = alpha.copy()
-    else:
-        selection = np.asarray(selection_values, dtype=np.float32)
-        if alpha.shape != selection.shape:
-            raise ValueError("The Cutout source Alpha does not match the Selection")
-        values = alpha * selection
+    height, width = source_rgba.shape[:2]
+    selection = rasterize_selection_path((width, height), path, antialias=True)
+    left, top, right, bottom = selection.bounds
+    values = source_rgba[top:bottom, left:right, 3] * selection.values
     if not np.any(visible_cutout_pixels(values, alpha_threshold)):
         raise ImageEditWarning("The Cutout selection contains no visible image pixels")
-    return values
+    return SelectionMask(values, selection.bounds)

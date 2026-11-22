@@ -9,7 +9,7 @@ from unittest.mock import Mock
 from anyimage.common import color_image as color_images
 from anyimage.common.image import image_content_state, image_pixels
 from anyimage.common.material import create_image_material
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 from anyimage.operators.bake_mesh.geometry import PROTOCOL_ATTRIBUTES, TARGET_UV, build_layout, mesh_bake_modifiers
 from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures
 from anyimage.operators.bake_mesh import BakeMesh
@@ -48,8 +48,8 @@ def cutout():
     bpy.context.view_layer.objects.active = obj
     modifier = obj.modifiers.new("Cutout", "NODES")
     modifier.node_group = OCutout.create_group()
-    set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Mode"), 1)
-    set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"), .2)
+    set_modifier_input(modifier, "Mode", 1)
+    set_modifier_input(modifier, "Thickness", .2, subtype="DISTANCE")
     obj.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     yield obj
@@ -360,7 +360,7 @@ def test_disk_normal_is_replaced_and_packed_in_place(cutout, tmp_path, monkeypat
 
 def test_single_region_without_normal_or_bump_preserves_user_attributes(cutout):
     modifier = cutout.modifiers[0]
-    set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE"), 0)
+    set_modifier_input(modifier, "Thickness", 0, subtype="DISTANCE")
     cutout.data.attributes.new("o_user_data", "FLOAT", "POINT")
     extra = cutout.data.uv_layers.new(name="UserUV")
     extra.data.foreach_set("uv", np.full(len(cutout.data.loops) * 2, .25, dtype=np.float32))
@@ -668,7 +668,6 @@ def test_bump_without_source_normal_creates_static_map(cutout, tmp_path, bump):
 @pytest.mark.parametrize("color_space,is_float", [("Non-Color", True), ("sRGB", False), ("AgX Base sRGB", False)])
 def test_flattened_outputs_preserve_original_shader_values_and_consumers(cutout, tmp_path, color_space, is_float):
     from scipy.ndimage import binary_erosion
-    from anyimage.common.color_reference import is_color_reference_candidate
 
     tree = cutout.active_material.node_tree
     layer = next(n for n in tree.nodes if n.type == "GROUP")
@@ -721,9 +720,47 @@ def test_flattened_outputs_preserve_original_shader_values_and_consumers(cutout,
     assert extra.inputs[1].links[0].from_node == unrelated and extra.operation == "MULTIPLY"
     assert not roughness.image.is_float and roughness.image.colorspace_settings.is_data
     assert bytes(roughness.image.packed_file.data).startswith(b"\x89PNG\r\n\x1a\n")
-    assert roughness.image.packed_file and not is_color_reference_candidate(roughness.image)
+    assert roughness.image.packed_file
     assert shader.inputs["Alpha"].links[0].from_node == shader.inputs["Base Color"].links[0].from_node
     assert not any(image.name.endswith("_alpha.png") for image in bpy.data.images)
+
+
+def test_disconnected_layer_and_consumers_do_not_choose_bake_channels(cutout):
+    from anyimage.operators.bake_mesh.materials import material_inputs
+
+    tree = cutout.active_material.node_tree
+    mods = mesh_bake_modifiers(cutout)
+    layer = material_inputs(cutout, mods).layer
+    for link in tuple(layer.outputs["Roughness"].links):
+        tree.links.remove(link)
+    expected = material_inputs(cutout, mods)
+    draft = tree.nodes.new("ShaderNodeGroup")
+    draft.node_tree = layer.node_tree
+    unused = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    tree.links.new(layer.outputs["Roughness"], unused.inputs["Roughness"])
+    tree.links.new(layer.outputs["Emission"], unused.inputs["Emission Color"])
+    unused.inputs["Emission Strength"].default_value = 2
+    assert material_inputs(cutout, mods) == expected
+
+
+def test_texture_layout_uses_the_shader_connected_to_the_output(cutout):
+    from anyimage.operators.bake_mesh.materials import finish_material_nodes
+
+    material = cutout.active_material
+    tree = material.node_tree
+    idle = next(node for node in tree.nodes if node.type == "BSDF_PRINCIPLED")
+    active = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    active.location = (1200, 400)
+    texture = tree.nodes.new("ShaderNodeTexImage")
+    tree.links.new(texture.outputs["Color"], active.inputs["Base Color"])
+    output = tree.get_output_node("CYCLES")
+    tree.links.new(active.outputs[0], output.inputs["Surface"])
+    idle_name = idle.name
+
+    finish_material_nodes(material, arrange=True)
+
+    assert idle_name not in tree.nodes
+    assert tuple(texture.location) == (550, 400)
 
 
 def test_flattening_failure_restores_nodes_links_and_images(cutout, monkeypatch):

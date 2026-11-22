@@ -1,106 +1,54 @@
-from ...common.job_image import apply_image_result
 import bpy
 
-from ...ai_preferences import configured_background_model, configured_device
+from ...ai_preferences import configured_background_model
 from ...runtime import JobOperator
-from ...common.ai import (
-    require_input_path,
-    report_ai_error,
-    invoke_ai_setup_if_needed,
-    require_environment,
-    require_model,
-)
-
-from ...common.image import image_rgba
-from ...common.image_input import cleanup_image_input, prepare_input_png
-from ...common.image_target import ImageEditTarget, image_edit_owner
-from .hdr import HdrBackgroundInput
+from ...common.ai import invoke_ai_setup_if_needed, model_job_parameters
+from ...common.image_input import cleanup_image_input
+from ...common.image_target import ImageEditTarget, editable_still_image
+from .image import BackgroundInput
 
 
-_HIDDEN = {"HIDDEN", "SKIP_SAVE"}
-
-
-class RemoveImageBackground(bpy.types.Operator):
+class RemoveImageBackground(JobOperator, bpy.types.Operator):
     bl_idname = "anyimage.remove_image_background"
     bl_label = "Remove Background"
     bl_description = "Remove the image background with the selected AI model"
     bl_options = {"REGISTER"}
+    job_type = "remove_background"
+    starting_message = "Starting image background removal"
+
+    _background_input = None
 
     @classmethod
     def poll(cls, context):
         from ...runtime import runtime
 
-        return image_edit_owner(context) is not None and runtime.can_submit()
+        return editable_still_image(context) is not None and runtime.can_submit()
 
-    def invoke(self, _context, _event):
+    def invoke(self, context, _event):
         setup_result = invoke_ai_setup_if_needed(self)
         if setup_result is not None:
             return setup_result
-        return self.execute(_context)
-
-    def execute(self, _context):
-        try:
-            result = bpy.ops.anyimage.run_background_removal()
-        except RuntimeError as error:
-            report_ai_error(self, error)
-            return {"CANCELLED"}
-        if "CANCELLED" not in result:
-            return {"FINISHED"}
-        return {"CANCELLED"}
-
-
-class RunBackgroundRemoval(JobOperator, bpy.types.Operator):
-    bl_idname = "anyimage.run_background_removal"
-    bl_label = "Run Background Removal"
-    job_type = "remove_background"
-    starting_message = "Starting image background removal"
-
-    input_path: bpy.props.StringProperty(options=_HIDDEN)
-
-    def execute(self, context):
-        self._hdr_input = None
-        try:
-            self._image_target, pixels = ImageEditTarget.capture_with_pixels(context)
-            image = self._image_target.image
-            if image.is_float:
-                self._hdr_input = HdrBackgroundInput.prepare(image, pixels)
-                source_path = self._hdr_input.path
-            else:
-                source_path = prepare_input_png(image_rgba(image, pixels))
-        except (OSError, RuntimeError, ValueError, MemoryError) as error:
-            self._hdr_input = None
-            self._image_target = None
-            message = "Not enough memory to prepare the HDR image" if isinstance(error, MemoryError) else str(error)
-            self.report({"ERROR"}, message)
-            return {"CANCELLED"}
-        self.input_path = str(source_path)
-        return super().execute(context)
+        return self.execute(context)
 
     def request(self, context):
-        require_environment()
-        model = configured_background_model(context)
-        require_model(model)
-        parameters = {
-            "input": str(require_input_path(self.input_path)),
-            "model": model,
-            "device": configured_device(),
-        }
-        if getattr(self, "_hdr_input", None) is not None:
-            parameters["output_kind"] = "alpha"
-        return parameters
+        parameters = model_job_parameters(configured_background_model(context))
+        try:
+            self._image_target, rgba = ImageEditTarget.capture(context)
+            self._background_input = BackgroundInput.prepare(self._image_target.image, rgba)
+        except MemoryError as error:
+            raise RuntimeError("Not enough memory to prepare the image") from error
+        return {**parameters, "input": str(self._background_input.path)}
 
     def response(self, _context, result):
-        if getattr(self, "_hdr_input", None) is not None:
-            self._hdr_input.apply(self._image_target, result.file("alpha"), prepare_undo=True)
-        else:
-            apply_image_result(self._image_target, result.file("foreground"))
+        self._background_input.apply(self._image_target, result.file("alpha"), prepare_undo=True)
         if "FINISHED" not in bpy.ops.ed.undo_push(message="Remove Background"):
             raise RuntimeError("Unable to create the Remove Background Undo step")
         return "Image background is removed"
 
     def cleanup(self):
         try:
-            cleanup_image_input(self.input_path)
+            if self._background_input is not None:
+                cleanup_image_input(self._background_input.path)
         finally:
             self._image_target = None
-            self._hdr_input = None
+            self._background_input = None

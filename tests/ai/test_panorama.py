@@ -1,6 +1,5 @@
 """Analytic projection, production inference and artifact lifecycle checks."""
 
-import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -128,8 +127,7 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     assert 0 < len(calls) < 12
     assert all(level == 3 and opts["fov_x"] == 90 for _, level, opts in calls)
     assert all(np.all(color[~opts["source_valid"]] == 0) for color, _, opts in calls)
-    assert result == {"depth": "depth.exr", "depth_metadata": "depth.json", "object_normal": "object-normal.png",
-                      "normal_coverage": "normal-coverage.png"}
+    assert result == {"depth": "depth.exr", "object_normal": "object-normal.png"}
     assert {path.name for path in context.directory.iterdir()} == set(result.values())
     alpha = pixels[0][..., 3]
     assert pixels[0].shape == image.shape
@@ -137,13 +135,8 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     assert np.all(alpha <= image[..., 3] / 255 + 1e-7)
     assert np.any(np.isclose(alpha, 128 / 255))
     np.testing.assert_allclose(pixels[0][..., 0], pixels[0][..., 2])
-    metadata = json.loads((context.directory / result["depth_metadata"]).read_text())
-    assert metadata["projection"] == "equirectangular"
-    assert metadata["image_size"] == [64, 32]
-    assert set(metadata) == {"projection", "image_size"}
-    for key in ("object_normal", "normal_coverage"):
-        with Image.open(context.directory / result[key]) as texture:
-            assert texture.size == (64, 32)
+    with Image.open(context.directory / result["object_normal"]) as texture:
+        assert texture.size == (64, 32)
 
 
 def test_job_writes_fused_depth_and_object_normals(panorama_job, monkeypatch):
@@ -161,8 +154,11 @@ def test_job_writes_fused_depth_and_object_normals(panorama_job, monkeypatch):
     np.testing.assert_array_equal(pixels[0][..., 0], distance)
     np.testing.assert_array_equal(pixels[0][..., 3], valid)
     with Image.open(context.directory / "object-normal.png") as image:
-        assert image.mode == "RGB"
-        normal = np.asarray(image).astype(float) / 127.5 - 1
+        assert image.mode == "RGBA"
+        rgba = np.asarray(image)
+        normal = rgba[..., :3].astype(float) / 127.5 - 1
+        assert not rgba[~valid, 3].any()
+        assert rgba[valid, 3].max() == 255
     inward = -directions * (-1, 1, 1)
     np.testing.assert_allclose(normal[~valid], inward[~valid], atol=1 / 255 + 1e-6)
     interior = facing < -.4
@@ -218,7 +214,7 @@ def test_refinement_handles_partial_sky_coverage_and_cancellation():
     assert checks == 5
 
 
-@pytest.mark.parametrize("kind", ["transparent", "invalid_model", "wrong_ratio", "cancel", "metadata"])
+@pytest.mark.parametrize("kind", ["transparent", "invalid_model", "wrong_ratio", "cancel", "normal_write"])
 def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind):
     source, context, parameters, calls, _ = panorama_job
     Image.new("RGBA", (64 if kind != "wrong_ratio" else 32, 32),
@@ -229,10 +225,10 @@ def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind)
                     "mask": np.zeros(color.shape[:2])}
 
         monkeypatch.setattr(onnx, "infer", invalid_prediction)
-    if kind == "metadata":
-        def fail_metadata(*args, **kwargs):
-            raise RuntimeError("Failed metadata serialization")
-        monkeypatch.setattr(job, "json", SimpleNamespace(dumps=fail_metadata))
+    if kind == "normal_write":
+        def fail_save(*args, **kwargs):
+            raise OSError("Failed to save normal texture")
+        monkeypatch.setattr(Image.Image, "save", fail_save)
     if kind == "cancel":
         count = [0]
         def cancel():
@@ -240,7 +236,7 @@ def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind)
             if count[0] == 6:
                 raise RuntimeError("Cancelled")
         context.check_cancelled = cancel
-    with pytest.raises((ValueError, RuntimeError)):
+    with pytest.raises((ValueError, RuntimeError, OSError)):
         job.run(context, parameters)
     assert not list(context.directory.iterdir())
     if kind == "transparent":

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .onnx_runtime import create_session as create_runtime_session
 from .onnx_runtime import run_session
-from .moge_geometry import MIN_TOKENS, MAX_TOKENS, postprocess
+from .moge_geometry import model_inputs, postprocess
 
 
 ONNX_FILENAME = "model.onnx"
@@ -22,30 +22,22 @@ def create_session(model_directory, requested_device="auto"):
     )
 
 
-def infer(
-    session, image, resolution_level, *,
-    fov_x=None, source_valid=None, include_points=True,
-):
-    import numpy as np
+def infer_normal(session, image, resolution_level):
+    normal, = run_session(session, ["normal"], model_inputs(image, resolution_level))
+    return normal[0]
 
-    level = min(max(int(resolution_level), 0), 9)
-    num_tokens = int(MIN_TOKENS + level / 9.0 * (MAX_TOKENS - MIN_TOKENS))
-    image_input = np.ascontiguousarray(image.transpose(2, 0, 1)[None], dtype=np.float32)
-    input_feed = {
-        "image": image_input,
-        "num_tokens": np.asarray(num_tokens, dtype=np.int64),
-    }
+
+def infer(session, image, resolution_level, *, fov_x=None, source_valid=None):
     output_names = {output.name for output in session.get_outputs()}
     scale_name = "metric_scale" if "metric_scale" in output_names else "scale"
     names = ("points", "normal", "mask", scale_name)
     values = run_session(
         session,
         list(names),
-        input_feed,
+        model_inputs(image, resolution_level),
     )
     raw_output = dict(zip(names, values))
     raw_output["metric_scale"] = raw_output.pop(scale_name)
     return postprocess(
         raw_output, fov_x=fov_x, source_valid=source_valid,
-        include_points=include_points,
     )

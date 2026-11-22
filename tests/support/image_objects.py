@@ -2,11 +2,9 @@ import bpy
 import numpy as np
 
 
-from anyimage.common import image as image_data
+from anyimage.common.image import image_rgba
 from anyimage.common.selection import SelectionMask
-from anyimage.operators.cutout_tool import geometry as cutout_geometry
-from anyimage.operators.cutout_tool import object as cutout_object
-from anyimage.common.color_image import create_material_color_image
+from anyimage.operators.cutout_tool.object import create_cutout_shape
 
 
 def _inputs(group):
@@ -32,7 +30,7 @@ def _create_cutout_shape(
     *,
     bounds=None,
     depth_image=None,
-    depth_metadata=None,
+    intrinsics=None,
     selection_values=None,
     gesture="LASSO",
 ):
@@ -41,32 +39,12 @@ def _create_cutout_shape(
     left, top, right, bottom = bounds
     if selection_values is None:
         selection_values = np.ones((bottom - top, right - left), dtype=np.float32)
-    selection_mask = SelectionMask(selection_values, bounds)
-    source_rgba = image_data.image_rgba(source.data)
-    color_image = create_material_color_image(
-        source.data,
-        selection_mask.bounds,
-        source_rgba,
-    )
-    plane_bounds = cutout_geometry.crop_plane_bounds(source, bounds, source.data.size)
-    base_shape = cutout_geometry.build_cutout_shape(
-        bpy.context,
-        source,
-        edge_length,
-        selection_mask.values,
-        plane_bounds,
-    )
-    return cutout_object.create_shape_object(
-        bpy.context,
-        source,
-        shape,
-        plane_bounds,
-        base_shape,
-        content_values=selection_mask.values,
+    return create_cutout_shape(
+        bpy.context, source, shape, edge_length, SelectionMask(selection_values, bounds),
+        source_rgba=image_rgba(source.data),
         depth_image=depth_image,
-        depth_metadata=depth_metadata,
+        intrinsics=intrinsics,
         gesture=gesture,
-        color_image=color_image,
     )
 
 
@@ -91,13 +69,6 @@ def _depth_image(points, alpha, name="Depth"):
     return image
 
 
-def _depth_metadata(intrinsics, image_size):
-    return {
-        "intrinsics": tuple(tuple(float(value) for value in row) for row in intrinsics),
-        "image_size": tuple(int(value) for value in image_size),
-    }
-
-
 def _evaluated_positions(obj):
     evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
     result = evaluated.to_mesh()
@@ -107,3 +78,15 @@ def _evaluated_positions(obj):
         evaluated.to_mesh_clear()
 
 
+
+
+def packed_clipboard_image(data, suffix):
+    from anyimage.operators.clipboard_image.cache import clipboard_source
+
+    with clipboard_source(data, suffix) as image:
+        if image.packed_file:
+            return image, True
+        image.pack()
+        image.use_fake_user = True
+    image.use_fake_user = False
+    return image, False

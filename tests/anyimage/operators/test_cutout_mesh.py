@@ -59,9 +59,9 @@ def test_local_support_connects_coarse_and_dense_branches(fine_outline, spacing)
 def test_support_splits_shared_chords_and_preserves_boundary_and_area():
     points = np.array(((0., 0.), (20., 0.), (20., 2.), (0., 2.)))
     faces = np.array(((0, 1, 2), (0, 2, 3)))
-    p, f = mesh.support_mesh(points, faces)
+    p, f, boundary = mesh.support_mesh(points, faces)
     assert len(p) == 5 and len(f) == 4
-    assert_supported(p, f, mesh.boundary_vertices_from_faces(len(p), f), [None])
+    assert_supported(p, f, boundary, [None])
     triangles = p[f]
     assert np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]).sum() == pytest.approx(80)
     np.testing.assert_array_equal(p[:4], points)
@@ -72,12 +72,13 @@ def test_support_splits_shared_chords_and_preserves_boundary_and_area():
 def test_support_adds_one_sample_to_isolated_triangle_and_is_idempotent():
     points = np.array(((0., 0.), (20., 0.), (0., 2.)))
     faces = np.array(((0, 1, 2),))
-    p, f = mesh.support_mesh(points, faces)
+    p, f, boundary = mesh.support_mesh(points, faces)
     assert len(p) == 4 and len(f) == 3
-    assert_supported(p, f, mesh.boundary_vertices_from_faces(len(p), f), [None])
-    again_p, again_f = mesh.support_mesh(p, f)
+    assert_supported(p, f, boundary, [None])
+    again_p, again_f, again_boundary = mesh.support_mesh(p, f)
     np.testing.assert_array_equal(p, again_p)
     np.testing.assert_array_equal(f, again_f)
+    np.testing.assert_array_equal(boundary, again_boundary)
 
 
 @pytest.mark.parametrize("spacing", [1, 16])
@@ -121,6 +122,7 @@ def assert_supported(points, faces, boundary, components):
     edges = np.sort(np.concatenate((faces[:, :2], faces[:, 1:], faces[:, ::2])), axis=1)
     edges, counts = np.unique(edges, axis=0, return_counts=True)
     assert counts.max() <= 2
+    np.testing.assert_array_equal(np.flatnonzero(boundary), np.unique(edges[counts == 1]))
     interior = np.flatnonzero(~boundary)
     links = edges[~boundary[edges].any(axis=1)]
     graph = coo_matrix(
@@ -232,7 +234,8 @@ def test_cdt_collinear_outline_samples_do_not_become_sliver_faces(offset):
     )
     assert np.min(area / longest_squared) > 1e-4
     assert area.sum() / 2 == pytest.approx(abs(contour_area(contour)), rel=1e-9)
-    boundary = mesh.boundary_vertices_from_faces(len(points), faces)
+    edges, counts = mesh.face_edge_counts(faces)
+    boundary = np.unique(edges[counts == 1])
     np.testing.assert_allclose(
         boundary_distance(points[boundary], [contour]), 0, atol=1e-9
     )

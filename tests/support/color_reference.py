@@ -6,7 +6,7 @@ import pytest
 from anyimage import properties
 from anyimage.common import color_reference as reference_cache
 from anyimage.common.image import CLIPBOARD_HASH_PROPERTY
-from anyimage.operators.color_match import MatchColorReference
+from anyimage.operators.color_match import MatchColorReference, SetColorReference
 
 
 def create_rgba_image(name, rgba, *, floating=False):
@@ -59,15 +59,15 @@ def registered_color_reference():
             type=properties.SettingsLite,
         )
     registered_operators = []
-    for operator in (MatchColorReference,):
+    for operator in (MatchColorReference, SetColorReference):
         try:
             bpy.utils.register_class(operator)
             registered_operators.append(operator)
         except (RuntimeError, ValueError):
             pass
-    properties.register_color_references()
+    reference_cache.register_color_references()
     yield
-    properties.unregister_color_references()
+    reference_cache.unregister_color_references()
     for operator in reversed(registered_operators):
         bpy.utils.unregister_class(operator)
     if added_scene_property:

@@ -26,7 +26,7 @@ def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
         _source_object=source, _source_image=image,
         _source_premultiplied=operators._rectify_sampling_pixels(image, pixels),
         _source_signature=image_content_signature(image, pixels),
-        source_object_name=source.name, quad_json="[[0,0],[2,0],[2,2],[0,2]]",
+        source_object_name=source.name, corners=(0, 0, 2, 0, 2, 2, 0, 2),
         aspect_ratio=1.0, report=Mock(),
     )
     if change == "rename":
@@ -54,8 +54,8 @@ def test_rectify_preview_keeps_its_source_and_rejects_external_changes(change):
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-@pytest.mark.parametrize("floating", [False, True])
-def test_rectify_preview_and_confirm_use_the_same_linear_image(monkeypatch, floating):
+@pytest.mark.parametrize("floating,thin_line", [(False, False), (True, False), (False, True)])
+def test_rectify_preview_and_confirm_use_the_same_linear_image(monkeypatch, floating, thin_line):
     from anyimage.common.color_space import linear_rgb_to_srgb, srgb_to_linear_rgb
     from anyimage.common.image import image_content_signature, image_pixels
     from anyimage.operators.rectify_tool import operators
@@ -64,6 +64,9 @@ def test_rectify_preview_and_confirm_use_the_same_linear_image(monkeypatch, floa
     image = bpy.data.images.new("Rectify", width=5, height=4, alpha=True, float_buffer=floating)
     rgba = np.ones((4, 5, 4), dtype=np.float32)
     rgba[:, ::2, :3] = .25
+    if thin_line:
+        rgba[1:, :, 3] = 0
+        monkeypatch.setattr(operators, "PREVIEW_TEXTURE_SIZE", 1)
     image.pixels.foreach_set(rgba.ravel())
     source = bpy.data.objects.new("Rectify", None)
     source.empty_display_type = "IMAGE"
@@ -73,7 +76,11 @@ def test_rectify_preview_and_confirm_use_the_same_linear_image(monkeypatch, floa
     quad = ((0, 0), (4, 0), (4, 4), (0, 4))
     image_quad = np.asarray(quad) + (.5, 0)
     class PreviewOperator(SimpleNamespace):
+        _modal_points = operators.RectifyImagePerspective._modal_points
+        _modal_aspect = operators.RectifyImagePerspective._modal_aspect
+        _update_aspect = operators.RectifyImagePerspective._update_aspect
         _begin_aspect_preview = operators.RectifyImagePerspective._begin_aspect_preview
+        execute = operators.RectifyImagePerspective.execute
 
     operator = PreviewOperator(
         _source_object=source, _source_image=image, _source_signature=image_content_signature(image),
@@ -89,8 +96,23 @@ def test_rectify_preview_and_confirm_use_the_same_linear_image(monkeypatch, floa
     monkeypatch.setattr(operators, "create_preview_texture", lambda pixels: pixels)
     assert operators.RectifyImagePerspective.modal(operator, context, event) == {"RUNNING_MODAL"}
     dark = original[0] if floating else srgb_to_linear_rgb(original[0])
-    np.testing.assert_allclose(operator._preview_texture[256, 0, :3], dark + (1 - dark) / 256, atol=1e-6)
-    assert operators.RectifyImagePerspective.execute(operator, context) == {"FINISHED"}
+    if thin_line:
+        assert operator._preview_texture[..., 3].max() == 0
+    else:
+        np.testing.assert_allclose(operator._preview_texture[256, 0, :3], dark + (1 - dark) / 256, atol=1e-6)
+    event.type, event.mouse_x, event.ctrl = "MOUSEMOVE", operator._aspect_anchor_x + 160, False
+    assert operators.RectifyImagePerspective.modal(operator, context, event) == {"RUNNING_MODAL"}
+    assert 1.5 < operator.aspect_ratio < 1.7
+    event.type, event.ctrl = "LEFT_CTRL", True
+    assert operators.RectifyImagePerspective.modal(operator, context, event) == {"RUNNING_MODAL"}
+    assert operator.aspect_ratio == pytest.approx(16 / 9)
+    event.value, event.mouse_x, event.ctrl = "RELEASE", operator._aspect_anchor_x, False
+    assert operators.RectifyImagePerspective.modal(operator, context, event) == {"RUNNING_MODAL"}
+    assert operator.aspect_ratio == pytest.approx(1)
+    event.type, event.value = "LEFTMOUSE", "PRESS"
+    assert operators.RectifyImagePerspective.modal(operator, context, event) == {"FINISHED"}
+    if thin_line:
+        assert tuple(source.data.size) == (4, 1)
     average = (1 + dark) * .5
     expected = average if floating else linear_rgb_to_srgb(average)
     np.testing.assert_allclose(image_pixels(source.data).reshape(-1, 4)[:, :3], expected, atol=1/255)
@@ -133,7 +155,7 @@ class RectifyToolTest(BlenderTestCase):
         )
 
         np.testing.assert_allclose(
-            np.flipud(np.asarray(result).reshape((3, 4, 4))),
+            result,
             top_down,
             atol=1e-6,
         )
@@ -148,11 +170,10 @@ class RectifyToolTest(BlenderTestCase):
             ((-2, 0), (2, 0), (2, 2), (-2, 2)),
             (4, 2),
         )
-        top_down = np.flipud(np.asarray(result).reshape((2, 4, 4)))
 
-        np.testing.assert_array_equal(top_down[:, :2, 3], 0.0)
-        np.testing.assert_allclose(top_down[:, 1, :3], 1.0)
-        np.testing.assert_allclose(top_down[:, 2:, 3], 1.0)
+        np.testing.assert_array_equal(result[:, :2, 3], 0.0)
+        np.testing.assert_allclose(result[:, 1, :3], 1.0)
+        np.testing.assert_allclose(result[:, 2:, 3], 1.0)
 
 
     def test_projective_sampling_uses_premultiplied_alpha(self):
@@ -200,18 +221,17 @@ class RectifyToolTest(BlenderTestCase):
 
         top_down = np.zeros((4, 4, 4), dtype=np.float32)
         top_down[1:3, 1:3] = (0.2, 0.4, 0.6, 1.0)
-        pixels, output_size, placement_bounds = (
+        top_down[2, 1:3, 0] = 0.8
+        result, placement_bounds = (
             self.rectify_geometry.extract_perspective_pixels(
                 top_down,
                 ((0, 0), (4, 0), (4, 4), (0, 4)),
                 1.0,
             )
         )
-        result = np.flipud(np.asarray(pixels).reshape((2, 2, 4)))
 
-        self.assertEqual(output_size, (2, 2))
+        np.testing.assert_allclose(result, top_down[1:3, 1:3])
         self.assertEqual(placement_bounds, (1.0, 1.0, 3.0, 3.0))
-        self.assertTrue(np.all(result[:, :, 3] == 1.0))
 
 
     def test_rectify_rejects_non_convex_corners(self):

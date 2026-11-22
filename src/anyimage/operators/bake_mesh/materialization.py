@@ -5,67 +5,41 @@ import bpy
 from ...common.bake import BAKE_MARGIN, bake_context
 from ...common.color_image import create_normalized_color_image
 from ...common.image import (
-    create_image_edit_result, has_other_image_user, image_content_state, image_pixels,
+    has_other_image_user, image_content_state, image_pixels,
     replace_image_content, restore_image_content,
 )
 from ...common.image_target import material_has_other_object_user
 from .geometry import PROTOCOL_ATTRIBUTES, SINGLE_REGION_GROUPS, TARGET_UV, build_layout, isolate_bake_modifiers
 from .textures import build_color_tiles, create_emission_color_image, merge_color_alpha
-from .materials import material_inputs, remove_unused_material_nodes, static_material_outputs
+from .materials import material_inputs, static_material_outputs
 
 
-def bake_material_output(material, layer_name, size, output_name, emitter_name=None):
-    """Bake a layer output using explicit source and target UVs."""
-    layer = material.node_tree.nodes[layer_name]
-    image = None
-    nodes, links = material.node_tree.nodes, material.node_tree.links
-    created = []
-    output = material.node_tree.get_output_node("CYCLES")
-    if output is None:
-        raise ValueError("Bake Mesh requires a Cycles material output")
-    surface = output.inputs["Surface"]
-    original_surface = surface.links[0].from_socket if surface.is_linked else None
-    active = nodes.active
+def bake_material_output(target, shader, size, output_name, source):
+    """Bake a source socket to a fresh image on the shared bake target."""
+    tree = target.id_data
+    is_normal = output_name == "Normal"
+    tree.links.new(source, shader.inputs["Normal" if is_normal else "Color"])
+    tree.links.new(shader.outputs[0], tree.get_output_node("CYCLES").inputs["Surface"])
+
+    is_roughness = output_name == "Roughness"
+    image = bpy.data.images.new(f"Mesh bake {output_name.lower()}", width=size[0], height=size[1],
+                                alpha=True, float_buffer=not is_roughness)
     try:
-        is_normal = output_name == "Normal"
-        is_roughness = output_name == "Roughness"
-        image = bpy.data.images.new(f"Mesh bake {output_name.lower()}", width=size[0], height=size[1], alpha=True, float_buffer=not is_roughness)
         image.colorspace_settings.name = "Non-Color"
         image.file_format = "PNG" if is_roughness else "OPEN_EXR"
-        shader = nodes.new("ShaderNodeBsdfDiffuse" if is_normal else "ShaderNodeEmission")
-        created.append(shader)
-        if emitter_name is not None:
-            emitter = nodes[emitter_name]
-            source = emitter.inputs["Emission Color"].links[0].from_socket
-            strength = emitter.inputs["Emission Strength"]
-            if strength.is_linked:
-                links.new(strength.links[0].from_socket, shader.inputs["Strength"])
-            else:
-                shader.inputs["Strength"].default_value = strength.default_value
-        else:
-            source = layer.outputs[output_name]
-        links.new(source, shader.inputs["Normal" if is_normal else "Color"])
-        links.new(shader.outputs[0], surface)
-        target = nodes.new("ShaderNodeTexImage")
-        created.append(target)
         target.image = image
-        nodes.active = target
-        result = bpy.ops.object.bake(type="NORMAL" if is_normal else "EMIT", normal_space="TANGENT", normal_r="POS_X", normal_g="POS_Y", normal_b="POS_Z",
-                                     use_selected_to_active=False, uv_layer=bpy.context.object.data.uv_layers.active.name,
-                                     margin=BAKE_MARGIN, margin_type="EXTEND")
+        result = bpy.ops.object.bake(
+            type="NORMAL" if is_normal else "EMIT", normal_space="TANGENT",
+            normal_r="POS_X", normal_g="POS_Y", normal_b="POS_Z",
+            use_selected_to_active=False, uv_layer=bpy.context.object.data.uv_layers.active.name,
+            margin=BAKE_MARGIN, margin_type="EXTEND",
+        )
         if result != {"FINISHED"}:
             raise RuntimeError(f"{output_name} baking was cancelled")
         return image
     except Exception:
-        if image is not None:
-            bpy.data.images.remove(image, do_unlink=True)
+        bpy.data.images.remove(image, do_unlink=True)
         raise
-    finally:
-        for node in created:
-            nodes.remove(node)
-        if original_surface is not None:
-            links.new(original_surface, surface)
-        nodes.active = active
 
 
 def materialize_mesh_and_textures(context, obj, modifiers):
@@ -77,7 +51,7 @@ def materialize_mesh_and_textures(context, obj, modifiers):
     inputs = material_inputs(obj, modifiers)
     material, layer = inputs.material, inputs.layer
     color, normal = inputs.color, inputs.normal
-    channels, emission_strengths = inputs.channels, inputs.emission_strengths
+    channels = inputs.channels
     single_region = modifiers[0].node_group.name in SINGLE_REGION_GROUPS
     mesh = None
     bake_material = None
@@ -90,7 +64,7 @@ def materialize_mesh_and_textures(context, obj, modifiers):
     updates = []
     originals = []
     output_images = {}
-    emission_images = {}
+    emission_outputs = {}
     static_normal = None
     images = []
     transferred = False
@@ -102,15 +76,22 @@ def materialize_mesh_and_textures(context, obj, modifiers):
         tiles = build_layout(mesh, single_region=single_region)
         pixels = build_color_tiles(source_color, tiles)
         color_size = (pixels.shape[1], pixels.shape[0])
-        if channels or None in emission_strengths.values():
+        if channels or inputs.emitters_to_bake:
             bake_material = material.copy()
             with bake_context(mesh, bake_material, obj.matrix_world):
+                tree = bake_material.node_tree
+                bake_layer = tree.nodes[layer.name]
+                emission = tree.nodes.new("ShaderNodeEmission")
+                diffuse = tree.nodes.new("ShaderNodeBsdfDiffuse") if "Normal" in channels else None
+                target = tree.nodes.new("ShaderNodeTexImage")
+                tree.nodes.active = target
                 for channel in channels:
                     size = color_size
                     if channel == "Normal" and source_normal is not None:
                         size = (max(color_size[0], source_normal.size[0] * len(tiles[0])),
                                 max(color_size[1], source_normal.size[1] * len(tiles)))
-                    image = bake_material_output(bake_material, layer.name, size, channel)
+                    shader = diffuse if channel == "Normal" else emission
+                    image = bake_material_output(target, shader, size, channel, bake_layer.outputs[channel])
                     if channel == "Alpha":
                         try:
                             merge_color_alpha(pixels, image_pixels(image).reshape(-1, 4)[:, 0], source_color)
@@ -118,50 +99,59 @@ def materialize_mesh_and_textures(context, obj, modifiers):
                             bpy.data.images.remove(image)
                         continue
                     images.append(image)
-                    image.pack()
                     if channel == "Normal":
                         static_normal = image
                         if normal is not None:
                             updates.append((normal.name, source_normal, image))
                         else:
+                            image.pack()
                             image.name = f"{material.name}_normal.exr"
                     else:
+                        image.pack()
                         extension = "exr" if channel == "Emission" else "png"
                         image.name = f"{material.name}_{channel.lower()}.{extension}"
                         output_images[channel] = image
-                for name, strength in emission_strengths.items():
-                    if strength is not None:
-                        continue
-                    shader = material.node_tree.nodes[name]
+                for name in inputs.emitters_to_bake:
+                    shader = tree.nodes[name]
                     shader_strength = shader.inputs["Emission Strength"]
                     if ("Emission" in output_images and not shader_strength.is_linked and shader_strength.default_value == 1
-                            and shader.inputs["Emission Color"].links[0].from_socket == layer.outputs["Emission"]):
-                        image, emission_strengths[name] = create_emission_color_image(output_images["Emission"])
+                            and shader.inputs["Emission Color"].links[0].from_socket == bake_layer.outputs["Emission"]):
+                        image, strength = create_emission_color_image(output_images["Emission"])
                     else:
-                        linear_emission = bake_material_output(bake_material, layer.name, color_size, "Emission", name)
+                        strength_input = emission.inputs["Strength"]
+                        if shader_strength.is_linked:
+                            tree.links.new(shader_strength.links[0].from_socket, strength_input)
+                        else:
+                            if strength_input.is_linked:
+                                tree.links.remove(strength_input.links[0])
+                            strength_input.default_value = shader_strength.default_value
+                        source = shader.inputs["Emission Color"].links[0].from_socket
+                        linear_emission = bake_material_output(target, emission, color_size, "Emission", source)
                         try:
-                            image, emission_strengths[name] = create_emission_color_image(linear_emission)
+                            image, strength = create_emission_color_image(linear_emission)
                         finally:
                             bpy.data.images.remove(linear_emission)
                     images.append(image)
                     image.name = f"{material.name}_emissioncolor.png"
-                    emission_images[name] = image
+                    emission_outputs[name] = (image, strength)
             bpy.data.materials.remove(bake_material)
             bake_material = None
-        final_color = create_image_edit_result(source_color, pixels.ravel(), color_size, pack=False)
-        images.append(final_color)
-        if "Alpha" in channels and final_color.alpha_mode == "NONE":
-            final_color.alpha_mode = "STRAIGHT"
-        del pixels
-        constant_emitters = [name for name, strength in emission_strengths.items() if name not in emission_images and strength > 0]
-        if constant_emitters:
-            emission_image, strength_scale = create_emission_color_image(final_color)
-            images.append(emission_image)
-            emission_image.name = f"{material.name}_emissioncolor.png"
-            for name in constant_emitters:
-                emission_images[name] = emission_image
-                emission_strengths[name] *= strength_scale
-        normalized_color = create_normalized_color_image(final_color)
+        rgba = pixels[::-1]
+        alpha_mode = source_color.alpha_mode
+        if "Alpha" in channels and alpha_mode == "NONE":
+            alpha_mode = "STRAIGHT"
+        emission_image = None
+        for name, strength in inputs.color_emission_strengths.items():
+            if strength == 0:
+                emission_outputs[name] = (None, 0)
+                continue
+            if emission_image is None:
+                emission_image, strength_scale = create_emission_color_image(source_color, rgba, alpha_mode=alpha_mode)
+                images.append(emission_image)
+                emission_image.name = f"{material.name}_emissioncolor.png"
+            emission_outputs[name] = (emission_image, strength * strength_scale)
+        normalized_color = create_normalized_color_image(source_color, rgba)
+        del rgba, pixels
         images.append(normalized_color)
         updates.insert(0, (color.name, source_color, normalized_color))
         if not single_region:
@@ -184,16 +174,16 @@ def materialize_mesh_and_textures(context, obj, modifiers):
         static_color = static_nodes[color.name]
         static_normal_node = static_nodes[normal.name] if normal is not None else None
         with static_material_outputs(static_material, static_layer, static_color,
-                                     (static_normal, static_normal_node), output_images, emission_images, emission_strengths):
+                                     (static_normal, static_normal_node), output_images, emission_outputs):
             for node_name, source, result in updates:
                 if isolated_images[node_name]:
+                    result.pack()
                     originals.append((node_name, source, None))
                     static_nodes[node_name].image = result
                     result.name = source.name
                 else:
                     originals.append((node_name, source, image_content_state(source)))
                     replace_image_content(source, result)
-        remove_unused_material_nodes(static_material)
         transferred = True
         return mesh
     finally:

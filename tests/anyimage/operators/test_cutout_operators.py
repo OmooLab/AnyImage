@@ -64,8 +64,8 @@ class CutoutOperatorsTest(BlenderTestCase):
                 patch.object(module, "require_image_empty", return_value=source),
                 patch.object(module, "is_animated_image", return_value=False),
                 patch.object(module, "image_rgba", return_value=np.ones((10, 10, 4))),
-                patch.object(module, "rasterize_selection_path", return_value=selection),
-                patch.object(module, "material_color_image", return_value=nullcontext("Color")),
+                patch.object(self.cutout_geometry, "rasterize_selection_path", return_value=selection),
+                patch.object(self.cutout_object, "material_color_image", return_value=nullcontext("Color")),
                 patch.object(self.cutout_object, "build_cutout_shape", return_value=mesh),
                 patch.object(self.cutout_object, "pad_cutout_images") as pad,
                 patch.object(self.cutout_object, "push_cutout_undo") as undo,
@@ -75,7 +75,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             self.assertEqual(create.call_args.args, (context, source, shape, (-4, 4, -4, 4), mesh))
             self.assertEqual(create.call_args.kwargs["color_image"], "Color")
             self.assertEqual(create.call_args.kwargs["gesture"], "POLYLINE")
-            pad.assert_called_once_with("Color", None, None, "Mask", 2.0)
+            self.assertEqual(pad.call_args.args[0].shape, (8, 8, 4))
             undo.assert_called_once_with(shape)
 
     def test_ai_cutout_writes_the_selection_bounds_image(self):
@@ -102,7 +102,6 @@ class CutoutOperatorsTest(BlenderTestCase):
             {"points": [[1, 1], [7, 1], [7, 3], [1, 3]]}
         )
         operator.shape = "DEPTH_SOLID"
-        operator.report = lambda *_args: None
         operator.edge_length = 0.1
         operator.report = lambda *_args: None
 
@@ -120,7 +119,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             ) as read_rgba,
             patch.object(self.cutout_main, "image_content_signature", return_value="snapshot"),
             patch.object(
-                self.cutout_main,
+                self.cutout_geometry,
                 "rasterize_selection_path",
                 return_value=selection_mask,
             ) as rasterize,
@@ -134,17 +133,16 @@ class CutoutOperatorsTest(BlenderTestCase):
                 "prepare_recognition_input",
                 return_value=Path(__file__),
             ) as prepare_input,
-            patch.object(
-                self.cutout_main.JobOperator,
-                "execute",
-                return_value={"FINISHED"},
-            ),
+            patch.object(self.cutout_main, "geometry_job_parameters", return_value={}),
+            patch.object(self.cutout_main.JobOperator, "execute",
+                         self.cutout_main.CutoutSelectionToShape.request),
         ):
-            result = operator.execute(context)
+            parameters = operator.execute(context)
 
-        self.assertEqual(result, {"FINISHED"})
-        np.testing.assert_array_equal(operator._content_values, np.full((2, 6), 0.375))
-        self.assertEqual(operator._content_bounds, selection_mask.bounds)
+        self.assertEqual(parameters["input"], str(Path(__file__)))
+        self.assertTrue(parameters["generate_depth"])
+        np.testing.assert_array_equal(operator._selection.values, np.full((2, 6), 0.375))
+        self.assertEqual(operator._selection.bounds, selection_mask.bounds)
         read_rgba.assert_called_once_with(source.data)
         rasterize.assert_called_once()
         self.assertIs(prepare_input.call_args.args[0], source.data)
@@ -173,7 +171,7 @@ class CutoutOperatorsTest(BlenderTestCase):
                     patch.object(module, "require_image_empty", return_value=source),
                     patch.object(module, "image_rgba", return_value=rgba),
                     patch.object(self.cutout_main, "invoke_ai_setup_if_needed") as setup,
-                    patch.object(self.cutout_operators, "material_color_image") as local_color,
+                    patch.object(self.cutout_object, "material_color_image") as local_color,
                     patch.object(self.cutout_main, "prepare_recognition_input") as ai_color,
                 ):
                     self.assertEqual(operator.execute(context), {"CANCELLED"})
@@ -185,11 +183,12 @@ class CutoutOperatorsTest(BlenderTestCase):
 
     def test_cutout_request_only_adds_depth_for_depth_shapes(self):
         operator = self.cutout_main.CutoutSelectionToShape()
-        operator.input_path = __file__
+        operator._source_image = Mock()
         with (
+            patch.object(self.cutout_main, "prepare_recognition_input", return_value=Path("input.png")),
             patch.object(self.cutout_main, "geometry_job_parameters", return_value={"model": "MOGE3_VITL"}),
-            patch.object(self.cutout_main, "require_input_path", return_value=Path("input.png")),
         ):
+            operator._input_rgba = None
             for shape in ("FLAT", "SOLID", "DEPTH_SOLID", "DEPTH_SYMMETRY"):
                 operator.shape = shape
                 self.assertEqual(operator.request(None), {
@@ -259,7 +258,6 @@ class CutoutOperatorsTest(BlenderTestCase):
 
         source = SimpleNamespace(data=SimpleNamespace(size=(24, 24)))
         pixels = np.arange(24 * 24 * 4, dtype=np.float32)
-        color_image = SimpleNamespace(users=0)
         content_values = np.ones((3, 4), dtype=np.float32)
         content_values[:, 0] = 0.0
         bounds = (10, 20, 14, 23)
@@ -267,13 +265,11 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.alpha_threshold = 0.25
         operator.fine_outline = False
         operator.source_object_name = "Source"
-        operator.input_path = __file__
         operator.shape = "FLAT"
         operator.gesture = "POLYLINE"
         operator.report = Mock()
         operator.edge_length = 0.1
-        operator._content_values = content_values
-        operator._content_bounds = bounds
+        operator._selection = self.image_selection.SelectionMask(content_values, bounds)
         operator._source_object = source
         operator._source_image = source.data
         operator.boundary_padding = 3.5
@@ -288,11 +284,6 @@ class CutoutOperatorsTest(BlenderTestCase):
                 "read_conversion_source",
                 return_value=(source, pixels),
             ),
-            patch.object(
-                self.cutout_main,
-                "material_color_image",
-                side_effect=lambda *args, **kwargs: nullcontext(color_image),
-            ) as color_result,
             patch.object(self.cutout_main, "create_cutout_shape") as create_shape,
         ):
             context = SimpleNamespace(scene=SimpleNamespace(
@@ -301,20 +292,14 @@ class CutoutOperatorsTest(BlenderTestCase):
             for result in results:
                 message = operator.response(context, result)
 
-        self.assertEqual(color_result.call_count, 2)
-        self.assertIs(color_result.call_args.args[0], source.data)
-        self.assertEqual(color_result.call_args.kwargs["bounds"], bounds)
-        np.testing.assert_array_equal(color_result.call_args.kwargs["rgba"], pixels.reshape(24, 24, 4)[::-1])
-
         self.assertEqual(message, "Flat is ready")
         self.assertEqual(operator.report.call_count, 2)
         operator.report.assert_called_with(
             {"WARNING"}, "The normal texture is missing; the shape was created without it",
         )
         self.assertEqual(create_shape.call_args.kwargs["gesture"], "POLYLINE")
-        self.assertIs(create_shape.call_args.args[4], content_values)
-        self.assertEqual(create_shape.call_args.args[5], bounds)
-        self.assertIs(create_shape.call_args.kwargs["color_image"], color_image)
+        self.assertIs(create_shape.call_args.args[4], operator._selection)
+        np.testing.assert_array_equal(create_shape.call_args.kwargs["source_rgba"], pixels.reshape(24, 24, 4)[::-1])
         self.assertEqual(create_shape.call_args.kwargs["alpha_threshold"], 0.25)
         self.assertIs(create_shape.call_args.kwargs["fine_outline"], False)
         self.assertEqual(create_shape.call_args.kwargs["boundary_padding"], 3.5)

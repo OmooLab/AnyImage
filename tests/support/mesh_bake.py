@@ -22,8 +22,8 @@ def add_post_bake_modifiers(obj, depth_image=None):
     group = bpy.data.node_groups.new("User geometry", "GeometryNodeTree")
     group.interface.new_socket(name="Geometry", in_out="INPUT", socket_type="NodeSocketGeometry")
     group.interface.new_socket(name="Geometry", in_out="OUTPUT", socket_type="NodeSocketGeometry")
-    offset = group.interface.new_socket(name="Offset", in_out="INPUT", socket_type="NodeSocketVector")
-    image = group.interface.new_socket(name="Depth Image", in_out="INPUT", socket_type="NodeSocketImage")
+    group.interface.new_socket(name="Offset", in_out="INPUT", socket_type="NodeSocketVector")
+    group.interface.new_socket(name="Depth Image", in_out="INPUT", socket_type="NodeSocketImage")
     source = group.nodes.new("NodeGroupInput")
     output = group.nodes.new("NodeGroupOutput")
     transform = group.nodes.new("GeometryNodeTransform")
@@ -36,8 +36,8 @@ def add_post_bake_modifiers(obj, depth_image=None):
     nodes = obj.modifiers.new("User nodes", "NODES")
     nodes.node_group = group
     nodes.show_render = False
-    set_modifier_input(nodes, offset.identifier, (4, 0, 0))
-    set_modifier_input(nodes, image.identifier, depth_image)
+    set_modifier_input(nodes, "Offset", (4, 0, 0))
+    set_modifier_input(nodes, "Depth Image", depth_image)
     disabled = obj.modifiers.new("Disabled bevel", "BEVEL")
     disabled.show_viewport = False
     empty = obj.modifiers.new("Empty nodes", "NODES")

@@ -1,6 +1,6 @@
 """Verify the public panorama entry and transactional Blender result handling."""
 
-import json
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -54,22 +54,25 @@ def test_world_conversion_requires_a_static_panorama_source(source):
     assert not ConvertToWorld.poll(bpy.context)
 
 
-def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkeypatch):
+def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkeypatch, capfd):
+    from anyimage.runtime import runtime
+
     source.data.scale(31, 20)
 
-    def submit(**parameters):
-        assert parameters["crop_bounds"] == (0, 2, 30, 17)
-        return {"CANCELLED"}
+    def submit(operator, context):
+        assert operator._source_object == source and operator._source_image == source.data
+        assert operator.crop_bounds == (0, 2, 30, 17)
+        return {"FINISHED"}
 
     monkeypatch.setattr(operators, "invoke_ai_setup_if_needed", lambda _operator: None)
-    monkeypatch.setattr(operators, "bpy", SimpleNamespace(
-        app=bpy.app,
-        ops=SimpleNamespace(anyimage=SimpleNamespace(generate_panorama=submit))))
-    operator = SimpleNamespace(report=Mock())
-
-    assert operators.ConvertToPanorama.execute(operator, bpy.context) == {"CANCELLED"}
-    operator.report.assert_called_once_with(
-        {"WARNING"}, "Panorama input cropped from 31 x 20 to 30 x 15")
+    monkeypatch.setattr(runtime, "can_submit", lambda: True)
+    monkeypatch.setattr(operators.JobOperator, "execute", submit)
+    bpy.utils.register_class(operators.ConvertToPanorama)
+    try:
+        assert bpy.ops.anyimage.convert_to_panorama() == {"FINISHED"}
+        assert "Panorama input cropped from 31 x 20 to 30 x 15" in capfd.readouterr().out
+    finally:
+        bpy.utils.unregister_class(operators.ConvertToPanorama)
 
 
 @pytest.mark.parametrize("image_source,size", [("MOVIE", (32, 16)), ("SEQUENCE", (32, 16)), ("FILE", (1, 32))])
@@ -86,15 +89,12 @@ def artifacts(tmp_path, source):
     rgba = np.ones((16, 32, 4), np.float32)
     rgba[..., :3] = 3
     write_float_exr(rgba, tmp_path / "depth.exr")
-    (tmp_path / "depth.json").write_text(json.dumps({"projection": "equirectangular", "image_size": [32, 16]}))
-    Image.new("RGB", (32, 16), (128, 128, 255)).save(tmp_path / "object-normal.png")
-    coverage = Image.new("L", (32, 16), 0)
-    coverage.paste(255, (0, 0, 8, 16))
-    coverage.save(tmp_path / "normal-coverage.png")
-    files = {"depth": "depth.exr", "depth_metadata": "depth.json", "object_normal": "object-normal.png",
-             "normal_coverage": "normal-coverage.png"}
+    normal = Image.new("RGBA", (32, 16), (128, 128, 255, 0))
+    normal.paste((128, 128, 255, 255), (0, 0, 8, 16))
+    normal.save(tmp_path / "object-normal.png")
+    files = {"depth": "depth.exr", "object_normal": "object-normal.png"}
     result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / files[key])
-    operator = SimpleNamespace(source_object_name=source.name, _source_object=source,
+    operator = SimpleNamespace(_source_object=source,
                                _source_image=source.data, _source_signature=image_content_signature(source.data),
                                crop_bounds=panorama_crop_bounds(*source.data.size))
     return result, operator
@@ -128,6 +128,7 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     source.empty_image_offset = (0.3, -0.8)
     undo = Mock(return_value={"FINISHED"})
     monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=undo))))
+    source_name = source.name
     obj = conversion.create_panorama_from_result(bpy.context, result, operator)
     assert obj["o_image_object"] is True
     assert obj.visible_shadow is False
@@ -139,7 +140,7 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Horizon Bend")) == pytest.approx(-0.1)
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Depth Split")) == pytest.approx(0.01)
     assert saved.name == "O Depth Panorama"
-    assert obj.name == operator.source_object_name and obj.type == "MESH"
+    assert obj.name == source_name and obj.type == "MESH"
     np.testing.assert_allclose(obj.location, matrix.translation, atol=1e-6)
     np.testing.assert_allclose(obj.scale, matrix.to_scale(), atol=1e-6)
     np.testing.assert_array_equal(obj.rotation_euler, (0, 0, 0))
@@ -222,7 +223,7 @@ def test_panorama_preserves_hdr_pixels_color_space_and_alpha(source, artifacts, 
     np.testing.assert_allclose(restored.pixels[:], rgba.ravel(), atol=1e-6)
 
 
-@pytest.mark.parametrize("failure", ["modifier", "depth_size", "stale", "replaced_image", "world", "finalize"])
+@pytest.mark.parametrize("failure", ["modifier", "depth_ratio", "depth_size", "stale", "replaced_image", "world", "finalize"])
 def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, monkeypatch, failure):
     result, operator = artifacts
     previous_world = bpy.data.worlds.new("Existing World")
@@ -240,15 +241,19 @@ def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, m
     elif failure == "replaced_image":
         operator._source_image = object()
     else:
-        (result.directory / "depth.json").write_text(json.dumps({"projection": "equirectangular", "image_size": [16, 8]}))
-    with pytest.raises((RuntimeError, ValueError)):
+        width = 8 if failure == "depth_ratio" else 16
+        write_float_exr(np.ones((8, width, 4), np.float32), result.file("depth"))
+    with pytest.raises((RuntimeError, ValueError), match="2:1" if failure == "depth_ratio" else None):
         conversion.create_panorama_from_result(bpy.context, result, operator)
     for name, values in before.items():
         assert set(getattr(bpy.data, name)) == values
     assert bpy.context.scene.world == previous_world
 
 
-def test_panorama_conversion_undo_restores_empty(source, artifacts):
+def test_panorama_conversion_undo_restores_empty(source, artifacts, monkeypatch):
+    from anyimage.runtime import runtime
+
+    monkeypatch.setattr(runtime, "can_submit", lambda: True)
     result, operator = artifacts
     name = source.name
     image_name = source.data.name
@@ -258,11 +263,11 @@ def test_panorama_conversion_undo_restores_empty(source, artifacts):
     def execute(self, context):
         conversion.create_panorama_from_result(context, result, operator)
         return {"FINISHED"}
-    with patch.object(operators.GeneratePanorama, "execute", execute):
-        bpy.utils.register_class(operators.GeneratePanorama)
+    with patch.object(operators.ConvertToPanorama, "execute", execute):
+        bpy.utils.register_class(operators.ConvertToPanorama)
         try:
             bpy.ops.ed.undo_push(message="Before Panorama")
-            assert bpy.ops.anyimage.generate_panorama("EXEC_DEFAULT") == {"FINISHED"}
+            assert bpy.ops.anyimage.convert_to_panorama("EXEC_DEFAULT") == {"FINISHED"}
             assert bpy.data.objects[name].type == "MESH"
             world_name = bpy.context.scene.world.name
             assert world_name != "Original World"
@@ -276,7 +281,7 @@ def test_panorama_conversion_undo_restores_empty(source, artifacts):
             assert bpy.data.objects[name].type == "MESH"
             assert not bpy.data.objects[name].children
         finally:
-            bpy.utils.unregister_class(operators.GeneratePanorama)
+            bpy.utils.unregister_class(operators.ConvertToPanorama)
 
 
 def test_depth_mask_default_removes_background_dome(source, artifacts, monkeypatch):
@@ -303,5 +308,11 @@ def test_depth_mask_default_removes_background_dome(source, artifacts, monkeypat
     layer = next(node for node in obj.active_material.node_tree.nodes if node.type == "GROUP")
     image = layer.inputs["Normal Texture"].links[0].from_node.image
     normal = np.asarray(image.pixels[:]).reshape(16, 32, 4)
+    np.testing.assert_allclose(normal[6, 4, :3], (128 / 255, 128 / 255, 1), atol=.02)
     np.testing.assert_allclose(normal[12, 16, :3], (128 / 255, 128 / 255, 1), atol=1e-6)
     assert normal[6, 16, 0] < .06
+    assert np.all(normal[..., 3] == 1)
+    with Image.open(BytesIO(image.packed_file.data)) as packed:
+        np.testing.assert_array_equal(
+            np.asarray(packed.convert("RGBA")), np.rint(normal[::-1] * 255).astype(np.uint8),
+        )

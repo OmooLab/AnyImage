@@ -5,7 +5,7 @@ import bpy
 from . import keymaps
 from .ai_preferences import Preferences
 from .ai_properties import Settings
-from .properties import register_color_references, unregister_color_references
+from .common.color_reference import register_color_references, unregister_color_references
 
 from .operators.clipboard_image import PasteClipboardImage
 from .operators.bake_mesh import BakeMesh
@@ -18,12 +18,8 @@ from .operators.cutout_tool.ai_operators import CutoutSelectionToShape
 from .operators.frame_tool import FrameImages
 from .operators.mask_tool import EditImageAlpha
 from .operators.rectify_tool import RectifyImagePerspective
-from .operators.depth_plane import (
-    GeneratePlaneGeometry,
-    ConvertToDepthPlane,
-    ConvertToReliefPlane,
-)
-from .operators.convert_to_panorama import GeneratePanorama, ConvertToPanorama
+from .operators.depth_plane import ConvertToDepthPlane, ConvertToReliefPlane
+from .operators.convert_to_panorama import ConvertToPanorama
 from .operators.ai_setup import (
     SetupAIServer,
     OpenAIEnvironmentSettings,
@@ -31,7 +27,7 @@ from .operators.ai_setup import (
     DownloadRequiredModels,
     UnloadModels,
 )
-from .operators.remove_background import RunBackgroundRemoval, RemoveImageBackground
+from .operators.remove_background import RemoveImageBackground
 from .operators.upscale import UpscaleImage
 
 from .ai_menus import ImageMenu, ObjectMenu, TextureNodeMenu
@@ -101,18 +97,15 @@ CLASSES = (
     FrameImages,
     EditImageAlpha,
     RectifyImagePerspective,
-    GeneratePlaneGeometry,
     ConvertToDepthPlane,
     ConvertToReliefPlane,
     CutoutSelectionToShape,
-    GeneratePanorama,
     ConvertToPanorama,
     SetupAIServer,
     OpenAIEnvironmentSettings,
     DownloadModel,
     DownloadRequiredModels,
     UnloadModels,
-    RunBackgroundRemoval,
     RemoveImageBackground,
     UpscaleImage,
 

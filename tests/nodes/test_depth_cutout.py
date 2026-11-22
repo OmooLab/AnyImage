@@ -4,7 +4,7 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 
 
 from tests.support.depth_surface import assert_no_boundary_ear_triangles
@@ -88,11 +88,7 @@ def test_depth_limit_tapers_balloon_profile_and_closes_the_cut_edge():
         result.to_mesh_clear()
 
     modifier = obj.modifiers[0]
-    set_modifier_input(
-        modifier,
-        modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE"),
-        0.5,
-    )
+    set_modifier_input(modifier, "Thickness", 0.5, subtype="NONE")
     obj.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     points, faces = evaluated(obj)
@@ -137,12 +133,11 @@ def test_normal_bias_reshapes_thickness_without_moving_zero_thickness(mode):
     set_value("Mode", mode)
     set_value("Front Inflation", .2)
     modifier = obj.modifiers[0]
-    thickness = modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE" if mode else "NONE")
-    bias = modifier_input_identifier(modifier.node_group, "Normal Bias")
+    thickness_subtype = "DISTANCE" if mode else "NONE"
 
     def result(amount, normal_bias):
-        set_modifier_input(modifier, thickness, amount)
-        set_modifier_input(modifier, bias, normal_bias)
+        set_modifier_input(modifier, "Thickness", amount, subtype=thickness_subtype)
+        set_modifier_input(modifier, "Normal Bias", normal_bias)
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
         return evaluated(obj)
@@ -226,10 +221,9 @@ def test_balloon_shell_converges_to_front_with_thickness():
     obj.data.attributes.new("o_balloon", "FLOAT", "POINT").data.foreach_set("value", profile)
     set_value("Mode", 0)
     modifier = obj.modifiers[0]
-    thickness = modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE")
 
     def amount(value):
-        set_modifier_input(modifier, thickness, value)
+        set_modifier_input(modifier, "Thickness", value, subtype="NONE")
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
         return evaluated(obj)
@@ -253,9 +247,7 @@ def test_depth_cutout_normal_reduction_caps_depth_scale_at_one(mode):
         "value", np.full(len(obj.data.vertices), 0.4),
     )
     modifier = obj.modifiers[0]
-    set_modifier_input(
-        modifier, modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE"), 0.3,
-    )
+    set_modifier_input(modifier, "Thickness", 0.3, subtype="NONE")
     set_value("Thickness", 0.3)
     set_value("Mode", mode)
     reductions = []

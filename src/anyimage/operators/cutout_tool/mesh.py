@@ -17,16 +17,6 @@ from .triangulation import face_edge_counts, triangulate
 NORMALIZED_EDGE_LENGTH = 32.0
 
 
-def boundary_vertices_from_faces(vertex_count, faces):
-    faces = np.asarray(faces, dtype=np.int32)
-    boundary = np.zeros(vertex_count, dtype=bool)
-    if not len(faces):
-        return boundary
-    edges, users = face_edge_counts(faces)
-    boundary[edges[users == 1]] = True
-    return boundary
-
-
 def support_mesh(points, faces, *, max_vertices=50000):
     """Split boundary chords once so every face has an interior height sample."""
     edges, counts = face_edge_counts(faces)
@@ -42,7 +32,7 @@ def support_mesh(points, faces, *, max_vertices=50000):
     if len(points) + len(chords) + isolated > max_vertices:
         raise ValueError("Cutout support vertex limit exceeded")
     if not len(chords) and not isolated:
-        return points, faces
+        return points, faces, boundary
     vertices = points.tolist() + points[chords].mean(axis=1).tolist()
     output = []
     for face in faces:
@@ -69,7 +59,9 @@ def support_mesh(points, faces, *, max_vertices=50000):
             vertices.append(points[face].mean(axis=0).tolist())
             pieces = [(face[i], face[(i+1) % 3], midpoint) for i in range(3)]
         output.extend(pieces)
-    return np.asarray(vertices), np.asarray(output, dtype=np.int32)
+    # Chord midpoints and face centers are interior vertices.
+    boundary = np.pad(boundary, (0, len(vertices) - len(points)))
+    return np.asarray(vertices), np.asarray(output, dtype=np.int32), boundary
 
 
 def prepare_mask(visible, transform, fine_outline):
@@ -124,7 +116,7 @@ def build_mesh(
     mask = prepare_mask(visible, transform, fine_outline)
     if not mask.any():
         raise ValueError("The Cutout selection contains no visible image pixels")
-    points, faces, components = [], [], []
+    points, faces, boundaries, components = [], [], [], []
     offset = 0
     for component in extract_selection_contours(mask):
         raw = separate_contour_contacts([np.asarray(c) @ transform for c in component])
@@ -148,16 +140,15 @@ def build_mesh(
             if not valid_contours(contours):
                 raise ValueError("Cutout simplified outline is invalid")
         vertices, triangles = triangulate(contours, NORMALIZED_EDGE_LENGTH)
-        vertices, triangles = support_mesh(
+        vertices, triangles, boundary = support_mesh(
             vertices, triangles, max_vertices=50000-offset
         )
         points.append(vertices @ inverse)
         faces.append(triangles + offset)
+        boundaries.append(boundary)
         if include_components:
             components.append(
                 (offset, offset + len(vertices), triangles, contours[0] @ inverse)
             )
         offset += len(vertices)
-    points, faces = np.concatenate(points), np.concatenate(faces)
-    boundary = boundary_vertices_from_faces(len(points), faces)
-    return points, faces, boundary, components, mask
+    return np.concatenate(points), np.concatenate(faces), np.concatenate(boundaries), components, mask

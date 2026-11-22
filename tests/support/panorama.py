@@ -2,7 +2,7 @@
 
 import bpy
 import numpy as np
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_panorama import ODepthPanorama
 
 
@@ -22,7 +22,7 @@ def panorama(depth=3, alpha=1, subdivide=2):
     modifier.node_group = group
 
     def set_value(name, value):
-        set_modifier_input(modifier, modifier_input_identifier(group, name), value)
+        set_modifier_input(modifier, name, value)
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
 

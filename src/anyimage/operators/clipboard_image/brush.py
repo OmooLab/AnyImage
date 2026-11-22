@@ -1,11 +1,12 @@
 """Bind pasted images to paint brushes and update their previews."""
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 import bpy
 
 from ...common.color_image import create_normalized_color_image
-from ...common.image import image_content_state, replace_image_content, restore_image_content
-from ...common.image_input import cleanup_image_input, save_image_input
-from ...common.viewport import redraw_area
+from ...common.image import COLOR_NORMALIZED_PROPERTY
 
 CLIPBOARD_TEXTURE_PROPERTY = "anyimage_clipboard_texture"
 DEFAULT_STENCIL_SIZE = 256.0
@@ -21,30 +22,28 @@ PAINT_SETTINGS_BY_MODE = {
 }
 
 
-class BrushPreviewError(RuntimeError):
-    pass
-
-
 def set_tool_texture(context, image):
     brush = active_brush(context)
     if brush is None:
         raise RuntimeError("The active tool does not provide an editable brush")
     brush = _ensure_editable_brush(context, brush)
 
-    content = None
+    normalized = None
     previous = (
         brush.texture, brush.texture_slot.texture,
         brush.texture_slot.map_mode, tuple(brush.stencil_dimension),
     )
     texture, is_new = None, False
     try:
-        if not image.is_float:
+        already_normalized = (
+            image.get(COLOR_NORMALIZED_PROPERTY) and image.colorspace_settings.name == "sRGB"
+            and image.alpha_mode == "PREMUL" and image.file_format == "PNG"
+        )
+        if not image.is_float and not already_normalized:
             normalized = create_normalized_color_image(image)
-            try:
-                content = image_content_state(image)
-                replace_image_content(image, normalized)
-            finally:
-                bpy.data.images.remove(normalized)
+            image = normalized
+        if not image.packed_file:
+            image.pack()
         texture, is_new = _find_or_create_image_texture(image)
         brush.texture = texture
         brush.texture_slot.texture = texture
@@ -64,34 +63,32 @@ def set_tool_texture(context, image):
         ) = previous
         if is_new:
             bpy.data.textures.remove(texture)
-        if content is not None:
-            restore_image_content(image, content)
+        if normalized is not None:
+            bpy.data.images.remove(normalized)
         raise RuntimeError(
             f"The active brush could not use the image texture: {error}"
         ) from error
-    try:
-        if getattr(context, "mode", "") == "PAINT_TEXTURE":
-            set_brush_preview(context, brush, image)
-    finally:
-        redraw_area(context)
     return texture
 
 
 def set_brush_preview(context, brush, image):
-    preview_path = None
     try:
-        preview_path = save_image_input(image)
-        with context.temp_override(id=brush):
-            result = bpy.ops.ed.lib_id_load_custom_preview(filepath=str(preview_path))
-        if result != {"FINISHED"}:
-            raise RuntimeError("Blender did not load the custom preview")
+        with TemporaryDirectory(prefix="anyimage-brush-") as directory:
+            path = str(Path(directory) / "preview.png")
+            original_format = image.file_format
+            try:
+                image.file_format = "PNG"
+                image.save(filepath=path, save_copy=True)
+            finally:
+                image.file_format = original_format
+            with context.temp_override(id=brush):
+                result = bpy.ops.ed.lib_id_load_custom_preview(filepath=path)
+            if result != {"FINISHED"}:
+                raise RuntimeError("Blender did not load the custom preview")
     except (OSError, RuntimeError, ValueError) as error:
-        raise BrushPreviewError(
+        raise RuntimeError(
             f"Texture pasted, but the brush preview could not be updated: {error}"
         ) from error
-    finally:
-        if preview_path is not None:
-            cleanup_image_input(preview_path)
 
 
 def _set_unbiased_paint_color(context, brush):

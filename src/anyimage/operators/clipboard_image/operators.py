@@ -7,8 +7,9 @@ from .actions import (
     replace_pasted_image,
     target_for_context,
 )
-from .cache import acquire_packed_image
-from .brush import BrushPreviewError
+from .cache import clipboard_source
+from ...common.viewport import redraw_area
+from .brush import active_brush, set_brush_preview
 from .clipboard import (
     ClipboardImageError,
     ClipboardImageUnavailable,
@@ -49,34 +50,29 @@ class PasteClipboardImage(bpy.types.Operator):
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
 
-        image = None
-        image_reused = False
-        replacement = None
-        paste_succeeded = False
         try:
             replacement = replacement_for_context(context)
-            image, image_reused = acquire_packed_image(image_data, suffix)
-            if replacement is not None:
-                replace_pasted_image(context, replacement, image)
-            else:
-                paste_image(context, image, self.location if self.properties.is_property_set("location") else None)
-            paste_succeeded = True
-        except BrushPreviewError as error:
-            self.report({"WARNING"}, str(error))
-            return {"FINISHED"}
+            with clipboard_source(image_data, suffix) as image:
+                if replacement is not None:
+                    pasted = replace_pasted_image(replacement, image)
+                else:
+                    location = self.location if self.properties.is_property_set("location") else None
+                    pasted = paste_image(context, image, location)
         except (OSError, RuntimeError, ValueError, TypeError) as error:
             self.report({"ERROR"}, bpy.app.translations.pgettext_rpt(
                 "Unable to paste clipboard image: {error}"
             ).format(error=bpy.app.translations.pgettext_rpt(str(error))))
             return {"CANCELLED"}
-        finally:
-            if (image is not None and not image_reused and image.users == 0
-                    and (replacement is not None or not paste_succeeded)
-                    and (replacement is None or image != replacement.image)):
-                bpy.data.images.remove(image)
 
-        name = replacement.image.name if replacement is not None else image.name
+        redraw_area(context)
+        if getattr(context, "mode", None) == "PAINT_TEXTURE" and target_for_context(context) == "TOOL_TEXTURE":
+            try:
+                set_brush_preview(context, active_brush(context), pasted)
+            except (RuntimeError, OSError, ValueError) as error:
+                self.report({"WARNING"}, str(error))
+                return {"FINISHED"}
+
         self.report({"INFO"}, bpy.app.translations.pgettext_rpt(
             "Replaced and packed {name}" if replacement is not None else "Pasted and packed {name}"
-        ).format(name=name))
+        ).format(name=pasted.name))
         return {"FINISHED"}

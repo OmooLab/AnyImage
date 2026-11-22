@@ -68,7 +68,7 @@ def test_cutout_menu_captures_fine_outline_before_later_redraw(monkeypatch):
 
 
 def cutout_source(name="Source", size=(2048, 1024)):
-    return SimpleNamespace(name=name, data=SimpleNamespace(size=size))
+    return SimpleNamespace(type="EMPTY", empty_display_type="IMAGE", name=name, data=SimpleNamespace(size=size))
 
 
 def test_cutout_pie_uses_two_local_shapes_without_ai(monkeypatch):
@@ -205,12 +205,11 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
     context.scene.anyimage_settings.cutout_gesture = "POLYLINE"
     source = cutout_source()
     monkeypatch.setattr(image_gesture, "active_view3d_tool_id", lambda _context: None)
-    monkeypatch.setattr(image_gesture, "require_image_empty", lambda _name: source)
     monkeypatch.setattr(image_gesture, "image_empty_bounds", lambda _source: None)
     monkeypatch.setattr(image_gesture, "screen_path_to_image_pixels", lambda path, *_args: path)
     monkeypatch.setattr(interaction, "ai_ready", lambda: False)
     operator = SimpleNamespace(
-        source_object_name=source.name, _source_matrix=None,
+        _source_object=source, _source_image=source.data, _source_matrix=None,
         active_tool_id="anyimage.cutout_lasso", _path=[(0, 0)],
         _polyline_confirm_type=None,
         _finish=Mock(),

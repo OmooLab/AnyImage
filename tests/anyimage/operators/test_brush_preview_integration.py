@@ -1,11 +1,22 @@
 import bpy
 import numpy as np
+import pytest
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from anyimage.operators.clipboard_image.brush import set_brush_preview
 from anyimage.operators.clipboard_image.actions import (
     ClipboardImageTarget, replace_pasted_image,
 )
+
+
+def test_failed_preview_export_restores_format_and_removes_directory():
+    image = SimpleNamespace(file_format="OPEN_EXR", save=Mock(side_effect=OSError("disk full")))
+    with pytest.raises(RuntimeError, match="disk full"):
+        set_brush_preview(bpy.context, None, image)
+    assert image.file_format == "OPEN_EXR"
+    assert not Path(image.save.call_args.kwargs["filepath"]).parent.exists()
 
 
 def test_packed_brush_replacement_updates_preview_and_survives_reopen(tmp_path):
@@ -15,6 +26,7 @@ def test_packed_brush_replacement_updates_preview_and_survives_reopen(tmp_path):
     pixels[:, :40] = (1.0, 0.0, 0.0, 1.0)
     image.pixels.foreach_set(pixels.ravel())
     image.pack()
+    image.file_format = "JPEG"
     original_pixels = tuple(image.pixels)
     original_format = image.file_format
     brush = bpy.data.brushes.new("Preview Brush", mode="TEXTURE_PAINT")
@@ -40,7 +52,8 @@ def test_packed_brush_replacement_updates_preview_and_survives_reopen(tmp_path):
             mode="PAINT_TEXTURE", scene=bpy.context.scene,
             temp_override=bpy.context.temp_override,
         )
-        replace_pasted_image(context, ClipboardImageTarget(image, texture, brush), replacement)
+        pasted = replace_pasted_image(ClipboardImageTarget(image, texture, brush), replacement)
+        set_brush_preview(context, brush, pasted)
         bpy.data.images.remove(replacement)
         assert brush.texture == texture and texture.image == image
         assert image.name == "Preview Source" and tuple(image.size) == (40, 80)

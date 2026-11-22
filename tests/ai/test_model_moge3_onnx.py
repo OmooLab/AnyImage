@@ -69,6 +69,19 @@ def test_inference_runs_requested_refinements_and_preserves_image_dimensions(opt
     assert options["fov_x"] == 90
 
 
+def test_normal_only_reads_backbone_normals_at_input_size():
+    backbone = object()
+    model_output = np.zeros((1, 3, 4, 8), np.float32)
+    model_output[:, 1] = 2
+    with patch.object(onnx_moge3, "run_session", return_value=[model_output]) as run:
+        normal = onnx_moge3.infer_normal(
+            onnx_moge3.Moge3Session(backbone, None), np.zeros((7, 11, 3), np.float32), 0,
+        )
+    run.assert_called_once()
+    assert run.call_args.args[:2] == (backbone, ["normal"])
+    np.testing.assert_array_equal(normal, np.broadcast_to([0, 1, 0], (7, 11, 3)))
+
+
 def test_bilinear_resize_preserves_edges_and_pixel_centers():
     image = np.array([[0, 2], [4, 6]], np.float32)
     assert np.array_equal(onnx_moge3._resize(image, 2, 2), image)

@@ -180,7 +180,7 @@ def straight_rgba(premultiplied):
 
 
 def warp_projective_pixels(premultiplied, quad, output_size):
-    """Sample a top-down premultiplied source into Blender-order straight RGBA."""
+    """Sample a top-down premultiplied source into top-down straight RGBA."""
     import numpy as np
 
     output_width, output_height = (int(value) for value in output_size)
@@ -205,4 +205,4 @@ def warp_projective_pixels(premultiplied, quad, output_size):
         points = np.stack((x, y), axis=-1)
         mapped = transform_homography(points, output_to_source)
         output[row_start:row_end] = sample_rgba(premultiplied, mapped)
-    return np.flipud(straight_rgba(output)).ravel()
+    return straight_rgba(output)

@@ -102,28 +102,9 @@ class TranslationsTest(BlenderTestCase):
         translate = self.fake_bpy.app.translations
         source = "Upscale ({width} × {height})"
         chinese = self.anyimage.TRANSLATIONS["zh_HANS"][("*", source)]
-        with patch.object(menu, "image_edit_owner", return_value=object()), \
-             patch.object(menu, "owner_image", return_value=SimpleNamespace(size=(640, 480))):
+        with patch.object(menu, "editable_still_image", return_value=SimpleNamespace(size=(640, 480))):
             self.assertEqual(menu.upscale_menu_label(None), "Upscale (1280 × 960)")
             with patch.object(translate, "pgettext_iface", return_value=chinese) as lookup:
                 self.assertEqual(menu.upscale_menu_label(None), "2倍高清（1280 × 960）")
                 lookup.assert_called_once_with(source)
             self.assertEqual(menu.upscale_menu_label(None), "Upscale (1280 × 960)")
-
-    def test_reference_gallery_uses_current_tooltip_translation(self):
-        properties = self.anyimage.properties
-        reference = SimpleNamespace(session_uid=1, name="Photo.png", size=(4, 3), as_pointer=lambda: 123)
-        translations = self.fake_bpy.app.translations
-        view = self.fake_bpy.context.preferences.view
-        with patch.object(properties, "color_reference_candidates", return_value=[reference]), \
-             patch.object(properties, "release_unused_color_references"), \
-             patch.object(properties, "color_reference_preview_icon", return_value=1):
-            english = properties.color_reference_items(None, None)
-            self.assertEqual(english[1][2], "Use Photo.png as the color reference")
-            with patch.object(translations, "locale", "zh_HANS"), \
-                 patch.object(translations, "pgettext_tip", return_value="使用 {name} 作为色彩参考图"):
-                chinese = properties.color_reference_items(None, None)
-                self.assertEqual(chinese[1][2], "使用 Photo.png 作为色彩参考图")
-            with patch.object(translations, "locale", "zh_HANS"), \
-                 patch.object(view, "use_translate_tooltips", False):
-                self.assertEqual(properties.color_reference_items(None, None)[1][2], english[1][2])

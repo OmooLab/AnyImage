@@ -1,7 +1,6 @@
 import bpy
 
-from .common.image_target import image_edit_owner
-from .common.image import owner_image
+from .common.image_target import editable_still_image
 from .operators.convert_to_plane import ConvertToPlane
 from .operators.convert_to_world import ConvertToWorld
 from .operators.color_match import MatchColorReference, SetColorReference
@@ -75,10 +74,7 @@ def draw_image_actions(layout, context):
 
 
 def upscale_menu_label(context):
-    owner = image_edit_owner(context)
-    if owner is None:
-        return "Upscale"
-    output_size = upscale_output_size(owner_image(owner))
+    output_size = upscale_output_size(editable_still_image(context))
     if output_size is None:
         return "Upscale"
     width, height = output_size

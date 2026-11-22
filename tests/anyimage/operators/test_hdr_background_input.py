@@ -6,8 +6,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.operators.remove_background.hdr import HdrBackgroundInput
-from anyimage.common.hdr_image import build_recognition_rgba, save_hdr_image
+from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.common.hdr_image import save_hdr_image
 from anyimage.common.image import image_pixels, image_content_state, image_rgba, restore_image_content
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
@@ -16,33 +16,31 @@ from tests.support.image_texture import texture, texture_context
 from tests.support.hdr_image import hdr_texture
 
 
-def test_recognition_preview_preserves_byte_rounding_at_half_step():
-    rgba = np.array([[[
-        0.0004766954225488007, 0.0009378092945553362,
-        0.9160183072090149, 0.9861790537834167,
-    ]]], dtype=np.float32)
-
-    preview = build_recognition_rgba(rgba, "PREMUL")
-
-    np.testing.assert_array_equal(
-        np.rint(preview * 255).astype(np.uint8), [[[1, 3, 237, 255]]],
-    )
+def test_hdr_recognition_png_has_straight_color_and_source_opacity(hdr_texture):
+    source = hdr_texture.image
+    rgba = np.array([[[1, 1, 1, .5], [2, 2, 2, 1]]], dtype=np.float32)
+    snapshot = BackgroundInput.prepare(source, rgba)
+    try:
+        with Image.open(snapshot.path) as preview:
+            np.testing.assert_array_equal(np.asarray(preview), [[[213, 213, 213, 128], [213, 213, 213, 255]]])
+    finally:
+        cleanup_image_input(snapshot.path)
 
 
 def test_failed_hdr_undo_preserves_pixels_with_unused_alpha(hdr_texture, tmp_path):
-    from anyimage.operators.remove_background import hdr
+    from anyimage.operators.remove_background import image as background_image
 
     image = hdr_texture.image
     image.alpha_mode = "NONE"
     original = image_pixels(image)
     original[3::4] = 0.25
     image.pixels.foreach_set(original)
-    target, pixels = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
-    snapshot = HdrBackgroundInput.prepare(image, pixels)
+    target, rgba = ImageEditTarget.capture(texture_context(hdr_texture))
+    snapshot = BackgroundInput.prepare(image, rgba)
     path = tmp_path / "alpha.npy"
     np.save(path, np.ones((3, 4), np.float32))
     try:
-        with patch.object(hdr, "bpy", SimpleNamespace(
+        with patch.object(background_image, "bpy", SimpleNamespace(
             data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **_: {"CANCELLED"})),
         )), pytest.raises(RuntimeError, match="Undo"):
             snapshot.apply(target, path, prepare_undo=True)
@@ -53,12 +51,12 @@ def test_failed_hdr_undo_preserves_pixels_with_unused_alpha(hdr_texture, tmp_pat
 
 
 def test_queued_hdr_results_follow_successful_target_replacements(hdr_texture, tmp_path):
-    from anyimage.operators.remove_background import hdr
+    from anyimage.operators.remove_background import image as background_image
 
-    first_target, pixels = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
-    first = HdrBackgroundInput.prepare(first_target.image, pixels)
-    second_target, pixels = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
-    second = HdrBackgroundInput.prepare(second_target.image, pixels)
+    first_target, rgba = ImageEditTarget.capture(texture_context(hdr_texture))
+    first = BackgroundInput.prepare(first_target.image, rgba)
+    second_target, rgba = ImageEditTarget.capture(texture_context(hdr_texture))
+    second = BackgroundInput.prepare(second_target.image, rgba)
     assert first_target is second_target
     before = image_rgba(first_target.image).copy()
     path = tmp_path / "alpha.npy"
@@ -76,7 +74,7 @@ def test_queued_hdr_results_follow_successful_target_replacements(hdr_texture, t
             return {"FINISHED"}
 
         np.save(path, np.full(before.shape[:2], 0.7, np.float32))
-        with patch.object(hdr, "bpy", SimpleNamespace(
+        with patch.object(background_image, "bpy", SimpleNamespace(
             data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=push_undo)),
         )):
             result = second.apply(second_target, path, prepare_undo=True)
@@ -121,8 +119,8 @@ def test_hdr_commit_keeps_float_pixels_and_transaction(hdr_texture, tmp_path, so
     if shared:
         other = texture.id_data.nodes.new("ShaderNodeTexImage")
         other.image = source
-    target = ImageEditTarget.capture(context)
-    snapshot = HdrBackgroundInput.prepare(source, image_pixels(source))
+    target, captured_rgba = ImageEditTarget.capture(context)
+    snapshot = BackgroundInput.prepare(source, captured_rgba)
     original_state = image_content_state(source)
     alpha = np.linspace(0.03, 0.91, 12, dtype=np.float32).reshape(3, 4)
     alpha_path = tmp_path / "alpha.npy"
@@ -160,8 +158,8 @@ def test_hdr_commit_keeps_float_pixels_and_transaction(hdr_texture, tmp_path, so
 
 @pytest.mark.parametrize("invalid", ["shape", "dtype", "nan", "range", "corrupt", "source", "colorspace", "binding"])
 def test_hdr_rejects_invalid_result_and_source_changes(hdr_texture, tmp_path, invalid):
-    target, pixels = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
-    snapshot = HdrBackgroundInput.prepare(target.image, pixels)
+    target, rgba = ImageEditTarget.capture(texture_context(hdr_texture))
+    snapshot = BackgroundInput.prepare(target.image, rgba)
     alpha = np.ones((3, 4), np.float32)
     if invalid == "shape": alpha = alpha[:1]
     if invalid == "dtype": alpha = alpha.astype(np.float64)
@@ -187,24 +185,17 @@ def test_hdr_rejects_invalid_result_and_source_changes(hdr_texture, tmp_path, in
 def test_hdr_preview_is_fixed_and_preserves_source(hdr_texture):
     image = hdr_texture.image
     before = image_rgba(image).copy()
-    first = HdrBackgroundInput.prepare(image, image_pixels(image))
+    first = BackgroundInput.prepare(image, image_rgba(image))
     bpy.context.scene.view_settings.view_transform = "Standard"
     bpy.context.scene.view_settings.exposure = 7
-    second = HdrBackgroundInput.prepare(image, image_pixels(image))
+    second = BackgroundInput.prepare(image, image_rgba(image))
     try:
         with Image.open(first.path) as a, Image.open(second.path) as b:
             np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
         np.testing.assert_array_equal(image_rgba(image), before)
-        np.testing.assert_array_equal(build_recognition_rgba(np.zeros((1, 1, 4), np.float32), "PREMUL"), [[[0, 0, 0, 1]]])
     finally:
         cleanup_image_input(first.path)
         cleanup_image_input(second.path)
-
-
-def test_hdr_rejects_animation_before_export(hdr_texture):
-    hdr_texture.image.source = "SEQUENCE"
-    with pytest.raises(RuntimeError, match="still images"):
-        HdrBackgroundInput.prepare(hdr_texture.image, image_pixels(hdr_texture.image))
 
 
 def test_hdr_export_failure_releases_blender_resources(hdr_texture, tmp_path):
@@ -225,11 +216,11 @@ def test_straight_exr_only_changes_alpha(hdr_texture, tmp_path):
     hdr_texture.image = source
     before = image_rgba(source).copy()
     np.testing.assert_allclose(before[..., :3], encoded[..., :3] * encoded[..., 3:4], atol=1e-7)
-    snapshot = HdrBackgroundInput.prepare(source, image_pixels(source))
+    snapshot = BackgroundInput.prepare(source, image_rgba(source))
     alpha_path = tmp_path / "alpha.npy"
     np.save(alpha_path, np.full((3, 4), 0.3, np.float32))
     try:
-        result = snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture)), alpha_path)
+        result = snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture))[0], alpha_path)
         rgba = image_rgba(result)
         np.testing.assert_array_equal(rgba[..., :3], before[..., :3])
         np.testing.assert_allclose(rgba[..., 3], before[..., 3] * 0.3, atol=1e-7)
@@ -238,24 +229,21 @@ def test_straight_exr_only_changes_alpha(hdr_texture, tmp_path):
 
 
 def test_hdr_failed_commit_restores_unsaved_source(hdr_texture, tmp_path):
-    target, pixels = ImageEditTarget.capture_with_pixels(texture_context(hdr_texture))
-    snapshot = HdrBackgroundInput.prepare(target.image, pixels)
+    target, rgba = ImageEditTarget.capture(texture_context(hdr_texture))
+    snapshot = BackgroundInput.prepare(target.image, rgba)
     before = image_rgba(target.image).copy()
     original_source = target.image.source
     alpha_path = tmp_path / "alpha.npy"
     np.save(alpha_path, np.full((3, 4), 0.3, np.float32))
-    calls = 0
+    pack_result = targets.pack_image_result
 
-    def fail_first(image, state):
-        nonlocal calls
-        calls += 1
-        restore_image_content(image, state)
-        if calls == 1:
-            raise RuntimeError("Commit failed")
+    def fail_after_write(*args):
+        pack_result(*args)
+        raise RuntimeError("Commit failed")
 
     count = len(bpy.data.images)
     try:
-        with patch.object(targets, "restore_image_content", side_effect=fail_first):
+        with patch.object(targets, "pack_image_result", side_effect=fail_after_write):
             with pytest.raises(RuntimeError, match="Commit failed"):
                 snapshot.apply(target, alpha_path, prepare_undo=True)
         np.testing.assert_array_equal(image_rgba(target.image), before)

@@ -8,7 +8,7 @@ from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout import OCutout
 from tests.support.nodes import CUTOUT_BUILDERS
 
 
-from anyimage.common.object import modifier_input_identifier, set_modifier_input
+from anyimage.common.object import set_modifier_input
 
 
 @pytest.mark.parametrize("shape", ("SOLID", "DEPTH_SOLID"))
@@ -39,7 +39,7 @@ def test_cutout_thickness_modes():
     for mode, thickness in ((0, 0), (0, 1), (1, 0), (1, 0.4)):
         for name, value in (("Mode", mode), ("Thickness", thickness)):
             subtype = ("DISTANCE" if mode else "NONE") if name == "Thickness" else None
-            set_modifier_input(modifier, modifier_input_identifier(modifier.node_group, name, subtype=subtype), value)
+            set_modifier_input(modifier, name, value, subtype=subtype)
         obj.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
         evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())

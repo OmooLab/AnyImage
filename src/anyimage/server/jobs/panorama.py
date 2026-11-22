@@ -1,14 +1,12 @@
 """Generate radial depth and object normal textures from an RGBA panorama."""
 
-import json
-
 from ..media.exr import write_float_exr
 from ..geometry.panorama import (
     camera_bases, merge_distances, merge_normals, pad_panorama_seam,
     panorama_sample_coordinates, sample_panorama, view_rays,
 )
 from ..geometry.panorama_relief import refine_panorama_normals
-from ..media.input import open_image, validate_input_path
+from ..media.input import open_image
 from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, normalized_max_input_size
 from ..models import model_adapter
 
@@ -21,19 +19,16 @@ def run(context, parameters):
     from PIL import Image
 
     context.check_cancelled()
-    input_path = validate_input_path(parameters["input"])
     maximum = normalized_max_input_size(parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE))
     if maximum < 2:
         raise ValueError("Panorama geometry requires a maximum AI input size of at least 2 pixels")
     context.directory.mkdir(parents=True, exist_ok=True)
     outputs = {
         "depth": context.directory / "depth.exr",
-        "depth_metadata": context.directory / "depth.json",
         "object_normal": context.directory / "object-normal.png",
-        "normal_coverage": context.directory / "normal-coverage.png",
     }
     try:
-        with open_image(input_path) as opened:
+        with open_image(parameters["input"]) as opened:
             if opened.width != opened.height * 2:
                 raise ValueError("Panorama conversion requires one static 2:1 image")
             with opened.convert("RGBA") as source:
@@ -100,12 +95,10 @@ def run(context, parameters):
         normal, coverage = refine_panorama_normals(distance, normal, valid_depth,
                                                     detail_strength=NORMAL_DETAIL_STRENGTH,
                                                     cancel_check=context.check_cancelled)
-        encoded = np.clip(np.rint((normal + 1) * 127.5), 0, 255).astype(np.uint8)
+        encoded = np.empty((height, width, 4), dtype=np.uint8)
+        encoded[..., :3] = np.clip(np.rint((normal + 1) * 127.5), 0, 255)
+        encoded[..., 3] = np.rint(coverage * 255)
         Image.fromarray(encoded).save(outputs["object_normal"])
-        Image.fromarray(np.rint(coverage * 255).astype(np.uint8)).save(outputs["normal_coverage"])
-        outputs["depth_metadata"].write_text(json.dumps({
-            "projection": "equirectangular", "image_size": [width, height],
-        }, separators=(",", ":")), encoding="utf-8")
         context.check_cancelled()
         context.progress(1.0, "Panorama conversion data is ready")
         return {key: path.name for key, path in outputs.items()}

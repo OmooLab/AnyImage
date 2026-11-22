@@ -1,4 +1,4 @@
-"""Prepare and commit HDR background-removal inputs."""
+"""Prepare recognition input and apply the predicted mask to the submitted colors."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,37 +8,36 @@ import bpy
 import numpy as np
 
 from ...common.image import (
+    create_image_edit_result,
+    has_other_image_user,
     image_content_signature,
+    pack_image_result,
     image_content_state,
     image_rgba,
-    is_animated_image,
     restore_image_content,
 )
-from ...common.image_input import prepare_input_png
-from ...common.image import has_other_image_user
-from ...common.hdr_image import build_recognition_rgba, create_packed_hdr_image
+from ...common.job_image import prepare_recognition_input
+from ...common.hdr_image import create_hdr_image
 
 
 @dataclass
-class HdrBackgroundInput:
-    """Own the submitted pixels and color interpretation of an HDR still."""
+class BackgroundInput:
+    """Keep the submitted pixels for applying the predicted opacity."""
 
     rgba: np.ndarray
     alpha_mode: str
     path: Path
 
     @classmethod
-    def prepare(cls, image, pixels):
-        if is_animated_image(image):
-            raise RuntimeError("HDR background removal supports still images only")
-        if image.source not in {"FILE", "GENERATED"}:
-            raise RuntimeError("HDR background removal requires a file or generated image")
-        if image.colorspace_settings.is_data:
-            raise RuntimeError("HDR background removal requires a color image with opacity alpha")
-        rgba = image_rgba(image, pixels)
-        if not np.isfinite(rgba).all() or np.any((rgba[..., 3] < 0) | (rgba[..., 3] > 1)):
-            raise RuntimeError("HDR image contains invalid color or alpha values")
-        path = prepare_input_png(build_recognition_rgba(rgba, image.alpha_mode))
+    def prepare(cls, image, rgba):
+        if image.is_float:
+            if image.source not in {"FILE", "GENERATED"}:
+                raise RuntimeError("HDR background removal requires a file or generated image")
+            if image.colorspace_settings.is_data:
+                raise RuntimeError("HDR background removal requires a color image with opacity alpha")
+            if not np.isfinite(rgba).all() or np.any((rgba[..., 3] < 0) | (rgba[..., 3] > 1)):
+                raise RuntimeError("HDR image contains invalid color or alpha values")
+        path = prepare_recognition_input(image, rgba)
         return cls(rgba, image.alpha_mode, path)
 
     def apply(self, target, alpha_path, *, prepare_undo=False):
@@ -59,8 +58,13 @@ class HdrBackgroundInput:
         if self.alpha_mode == "NONE":
             rgba[..., 3] = 1
         rgba[..., 3] *= alpha
+        if not image.is_float:
+            result = create_image_edit_result(image, rgba[::-1].ravel(), rgba.shape[1::-1])
+            if self.alpha_mode == "NONE":
+                result.alpha_mode = "STRAIGHT"
+            return target.commit(result)
         with tempfile.TemporaryDirectory(prefix="anyimage-hdr-result-") as directory:
-            result = create_packed_hdr_image(
+            result = create_hdr_image(
                 rgba, image.name, Path(directory) / "result.exr", alpha_mode="CHANNEL_PACKED",
             )
             original_state = None
@@ -74,12 +78,12 @@ class HdrBackgroundInput:
                     if baseline_alpha_mode == "NONE":
                         baseline_rgba = baseline_rgba.copy()
                         baseline_rgba[..., 3] = 1
-                    baseline = create_packed_hdr_image(
+                    baseline = create_hdr_image(
                         baseline_rgba, image.name, Path(directory) / "source.exr",
                         alpha_mode="CHANNEL_PACKED" if baseline_alpha_mode == "CHANNEL_PACKED" else "PREMUL",
                     )
                     try:
-                        restore_image_content(image, image_content_state(baseline))
+                        pack_image_result(baseline, image)
                     finally:
                         bpy.data.images.remove(baseline)
                     target.content_signature = image_content_signature(image)

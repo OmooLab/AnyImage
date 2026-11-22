@@ -96,10 +96,10 @@ def apply_frame(context, source_objects, frame_quad):
             }
             if len(source_objects) > 1:
                 buffers[image]["pixels"] = premultiplied_rgba(pixels, (width, height))
-        source.update(buffers[image], active=is_active, object=obj, name=obj.name)
+        source.update(buffers[image], active=is_active, name=obj.name)
         sources.append(source)
     pixels = composite_frame_pixels(sources, frame_quad, output_size)
-    depth_location = frame_depth_location(active_source, active_overlap)
+    depth_location = frame_depth_location(active_source, active_overlap, active.matrix_world.translation)
     matrix, display_size = frame_result_transform(
         frame_quad,
         depth_location,

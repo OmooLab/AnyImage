@@ -5,7 +5,6 @@ from unittest.mock import patch
 import bpy
 import numpy as np
 import pytest
-from PIL import Image
 
 from anyimage.operators import ai_setup
 from anyimage.operators.convert_to_panorama import operators as panorama
@@ -33,7 +32,7 @@ def test_native_server_controls_are_disabled_during_migration():
     (conversion, conversion.ConvertToReliefPlane, "RELIEF"),
     (panorama, panorama.ConvertToPanorama, None),
 ])
-def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, operator, plane_type, monkeypatch, capfd):
+def test_geometry_job_caps_hdr_before_submission_and_cleans_failed_input(module, operator, plane_type, monkeypatch, capfd):
     from anyimage.common import ai
     from anyimage.runtime import runtime
 
@@ -43,22 +42,22 @@ def test_geometry_job_submits_hdr_as_png_and_cleans_failed_input(module, operato
     def reject(job_type, parameters, **kwargs):
         path = Path(parameters["input"])
         assert list(path.parent.iterdir()) == [path]
-        assert parameters["max_input_size"] == 1024
+        assert "max_input_size" not in parameters
         assert parameters["resolution_level"] == 2
         assert parameters["model"] == "MOGE3_VITL" and parameters["refine_steps"] == 3
         assert parameters.get("plane_type") == plane_type
-        with Image.open(path) as png:
-            assert png.format == "PNG" and png.mode == "RGBA"
-            assert png.size == ((4, 3) if plane_type else (4, 2))
-            assert png.getpixel((0, 0))[3] == 0
-            np.testing.assert_allclose(png.getpixel((1, 1)), (231, 231, 231, 128), atol=1)
+        rgba = np.load(path)
+        assert rgba.dtype == np.float32
+        assert rgba.shape == ((2, 3, 4) if plane_type else (1, 2, 4))
+        assert parameters.get("output_size") == ((4, 3) if plane_type else None)
+        np.testing.assert_allclose(rgba[-1, -1], (0.9063, 0.9063, 0.9063, .5), atol=.06)
         inputs.append(path)
         raise RuntimeError(reason)
 
     monkeypatch.setattr(runtime, "submit", reject)
     monkeypatch.setattr(ai, "require_environment", lambda: None)
     monkeypatch.setattr(ai, "require_model", lambda model: None)
-    monkeypatch.setattr(ai, "configured_max_ai_input_size", lambda context: 1024)
+    monkeypatch.setattr(module, "configured_max_ai_input_size", lambda context: 3)
     monkeypatch.setattr(ai, "configured_geometry_model", lambda context: "MOGE3_VITL")
     monkeypatch.setattr(ai, "addon_preferences", lambda context: SimpleNamespace(geometry_resolution_level=2, geometry_refine_steps=3))
     monkeypatch.setattr(operator, "poll", classmethod(lambda cls, context: True))

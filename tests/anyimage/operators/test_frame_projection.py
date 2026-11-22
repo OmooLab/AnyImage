@@ -1,5 +1,4 @@
 import unittest
-from types import SimpleNamespace
 from anyimage.operators.frame_tool import projection as frame_projection
 import numpy as np
 import pytest
@@ -243,32 +242,20 @@ class FrameProjectionTest(unittest.TestCase):
             (100, 100),
             perspective=True,
         )
-        source.update(
-            {
-                "image_size": (100, 100),
-                "object": SimpleNamespace(matrix_world=matrix_world),
-            }
-        )
         frame = ((50.0, 100.0), (100.0, 100.0), (100.0, 0.0), (50.0, 0.0))
         overlap = frame_projection.frame_source_overlap(source, frame)
-        depth_location = frame_projection.frame_depth_location(source, overlap)
+        depth_location = frame_projection.frame_depth_location(source, overlap, matrix_world[:3, 3])
 
         self.assertLess(depth_location[2], 0.0)
 
 
     def test_frame_keeps_positive_active_origin_as_result_depth_location(self):
-        marker = SimpleNamespace(copy=lambda: "active-origin")
-        source = {
-            "object": SimpleNamespace(
-                matrix_world=SimpleNamespace(translation=marker),
-            ),
-            "origin_depth": 1e-14,
-            "perspective": True,
-        }
+        source = {"origin_depth": 1e-14, "perspective": True}
+        origin = (1.0, 2.0, -1e-14)
 
         self.assertEqual(
-            frame_projection.frame_depth_location(source, ((0.0, 0.0),)),
-            "active-origin",
+            frame_projection.frame_depth_location(source, ((0.0, 0.0),), origin),
+            origin,
         )
 
 

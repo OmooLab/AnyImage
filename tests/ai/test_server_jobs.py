@@ -22,7 +22,7 @@ class ServerJobsTest(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 context = FakeJobContext(root / "result", "generate_depth_plane_geometry")
-                parameters = {"input": str(root / "input.png"), "plane_type": plane_type}
+                parameters = {"input": str(root / "input.npy"), "plane_type": plane_type}
                 with patch.object(self.depth_plane_job, "generate_moge_artifacts") as generate:
                     self.assertIs(self.depth_plane_job.run(context, parameters), generate.return_value)
             generate.assert_called_once_with(

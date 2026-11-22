@@ -190,7 +190,7 @@ def pixel_digest(pixels):
     import numpy as np
 
     pixels = np.asarray(pixels)
-    digest = hashlib.blake2b(digest_size=32)
+    digest = hashlib.sha256()
     if pixels.flags.c_contiguous:
         digest.update(memoryview(pixels))
     else:

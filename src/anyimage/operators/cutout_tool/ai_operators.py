@@ -2,6 +2,7 @@
 
 import bpy
 
+from ...ai_preferences import configured_max_ai_input_size
 from ...preferences import (
     DEFAULT_CUTOUT_BOUNDARY_PADDING,
     MAX_CUTOUT_BOUNDARY_PADDING,
@@ -14,8 +15,7 @@ from ...properties import (
     cutout_edge_length_property,
 )
 from ...runtime import JobOperator
-from ...common.job_image import prepare_recognition_input
-from ...common.image_input import cleanup_image_input
+from ...common.image_input import cleanup_image_input, prepare_moge_input
 from ...common.ai import (
     invoke_ai_setup_if_needed,
     geometry_job_parameters,
@@ -95,11 +95,15 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
 
     def request(self, context):
         parameters = geometry_job_parameters(context)
-        self._input_path = prepare_recognition_input(self._source_image, self._input_rgba)
+        output_size = self._input_rgba.shape[1::-1]
+        self._input_path = prepare_moge_input(
+            self._source_image, self._input_rgba, max_input_size=configured_max_ai_input_size(context),
+        )
         self._input_rgba = None
         return {
             **parameters,
             "input": str(self._input_path),
+            "output_size": output_size,
             "generate_depth": self.shape in DEPTH_CUTOUT_SHAPES,
         }
 

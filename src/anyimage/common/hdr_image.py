@@ -1,5 +1,7 @@
 """Encode HDR images and build their recognition previews."""
 
+from concurrent.futures import ThreadPoolExecutor
+
 import bpy
 import numpy as np
 
@@ -49,17 +51,31 @@ def create_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
         raise
 
 
-def build_recognition_rgba(rgba, alpha_mode):
-    """Tone-map scene-linear pixels for sRGB recognition without changing the source."""
-    alpha = 1.0 if alpha_mode == "NONE" else rgba[..., 3:4]
-    rgb = rgba[..., :3].astype(np.float64)
-    if alpha_mode not in {"CHANNEL_PACKED", "NONE"}:
-        rgb = np.divide(rgb, alpha, out=np.zeros_like(rgb), where=alpha > 0)
-    rgb = np.maximum(rgb, 0)
-    luminance = rgb @ np.array([0.2126, 0.7152, 0.0722])
-    rgb /= 1 + luminance[..., None]
-    encoded = linear_rgb_to_srgb(rgb)
+def build_recognition_rgba(image, rgba):
+    """Encode Blender's linear float pixels for recognition, preserving sRGB source brightness."""
+    alpha_mode = image.alpha_mode
+    tone_map = image.colorspace_settings.name != "sRGB"
     preview = np.empty(rgba.shape, dtype=np.float32)
-    preview[..., :3] = np.clip(encoded, 0, 1)
-    preview[..., 3:4] = alpha
+
+    def map_rows(top):
+        rows = slice(top, top + 64)
+        source = rgba[rows]
+        if not np.isfinite(source).all():
+            raise ValueError("HDR recognition requires finite RGBA values")
+        alpha = source[..., 3]
+        rgb = np.array(source[..., :3].transpose(2, 0, 1), dtype=np.float64, order="C")
+        np.maximum(rgb, 0, out=rgb)
+        divisor = 1.0 if alpha_mode in {"CHANNEL_PACKED", "NONE"} else np.where(alpha > 0, alpha, np.inf)
+        if tone_map:
+            # Unpremultiplying then tone mapping gives RGB / (alpha + luminance).
+            luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+            divisor = divisor + luminance
+        rgb /= divisor
+        encoded = linear_rgb_to_srgb(rgb.astype(np.float32))
+        preview[rows, :, :3] = np.clip(encoded, 0, 1).transpose(1, 2, 0)
+        preview[rows, :, 3] = 1 if alpha_mode == "NONE" else np.clip(alpha, 0, 1)
+
+    # Workers only touch independent NumPy rows; all Blender access stays on the caller.
+    with ThreadPoolExecutor(max_workers=4) as workers:
+        list(workers.map(map_rows, range(0, len(rgba), 64)))
     return preview

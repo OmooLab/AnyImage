@@ -1,5 +1,6 @@
 """Palette-anchor chroma transfer with independent quantile lightness matching."""
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple
 
 import numpy as np
@@ -130,14 +131,20 @@ def build_color_match(mapping, target_rgba, *, target_float=False):
     lab = linear_rgb_to_oklab(rgba[..., :3])
     flat = lab.reshape(-1, 3)
     chroma_delta = np.empty((len(flat), 2), dtype=np.float32)
-    for start in range(0, len(flat), 65_536):
-        chunk = flat[start:start + 65_536]
+    chunk_size = 65_536
+
+    def match_chroma(start):
+        chunk = flat[start:start + chunk_size]
         distance = np.sum((chunk[:, None, 1:] - anchors[None, :, 1:]) ** 2, axis=2)
         distance += 0.1 * (chunk[:, None, 0] - anchors[None, :, 0]) ** 2
         distance -= distance.min(axis=1, keepdims=True)
         membership = np.exp(-distance / (2 * 0.085**2))
         membership /= membership.sum(axis=1, keepdims=True)
         chroma_delta[start:start + len(chunk)] = membership @ mapping.anchor_delta
+
+    with ThreadPoolExecutor(max_workers=4) as workers:
+        list(workers.map(match_chroma, range(0, len(flat), chunk_size)))
+
     source, destination = mapping.source_lightness, mapping.reference_lightness
     values = lab[..., 0]
     if len(source) == 1:

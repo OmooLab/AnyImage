@@ -97,7 +97,7 @@ def test_periodic_fusion_removes_view_scale_offsets():
 
 @pytest.fixture
 def panorama_job(tmp_path, monkeypatch):
-    source = tmp_path / "source.png"
+    source = tmp_path / "source.npy"
     context = FakeJobContext(tmp_path / "result", "generate_panorama_geometry",
                              SimpleNamespace(directory=lambda _: tmp_path, get_session=lambda *_: (object(), 0.0)))
     calls, pixels = [], []
@@ -111,8 +111,7 @@ def panorama_job(tmp_path, monkeypatch):
     monkeypatch.setattr(onnx, "infer", infer)
     write = job.write_float_exr
     monkeypatch.setattr(job, "write_float_exr", lambda rgba, path: (pixels.append(rgba.copy()), write(rgba, path))[1])
-    parameters = {"input": str(source), "model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 3,
-                  "max_input_size": 128}
+    parameters = {"input": str(source), "model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 3}
     return source, context, parameters, calls, pixels
 
 
@@ -121,8 +120,7 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     image = np.full((32, 64, 4), 255, np.uint8)
     image[:24, :, 3] = 0
     image[26:28, :, 3] = 128
-    Image.fromarray(image.repeat(2, axis=0).repeat(2, axis=1)).save(source)
-    parameters["max_input_size"] = 65
+    np.save(source, image.astype(np.float32) / 255)
     result = job.run(context, parameters)
     assert 0 < len(calls) < 12
     assert all(level == 3 and opts["fov_x"] == 90 for _, level, opts in calls)
@@ -142,7 +140,7 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
 def test_job_writes_fused_depth_and_object_normals(panorama_job, monkeypatch):
     source, context, parameters, _, pixels = panorama_job
     width, height = 70, 35
-    Image.new("RGBA", (width, height), (255, 255, 255, 255)).save(source)
+    np.save(source, np.ones((height, width, 4), np.float32))
     expected = np.array((.2, -.3, 1.0))
     expected /= np.linalg.norm(expected)
     directions = geometry.panorama_directions(width, height)
@@ -217,8 +215,10 @@ def test_refinement_handles_partial_sky_coverage_and_cancellation():
 @pytest.mark.parametrize("kind", ["transparent", "invalid_model", "wrong_ratio", "cancel", "normal_write"])
 def test_failed_jobs_leave_no_partial_artifacts(panorama_job, monkeypatch, kind):
     source, context, parameters, calls, _ = panorama_job
-    Image.new("RGBA", (64 if kind != "wrong_ratio" else 32, 32),
-              (255, 255, 255, 0 if kind == "transparent" else 255)).save(source)
+    rgba = np.ones((32, 32 if kind == "wrong_ratio" else 64, 4), np.float32)
+    if kind == "transparent":
+        rgba[..., 3] = 0
+    np.save(source, rgba)
     if kind == "invalid_model":
         def invalid_prediction(session, color, level, **options):
             return {"points": np.ones_like(color), "normal": np.zeros_like(color),

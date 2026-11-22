@@ -2,11 +2,12 @@
 
 import bpy
 
+from ...ai_preferences import configured_max_ai_input_size
+
 from ...common.ai import geometry_job_parameters, invoke_ai_setup_if_needed
 from ...common.color_image import require_static_color_image
 from ...common.image import image_content_signature, image_pixels, image_rgba, is_image_empty
-from ...common.image_input import cleanup_image_input
-from ...common.job_image import prepare_recognition_input
+from ...common.image_input import cleanup_image_input, prepare_moge_input
 from ...runtime import JobOperator
 from .object import create_depth_plane_from_result
 
@@ -42,10 +43,13 @@ class DepthPlaneJob(JobOperator):
         image = self._source_image
         pixels = image_pixels(image)
         self._source_signature = image_content_signature(image, pixels)
-        self._input_path = prepare_recognition_input(image, image_rgba(image, pixels))
+        self._input_path = prepare_moge_input(
+            image, image_rgba(image, pixels), max_input_size=configured_max_ai_input_size(context),
+        )
         return {
             **parameters,
             "input": str(self._input_path),
+            "output_size": tuple(image.size),
             "plane_type": self.plane_type,
         }
 

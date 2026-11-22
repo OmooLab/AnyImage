@@ -6,8 +6,6 @@ from ..geometry.panorama import (
     panorama_sample_coordinates, sample_panorama, view_rays,
 )
 from ..geometry.panorama_relief import refine_panorama_normals
-from ..media.input import open_image
-from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, normalized_max_input_size
 from ..models import model_adapter
 
 
@@ -19,29 +17,21 @@ def run(context, parameters):
     from PIL import Image
 
     context.check_cancelled()
-    maximum = normalized_max_input_size(parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE))
-    if maximum < 2:
-        raise ValueError("Panorama geometry requires a maximum AI input size of at least 2 pixels")
     context.directory.mkdir(parents=True, exist_ok=True)
     outputs = {
         "depth": context.directory / "depth.exr",
         "object_normal": context.directory / "object-normal.png",
     }
     try:
-        with open_image(parameters["input"]) as opened:
-            if opened.width != opened.height * 2:
-                raise ValueError("Panorama conversion requires one static 2:1 image")
-            with opened.convert("RGBA") as source:
-                size = min(maximum, max(512, source.width // 4))
-                height = min(source.width, maximum) // 2
-                width = 2 * height
-                source_shape = (source.height, source.width)
-                padded = pad_panorama_seam(np.asarray(source)).astype(np.float32)
-                padded /= 255.0
-                source_alpha = source.getchannel("A")
-                if width < source.width:
-                    source_alpha = source_alpha.resize((width, height), Image.Resampling.BOX)
-                alpha = np.asarray(source_alpha, dtype=np.float32) / 255.0
+        source = np.load(parameters["input"], allow_pickle=False)
+        source_shape = source.shape[:2]
+        height, width = source_shape
+        if width != height * 2:
+            raise ValueError("Panorama conversion requires one static 2:1 image")
+        size = min(width, max(512, width // 4))
+        padded = pad_panorama_seam(source)
+        alpha = source[..., 3].copy()
+        del source
         manager = context.resource("model_manager")
         bases = camera_bases()
         rays = view_rays(size)

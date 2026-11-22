@@ -55,8 +55,12 @@ def sample_panorama(padded, coords, *, order=1):
 
     if padded.ndim == 2:
         return map_coordinates(padded, coords, order=order, mode="nearest")
-    return np.stack([map_coordinates(padded[..., c], coords, order=order,
-                                    mode="nearest") for c in range(padded.shape[2])], -1)
+
+    channels = [
+        map_coordinates(padded[..., channel], coords, order=order, mode="nearest")
+        for channel in range(padded.shape[2])
+    ]
+    return np.stack(channels, axis=-1)
 
 
 def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel_check=None):

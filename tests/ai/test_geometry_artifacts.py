@@ -91,53 +91,44 @@ class GeometryArtifactsTest(unittest.TestCase):
 
     def test_moge_model_input_preserves_rgb_independently_of_alpha(self):
         import numpy as np
-        from PIL import Image
 
         artifacts = importlib.import_module("server.geometry.prediction_artifacts")
-        first_path = self.storage_root / "first.png"
-        second_path = self.storage_root / "second.png"
+        first_path = self.storage_root / "first.npy"
+        second_path = self.storage_root / "second.npy"
         first = np.asarray(
             [[(240, 120, 60, 0), (200, 100, 50, 128), (9, 8, 7, 255)]],
-            dtype=np.uint8,
-        )
+            dtype=np.float32,
+        ) / 255
         second = first.copy()
-        second[..., 3] = 255
-        Image.fromarray(first, mode="RGBA").save(first_path)
-        Image.fromarray(second, mode="RGBA").save(second_path)
+        second[..., 3] = 1
+        np.save(first_path, first)
+        np.save(second_path, second)
         context = FakeJobContext(self.storage_root, "generate_cutout_artifacts")
         moge = importlib.import_module("server.models.onnx_moge2")
         parameters = {"model": "MOGE2_VITS_NORMAL", "device": "cpu", "resolution_level": 0}
 
-        for max_size in (2048, 2):
-            with self.subTest(max_size=max_size):
-                outputs = []
-                for source in (first_path, second_path):
-                    with (
-                        patch.object(moge, "infer_normal", side_effect=lambda session, rgb, level: rgb) as infer,
-                        patch.object(artifacts, "write_normal_texture"),
-                    ):
-                        artifacts.generate_moge_artifacts(
-                            context, {**parameters, "input": str(source), "max_input_size": max_size}, generate_depth=False,
-                        )
-                    outputs.append(infer.call_args.args[1])
-                np.testing.assert_array_equal(*outputs)
-                self.assertEqual(outputs[0].shape[1], min(3, max_size))
-                if max_size == 2048:
-                    np.testing.assert_allclose(outputs[0], first[..., :3] / 255)
+        for source in (first_path, second_path):
+            with (
+                patch.object(moge, "infer_normal", side_effect=lambda session, rgb, level: rgb) as infer,
+                patch.object(artifacts, "write_normal_texture"),
+            ):
+                artifacts.generate_moge_artifacts(
+                    context, {**parameters, "input": str(source), "output_size": (3, 1)}, generate_depth=False,
+                )
+            np.testing.assert_array_equal(infer.call_args.args[1], first[..., :3])
 
 
     def test_moge_artifact_orchestration_uses_one_geometry_frame(self):
         import numpy as np
-        from PIL import Image
 
         artifacts = importlib.import_module("server.geometry.prediction_artifacts")
         GeometryFrame = importlib.import_module(
             "server.models.geometry"
         ).GeometryFrame
-        input_path = self.storage_root / "selection.png"
-        source = Image.new("RGBA", (4, 4), (255, 128, 64, 255))
-        source.paste((255, 128, 64, 0), (2, 0, 4, 2))
-        source.save(input_path)
+        input_path = self.storage_root / "selection.npy"
+        source = np.ones((4, 4, 4), np.float32)
+        source[:2, 2:, 3] = 0
+        np.save(input_path, source)
         output_directory = self.storage_root / "job"
         output_directory.mkdir()
         context = FakeJobContext(output_directory, "generate_depth_plane_geometry")
@@ -156,7 +147,7 @@ class GeometryArtifactsTest(unittest.TestCase):
         ):
             result = artifacts.generate_moge_artifacts(
                 context,
-                {"input": str(input_path), "model": "MOGE2_VITS_NORMAL", "resolution_level": 1, "device": "cpu"},
+                {"input": str(input_path), "output_size": (4, 4), "model": "MOGE2_VITS_NORMAL", "resolution_level": 1, "device": "cpu"},
                 generate_depth=True,
             )
 
@@ -170,7 +161,7 @@ class GeometryArtifactsTest(unittest.TestCase):
 
     def test_generate_cutout_artifacts_only_returns_requested_outputs(self):
         job = importlib.import_module("server.jobs.cutout")
-        input_path = self.storage_root / "input.png"
+        input_path = self.storage_root / "input.npy"
         context = SimpleNamespace(
             directory=self.storage_root / "job",
             progress=lambda *_args: None,

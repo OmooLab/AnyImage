@@ -2,12 +2,12 @@
 
 import bpy
 
+from ...ai_preferences import configured_max_ai_input_size
 from ...common.ai import geometry_job_parameters, invoke_ai_setup_if_needed
 from ...common.image import (
     image_content_signature, image_pixels, image_rgba, is_animated_image, is_image_empty,
 )
-from ...common.image_input import cleanup_image_input
-from ...common.job_image import prepare_recognition_input
+from ...common.image_input import cleanup_image_input, prepare_moge_input
 from ...common.panorama import panorama_crop_bounds, report_panorama_crop
 from ...runtime import JobOperator
 from .object import create_panorama_from_result
@@ -57,7 +57,9 @@ class ConvertToPanorama(JobOperator, bpy.types.Operator):
         self._source_signature = image_content_signature(image, pixels)
         left, top, right, bottom = self.crop_bounds
         cropped = image_rgba(image, pixels)[top:bottom, left:right]
-        self._input_path = prepare_recognition_input(image, cropped)
+        self._input_path = prepare_moge_input(
+            image, cropped, max_input_size=configured_max_ai_input_size(context), panorama=True,
+        )
         return {
             **parameters,
             "input": str(self._input_path),

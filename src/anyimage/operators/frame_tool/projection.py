@@ -219,13 +219,12 @@ def frame_result_transform(frame_quad, source_origin, region, view3d, output_siz
     return Matrix(matrix), display_size
 
 
-def frame_depth_location(active_source, overlap_polygon):
+def frame_depth_location(active_source, overlap_polygon, source_origin):
     """Return the world point whose view depth places the Frame result."""
     import numpy as np
 
-    source_object = active_source["object"]
     if not active_source["perspective"] or active_source["origin_depth"] > 0.0:
-        return source_object.matrix_world.translation.copy()
+        return source_origin
     centroid = np.asarray((polygon_centroid(overlap_polygon),), dtype=np.float64)
     normalized_source, depth, valid = frame_source_coordinates(
         active_source,

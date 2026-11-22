@@ -36,6 +36,6 @@ def apply_image_result(target, path):
 def prepare_recognition_input(image, rgba):
     """Write the supplied pixels as an sRGB PNG, retaining source opacity."""
     if image.is_float:
-        rgba = build_recognition_rgba(rgba, image.alpha_mode)
+        rgba = build_recognition_rgba(image, rgba)
         return prepare_input_png(rgba)
     return prepare_input_png(rgba, color_space=image.colorspace_settings.name)

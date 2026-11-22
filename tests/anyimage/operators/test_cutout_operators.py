@@ -130,7 +130,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             ),
             patch.object(
                 self.cutout_main,
-                "prepare_recognition_input",
+                "prepare_moge_input",
                 return_value=Path(__file__),
             ) as prepare_input,
             patch.object(self.cutout_main, "geometry_job_parameters", return_value={}),
@@ -172,7 +172,7 @@ class CutoutOperatorsTest(BlenderTestCase):
                     patch.object(module, "image_rgba", return_value=rgba),
                     patch.object(self.cutout_main, "invoke_ai_setup_if_needed") as setup,
                     patch.object(self.cutout_object, "material_color_image") as local_color,
-                    patch.object(self.cutout_main, "prepare_recognition_input") as ai_color,
+                    patch.object(self.cutout_main, "prepare_moge_input") as ai_color,
                 ):
                     self.assertEqual(operator.execute(context), {"CANCELLED"})
                 operator.report.assert_called_once_with({"WARNING"}, "The Cutout selection contains no visible image pixels")
@@ -185,14 +185,14 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator = self.cutout_main.CutoutSelectionToShape()
         operator._source_image = Mock()
         with (
-            patch.object(self.cutout_main, "prepare_recognition_input", return_value=Path("input.png")),
+            patch.object(self.cutout_main, "prepare_moge_input", return_value=Path("input.npy")),
             patch.object(self.cutout_main, "geometry_job_parameters", return_value={"model": "MOGE3_VITL"}),
         ):
-            operator._input_rgba = None
             for shape in ("FLAT", "SOLID", "DEPTH_SOLID", "DEPTH_SYMMETRY"):
+                operator._input_rgba = SimpleNamespace(shape=(3, 4, 4))
                 operator.shape = shape
                 self.assertEqual(operator.request(None), {
-                    "model": "MOGE3_VITL", "input": "input.png",
+                    "model": "MOGE3_VITL", "input": "input.npy", "output_size": (4, 3),
                     "generate_depth": shape in {"DEPTH_SOLID", "DEPTH_SYMMETRY"},
                 })
 

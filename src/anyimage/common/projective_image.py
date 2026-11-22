@@ -1,6 +1,7 @@
 """Projective image transforms and alpha-aware pixel sampling."""
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 
 MAX_PROJECTIVE_OUTPUT_DIMENSION = 8192
@@ -9,7 +10,8 @@ MAX_PROJECTIVE_OUTPUT_DIMENSION = 8192
 MAX_PROJECTIVE_OUTPUT_PIXELS = 16_777_216
 
 
-PROJECTIVE_CHUNK_ROWS = 256
+# Four workers share the intermediate pixel buffers' row budget.
+PROJECTIVE_CHUNK_ROWS = 64
 
 
 def homography_from_points(source, target):
@@ -198,11 +200,15 @@ def warp_projective_pixels(premultiplied, quad, output_size):
     output_to_source = homography_from_points(target, quad)
     output = np.zeros((output_height, output_width, 4), dtype=np.float32)
     target_x = np.arange(output_width, dtype=np.float64) + 0.5
-    for row_start in range(0, output_height, PROJECTIVE_CHUNK_ROWS):
+
+    def sample_rows(row_start):
         row_end = min(row_start + PROJECTIVE_CHUNK_ROWS, output_height)
         target_y = np.arange(row_start, row_end, dtype=np.float64) + 0.5
         x, y = np.meshgrid(target_x, target_y)
         points = np.stack((x, y), axis=-1)
         mapped = transform_homography(points, output_to_source)
         output[row_start:row_end] = sample_rgba(premultiplied, mapped)
+
+    with ThreadPoolExecutor(max_workers=4) as workers:
+        list(workers.map(sample_rows, range(0, output_height, PROJECTIVE_CHUNK_ROWS)))
     return straight_rgba(output)

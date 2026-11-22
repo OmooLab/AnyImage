@@ -1,6 +1,8 @@
 """Composite linear image samples with independent RGB and Alpha coverage."""
 
 import math
+from concurrent.futures import ThreadPoolExecutor
+
 from ...common.projective_image import PROJECTIVE_CHUNK_ROWS, sample_rgba
 from .projection import frame_source_coordinates
 
@@ -105,7 +107,8 @@ def composite_frame_pixels(sources, frame_quad, output_size):
     boundary_lines = [_frame_boundary_lines(source, pixel_step) for source in sources]
     output = np.zeros((output_height, output_width, 4), dtype=np.float32)
     target_x = left + (np.arange(output_width) + 0.5) * pixel_step[0]
-    for row_start in range(0, output_height, PROJECTIVE_CHUNK_ROWS):
+
+    def composite_rows(row_start):
         row_end = min(row_start + PROJECTIVE_CHUNK_ROWS, output_height)
         target_y = top + (np.arange(row_start, row_end) + 0.5) * pixel_step[1]
         x, y = np.meshgrid(target_x, target_y)
@@ -128,5 +131,8 @@ def composite_frame_pixels(sources, frame_quad, output_size):
             accumulated[..., :3] /= np.maximum(counts, 1)[..., None]
             composite[boundary] = accumulated
         output[row_start:row_end] = composite
+
+    with ThreadPoolExecutor(max_workers=4) as workers:
+        list(workers.map(composite_rows, range(0, output_height, PROJECTIVE_CHUNK_ROWS)))
     output[..., 3][output[..., 3] <= 1e-8] = 0.0
     return np.flipud(output).ravel()

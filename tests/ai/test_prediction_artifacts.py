@@ -1,7 +1,6 @@
 from unittest.mock import patch
 import numpy as np
 import pytest
-from PIL import Image
 
 
 from server.geometry import prediction_artifacts as artifacts
@@ -40,16 +39,16 @@ def silhouette():
 
 
 def test_alpha_resize_retains_threshold_values(tmp_path):
-    rgba = np.zeros((1, 4, 4), np.uint8)
-    rgba[0, :, 3] = [25, 26, 242, 243]
-    path = tmp_path / "alpha.png"
-    Image.fromarray(rgba).save(path)
+    rgba = np.zeros((1, 4, 4), np.float32)
+    rgba[0, :, 3] = [.0999, .1001, .9499, .9501]
+    path = tmp_path / "alpha.npy"
+    np.save(path, rgba)
     context = FakeJobContext(tmp_path, "generate_cutout_artifacts")
     with (
         patch.object(artifacts, "infer_geometry", return_value=make_frame(np.ones((2, 8)))),
         patch.object(artifacts, "write_depth_texture") as depth,
     ):
-        artifacts.generate_moge_artifacts(context, {**MODEL, "input": str(path)}, generate_depth=True)
+        artifacts.generate_moge_artifacts(context, {**MODEL, "input": str(path), "output_size": (4, 1)}, generate_depth=True)
     alpha = depth.call_args.kwargs["alpha"]
     np.testing.assert_array_equal(
         alpha >= 0.1, [[False] * 2 + [True] * 6] * 2
@@ -59,31 +58,13 @@ def test_alpha_resize_retains_threshold_values(tmp_path):
     )
 
 
-def test_source_is_closed_before_cancelled_inference(tmp_path):
-    path = tmp_path / "source.png"
-    Image.new("RGBA", (4, 4)).save(path)
-    context = FakeJobContext(tmp_path, "generate_cutout_artifacts")
-    with Image.open(path) as source:
-        def cancel(*_args, **_kwargs):
-            assert source.fp is None
-            raise RuntimeError("cancelled")
-
-        with (
-            patch.object(artifacts, "open_image", return_value=source),
-            patch.object(context, "check_cancelled", side_effect=cancel),
-            pytest.raises(RuntimeError, match="cancelled"),
-        ):
-            artifacts.generate_moge_artifacts(context, {**MODEL, "input": str(path)}, generate_depth=True)
-    assert list(tmp_path.iterdir()) == [path]
-
-
 @pytest.mark.parametrize("generate_depth", [True, False])
 def test_artifacts_write_normals_and_optional_depth(tmp_path, generate_depth):
     frame, alpha = silhouette()
-    rgba = np.full((*alpha.shape, 4), 255, np.uint8)
-    rgba[..., 3] = np.round(alpha * 255).astype(np.uint8)
-    path = tmp_path / "source.png"
-    Image.fromarray(rgba).save(path)
+    rgba = np.ones((*alpha.shape, 4), np.float32)
+    rgba[..., 3] = alpha
+    path = tmp_path / "source.npy"
+    np.save(path, rgba)
     context = FakeJobContext(tmp_path, "generate_cutout_artifacts")
     with (
         patch.object(artifacts, "infer_geometry", return_value=frame) as infer,
@@ -97,11 +78,11 @@ def test_artifacts_write_normals_and_optional_depth(tmp_path, generate_depth):
         ) as normal,
     ):
         result = artifacts.generate_moge_artifacts(
-            context, {**MODEL, "input": str(path)}, generate_depth=generate_depth,
+            context, {**MODEL, "input": str(path), "output_size": (70, 50)}, generate_depth=generate_depth,
         )
     assert normal.call_args.args[0] is frame.normal
     np.testing.assert_array_equal(normal.call_args.args[1], alpha >= 0.1)
-    assert normal.call_args.args[2] == (35, 25)
+    assert normal.call_args.args[2] == (70, 50)
     if generate_depth:
         infer.assert_called_once()
         infer_normal.assert_not_called()

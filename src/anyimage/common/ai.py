@@ -2,7 +2,7 @@
 
 import bpy
 
-from ..ai_preferences import configured_device, configured_geometry_model, configured_max_ai_input_size
+from ..ai_preferences import configured_device, configured_geometry_model
 from ..preferences import addon_preferences
 from ..runtime import runtime
 from ..server import model_catalog as shared_model_catalog
@@ -92,10 +92,7 @@ def geometry_job_parameters(context):
     model = configured_geometry_model(context)
     parameters = model_job_parameters(model)
     preferences = addon_preferences(context)
-    parameters.update({
-        "resolution_level": int(getattr(preferences, "geometry_resolution_level", 3)),
-        "max_input_size": configured_max_ai_input_size(context),
-    })
+    parameters["resolution_level"] = int(getattr(preferences, "geometry_resolution_level", 3))
     if model == "MOGE3_VITL":
         parameters["refine_steps"] = int(getattr(preferences, "geometry_refine_steps", 1))
     return parameters

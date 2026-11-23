@@ -1,6 +1,5 @@
 """Palette-anchor chroma transfer with independent quantile lightness matching."""
 
-from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple
 
 import numpy as np
@@ -188,17 +187,16 @@ def build_color_match(mapping, target_rgba, *, target_float=False):
     chroma_delta = np.empty((len(flat), 2), dtype=np.float32)
     chunk_size = 65_536
 
-    def match_chroma(start):
+    for start in range(0, len(flat), chunk_size):
         chunk = flat[start:start + chunk_size]
-        distance = np.sum((chunk[:, None, 1:] - anchors[None, :, 1:]) ** 2, axis=2)
-        distance += 0.1 * (chunk[:, None, 0] - anchors[None, :, 0]) ** 2
-        distance -= distance.min(axis=1, keepdims=True)
+        # Each row holds one anchor's distances across the pixel block.
+        lightness, a, b = chunk.T
+        distance = (a - anchors[:, 1:2]) ** 2 + (b - anchors[:, 2:3]) ** 2
+        distance += 0.1 * (lightness - anchors[:, 0:1]) ** 2
+        distance -= distance.min(axis=0)
         membership = np.exp(-distance / (2 * 0.085**2))
-        membership /= membership.sum(axis=1, keepdims=True)
-        chroma_delta[start:start + len(chunk)] = membership @ mapping.anchor_delta
-
-    with ThreadPoolExecutor(max_workers=4) as workers:
-        list(workers.map(match_chroma, range(0, len(flat), chunk_size)))
+        membership /= membership.sum(axis=0)
+        chroma_delta[start:start + len(chunk)] = membership.T @ mapping.anchor_delta
 
     source, destination = mapping.source_lightness, mapping.reference_lightness
     values = lab[..., 0]
@@ -222,14 +220,20 @@ def apply_color_match(match, *, color=0.5, lightness=0.0):
         raise ValueError("Color and lightness must be finite")
     color = float(np.clip(color, *COLOR_LIMITS))
     lightness = float(np.clip(lightness, *LIGHTNESS_LIMITS))
-    result = match.rgba.copy()
     if color == 0.0 and lightness == 0.0:
-        return result
+        return match.rgba.copy()
     lab = match.lab.copy()
-    lab[..., 1:] += color * match.chroma_delta
-    lab[..., 0] += lightness * match.lightness_delta
+    if color:
+        lab[..., 1] += color * match.chroma_delta[..., 0]
+        lab[..., 2] += color * match.chroma_delta[..., 1]
+    if lightness:
+        lab[..., 0] += lightness * match.lightness_delta
     rgb = oklab_to_linear_rgb(lab)
-    result[..., :3] = rgb if match.target_float else np.clip(rgb, 0.0, 1.0)
+    if not match.target_float:
+        np.clip(rgb, 0.0, 1.0, out=rgb)
+    result = np.empty_like(match.rgba)
+    result[..., :3] = rgb
+    result[..., 3] = match.rgba[..., 3]
     return result
 
 

@@ -1,7 +1,6 @@
 """Projective image transforms and alpha-aware pixel sampling."""
 
 import math
-from concurrent.futures import ThreadPoolExecutor
 
 
 MAX_PROJECTIVE_OUTPUT_DIMENSION = 8192
@@ -10,7 +9,6 @@ MAX_PROJECTIVE_OUTPUT_DIMENSION = 8192
 MAX_PROJECTIVE_OUTPUT_PIXELS = 16_777_216
 
 
-# Four workers share the intermediate pixel buffers' row budget.
 PROJECTIVE_CHUNK_ROWS = 64
 
 
@@ -114,6 +112,7 @@ def premultiplied_rgba(source_pixels, source_size):
 def sample_rgba(source, source_points):
     """Bilinearly sample top-down RGBA at image-boundary coordinates."""
     import numpy as np
+    from scipy.ndimage import map_coordinates
 
     source = np.asarray(source, dtype=np.float32)
     points = np.asarray(source_points, dtype=np.float64)
@@ -122,31 +121,15 @@ def sample_rgba(source, source_points):
     if points.shape[-1] != 2:
         raise ValueError("Sample points must contain X and Y")
     height, width = source.shape[:2]
-    flat = points.reshape((-1, 2))
-    mapped_x = flat[:, 0]
-    mapped_y = flat[:, 1]
-    valid = (
-        np.isfinite(mapped_x)
-        & np.isfinite(mapped_y)
-        & (mapped_x >= 0.0)
-        & (mapped_x <= width)
-        & (mapped_y >= 0.0)
-        & (mapped_y <= height)
-    )
-    pixel_x = np.clip(mapped_x - 0.5, 0.0, width - 1.0)
-    pixel_y = np.clip(mapped_y - 0.5, 0.0, height - 1.0)
-    x0 = np.floor(pixel_x).astype(np.int64)
-    y0 = np.floor(pixel_y).astype(np.int64)
-    x1 = np.minimum(x0 + 1, width - 1)
-    y1 = np.minimum(y0 + 1, height - 1)
-    fx = (pixel_x - x0)[:, None]
-    fy = (pixel_y - y0)[:, None]
-    sampled = (
-        source[y0, x0] * (1.0 - fx) * (1.0 - fy)
-        + source[y0, x1] * fx * (1.0 - fy)
-        + source[y1, x0] * (1.0 - fx) * fy
-        + source[y1, x1] * fx * fy
-    )
+    x, y = points.reshape(-1, 2).T
+    valid = (x >= 0) & (x <= width) & (y >= 0) & (y <= height)
+    # SciPy samples pixel centers in row, column order.
+    coordinates = np.stack((y - 0.5, x - 0.5))
+    coordinates[:, ~valid] = 0
+    sampled = np.empty((x.size, 4), dtype=np.float64)
+    for channel in range(4):
+        map_coordinates(source[..., channel], coordinates, output=sampled[:, channel],
+                        order=1, mode="nearest")
     sampled[~valid] = 0.0
     return sampled.reshape((*points.shape[:-1], 4))
 
@@ -159,7 +142,10 @@ def straight_rgba(premultiplied):
     alpha = rgba[..., 3]
     visible = alpha > 1e-8
     rgb = rgba[..., :3]
-    rgb[visible] /= alpha[visible, None]
+    if visible.all():
+        rgb /= alpha[..., None]
+        return rgba
+    np.divide(rgb, alpha[..., None], out=rgb, where=visible[..., None])
     rgba[~visible] = 0.0
     if rgba.ndim == 3:
         unfilled = ~visible
@@ -201,7 +187,7 @@ def warp_projective_pixels(premultiplied, quad, output_size):
     output = np.zeros((output_height, output_width, 4), dtype=np.float32)
     target_x = np.arange(output_width, dtype=np.float64) + 0.5
 
-    def sample_rows(row_start):
+    for row_start in range(0, output_height, PROJECTIVE_CHUNK_ROWS):
         row_end = min(row_start + PROJECTIVE_CHUNK_ROWS, output_height)
         target_y = np.arange(row_start, row_end, dtype=np.float64) + 0.5
         x, y = np.meshgrid(target_x, target_y)
@@ -209,6 +195,4 @@ def warp_projective_pixels(premultiplied, quad, output_size):
         mapped = transform_homography(points, output_to_source)
         output[row_start:row_end] = sample_rgba(premultiplied, mapped)
 
-    with ThreadPoolExecutor(max_workers=4) as workers:
-        list(workers.map(sample_rows, range(0, output_height, PROJECTIVE_CHUNK_ROWS)))
     return straight_rgba(output)

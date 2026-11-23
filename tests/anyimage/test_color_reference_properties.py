@@ -20,11 +20,15 @@ def test_set_reference_previews_current_image_and_colors(registered_color_refere
     assert bpy.ops.anyimage.set_color_reference() == {"FINISHED"}
     assert bpy.context.scene.anyimage_settings.color_reference == image
     layout = Mock(spec_set=["label", "template_icon", "row"])
-    row = layout.row.return_value = Mock(spec_set=["template_node_socket"])
+    row = layout.row.return_value
     ColorMatchPanel.draw(SimpleNamespace(layout=layout), bpy.context)
     prepared = reference_cache.get_color_reference(image)
     layout.template_icon.assert_called_once_with(icon_value=prepared.icon_id, scale=6.0)
-    row.template_node_socket.assert_called_once_with(color=(*prepared.transfer.colors[0], 1.0))
+    cell = row.row.return_value
+    settings = bpy.context.scene.anyimage_settings
+    cell.prop.assert_called_once_with(settings, "reference_swatch_0", text="")
+    assert cell.scale_x == 1.0
+    np.testing.assert_allclose(settings.reference_swatch_0, prepared.transfer.colors[0])
 
 
 def test_setting_reference_does_not_add_an_undo_step(registered_color_reference):

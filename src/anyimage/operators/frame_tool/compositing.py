@@ -1,7 +1,6 @@
 """Composite linear image samples with independent RGB and Alpha coverage."""
 
 import math
-from concurrent.futures import ThreadPoolExecutor
 
 from ...common.projective_image import PROJECTIVE_CHUNK_ROWS, sample_rgba
 from .projection import frame_source_coordinates
@@ -11,36 +10,31 @@ def _composite_frame_samples(sources, screen_points):
     """Resolve independently sorted samples with an unweighted bottom RGB base."""
     import numpy as np
 
-    samples, depths, coordinates = [], [], []
+    depths, coordinates = [], []
     for source in sources:
         normalized, depth, valid = frame_source_coordinates(source, screen_points)
         points = normalized * source["image_size"]
-        points[~valid] = -1.0
         if len(sources) == 1:
+            points[~valid] = -1.0
             return sample_rgba(source["rgba"], points), valid
-        sample = sample_rgba(source["pixels"], points)
         depths.append(np.where(valid, depth, -math.inf))
-        samples.append(sample)
         coordinates.append(points)
-    samples = np.stack(samples)
     depths = np.stack(depths)
     order = np.argsort(-depths, axis=0, kind="stable")
-    bottom = order[0]
-    covered = np.isfinite(np.take_along_axis(depths, bottom[None], axis=0)[0])
-    result = np.zeros_like(samples[0])
+    layers = np.zeros((*depths.shape, 4), dtype=np.float64)
     for index, source in enumerate(sources):
-        selected = covered & (bottom == index)
-        if np.any(selected):
-            result[..., :3][selected] = sample_rgba(
-                source["rgba"], coordinates[index][selected]
-            )[..., :3]
-    for index in range(len(sources)):
-        layer = np.take_along_axis(samples, order[index][None, ..., None], axis=0)[0]
-        alpha = layer[..., 3:4]
-        result[..., 3:4] = alpha + result[..., 3:4] * (1 - alpha)
-        if index:
-            result[..., :3] = layer[..., :3] + result[..., :3] * (1 - alpha)
-    return result, covered
+        valid = np.isfinite(depths[index])
+        bottom = order[0] == index
+        # The bottom layer keeps hidden RGB; layers above it use premultiplied RGB.
+        for pixels, selected in (("rgba", valid & bottom), ("pixels", valid & ~bottom)):
+            if np.any(selected):
+                layers[index][selected] = sample_rgba(source[pixels], coordinates[index][selected])
+
+    result = np.take_along_axis(layers, order[:1, ..., None], axis=0)[0]
+    for indices in order[1:]:
+        layer = np.take_along_axis(layers, indices[None, ..., None], axis=0)[0]
+        result = layer + result * (1 - layer[..., 3:4])
+    return result, np.isfinite(depths).any(axis=0)
 
 
 def _frame_boundary_lines(source, pixel_step):
@@ -72,7 +66,8 @@ def _frame_boundary_pixels(sources, boundary_lines, points, pixel_step):
                 negative &= value - radius <= 0
             source_boundary |= np.abs(value) < radius - 1e-10 * max(radius, 1e-20)
         boundary |= source_boundary & (positive | negative)
-    if len(sources) > 1:
+    # Constant-depth planes can change coverage only at the contours above.
+    if len(sources) > 1 and any(np.any(s["source_to_view"][2, :2]) for s in sources):
         first_order = None
         for offset in ((-0.499999, -0.499999), (0.499999, -0.499999),
                        (-0.499999, 0.499999), (0.499999, 0.499999)):
@@ -108,7 +103,7 @@ def composite_frame_pixels(sources, frame_quad, output_size):
     output = np.zeros((output_height, output_width, 4), dtype=np.float32)
     target_x = left + (np.arange(output_width) + 0.5) * pixel_step[0]
 
-    def composite_rows(row_start):
+    for row_start in range(0, output_height, PROJECTIVE_CHUNK_ROWS):
         row_end = min(row_start + PROJECTIVE_CHUNK_ROWS, output_height)
         target_y = top + (np.arange(row_start, row_end) + 0.5) * pixel_step[1]
         x, y = np.meshgrid(target_x, target_y)
@@ -132,7 +127,5 @@ def composite_frame_pixels(sources, frame_quad, output_size):
             composite[boundary] = accumulated
         output[row_start:row_end] = composite
 
-    with ThreadPoolExecutor(max_workers=4) as workers:
-        list(workers.map(composite_rows, range(0, output_height, PROJECTIVE_CHUNK_ROWS)))
     output[..., 3][output[..., 3] <= 1e-8] = 0.0
     return np.flipud(output).ravel()

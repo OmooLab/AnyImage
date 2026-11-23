@@ -25,5 +25,9 @@ class ColorMatchPanel(bpy.types.Panel):
         self.layout.template_icon(icon_value=reference.icon_id, scale=6.0)
         if reference.transfer is not None:
             row = self.layout.row(align=True)
-            for color in reference.transfer.colors:
-                row.template_node_socket(color=(*color, 1.0))
+            weights = reference.transfer.weights ** 0.5
+            total = weights.sum()
+            for index, weight in enumerate(weights):
+                cell = row.row(align=True)
+                cell.scale_x = max(weight / total * len(weights), 0.1)
+                cell.prop(context.scene.anyimage_settings, f"reference_swatch_{index}", text="")

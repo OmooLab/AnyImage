@@ -11,6 +11,7 @@ AI_PATHS = (
     "ai_translations.py",
     "ai_tools.py",
     "common/ai.py",
+    "common/image_input.py",
     "operators/ai_setup.py",
     "operators/convert_to_panorama.py",
     "operators/depth_plane.py",

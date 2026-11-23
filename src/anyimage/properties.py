@@ -1,5 +1,17 @@
 import bpy
-from .common.color_reference import release_unused_references
+from .common.color_reference import get_color_reference, release_unused_references
+
+
+def color_reference_swatch(index):
+    def get_color(settings):
+        image = settings.color_reference
+        if image is not None:
+            transfer = get_color_reference(image).transfer
+            if transfer is not None and index < len(transfer.colors):
+                return tuple(transfer.colors[index])
+        return (0.0, 0.0, 0.0)
+
+    return bpy.props.FloatVectorProperty(size=3, subtype="COLOR", get=get_color, options={"SKIP_SAVE"})
 
 
 def cutout_gesture_property():
@@ -125,6 +137,11 @@ def cutout_edge_length_property(*, store_meters=False, **options):
 
 
 class SettingsLite(bpy.types.PropertyGroup):
+    reference_swatch_0: color_reference_swatch(0)
+    reference_swatch_1: color_reference_swatch(1)
+    reference_swatch_2: color_reference_swatch(2)
+    reference_swatch_3: color_reference_swatch(3)
+
     color_reference: bpy.props.PointerProperty(
         name="Reference",
         type=bpy.types.Image,

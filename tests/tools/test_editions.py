@@ -43,6 +43,8 @@ def test_lite_contents_and_dependencies(tmp_path):
         assert archive.read("assets/O_AnyImage.blend") == other.read("assets/O_AnyImage.blend")
         assert not any(name.startswith("server/") for name in archive.namelist())
         assert "runtime.py" not in archive.namelist()
+        assert "common/image_input.py" not in archive.namelist()
+        assert "common/image_input.py" in other.namelist()
         assert not any(
             name == excluded or name.startswith(excluded + "/")
             for name in archive.namelist()

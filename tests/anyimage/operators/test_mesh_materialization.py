@@ -471,14 +471,14 @@ def test_image_write_failure_restores_both_images(cutout, monkeypatch, packed, s
     tree = cutout.active_material.node_tree
     node_ids = {n.as_pointer() for n in tree.nodes}
     connections = {(link.from_socket.as_pointer(), link.to_socket.as_pointer()) for link in tree.links}
-    replace = materialization.replace_image_content
+    pack = materialization.pack_image_result
 
-    def fail_second_write(image, result):
-        replace(image, result)
+    def fail_second_write(result, image, *, filepath):
+        pack(result, image, filepath=filepath)
         if image == images[-1]:
             raise RuntimeError("Injected image write failure")
 
-    monkeypatch.setattr(materialization, "replace_image_content", fail_second_write)
+    monkeypatch.setattr(materialization, "pack_image_result", fail_second_write)
     with pytest.raises(RuntimeError, match="Injected image write"):
         materialize_mesh_and_textures(bpy.context, cutout, mesh_bake_modifiers(cutout))
     assert node_ids == {n.as_pointer() for n in tree.nodes}
@@ -1010,6 +1010,24 @@ def test_scalar_bakes_preserve_layer_controls_in_both_engines(cutout, tmp_path, 
         after = render_material(cutout, tmp_path / f"{channel}-after.exr", (0, -1, 0),
                                 channel=channel, engine=render_engine)
         np.testing.assert_allclose(after[24:40, 24:40, :3], before[channel][24:40, 24:40, :3], atol=1 / 255)
+
+
+def test_baked_jpeg_color_packs_shader_opacity(cutout, tmp_path):
+    from io import BytesIO
+    from PIL import Image
+
+    path = tmp_path / "opaque.jpg"
+    Image.new("RGB", (32, 32), (26, 102, 230)).save(path)
+    image = bpy.data.images.load(str(path))
+    layer = next(n for n in cutout.active_material.node_tree.nodes if n.type == "GROUP")
+    layer.inputs["Color Texture"].links[0].from_node.image = image
+    layer.inputs["Alpha Scale"].default_value = .7
+    assert BakeMesh.execute(SimpleNamespace(report=Mock()), bpy.context) == {"FINISHED"}
+    width, height = image.size
+    alpha = np.asarray(image.pixels[:]).reshape(height, width, 4)[::-1, :, 3]
+    assert alpha.min() < 1
+    with Image.open(BytesIO(image.packed_file.data)) as packed:
+        np.testing.assert_array_equal(np.asarray(packed.getchannel("A")), np.rint(alpha * 255))
 
 
 @pytest.mark.parametrize("render_engine", ["EEVEE"], indirect=True)

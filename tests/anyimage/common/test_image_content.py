@@ -32,7 +32,7 @@ def test_clean_float_snapshot_restores_pixels_after_byte_replacement(space, alph
         result[images.COLOR_NORMALIZED_PROPERTY] = True
         result.pixels.foreach_set(np.tile([.2, .4, .6, 1], 4).astype(np.float32))
         result.pack()
-        images.replace_image_content(source, result)
+        images.pack_image_result(result, source, filepath=source.filepath_raw)
         assert not source.is_float and tuple(source.size) == (2, 2)
         assert source[images.COLOR_NORMALIZED_PROPERTY]
         np.testing.assert_array_equal(images.image_pixels(source), images.image_pixels(result))

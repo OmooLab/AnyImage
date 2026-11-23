@@ -8,7 +8,7 @@ from ...common.color_image import create_normalized_color_image, linear_color_rg
 from ...common.color_space import linear_rgb_to_srgb
 from ...common.image import (
     has_other_image_user, image_content_state, image_pixels,
-    replace_image_content, restore_image_content,
+    pack_image_result, restore_image_content,
 )
 from ...common.image_target import material_has_other_object_user
 from .geometry import PROTOCOL_ATTRIBUTES, SINGLE_REGION_GROUPS, TARGET_UV, build_layout, isolate_bake_modifiers
@@ -234,7 +234,7 @@ def materialize_mesh_and_textures(context, obj, modifiers):
                     result.name = source.name
                 else:
                     originals.append((node_name, source, image_content_state(source)))
-                    replace_image_content(source, result)
+                    pack_image_result(result, source, filepath=source.filepath_raw)
         transferred = True
         return mesh
     finally:

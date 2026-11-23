@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 import bpy
 import numpy as np
 import pytest
+from PIL import Image
 
 from anyimage.operators.remove_background import BackgroundInput
 from anyimage.common.image import image_rgba
@@ -12,6 +13,54 @@ from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators import remove_background
 from tests.support.image_texture import hdr_texture, texture, texture_context
+
+
+@pytest.mark.parametrize("move_image", [True, False], ids=["image-empty", "other-object"])
+def test_undo_move_after_removing_rgb_background(tmp_path, move_image):
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.context.preferences.edit.use_global_undo = True
+    path = tmp_path / "source.jpg"
+    Image.new("RGB", (8, 8), (215, 53, 66)).save(path)
+    owner = bpy.data.objects.new("Background removal", None)
+    owner.empty_display_type = "IMAGE"
+    owner.data = bpy.data.images.load(str(path))
+    other = bpy.data.objects.new("Other", None)
+    for obj in (owner, other):
+        bpy.context.collection.objects.link(obj)
+    owner.select_set(True)
+    bpy.context.view_layer.objects.active = owner
+    owner_name = owner.name
+    mask = np.ones((8, 8), dtype=np.float32)
+    mask[:, :4] = 0
+    alpha_path = tmp_path / "alpha.npy"
+    np.save(alpha_path, mask)
+    try:
+        bpy.ops.ed.undo_push(message="Original image")
+        target, rgba = ImageEditTarget.capture(bpy.context)
+        operator = SimpleNamespace(
+            _image_target=target, _background_input=BackgroundInput.prepare(owner.data, rgba),
+        )
+        result = SimpleNamespace(file=lambda _: alpha_path)
+        try:
+            remove_background.RemoveImageBackground.response(operator, bpy.context, result)
+        finally:
+            remove_background.RemoveImageBackground.cleanup(operator)
+        np.testing.assert_array_equal(image_rgba(owner.data)[..., 3], mask)
+
+        moved = owner if move_image else other
+        moved_name = moved.name
+        owner.select_set(move_image)
+        moved.select_set(True)
+        bpy.context.view_layer.objects.active = moved
+        assert bpy.ops.transform.translate("EXEC_DEFAULT", True, value=(2, 0, 0)) == {"FINISHED"}
+        assert moved.location.x == 2
+        assert bpy.ops.ed.undo() == {"FINISHED"}
+        assert bpy.data.objects[moved_name].location.x == 0
+        np.testing.assert_array_equal(image_rgba(bpy.data.objects[owner_name].data)[..., 3], mask)
+        assert bpy.ops.ed.undo() == {"FINISHED"}
+        np.testing.assert_array_equal(image_rgba(bpy.data.objects[owner_name].data), rgba)
+    finally:
+        bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
 @pytest.mark.parametrize("owner_kind,shared", [("texture", False), ("empty", True)])

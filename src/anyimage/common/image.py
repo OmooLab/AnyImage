@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 import hashlib
-from pathlib import Path
 
 import bpy
 
@@ -277,7 +276,10 @@ def restore_image_content(image, state):
         image.source = "FILE"
         image.pack(data=data, data_len=len(data))
         image.source = state["source"]
-    image.reload()
+        # Discard cached pixels so Blender reads the packed edit instead of reloading the source file.
+        image.buffers_free()
+    else:
+        image.reload()
     if state["pixels"] is not None:
         if tuple(image.size) != state["size"]:
             image.scale(*state["size"])
@@ -287,41 +289,15 @@ def restore_image_content(image, state):
 
 
 def pack_image_result(result, destination=None, *, filepath=None):
-    """Pack the finished edit on its final Image datablock."""
+    """Pack the finished image with its own channels before transferring it."""
+    if not result.packed_file or result.is_dirty:
+        result.pack()
     if destination is None or destination == result:
-        if not result.packed_file or result.is_dirty:
-            result.pack()
         return
     state = image_content_state(result)
-    if state["packed"] is None and result.source == "FILE" and not result.is_dirty:
-        state["packed"] = Path(bpy.path.abspath(result.filepath_raw)).read_bytes()
     if filepath is not None:
         state["filepath"] = filepath
     restore_image_content(destination, state)
-    if state["packed"] is None:
-        destination.pack()
-
-
-def replace_image_content(image, result):
-    """Write packed result pixels while retaining the destination ID and path."""
-    filepath = image.filepath_raw
-    if result.is_float != image.is_float:
-        image.source = "GENERATED"
-        image.use_generated_float = result.is_float
-    image.colorspace_settings.name = result.colorspace_settings.name
-    image.alpha_mode = result.alpha_mode
-    image.file_format = result.file_format
-    image.filepath_raw = filepath
-    if result.get(COLOR_NORMALIZED_PROPERTY):
-        image[COLOR_NORMALIZED_PROPERTY] = True
-    elif COLOR_NORMALIZED_PROPERTY in image:
-        del image[COLOR_NORMALIZED_PROPERTY]
-    if tuple(image.size) != tuple(result.size):
-        image.scale(*result.size)
-    image.pixels.foreach_set(image_pixels(result))
-    image.update()
-    image.pack()
-    refresh_image_content(image)
 
 
 def refresh_image_content(image):

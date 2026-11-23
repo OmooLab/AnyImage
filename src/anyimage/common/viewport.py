@@ -4,11 +4,29 @@ import math
 
 import bpy
 
+from ..preferences import addon_preferences
 from . import polygon as polygon_geometry
 from .image import image_empty_bounds, is_image_empty
 from .selection import ImageEditWarning
 
 MIN_PATH_DISTANCE = 2.0
+
+
+def apply_material_preview(context, *, use_scene_world=False):
+    """Show the result in the invoking 3D viewport."""
+    space = getattr(context, "space_data", None)
+    if space is None or space.type != "VIEW_3D":
+        return
+    if not getattr(addon_preferences(context), "auto_material_preview", True):
+        return
+    shading = space.shading
+    if shading.type in {"SOLID", "WIREFRAME"}:
+        shading.type = "MATERIAL"
+    if use_scene_world:
+        if shading.type == "RENDERED":
+            shading.use_scene_world_render = True
+        else:
+            shading.use_scene_world = True
 
 
 def redraw_area(context):

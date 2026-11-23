@@ -17,6 +17,7 @@ from ..common.material import create_image_material
 from ..common.node import load_node_group, set_modifier_input
 from ..common.object import conversion_source, finalize_object_result
 from ..common.panorama import create_panorama_world, panorama_crop_bounds, report_panorama_crop
+from ..common.viewport import apply_material_preview
 from ..runtime import JobOperator
 
 
@@ -210,6 +211,7 @@ class ConvertToPanorama(JobOperator, bpy.types.Operator):
             raise
         if "FINISHED" not in bpy.ops.ed.undo_push(message="Convert to Panorama"):
             raise RuntimeError("Unable to create the Convert to Panorama Undo step")
+        apply_material_preview(context, use_scene_world=True)
         return "Panorama is ready"
 
     def cleanup(self):

@@ -43,10 +43,11 @@ class RecordingLayout:
 class PreferencesTest(BlenderTestCase):
     def test_base_preferences_draw_only_tool_settings(self):
         preferences = self.anyimage.preferences.PreferencesLite()
+        self.assertTrue(preferences.__annotations__["auto_material_preview"]["default"])
         preferences.layout = RecordingLayout([])
         preferences.draw(None)
         self.assertEqual(preferences.layout.properties, [
-            "max_frame_resolution", "min_cutout_relative_edge_length",
+            "auto_material_preview", "max_frame_resolution", "min_cutout_relative_edge_length",
             "cutout_boundary_padding", "balloon_profile_algorithm",
         ])
 
@@ -185,4 +186,5 @@ class PreferencesTest(BlenderTestCase):
             patch.object(self.anyimage.runtime, "state", return_value="IDLE"),
         ):
             preferences.draw(None)
+        self.assertIn("auto_material_preview", preferences.layout.properties)
         return operators

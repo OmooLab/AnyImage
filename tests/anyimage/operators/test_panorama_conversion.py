@@ -50,6 +50,11 @@ def test_world_conversion_requires_a_static_panorama_source(source):
     assert ConvertToWorld.poll(bpy.context)
     source.data.scale(1, 8)
     assert not ConvertToWorld.poll(bpy.context)
+    area = next(area for area in bpy.context.screen.areas if area.type == "VIEW_3D")
+    with bpy.context.temp_override(area=area):
+        assert ConvertToWorld.execute(SimpleNamespace(report=Mock()), bpy.context) == {"CANCELLED"}
+        assert bpy.context.space_data.shading.type == "SOLID"
+        assert not bpy.context.space_data.shading.use_scene_world
     source.data.scale(16, 8)
     source.data.source = "SEQUENCE"
     assert not ConvertToWorld.poll(bpy.context)
@@ -81,7 +86,10 @@ def test_invalid_input_is_rejected_before_setup(image_source, size, monkeypatch)
     setup = Mock()
     monkeypatch.setattr(convert_to_panorama, "invoke_ai_setup_if_needed", setup)
     obj = SimpleNamespace(data=SimpleNamespace(source=image_source, size=size))
-    assert convert_to_panorama.ConvertToPanorama.execute(SimpleNamespace(report=Mock()), SimpleNamespace(object=obj)) == {"CANCELLED"}
+    shading = SimpleNamespace(type="SOLID", use_scene_world=False)
+    context = SimpleNamespace(object=obj, space_data=SimpleNamespace(type="VIEW_3D", shading=shading))
+    assert convert_to_panorama.ConvertToPanorama.execute(SimpleNamespace(report=Mock()), context) == {"CANCELLED"}
+    assert shading.type == "SOLID" and not shading.use_scene_world
     setup.assert_not_called()
 
 
@@ -112,12 +120,20 @@ def test_world_and_panorama_interpret_the_same_srgb_image(source, artifacts, vie
     world_source = source.copy()
     bpy.context.collection.objects.link(world_source)
     bpy.context.view_layer.objects.active = world_source
-    assert ConvertToWorld.execute(SimpleNamespace(), bpy.context) == {"FINISHED"}
+    area = next(area for area in bpy.context.screen.areas if area.type == "VIEW_3D")
+    shading = area.spaces.active.shading
+    with bpy.context.temp_override(area=area):
+        assert ConvertToWorld.execute(SimpleNamespace(), bpy.context) == {"FINISHED"}
+    assert shading.type == "MATERIAL" and shading.use_scene_world
     standalone = next(n.image for n in scene.world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
 
     bpy.context.view_layer.objects.active = source
     result, operator = artifacts
-    convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result)
+    shading.type = "RENDERED"
+    shading.use_scene_world_render = False
+    with bpy.context.temp_override(area=area):
+        convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result)
+    assert shading.type == "RENDERED" and shading.use_scene_world_render
     panorama = next(n.image for n in scene.world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
     assert standalone.colorspace_settings.name == panorama.colorspace_settings.name
     assert standalone.alpha_mode == panorama.alpha_mode

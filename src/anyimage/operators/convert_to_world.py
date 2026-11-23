@@ -5,6 +5,7 @@ import bpy
 from ..common.color_image import configure_material_color_image, material_color_image
 from ..common.image import is_image_empty, is_static_image
 from ..common.panorama import create_panorama_world, panorama_crop_bounds, report_panorama_crop
+from ..common.viewport import apply_material_preview
 
 
 class ConvertToWorld(bpy.types.Operator):
@@ -37,4 +38,5 @@ class ConvertToWorld(bpy.types.Operator):
         except ValueError as error:
             self.report({"ERROR"}, str(error))
             return {"CANCELLED"}
+        apply_material_preview(context, use_scene_world=True)
         return {"FINISHED"}

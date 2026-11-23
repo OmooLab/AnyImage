@@ -539,14 +539,24 @@ def test_job_creates_cutout_after_source_is_deleted(tmp_path, monkeypatch):
                          boundary_padding=0, gesture="LASSO", report=lambda *_: None)
     monkeypatch.setattr(ai_operators, "geometry_job_parameters", lambda _: {})
     monkeypatch.setattr(image_data, "pixel_digest", lambda _: pytest.fail("Cutout scanned the image for validation"))
-    ai_operators.CutoutSelectionToShape.request(op, bpy.context)
+    origin = next(area for area in bpy.context.screen.areas if area.type == "VIEW_3D")
+    other = next(area for area in bpy.context.screen.areas if area.type == "PROPERTIES")
+    other.type = "VIEW_3D"
+    with bpy.context.temp_override(area=origin):
+        op._window, op._area, op._region = bpy.context.window, origin, bpy.context.region
+        ai_operators.CutoutSelectionToShape.request(op, bpy.context)
+    assert origin.spaces.active.shading.type == "SOLID"
     try:
         bpy.data.objects.remove(owner, do_unlink=True)
         bpy.data.images.remove(image)
         normal = tmp_path / "normal.png"
         Image.new("RGB", (24, 24), (128, 128, 255)).save(normal)
         bpy.ops.ed.undo_push(message="Source deleted")
-        ai_operators.CutoutSelectionToShape.response(op, bpy.context, SimpleNamespace(file=lambda _: normal))
+        with bpy.context.temp_override(area=other):
+            with ai_operators.JobOperator._response_context(op, bpy.context) as context:
+                ai_operators.CutoutSelectionToShape.response(op, context, SimpleNamespace(file=lambda _: normal))
+            assert other.spaces.active.shading.type == "SOLID"
+            assert origin.spaces.active.shading.type == "MATERIAL"
         obj = bpy.context.view_layer.objects.active
         assert obj.type == "MESH" and obj.active_material.name == "Crop source"
         np.testing.assert_allclose(obj.matrix_world.translation, (2, 3, 4), atol=.1)

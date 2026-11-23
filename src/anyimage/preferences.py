@@ -56,6 +56,12 @@ def configured_max_frame_resolution(context=None):
 class PreferencesLite(bpy.types.AddonPreferences):
     bl_idname = ADDON_PACKAGE
 
+    auto_material_preview: bpy.props.BoolProperty(
+        name="Automatic Material Preview",
+        description="Show materials after Cutout and use the scene World after World or Panorama conversion",
+        default=True,
+    )
+
     min_cutout_relative_edge_length: bpy.props.FloatProperty(
         name="Minimum Relative Edge Length",
         description="Minimum target edge length as a percentage of the Cutout bounds' longest side",
@@ -102,6 +108,8 @@ class PreferencesLite(bpy.types.AddonPreferences):
     def draw(self, _context):
         layout = self.layout
         tools = self._draw_box(layout, "Tools")
+        tools.prop(self, "auto_material_preview")
+        tools.separator(type="LINE")
         tools.label(text="Frame Images", text_ctxt="AnyImage")
         tools.prop(self, "max_frame_resolution")
         tools.separator(type="LINE")

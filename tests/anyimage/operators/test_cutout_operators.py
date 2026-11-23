@@ -58,6 +58,8 @@ class CutoutOperatorsTest(BlenderTestCase):
         selection = self.image_selection.SelectionMask(np.ones((8, 8)), (1, 1, 9, 9))
         module = self.cutout_operators
         for shape in ("FLAT", "SOLID"):
+            shading = SimpleNamespace(type="WIREFRAME", use_scene_world=False)
+            context.space_data = SimpleNamespace(type="VIEW_3D", shading=shading)
             operator = SimpleNamespace(source_object_name="Source", selection_path_json=json.dumps({"points": [[1, 1], [9, 1], [9, 9]]}), shape=shape, gesture="POLYLINE", edge_length=0.1, alpha_threshold=0.25, fine_outline=False, report=Mock())
             source.bounds = (-4, 4, -4, 4)
             source.image_name, source.image_format = "Color", Mock()
@@ -74,9 +76,11 @@ class CutoutOperatorsTest(BlenderTestCase):
                 patch.object(self.cutout_object, "build_cutout_shape", return_value=mesh),
                 patch.object(self.cutout_object, "pad_cutout_images") as pad,
                 patch.object(self.cutout_object, "push_cutout_undo") as undo,
-                patch.object(self.cutout_object, "create_shape_object") as create,
+                patch.object(self.cutout_object, "create_shape_object",
+                             side_effect=lambda *args, **kw: self.assertEqual(shading.type, "MATERIAL")) as create,
             ):
                 self.assertEqual(module.CreateCutoutShape.execute(operator, context), {"FINISHED"})
+            self.assertFalse(shading.use_scene_world)
             self.assertEqual(create.call_args.args, (context, source, shape, (-4, 4, -4, 4), mesh))
             self.assertEqual(create.call_args.kwargs["color_image"], color)
             self.assertEqual(create.call_args.kwargs["gesture"], "POLYLINE")

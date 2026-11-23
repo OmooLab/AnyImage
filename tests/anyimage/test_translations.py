@@ -29,6 +29,7 @@ class TranslationsTest(BlenderTestCase):
         self.assertNotIn(("*", "Set Up AI Server"), lite)
         self.assertEqual(full[("*", "Set Up AI Server")], "设置 AI 服务器")
         for message in (
+            "Automatic Material Preview",
             "Draw Frame",
             "Snap to Preset",
             "Choose Shape",

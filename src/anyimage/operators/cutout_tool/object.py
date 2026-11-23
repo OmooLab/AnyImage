@@ -19,6 +19,7 @@ from ...common.depth_geometry import (
 from ...common.image_plane import build_image_plane_matrix
 from ...common.material import create_image_material
 from ...common.node import load_node_group, set_modifier_input
+from ...common.viewport import apply_material_preview
 from .geometry import (
     build_reference_mask,
     crop_plane_bounds,
@@ -216,6 +217,7 @@ def create_cutout_shape(
     )
     color_image = create_crop_color_image(source.image_name, source.image_format, source.rgba)
     try:
+        apply_material_preview(context)
         result = create_shape_object(
             context,
             source,

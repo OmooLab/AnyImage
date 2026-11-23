@@ -18,6 +18,8 @@ COMMON = {
     'Error': '错误',
     'Unavailable': '不可用',
     'Tools': '工具',
+    'Automatic Material Preview': '自动材质预览',
+    'Show materials after Cutout and use the scene World after World or Panorama conversion': '抠图后显示材质，转换为世界环境或全景后使用场景世界环境',
     'Gesture': '手势',
     'None': '无',
     'Lasso': '套索',

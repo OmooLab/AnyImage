@@ -1,8 +1,13 @@
 """Create Blender data for a Cutout Shape."""
 
+from dataclasses import dataclass
+
 import bpy
 
-from ...common.color_image import material_color_image
+from ...common.color_image import (
+    create_crop_color_image, material_highlight_threshold,
+)
+from ...common.image import ImageFormat, image_base_name
 from ...common.geometry_image import camera_depth_values
 from ...common.depth_geometry import (
     depth_limit_preset,
@@ -13,11 +18,7 @@ from ...common.depth_geometry import (
 )
 from ...common.image_plane import build_image_plane_matrix
 from ...common.material import create_image_material
-from ...common.node import load_node_group
-from ...common.object import (
-    finalize_object_result,
-    set_modifier_input,
-)
+from ...common.node import load_node_group, set_modifier_input
 from .geometry import (
     build_reference_mask,
     crop_plane_bounds,
@@ -29,10 +30,33 @@ from .boundary_padding import pad_cutout_images
 from ...preferences import DEFAULT_CUTOUT_BOUNDARY_PADDING
 
 
-def create_cutout_mesh_object(context, source_object, bounds, base_shape, material):
+@dataclass
+class CutoutSource:
+    """Source values needed to create a cutout after the original is gone."""
+
+    name: str
+    image_name: str
+    matrix_world: object
+    collection: object
+    bounds: tuple
+    rgba: object
+    image_format: ImageFormat
+    highlight_threshold: float
+
+    @classmethod
+    def capture(cls, context, source, bounds, rgba):
+        image = source.data
+        fmt = ImageFormat.capture(image)
+        threshold = material_highlight_threshold(image, rgba, context.scene)
+        left, top, right, bottom = bounds
+        return cls(source.name, image_base_name(image), source.matrix_world.copy(), context.collection,
+                   crop_plane_bounds(source, bounds, image.size), rgba[top:bottom, left:right].copy(), fmt, threshold)
+
+
+def create_cutout_mesh_object(source, bounds, base_shape, material):
     import numpy as np
 
-    source_name = source_object.name
+    source_name = source.name
     mesh = bpy.data.meshes.new(source_name)
     mesh_object = None
     try:
@@ -49,8 +73,8 @@ def create_cutout_mesh_object(context, source_object, bounds, base_shape, materi
         mesh.materials.append(material)
         mesh.update()
         mesh_object = bpy.data.objects.new(source_name, mesh)
-        context.collection.objects.link(mesh_object)
-        mesh_object.matrix_world = build_image_plane_matrix(source_object.matrix_world, bounds)
+        source.collection.objects.link(mesh_object)
+        mesh_object.matrix_world = build_image_plane_matrix(source.matrix_world, bounds)
         mesh_object["o_image_object"] = True
         return mesh_object
     except Exception:
@@ -78,7 +102,7 @@ def create_cutout_modifier(obj, group, shape, gesture):
 
 def create_shape_object(
     context,
-    source_object,
+    source,
     shape,
     bounds,
     base_shape,
@@ -99,14 +123,14 @@ def create_shape_object(
     mesh_object = None
     try:
         material = create_image_material(
-            source_object.data,
-            color_image,
+            color_image, color_image,
+            highlight_threshold=source.highlight_threshold, material_name=source.image_name,
             normal_image=normal_image,
             normal_space="OBJECT",
             scene=context.scene,
         )
         mesh_object = create_cutout_mesh_object(
-            context, source_object, bounds, base_shape, material
+            source, bounds, base_shape, material
         )
         mesh = mesh_object.data
         node_group = load_node_group(
@@ -141,12 +165,11 @@ def create_shape_object(
                 symmetry.node_group = symmetry_group
                 symmetry.show_group_selector = False
                 set_modifier_input(symmetry, "Direction", depth_node_direction(direction))
-        return finalize_object_result(
-            context,
-            source_object,
-            mesh_object,
-            keep_source=True,
-        )
+        for selected in context.selected_objects:
+            selected.select_set(False)
+        mesh_object.select_set(True)
+        context.view_layer.objects.active = mesh_object
+        return mesh_object
     except Exception:
         if mesh_object is not None:
             bpy.data.objects.remove(mesh_object, do_unlink=True)
@@ -165,7 +188,7 @@ def push_cutout_undo(shape):
 
 def create_cutout_shape(
     context,
-    source_object,
+    source,
     shape,
     edge_length,
     selection,
@@ -176,27 +199,26 @@ def create_cutout_shape(
     intrinsics=None,
     normal_image=None,
     boundary_padding=DEFAULT_CUTOUT_BOUNDARY_PADDING,
-    source_rgba,
     gesture="LASSO",
     report=None,
 ):
-    bounds = crop_plane_bounds(source_object, selection.bounds, source_object.data.size)
+    bounds = source.bounds
     base_shape = build_cutout_shape(
-        context, source_object, edge_length, selection.values, bounds,
+        context, source, edge_length, selection.values, bounds,
         alpha_threshold, fine_outline, report,
     )
-    left, top, right, bottom = selection.bounds
     depth_pixels = pad_cutout_images(
-        source_rgba[top:bottom, left:right],
+        source.rgba,
         depth_image,
         intrinsics,
         base_shape.mask,
         boundary_padding,
     )
-    with material_color_image(source_object.data, bounds=selection.bounds, rgba=source_rgba) as color_image:
+    color_image = create_crop_color_image(source.image_name, source.image_format, source.rgba)
+    try:
         result = create_shape_object(
             context,
-            source_object,
+            source,
             shape,
             bounds,
             base_shape,
@@ -209,5 +231,8 @@ def create_cutout_shape(
             color_image=color_image,
             gesture=gesture,
         )
+    finally:
+        if color_image.users == 0:
+            bpy.data.images.remove(color_image)
     push_cutout_undo(shape)
     return result

@@ -11,16 +11,15 @@ from mathutils import Vector
 from anyimage.common.color_image import create_material_color_image
 from anyimage.common import image as image_data
 from anyimage.common import material as material_data
-from anyimage.common import object as object_data
+from anyimage.common import node
 from anyimage.common.selection import ImageEditWarning, SelectionPath
 from anyimage.operators.cutout_tool import geometry as cutout_geometry
 from anyimage.operators.cutout_tool import object as cutout_main
 from anyimage.operators.cutout_tool import shape as cutout_shape
 from anyimage.operators.cutout_tool.boundary_padding import pad_cutout_images
-from anyimage.server.geometry.depth_texture import (
-    write_depth_texture,
+from anyimage.server.geometry.prediction_artifacts import (
+    GeometryFrame, write_depth_texture,
 )
-from anyimage.server.models.geometry import GeometryFrame
 from tests.support.image_objects import _create_cutout_shape, _depth_image, _evaluated_positions, _group_node
 
 
@@ -41,7 +40,7 @@ def test_depth_result_image_loads_camera_exr_and_keeps_data_name(tmp_path):
     alpha = np.asarray(((0.8, 1.0), (0.75, 0.0)), dtype=np.float32)
     write_depth_texture(frame, path, alpha=alpha)
 
-    image = geometry_image.load_depth_result_image(path, source)
+    image = geometry_image.load_depth_result_image(path, geometry_image.depth_data_name(source))
 
     packed = np.empty(16, dtype=np.float32)
     image.pixels.foreach_get(packed)
@@ -74,7 +73,7 @@ def test_cutout_depth_result_keeps_the_single_server_image(tmp_path):
     path = tmp_path / "depth.exr"
     write_depth_texture(frame, path, alpha=np.ones((2, 2)))
 
-    image = geometry_image.load_depth_result_image(path, source)
+    image = geometry_image.load_depth_result_image(path, geometry_image.depth_data_name(source))
 
     assert tuple(image.size) == (2, 2)
     camera_depth, valid = geometry_image.camera_depth_values(image_data.image_rgba(image))
@@ -96,7 +95,7 @@ def test_depth_texture_keeps_points_outside_positive_validity(tmp_path):
     path = tmp_path / "depth.exr"
     write_depth_texture(frame, path, alpha=np.ones_like(frame.validity))
 
-    image = geometry_image.load_depth_result_image(path, source)
+    image = geometry_image.load_depth_result_image(path, geometry_image.depth_data_name(source))
 
     packed = np.empty(8, dtype=np.float32)
     image.pixels.foreach_get(packed)
@@ -177,17 +176,17 @@ def test_depth_surface_object_evaluates(gesture):
     assert modifier.node_group.name == cutout_shape.CUTOUT_NODE_GROUP_NAMES["DEPTH_SOLID"]
     layer = _group_node(material_data.load_node_group(material_data.IMAGE_MATERIAL_NODE_GROUP_NAME), result.data.materials[0].node_tree)
     assert layer.inputs["Object Space"].default_value is False
-    assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Mode")) == (1 if gesture == "POLYLINE" else 0)
-    assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.1)
-    assert modifier_value(modifier, object_data.modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE")) == 1.0
-    object_data.set_modifier_input(modifier, "Thickness", 0.0, subtype="DISTANCE")
+    assert modifier_value(modifier, node.modifier_input_identifier(modifier.node_group, "Mode")) == (1 if gesture == "POLYLINE" else 0)
+    assert modifier_value(modifier, node.modifier_input_identifier(modifier.node_group, "Thickness", subtype="DISTANCE")) == pytest.approx(0.1)
+    assert modifier_value(modifier, node.modifier_input_identifier(modifier.node_group, "Thickness", subtype="NONE")) == 1.0
+    node.set_modifier_input(modifier, "Thickness", 0.0, subtype="DISTANCE")
     for name, value in (("Mode", 1), ("Front Inflation", 0.0)):
-        object_data.set_modifier_input(modifier, name, value)
-    scale_id = object_data.modifier_input_identifier(
+        node.set_modifier_input(modifier, name, value)
+    scale_id = node.modifier_input_identifier(
         modifier.node_group,
         "Uniform Scale",
     )
-    reference_id = object_data.modifier_input_identifier(
+    reference_id = node.modifier_input_identifier(
         modifier.node_group,
         "Reference Depth",
     )
@@ -197,12 +196,12 @@ def test_depth_surface_object_evaluates(gesture):
     )
     assert modifier_value(
         modifier,
-        object_data.modifier_input_identifier(modifier.node_group, "Depth Limit"),
+        node.modifier_input_identifier(modifier.node_group, "Depth Limit"),
     ) == pytest.approx(
         (DEPTH_LIMIT_MEDIAN_FACTOR - 1.0)
         * modifier_value(modifier, scale_id)
     )
-    object_data.set_modifier_input(modifier, "Boundary Smooth", 0)
+    node.set_modifier_input(modifier, "Boundary Smooth", 0)
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     evaluated = result.evaluated_get(bpy.context.evaluated_depsgraph_get())
@@ -216,7 +215,7 @@ def test_depth_surface_object_evaluates(gesture):
     finally:
         evaluated.to_mesh_clear()
 
-    object_data.set_modifier_input(modifier, "Thickness", 1.0, subtype="DISTANCE")
+    node.set_modifier_input(modifier, "Thickness", 1.0, subtype="DISTANCE")
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     evaluated = result.evaluated_get(bpy.context.evaluated_depsgraph_get())
@@ -261,7 +260,7 @@ def test_depth_surface_keeps_continuous_points_across_zero_validity_edge():
         intrinsics=intrinsics,
     )
     modifier = result.modifiers[0]
-    object_data.set_modifier_input(modifier, "Thickness", 0.0)
+    node.set_modifier_input(modifier, "Thickness", 0.0)
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     positions = _evaluated_positions(result)
@@ -330,7 +329,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert not modifier.show_group_selector and not symmetry.show_group_selector
 
     def value(modifier, name, subtype=None):
-        return modifier_value(modifier, object_data.modifier_input_identifier(
+        return modifier_value(modifier, node.modifier_input_identifier(
             modifier.node_group, name, subtype=subtype))
 
     assert value(modifier, "Mode") == (1 if gesture == "POLYLINE" else 0)
@@ -377,7 +376,7 @@ def test_depth_symmetry_uses_metric_plane_inputs(gesture):
     assert len(positions) and np.isfinite(positions).all()
     assert cKDTree(positions).query(positions * (-1, 1, 1))[0].max() < 1e-5
     # Both modes preserve symmetric geometry after changing the menu.
-    object_data.set_modifier_input(modifier, "Mode", 0 if gesture == "POLYLINE" else 1)
+    node.set_modifier_input(modifier, "Mode", 0 if gesture == "POLYLINE" else 1)
     result.update_tag(refresh={"DATA"})
     bpy.context.view_layer.update()
     changed = _evaluated_positions(result)
@@ -457,13 +456,12 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
         selection_mask = cutout_geometry.cutout_selection_mask(rgba, selection_path, alpha_threshold=0.5)
         cutout_main.create_cutout_shape(
             bpy.context,
-            source,
+            cutout_main.CutoutSource.capture(bpy.context, source, selection_mask.bounds, rgba),
             "FLAT",
             0.1,
             selection_mask,
             alpha_threshold=0.5,
             boundary_padding=0.0,
-            source_rgba=rgba,
         )
 
     read_rgba.assert_called_once_with(image)
@@ -509,7 +507,7 @@ def test_local_cutout_builds_from_blender_image_pixels_without_a_job():
 
 def modifier_value(modifier, identifier):
     """Read modifier values through the runtime's socket API."""
-    inputs = object_data._modifier_input_slots(modifier)
+    inputs = node._modifier_input_slots(modifier)
     if inputs is None:
         return modifier[identifier]
     slot = getattr(inputs, identifier)
@@ -517,3 +515,42 @@ def modifier_value(modifier, identifier):
     if prop.type == "ENUM":
         return list(prop.enum_items.keys()).index(slot.value)
     return slot.value
+
+
+def test_job_creates_cutout_after_source_is_deleted(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from anyimage.operators.cutout_tool import ai_operators
+    from anyimage.common.image_input import cleanup_image_input
+    from PIL import Image
+
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    image = bpy.data.images.new("Crop source", 32, 32, alpha=True)
+    image.pixels.foreach_set(np.tile(np.array([.5, .2, .1, 1], np.float32), 32 * 32))
+    owner = bpy.data.objects.new("Cutout placement", None)
+    owner.empty_display_type = "IMAGE"
+    owner.data = image
+    owner.location = (2, 3, 4)
+    bpy.context.collection.objects.link(owner)
+    bpy.context.view_layer.update()
+    op = SimpleNamespace(_source_image=image, _source_object=owner, _input_rgba=image_data.image_rgba(image),
+                         _selection=cutout_geometry.cutout_selection_mask(image_data.image_rgba(image),
+                             SelectionPath(((4, 4), (28, 4), (28, 28), (4, 28)))),
+                         shape="FLAT", edge_length=.1, alpha_threshold=.25, fine_outline=False,
+                         boundary_padding=0, gesture="LASSO", report=lambda *_: None)
+    monkeypatch.setattr(ai_operators, "geometry_job_parameters", lambda _: {})
+    monkeypatch.setattr(image_data, "pixel_digest", lambda _: pytest.fail("Cutout scanned the image for validation"))
+    ai_operators.CutoutSelectionToShape.request(op, bpy.context)
+    try:
+        bpy.data.objects.remove(owner, do_unlink=True)
+        bpy.data.images.remove(image)
+        normal = tmp_path / "normal.png"
+        Image.new("RGB", (24, 24), (128, 128, 255)).save(normal)
+        bpy.ops.ed.undo_push(message="Source deleted")
+        ai_operators.CutoutSelectionToShape.response(op, bpy.context, SimpleNamespace(file=lambda _: normal))
+        obj = bpy.context.view_layer.objects.active
+        assert obj.type == "MESH" and obj.active_material.name == "Crop source"
+        np.testing.assert_allclose(obj.matrix_world.translation, (2, 3, 4), atol=.1)
+        assert bpy.ops.ed.undo() == {"FINISHED"}
+        assert "Cutout placement" not in bpy.data.objects
+    finally:
+        cleanup_image_input(op._input_path)

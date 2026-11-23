@@ -10,7 +10,6 @@ from .image import (
     TEMPORARY_IMAGE_PREVIEW_PROPERTY,
     image_content_state,
     pack_image_result,
-    image_content_signature,
     has_other_image_user,
     image_pixels,
     image_rgba,
@@ -170,6 +169,31 @@ def replace_texture_image(node, result_image):
             bpy.data.images.remove(result_image)
 
 
+def prepare_image_undo(image):
+    """Pack unsaved pixels into the Undo step taken just before a job writes."""
+    from pathlib import Path
+    import tempfile
+    from .hdr_image import save_image_exr
+
+    if not image.is_dirty and image.source != "GENERATED":
+        return
+    state = image_content_state(image)
+    try:
+        if image.is_float and not image.colorspace_settings.is_data and state["colorspace"] != "Linear Rec.709":
+            # Float buffers are scene-linear. The packed file must match the Image's color space.
+            with tempfile.TemporaryDirectory(prefix="anyimage-undo-") as directory:
+                path = Path(directory) / "source.exr"
+                save_image_exr(image, path, state["colorspace"])
+                data = path.read_bytes()
+            image.pack(data=data, data_len=len(data))
+        else:
+            image.pack()
+        if "FINISHED" not in bpy.ops.ed.undo_push(message="Before image edit"):
+            raise RuntimeError("Unable to preserve the source image for Undo")
+    finally:
+        restore_image_content(image, state)
+
+
 @dataclass
 class ImageEditTarget:
     """Hold main-thread RNA identities for a single asynchronous image edit."""
@@ -181,7 +205,6 @@ class ImageEditTarget:
     object_owner: object = None
     material: object = None
     material_slot: int = -1
-    content_signature: tuple = None
 
     @classmethod
     def capture(cls, context):
@@ -206,8 +229,7 @@ class ImageEditTarget:
                 owner["anyimage_identity"] = identity
         key = (object_owner or owner).as_pointer()
         pixels = image_pixels(image)
-        target = cls(owner, image, tree, identity, object_owner, material, material_slot,
-                     image_content_signature(image, pixels))
+        target = cls(owner, image, tree, identity, object_owner, material, material_slot)
         pending = _image_targets.get(key)
         if pending == target:
             target = pending
@@ -246,16 +268,12 @@ class ImageEditTarget:
             pass
         raise RuntimeError("The source image target is no longer available or has changed")
 
-    def validate(self):
-        """Reject source changes outside successful edits of this target."""
-        self.validate_binding()
-        if image_content_signature(self.image) != self.content_signature:
-            raise RuntimeError("The source image content or settings have changed")
-
-    def commit(self, result_image):
+    def commit(self, result_image, *, prepare_undo=False):
         """Commit an owned, fully prepared image through the target transaction."""
         try:
-            self.validate()
+            self.validate_binding()
+            if prepare_undo:
+                prepare_image_undo(self.image)
         except Exception:
             bpy.data.images.remove(result_image)
             raise
@@ -270,7 +288,6 @@ class ImageEditTarget:
             image = replace_texture_image(self.owner, result_image)
         # Pending edits of the same owner follow only our successful replacements.
         self.image = image
-        self.content_signature = image_content_signature(image)
         return image
 
     def _commit_isolated_material(self, result_image):

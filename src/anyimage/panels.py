@@ -1,4 +1,5 @@
 import bpy
+
 from .common.color_reference import get_color_reference
 from .common.image import is_static_image
 

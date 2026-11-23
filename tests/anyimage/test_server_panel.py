@@ -1,4 +1,3 @@
-import importlib
 from types import SimpleNamespace
 from unittest.mock import patch
 from tests.support.blender import BlenderTestCase
@@ -57,11 +56,10 @@ class ServerPanelTest(BlenderTestCase):
         self.assertEqual(events.sequence[:2], ["Environment is not installed", "anyimage.setup_ai_server"])
 
     def test_danger_zone_is_last_collapsed_and_contains_only_cleanup(self):
-        panel_module = importlib.import_module("anyimage.panel")
-        panel_type = panel_module.DangerZonePanel
+        panel_type = self.anyimage.DangerZonePanel
         self.assertIn(panel_type, self.anyimage.CLASSES)
         self.assertEqual(panel_type.bl_options, {"DEFAULT_CLOSED"})
-        self.assertGreater(panel_type.bl_order, panel_module.ServerPanel.bl_order)
+        self.assertGreater(panel_type.bl_order, self.anyimage.ServerPanel.bl_order)
         events = self._draw_server_panel("IDLE", panel_type=panel_type)
         self.assertEqual(events.operators, [("anyimage.clear_job_files", True)])
         self.assertEqual(events.parents["anyimage.clear_job_files"].operator_context, "INVOKE_DEFAULT")
@@ -103,15 +101,15 @@ class ServerPanelTest(BlenderTestCase):
                 events.options[identifier] = _options
                 return SimpleNamespace()
 
-        panel_module = importlib.import_module("anyimage.panel")
-        panel = (panel_type or panel_module.ServerPanel)()
+        panel = (panel_type or self.anyimage.ServerPanel)()
         panel.layout = Layout()
         loaded = dict(
             zip(("geometry", "background", "upscale"), cached_names)
         )
+        runtime = self.anyimage.runtime
         with (
-            patch.object(panel_module.runtime, "state", return_value=state),
-            patch.object(panel_module.runtime, "resource", return_value={"loaded": loaded}),
+            patch.object(runtime, "state", return_value=state),
+            patch.object(runtime, "resource", return_value={"loaded": loaded}),
         ):
             panel.draw(None)
         return events

@@ -7,8 +7,8 @@ import numpy as np
 import pytest
 
 from anyimage.operators import ai_setup
-from anyimage.operators.convert_to_panorama import operators as panorama
-from anyimage.operators.depth_plane import operators as conversion
+from anyimage.operators import convert_to_panorama as panorama
+from anyimage.operators import depth_plane as conversion
 
 
 def test_native_server_controls_are_disabled_during_migration():
@@ -41,7 +41,7 @@ def test_geometry_job_caps_hdr_before_submission_and_cleans_failed_input(module,
 
     def reject(job_type, parameters, **kwargs):
         path = Path(parameters["input"])
-        assert list(path.parent.iterdir()) == [path]
+        assert (path.parent / "color.exr").is_file()
         assert "max_input_size" not in parameters
         assert parameters["resolution_level"] == 2
         assert parameters["model"] == "MOGE3_VITL" and parameters["refine_steps"] == 3

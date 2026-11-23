@@ -6,13 +6,12 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.operators.remove_background import BackgroundInput
 from anyimage.common.image import image_rgba
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
-from anyimage.operators.remove_background import operators
-from tests.support.hdr_image import hdr_texture
-from tests.support.image_texture import texture, texture_context
+from anyimage.operators import remove_background
+from tests.support.image_texture import hdr_texture, texture, texture_context
 
 
 @pytest.mark.parametrize("owner_kind,shared", [("texture", False), ("empty", True)])
@@ -52,7 +51,7 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
             operator.cleanup()
         return {"FINISHED"}
 
-    operation = operators.RemoveImageBackground
+    operation = remove_background.RemoveImageBackground
     bpy.context.preferences.edit.use_global_undo = True
     with patch.object(operation, "execute", execute), patch.object(operation, "poll", classmethod(lambda cls, context: True), create=True):
         bpy.utils.register_class(operation)
@@ -75,7 +74,7 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
 def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outcome):
     capture = ImageEditTarget.capture(texture_context(hdr_texture))
     paths = []
-    operation = operators.RemoveImageBackground
+    operation = remove_background.RemoveImageBackground
     original_cleanup = operation.cleanup
     original_execute = operation.execute
     context = SimpleNamespace(window_manager=Mock(), window=None)
@@ -101,7 +100,7 @@ def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outco
         patch.object(runtime.server, "submit", side_effect=RuntimeError("Submission failed")),
         patch.object(operation, "execute", execute),
         patch.object(operation, "poll", classmethod(lambda cls, context: True)),
-        patch.object(operators, "model_job_parameters", return_value={}),
+        patch.object(remove_background, "model_job_parameters", return_value={}),
         patch.object(operation, "cleanup", cleanup),
     ):
         bpy.utils.register_class(operation)
@@ -116,10 +115,10 @@ def test_hdr_submission_failure_releases_preview_and_snapshot(hdr_texture, outco
 
 
 def test_hdr_request_uses_alpha_output_and_current_still(hdr_texture):
-    operation = operators.RemoveImageBackground
+    operation = remove_background.RemoveImageBackground
     operator = SimpleNamespace(_input_path=None)
     try:
-        with patch.object(operators, "model_job_parameters", return_value={}):
+        with patch.object(remove_background, "model_job_parameters", return_value={}):
             parameters = operation.request(operator, texture_context(hdr_texture))
         assert Path(parameters["input"]).is_file()
         assert "start_frame" not in parameters and "video_frames" not in parameters

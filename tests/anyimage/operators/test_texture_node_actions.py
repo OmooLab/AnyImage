@@ -1,5 +1,5 @@
-from anyimage.operators.remove_background.image import BackgroundInput
-from anyimage.common.job_image import apply_image_result
+from anyimage.operators.remove_background import BackgroundInput
+from anyimage.operators.upscale import apply_upscale_result, upscale_output_format
 from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +14,7 @@ from anyimage import ai_menus as menu
 from anyimage.common import ai, image as images
 from anyimage.common.image_target import ImageEditTarget, active_texture_node
 from anyimage.operators import upscale
-from anyimage.operators.remove_background import operators as remove_background
+from anyimage.operators import remove_background
 from anyimage.runtime import runtime
 from tests.support.image_texture import texture, texture_context, write_result
 
@@ -62,7 +62,8 @@ def test_world_texture_menu_and_result(texture, node_type, tmp_path):
     anyimage.draw_texture_node_context_menu(SimpleNamespace(layout=layout), context)
     layout.menu.assert_called_once_with(menu.TextureNodeMenu.bl_idname)
     write_result(tmp_path)
-    apply_image_result(ImageEditTarget.capture(context)[0], tmp_path / "foreground.png")
+    target, _ = ImageEditTarget.capture(context)
+    apply_upscale_result(target, tmp_path / "foreground.png", upscale_output_format(target.image))
     assert tuple(node.image.size) == (8, 6)
     assert tuple(texture.image.size) == (4, 3)
 
@@ -74,7 +75,8 @@ def test_shader_editor_edits_the_shared_material(shader_editor, tmp_path):
     bpy.context.collection.objects.link(other)
     node = active_texture_node(shader_editor)
 
-    apply_image_result(ImageEditTarget.capture(shader_editor)[0], write_result(tmp_path))
+    target, _ = ImageEditTarget.capture(shader_editor)
+    apply_upscale_result(target, write_result(tmp_path), upscale_output_format(target.image))
 
     assert obj.active_material == other.active_material == material
     assert tuple(node.image.size) == (8, 6)
@@ -101,7 +103,7 @@ def test_shader_editor_pin_and_shared_group_target(shader_editor, tmp_path):
     source = nested.image
     target, _ = ImageEditTarget.capture(context)
     write_result(tmp_path)
-    apply_image_result(target, tmp_path / "foreground.png")
+    apply_upscale_result(target, tmp_path / "foreground.png", upscale_output_format(target.image))
     assert nested.image == source
     assert tuple(source.size) == (8, 6)
     assert second_instance.node_tree.nodes[nested.name].image == source
@@ -117,7 +119,7 @@ def test_linked_material_target_is_unavailable(texture, tmp_path):
     assert active_texture_node(context) is None
     target = ImageEditTarget(linked, linked.image, linked.id_data)
     with pytest.raises(RuntimeError, match="no longer available"):
-        target.validate()
+        target.validate_binding()
 
 
 def test_texture_menu_uses_node_dimensions_and_ai_settings(texture):
@@ -173,8 +175,10 @@ def test_texture_action_undo_redo_restores_image_and_binding(texture, tmp_path, 
         operator._image_target, rgba = ImageEditTarget.capture(texture_context(node))
         if operation == upscale.UpscaleImage:
             operator._model = "HAT_GAN_X4_SHARPER"
+            operator._output_format = upscale.upscale_output_format(operator._image_target.image)
         else:
-            operator._background_input = BackgroundInput(rgba, operator._image_target.image.alpha_mode, tmp_path / "input.png")
+            from anyimage.common.image import ImageFormat
+            operator._background_input = BackgroundInput(rgba, ImageFormat.capture(operator._image_target.image), tmp_path / "input.npy")
         operator.response(context, SimpleNamespace(file=lambda key: tmp_path / filename))
         return {"FINISHED"}
 

@@ -126,11 +126,15 @@ def test_effective_length_report_and_geometry_build_share_value():
     report = Mock()
     context = SimpleNamespace(scene=SimpleNamespace(unit_settings=SimpleNamespace(system="METRIC", scale_length=0.01)))
     source = source_plane(display_size=1000)
+    source.bounds = (-500, 500, -500, 500)
+    source.image_format = Mock()
+    source.image_name = "source"
+    source.rgba = np.ones((10, 10, 4))
     selection = SelectionMask(np.ones((10, 10)), (0, 0, 10, 10))
     from anyimage.operators.cutout_tool import geometry
     with patch.object(geometry, "effective_cutout_edge_length", return_value=20), \
          patch.object(geometry, "build_mesh", wraps=geometry.build_mesh) as build, \
-         patch.object(operators, "material_color_image", return_value=nullcontext(object())), \
+         patch.object(operators, "create_crop_color_image", return_value=Mock(users=1)), \
          patch.object(operators, "create_shape_object") as create, \
          patch.object(operators.bpy.ops.ed, "undo_push", return_value={"FINISHED"}):
         operators.create_cutout_shape(
@@ -140,7 +144,6 @@ def test_effective_length_report_and_geometry_build_share_value():
             10,
             selection,
             boundary_padding=0.0,
-            source_rgba=np.ones((100, 100, 4)),
             report=report,
         )
     assert build.call_args.args[1] == 20

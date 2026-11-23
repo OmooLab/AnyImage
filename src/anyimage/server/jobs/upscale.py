@@ -1,5 +1,4 @@
-from ..media.resolution import DEFAULT_MAX_AI_INPUT_SIZE, limit_image
-from ..media.input import open_image
+from ..media.input import DEFAULT_MAX_AI_INPUT_SIZE, limit_image, load_ai_input
 from ..model_catalog import UPSCALE_MODELS
 from ..models import model_adapter
 
@@ -19,31 +18,18 @@ def run(context, parameters):
     context.progress(0.08, "Upscaling image")
     if parameters["model"] not in UPSCALE_MODELS:
         raise ValueError(f"Unknown upscale model: {parameters['model']}")
-    with open_image(parameters["input"]) as opened:
-        model, _load_ms = context.resource("model_manager").get_session(
-            parameters["model"], parameters["device"],
-        )
-        source = limit_image(
-            opened,
-            parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE),
-        )
-        source_alpha = (
-            source.convert("RGBA").getchannel("A")
-            if "A" in source.getbands() or "transparency" in source.info
-            else None
-        )
-        prediction = model_adapter(parameters["model"]).infer(
-            model,
-            source,
-            cancel_check=context.check_cancelled,
-            tile_border=UPSCALE_MODELS[parameters["model"]].tile_border,
-        )
-        prediction = prediction.resize(
-            (source.width * 2, source.height * 2), Image.Resampling.LANCZOS,
-        )
-        if source_alpha is not None:
-            prediction = prediction.convert("RGBA")
-            prediction.putalpha(source_alpha.resize(prediction.size, Image.Resampling.LANCZOS))
+    source = Image.fromarray(load_ai_input(parameters["input"], as_bytes=True))
+    source = limit_image(source, parameters.get("max_input_size", DEFAULT_MAX_AI_INPUT_SIZE))
+    model, _load_ms = context.resource("model_manager").get_session(
+        parameters["model"], parameters["device"],
+    )
+    prediction = model_adapter(parameters["model"]).infer(
+        model, source, cancel_check=context.check_cancelled,
+        tile_border=UPSCALE_MODELS[parameters["model"]].tile_border,
+    )
+    size = (source.width * 2, source.height * 2)
+    prediction = prediction.resize(size, Image.Resampling.LANCZOS)
+    prediction.putalpha(source.getchannel("A").resize(size, Image.Resampling.LANCZOS))
     context.check_cancelled()
     prediction.save(context.directory / "upscale.png", format="PNG", compress_level=1)
     context.progress(1.0, "Image upscale complete")

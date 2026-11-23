@@ -1,9 +1,7 @@
 import bpy
 
-from .operators.ai_setup import UnloadModels, SetupAIServer
+from .operators.ai_setup import SetupAIServer, UnloadModels
 from .runtime import runtime
-
-
 from .server.model_catalog import DOWNLOADABLE_MODELS
 
 

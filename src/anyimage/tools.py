@@ -1,12 +1,21 @@
 import bpy
 
-from .common.viewport import image_edit_keymap
 from .operators.cutout_tool import SelectCutoutSelection
 from .operators.frame_tool import FrameImages
 from .operators.frame_tool.operators import FRAME_TOOL_ID
 from .operators.mask_tool import EditImageAlpha, MASK_TOOL_ID
 from .operators.rectify_tool import RectifyImagePerspective
 from .operators.rectify_tool.operators import RECTIFY_TOOL_ID
+
+
+def image_edit_keymap(operator_id, *events):
+    return (
+        *((operator_id, {"type": "LEFTMOUSE", "value": value}, None) for value in events),
+        ("view3d.select", {"type": "LEFTMOUSE", "value": "CLICK"},
+         {"properties": [("deselect_all", True)]}),
+        ("view3d.select", {"type": "LEFTMOUSE", "value": "CLICK", "shift": True},
+         {"properties": [("toggle", True)]}),
+    )
 
 
 class FrameTool(bpy.types.WorkSpaceTool):

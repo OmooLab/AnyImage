@@ -16,11 +16,11 @@ def normal_data_name(source_object):
     return f"{image_base_name(source_object.data)}_normal.png"
 
 
-def load_normal_result_image(path, source_object):
+def load_normal_result_image(path, name):
     """Load, name, configure, and pack a generated normal image."""
     image = bpy.data.images.load(str(path), check_existing=False)
     try:
-        image.name = normal_data_name(source_object)
+        image.name = name
         image.colorspace_settings.is_data = True
         image.pack()
         return image
@@ -29,11 +29,11 @@ def load_normal_result_image(path, source_object):
         raise
 
 
-def load_depth_result_image(path, source_object):
+def load_depth_result_image(path, name):
     """Load and configure a generated Depth texture."""
     image = bpy.data.images.load(str(path), check_existing=False)
     try:
-        image.name = depth_data_name(source_object)
+        image.name = name
         image.colorspace_settings.is_data = True
         image.alpha_mode = "CHANNEL_PACKED"
         return image

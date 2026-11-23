@@ -10,27 +10,27 @@ from scipy.sparse.linalg import cg
 RELIEF_SCALE_DEGREES = 2.5
 
 
-def _unit(field):
-    return field / np.maximum(np.linalg.norm(field, axis=-1, keepdims=True), 1e-12)
-
-
 def _dot(a, b):
-    return np.sum(a * b, axis=-1)
+    return np.einsum("...i,...i->...", a, b)
+
+
+def _unit(field):
+    length = np.sqrt(_dot(field, field))
+    return field / np.maximum(length[..., None], 1e-12)
 
 
 def _derivative(field, forward, axis):
     backward = np.roll(forward, 1, axis=axis)
-    plus = np.roll(field, -1, axis=axis) - field
-    minus = field - np.roll(field, 1, axis=axis)
+    delta = (np.roll(field, -1, axis=axis) - field) * forward[..., None]
     count = forward.astype(np.float32) + backward
-    return (plus * forward[..., None] + minus * backward[..., None]) / np.maximum(count[..., None], 1)
+    return (delta + np.roll(delta, 1, axis=axis)) / np.maximum(count[..., None], 1)
 
 
 def _normals(points, rays, horizontal, vertical):
     tangent_x = _derivative(points, horizontal, 1)
     tangent_y = _derivative(points, vertical, 0)
     product = np.cross(tangent_x, tangent_y)
-    area = np.linalg.norm(product, axis=-1)
+    area = np.sqrt(_dot(product, product))
     normal = product / np.maximum(area[..., None], 1e-12)
     normal[_dot(normal, rays) > 0] *= -1
     degenerate = area < 1e-12

@@ -1,9 +1,69 @@
 """Export requested depth and normal artifacts from one MoGe prediction."""
 
+from dataclasses import dataclass
+from pathlib import Path
+
+from ..media.exr import write_float_exr
+from ..media.input import load_ai_input
 from ..models import model_adapter
-from ..models.geometry import infer_geometry
-from .depth_texture import write_depth_texture
-from .normal_texture import write_normal_texture
+
+
+@dataclass
+class GeometryFrame:
+    depth: object
+    validity: object
+    intrinsics: object
+    normal: object | None = None
+    points: object | None = None
+
+    def __post_init__(self):
+        import numpy as np
+
+        depth = np.asarray(self.depth)
+        validity = np.asarray(self.validity)
+        intrinsics = np.asarray(self.intrinsics)
+        if depth.dtype != np.float32 or depth.ndim != 2:
+            raise ValueError("Geometry depth must be a 2D float32 field")
+        if validity.dtype != np.float32 or validity.shape != depth.shape:
+            raise ValueError("Geometry validity must match the depth as float32")
+        if intrinsics.dtype != np.float32 or intrinsics.shape != (3, 3):
+            raise ValueError("Geometry intrinsics must be a 3x3 float32 matrix")
+        for name in ("normal", "points"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            field = np.asarray(value)
+            if field.dtype != np.float32 or field.shape != (*depth.shape, 3):
+                raise ValueError(
+                    f"Geometry {name} must match the depth as three-channel float32"
+                )
+
+
+def _pixel_intrinsics(intrinsics, image_size):
+    import numpy as np
+
+    width, height = image_size
+    result = np.asarray(intrinsics, dtype=np.float32).copy()
+    result[0] *= width
+    result[1] *= height
+    result[2] = (0.0, 0.0, 1.0)
+    return result
+
+
+def infer_geometry(adapter, session, rgb, resolution_level, **options):
+    """Infer full geometry with camera intrinsics expressed in pixels."""
+    import numpy as np
+
+    prediction = adapter.infer(session, rgb, resolution_level, **options)
+    depth = np.asarray(prediction["depth"], dtype=np.float32)
+    height, width = depth.shape
+    return GeometryFrame(
+        depth=depth,
+        normal=np.asarray(prediction["normal"], dtype=np.float32),
+        validity=np.asarray(prediction["mask"], dtype=np.float32),
+        intrinsics=_pixel_intrinsics(prediction["intrinsics"], (width, height)),
+        points=np.asarray(prediction["points"], dtype=np.float32),
+    )
 
 
 def generate_moge_artifacts(
@@ -17,7 +77,7 @@ def generate_moge_artifacts(
     import numpy as np
     from PIL import Image
 
-    rgba = np.load(parameters["input"], allow_pickle=False)
+    rgba = load_ai_input(parameters["input"])
     rgb = rgba[..., :3]
     context.check_cancelled()
     model = parameters["model"]
@@ -49,3 +109,50 @@ def generate_moge_artifacts(
         normal_space=normal_space,
     ).name
     return result
+
+
+def write_depth_texture(frame, output_path, *, alpha):
+    """Write camera-space XYZ and alpha-weighted model validity as float RGBA."""
+    import numpy as np
+
+    if frame.points is None:
+        raise ValueError("Depth requires a point field")
+    points = np.asarray(frame.points, dtype=np.float32)
+    validity = np.asarray(frame.validity, dtype=np.float32)
+    alpha = np.asarray(alpha, dtype=np.float32)
+    if alpha.shape != validity.shape:
+        raise ValueError("Depth Alpha must match the validity dimensions")
+    if not np.isfinite(points).all():
+        raise ValueError("Point field contains non-finite values")
+    if not np.any((validity > 0.5) & np.isfinite(frame.depth) & (frame.depth > 0)):
+        raise ValueError("Geometry frame contains no valid depth pixels")
+    rgba = np.empty((*validity.shape, 4), dtype=np.float32)
+    rgba[..., :3] = points
+    rgba[..., 3] = alpha * validity
+    return write_float_exr(rgba, output_path)
+
+
+def write_normal_texture(normal, visibility, output_size, output_path, *, normal_space="TANGENT"):
+    """Encode camera normals in flat tangent or image-object space."""
+    import numpy as np
+    from PIL import Image
+
+    normal = np.asarray(normal, dtype=np.float32)
+    if not np.isfinite(normal).all():
+        raise ValueError("Normal field contains non-finite values")
+    if normal_space == "OBJECT":
+        converted = normal[..., (0, 2, 1)] * np.asarray((1.0, 1.0, -1.0), dtype=np.float32)
+        empty_normal = (128, 0, 128)
+    elif normal_space == "TANGENT":
+        converted = normal * np.asarray((1.0, -1.0, -1.0), dtype=np.float32)
+        empty_normal = (128, 128, 255)
+    else:
+        raise ValueError(f"Unsupported normal space: {normal_space}")
+    encoded = np.clip((converted + 1.0) * 127.5, 0.0, 255.0).astype(np.uint8)
+    encoded[~visibility] = empty_normal
+    image = Image.fromarray(encoded, mode="RGB")
+    if image.size != output_size:
+        image = image.resize(output_size, Image.Resampling.BILINEAR)
+    output_path = Path(output_path)
+    image.save(output_path)
+    return output_path

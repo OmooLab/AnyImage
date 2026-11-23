@@ -137,14 +137,13 @@ class BlenderTestCase(unittest.TestCase):
         cls.ai = importlib.import_module("anyimage.common.ai")
         cls.image_data = importlib.import_module("anyimage.common.image")
         cls.image_input = importlib.import_module("anyimage.common.image_input")
-        cls.depth_plane_operators = importlib.import_module("anyimage.operators.depth_plane.operators")
-        cls.depth_plane = importlib.import_module("anyimage.operators.depth_plane.object")
+        cls.depth_plane = importlib.import_module("anyimage.operators.depth_plane")
         cls.cutout_object = importlib.import_module("anyimage.operators.cutout_tool.object")
         cls.cutout_main = importlib.import_module(
             "anyimage.operators.cutout_tool.ai_operators"
         )
         cls.remove_background = importlib.import_module(
-            "anyimage.operators.remove_background.operators"
+            "anyimage.operators.remove_background"
         )
         cls.upscale = importlib.import_module("anyimage.operators.upscale")
         cls.image_interaction = importlib.import_module("anyimage.common.viewport")
@@ -159,7 +158,6 @@ class BlenderTestCase(unittest.TestCase):
             "anyimage.operators.rectify_tool.operators"
         )
         cls.rectify_geometry = importlib.import_module("anyimage.operators.rectify_tool.geometry")
-        cls.rectify_preview = importlib.import_module("anyimage.operators.rectify_tool.preview")
         cls.cutout_operators = importlib.import_module("anyimage.operators.cutout_tool.operators")
         cls.convert_to_plane = importlib.import_module("anyimage.operators.convert_to_plane")
         cls.cutout_geometry = importlib.import_module(

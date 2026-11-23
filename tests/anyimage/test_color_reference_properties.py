@@ -10,7 +10,7 @@ from tests.support.color_reference import create_clipboard_image, registered_col
 def test_set_reference_previews_current_image_and_colors(registered_color_reference):
     from types import SimpleNamespace
     from unittest.mock import Mock
-    from anyimage.color_panel import ColorMatchPanel
+    from anyimage.panels import ColorMatchPanel
     from tests.support.color_reference import create_image_empty
 
     bpy.ops.wm.read_factory_settings(use_empty=True)

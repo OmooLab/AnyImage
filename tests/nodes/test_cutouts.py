@@ -5,16 +5,16 @@ import bpy
 import numpy as np
 import pytest
 from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout import OCutout
-from tests.support.nodes import CUTOUT_BUILDERS
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_cutout import ODepthCutout
 
 
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 
 
-@pytest.mark.parametrize("shape", ("SOLID", "DEPTH_SOLID"))
-def test_depth_axis_is_removed_from_cutout_options(shape):
+@pytest.mark.parametrize("node_type", (OCutout, ODepthCutout))
+def test_depth_axis_is_removed_from_cutout_options(node_type):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    group = CUTOUT_BUILDERS[shape]()
+    group = node_type.create_group()
     inputs = {item.name: item for item in group.interface.items_tree
               if item.item_type == "SOCKET" and item.in_out == "INPUT"}
     assert "Depth Axis" not in inputs

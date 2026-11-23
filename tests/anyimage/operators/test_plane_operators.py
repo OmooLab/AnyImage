@@ -18,7 +18,7 @@ class PlaneOperatorsTest(BlenderTestCase):
 
 
     def test_depth_plane_rejects_animation_and_requests_ai_setup(self):
-        module = self.depth_plane_operators
+        module = self.depth_plane
         operator = SimpleNamespace(report=Mock())
         source = SimpleNamespace(source="MOVIE")
         context = SimpleNamespace(object=SimpleNamespace(data=source))
@@ -33,35 +33,35 @@ class PlaneOperatorsTest(BlenderTestCase):
         for plane_type, normal_space in (("DEPTH", "OBJECT"), ("RELIEF", "TANGENT")):
             normal_key = f"{normal_space.lower()}_normal"
             module = self.depth_plane
-            source = SimpleNamespace(data=SimpleNamespace(name="Source"))
+            source = SimpleNamespace(data=SimpleNamespace(name="Source", source="FILE", is_dirty=False))
             result = SimpleNamespace(file=lambda key: Path("result") / key, value={"intrinsics": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]})
-            operator = SimpleNamespace(plane_type=plane_type, bl_label=plane_type)
+            operator = SimpleNamespace(plane_type=plane_type, bl_label=plane_type, ready_message=plane_type, _color_path=Mock(), _color_format=Mock())
             context = SimpleNamespace(scene=object())
             ops = SimpleNamespace(
                 ed=SimpleNamespace(undo_push=Mock(return_value={"FINISHED"}))
             )
 
             with (
-                patch.object(module, "read_conversion_source", return_value=(source, None)),
+                patch.object(module, "conversion_source", return_value=source),
                 patch.object(module, "image_rgba"),
-                patch.object(module, "material_color_image", return_value=nullcontext(object())),
+                patch.object(module, "load_material_color", return_value=Mock()),
                 patch.object(module, "load_depth_result_image"),
                 patch.object(module, "load_normal_result_image") as load_normal,
                 patch.object(module, "create_image_material") as create_material,
                 patch.object(module, "create_depth_plane_object"),
                 patch.object(module.bpy, "ops", ops, create=True),
             ):
-                module.create_depth_plane_from_result(context, result, operator)
+                module.DepthPlaneJob.response(operator, context, result)
 
-            load_normal.assert_called_once_with(Path("result") / normal_key, source)
+            load_normal.assert_called_once_with(Path("result") / normal_key, "Source_normal.png")
             self.assertIs(create_material.call_args.kwargs["normal_image"], load_normal.return_value)
             self.assertEqual(create_material.call_args.kwargs["normal_space"], normal_space)
 
 
     def test_depth_plane_result_cleans_unused_depth_and_normal_on_failure(self):
         module = self.depth_plane
-        source = SimpleNamespace(data=SimpleNamespace(name="Source"))
-        color_image = SimpleNamespace(name="", users=0)
+        source = SimpleNamespace(data=SimpleNamespace(name="Source", source="FILE", is_dirty=False))
+        color_image = SimpleNamespace(name="", users=0, size=(2, 1))
         depth_image = SimpleNamespace(users=0, pack=Mock())
         normal_image = SimpleNamespace(users=0)
         material = SimpleNamespace(users=0)
@@ -82,9 +82,9 @@ class PlaneOperatorsTest(BlenderTestCase):
         )
 
         with (
-            patch.object(module, "read_conversion_source", return_value=(source, None)),
+            patch.object(module, "conversion_source", return_value=source),
             patch.object(module, "image_rgba"),
-            patch.object(module, "material_color_image", return_value=nullcontext(color_image)),
+            patch.object(module, "load_material_color", return_value=color_image),
             patch.object(module, "load_depth_result_image", return_value=depth_image),
             patch.object(module, "load_normal_result_image", return_value=normal_image),
             patch.object(module, "create_image_material", return_value=material),
@@ -96,16 +96,15 @@ class PlaneOperatorsTest(BlenderTestCase):
             patch.object(module.bpy, "data", data),
             self.assertRaisesRegex(RuntimeError, "failed"),
         ):
-            module.create_depth_plane_from_result(
-                SimpleNamespace(scene=object()),
-                result,
-                SimpleNamespace(plane_type="DEPTH"),
+            module.DepthPlaneJob.response(
+                SimpleNamespace(plane_type="DEPTH", _color_path=Mock(), _color_format=Mock()),
+                SimpleNamespace(scene=object()), result,
             )
 
         remove_material.assert_called_once_with(material, do_unlink=True)
         self.assertEqual(
             [entry.args[0] for entry in remove_image.call_args_list],
-            [depth_image, normal_image],
+            [depth_image, normal_image, color_image],
         )
         self.assertTrue(
             all(

@@ -1,5 +1,4 @@
-from anyimage.common.job_image import apply_image_result
-from anyimage.common.job_image import load_image_edit_result
+from anyimage.operators.upscale import apply_upscale_result, load_upscale_result, upscale_output_format
 from unittest.mock import patch
 
 import bpy
@@ -12,7 +11,7 @@ from tests.support.image_texture import texture, texture_context, write_result
 
 
 @pytest.mark.parametrize("change", ["pixels", "colorspace", "alpha_mode"])
-def test_external_content_changes_reject_old_job_and_allow_new_capture(texture, tmp_path, change):
+def test_in_place_edits_share_the_same_job_target(texture, tmp_path, change):
     old, _ = targets.ImageEditTarget.capture(texture_context(texture))
     if change == "pixels":
         texture.image.pixels[0] = 0.9
@@ -22,17 +21,10 @@ def test_external_content_changes_reject_old_job_and_allow_new_capture(texture, 
     else:
         texture.image.alpha_mode = "CHANNEL_PACKED"
     current, _ = targets.ImageEditTarget.capture(texture_context(texture))
-    assert current is not old
-    before = images.image_pixels(texture.image)
-    path = write_result(tmp_path)
-    count = len(bpy.data.images)
-    with pytest.raises(RuntimeError, match="content or settings have changed"):
-        apply_image_result(old, path)
-    assert len(bpy.data.images) == count
-    np.testing.assert_array_equal(images.image_pixels(texture.image), before)
-    apply_image_result(current, path)
+    assert current is old
+    apply_upscale_result(old, write_result(tmp_path), upscale_output_format(old.image))
     assert tuple(texture.image.size) == (8, 6)
-    current.validate()
+    current.validate_binding()
 
 
 def test_target_uses_edit_tree_and_survives_renaming(texture, tmp_path):
@@ -44,7 +36,7 @@ def test_target_uses_edit_tree_and_survives_renaming(texture, tmp_path):
     texture.id_data.nodes.active = other
     context.space_data.edit_tree = None
     write_result(tmp_path)
-    apply_image_result(target, tmp_path / "foreground.png")
+    apply_upscale_result(target, tmp_path / "foreground.png", upscale_output_format(target.image))
     assert tuple(texture.image.size) == (8, 6)
     assert other.image is None
 
@@ -54,9 +46,9 @@ def test_target_uses_edit_tree_and_survives_renaming(texture, tmp_path):
     ("AgX Base sRGB", "STRAIGHT", "upscale.png", False),
     ("Filmic sRGB", "STRAIGHT", "foreground.png", False),
     ("sRGB", "STRAIGHT", "upscale.png", True),
-    ("AgX Base sRGB", "PREMUL", "foreground.png", True),
+    ("Non-Color", "CHANNEL_PACKED", "upscale.png", True),
 ])
-def test_image_actions_preserve_source_color_space_and_alpha(texture, tmp_path, color_space, alpha_mode, filename, shared):
+def test_ai_result_uses_encoded_color_space_and_preserves_alpha(texture, tmp_path, color_space, alpha_mode, filename, shared):
     texture.image.colorspace_settings.name = color_space
     texture.image.alpha_mode = alpha_mode
     original = texture.image
@@ -66,9 +58,9 @@ def test_image_actions_preserve_source_color_space_and_alpha(texture, tmp_path, 
         other.image = original
     target, _ = targets.ImageEditTarget.capture(texture_context(texture))
     write_result(tmp_path, filename)
-    apply_image_result(target, tmp_path / filename)
+    apply_upscale_result(target, tmp_path / filename, upscale_output_format(target.image))
     result = texture.image
-    assert result.colorspace_settings.name == color_space
+    assert result.colorspace_settings.name == ("Non-Color" if color_space == "Non-Color" else "sRGB")
     assert result.alpha_mode == alpha_mode
     np.testing.assert_allclose(
         images.image_pixels(result).reshape(-1, 4),
@@ -105,6 +97,7 @@ def test_invalid_node_context_does_not_fall_back_to_empty(texture, invalid):
 @pytest.mark.parametrize("change", ["delete", "recreate", "rebind", "delete_material", "delete_image", "identity"])
 def test_target_rejects_changed_identity_before_loading_result(texture, tmp_path, change):
     target, _ = targets.ImageEditTarget.capture(texture_context(texture))
+    output_format = upscale_output_format(target.image)
     tree = texture.id_data
     if change in {"delete", "recreate"}:
         name = texture.name
@@ -124,7 +117,7 @@ def test_target_rejects_changed_identity_before_loading_result(texture, tmp_path
         bpy.data.images.remove(texture.image)
     count = len(bpy.data.images)
     with pytest.raises(RuntimeError, match="no longer available"):
-        apply_image_result(target, tmp_path / "foreground.png")
+        apply_upscale_result(target, tmp_path / "foreground.png", output_format)
     assert len(bpy.data.images) == count
 
 
@@ -159,7 +152,7 @@ def test_texture_commit_preserves_structure_and_isolates_users(texture, tmp_path
     shared = reference in {"same_tree", "other_material", "empty", "brush"}
     links = [(link.from_socket, link.to_socket) for link in texture.id_data.links]
     write_result(tmp_path)
-    apply_image_result(target, tmp_path / "foreground.png")
+    apply_upscale_result(target, tmp_path / "foreground.png", upscale_output_format(target.image))
     assert (texture.image == original) == (not shared)
     assert tuple(texture.image.size) == (8, 6)
     assert texture.image.colorspace_settings.name == "Non-Color"
@@ -198,7 +191,7 @@ def test_failed_texture_assignment_restores_source(texture, tmp_path, shared):
     original.pixels.foreach_set(np.tile([0.1, 0.3, 0.7, 0.5], 12).astype(np.float32))
     packed = bytes(original.packed_file.data)
     pixels = images.image_pixels(original)
-    result = load_image_edit_result(original, write_result(tmp_path))
+    result = load_upscale_result(original, write_result(tmp_path), upscale_output_format(original))
     count = len(bpy.data.images) - 1
 
     class FailingTarget:

@@ -5,13 +5,13 @@ import bpy
 import numpy as np
 
 
-from tests.support.nodes import CUTOUT_BUILDERS
-from anyimage.common.object import modifier_input_identifier
+from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_cutout import ODepthCutout
+from anyimage.common.node import modifier_input_identifier
 
 
 def surface(*, step=6.0, size=1.0, resolution=2):
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    group = CUTOUT_BUILDERS["DEPTH_SOLID"]()
+    group = ODepthCutout.create_group()
     # Two columns with a complete depth jump along their common boundary.
     points = [
         (x * size / resolution, 0, y * size / resolution)

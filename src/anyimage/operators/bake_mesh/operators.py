@@ -2,7 +2,7 @@
 
 import bpy
 
-from ...common.object import get_modifier_input
+from ...common.node import get_modifier_input
 from .geometry import PROTOCOL_ATTRIBUTES, mesh_bake_modifiers
 from .materialization import materialize_mesh_and_textures
 

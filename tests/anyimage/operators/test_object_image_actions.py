@@ -1,4 +1,4 @@
-from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.operators.remove_background import BackgroundInput
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -15,7 +15,7 @@ from anyimage.common.image_target import (
     object_image_texture,
 )
 from anyimage.operators import upscale
-from anyimage.operators.remove_background import operators as remove_background
+from anyimage.operators import remove_background
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
 from tests.support.materials import shadeless_material
@@ -50,7 +50,7 @@ def _material(kind="PLAIN", image=None):
 
 
 def test_pending_edits_follow_shared_material_replacement(tmp_path):
-    from anyimage.common.job_image import apply_image_result
+    from anyimage.operators.upscale import apply_upscale_result, upscale_output_format
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, image = _material()
     first_owner = _image_object(material, "First")
@@ -58,8 +58,8 @@ def test_pending_edits_follow_shared_material_replacement(tmp_path):
     first, _ = ImageEditTarget.capture(_context(first_owner))
     second, _ = ImageEditTarget.capture(_context(first_owner))
     write_result(tmp_path)
-    apply_image_result(first, tmp_path / "foreground.png")
-    apply_image_result(second, tmp_path / "foreground.png")
+    apply_upscale_result(first, tmp_path / "foreground.png", upscale_output_format(first.image))
+    apply_upscale_result(second, tmp_path / "foreground.png", upscale_output_format(second.image))
     assert first_owner.active_material != material
     assert second_owner.active_material == material
     assert object_image_texture(second_owner).image == image
@@ -79,7 +79,7 @@ def test_marked_object_resolves_material_color(kind):
     assert target.object_owner == obj
     assert target.material == material
     assert target.material_slot == 0
-    target.validate()
+    target.validate_binding()
 
 
 def test_ordinary_object_uses_first_texture_of_current_material():
@@ -104,7 +104,7 @@ def test_ordinary_object_uses_first_texture_of_current_material():
     assert image_edit_owner(context) == texture
     assert not material.texture_paint_images
     target, _ = ImageEditTarget.capture(context)
-    target.validate()
+    target.validate_binding()
     bpy.context.tool_settings.image_paint.mode = "MATERIAL"
     material.paint_active_slot = 1
     tree.nodes.active = other
@@ -138,11 +138,11 @@ def test_object_color_target_survives_shader_edits(edit):
         tree.nodes.remove(shader)
     if edit == "reroute":
         assert object_image_texture(obj).image == color
-        target.validate()
+        target.validate_binding()
     else:
         assert object_image_texture(obj) is None
         with pytest.raises(RuntimeError):
-            target.validate()
+            target.validate_binding()
 
 
 def test_object_target_rejects_changed_material_slot():
@@ -154,7 +154,7 @@ def test_object_target_rejects_changed_material_slot():
     obj.material_slots[0].material = replacement
 
     with pytest.raises(RuntimeError, match="no longer available"):
-        target.validate()
+        target.validate_binding()
 
 
 def test_object_commit_isolates_shared_material():
@@ -222,8 +222,10 @@ def test_object_action_undo_redo_restores_shared_material(
         operator._image_target, rgba = ImageEditTarget.capture(_context(current))
         if operation == upscale.UpscaleImage:
             operator._model = "HAT_GAN_X4_SHARPER"
+            operator._output_format = upscale.upscale_output_format(operator._image_target.image)
         else:
-            operator._background_input = BackgroundInput(rgba, operator._image_target.image.alpha_mode, tmp_path / "input.png")
+            from anyimage.common.image import ImageFormat
+            operator._background_input = BackgroundInput(rgba, ImageFormat.capture(operator._image_target.image), tmp_path / "input.npy")
         operator.response(
             context,
             SimpleNamespace(file=lambda key: tmp_path / filename),

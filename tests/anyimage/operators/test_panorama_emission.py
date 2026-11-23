@@ -13,7 +13,7 @@ from anyimage.common.image import image_pixels
 from anyimage.common.material import create_image_material
 from anyimage.operators.bake_mesh import BakeMesh, materialization, materials
 from anyimage.operators.bake_mesh.geometry import mesh_bake_modifiers
-from anyimage.operators.bake_mesh.textures import create_emission_color_image
+from anyimage.operators.bake_mesh.materialization import create_emission_color_image
 from nodes.O_AnyImage.O_AnyImage.shader.o_texture_to_layer import OTextureToLayer
 from tests.support.mesh_bake import render_material
 from tests.support.panorama import panorama
@@ -155,7 +155,7 @@ def test_emission_encoding_clamps_negative_rgb_and_preserves_hdr_ratios(image_ob
 
 
 def test_inverse_mask_emission_survives_baking(image_object, tmp_path):
-    from anyimage.common.object import set_modifier_input
+    from anyimage.common.node import set_modifier_input
     from scipy.ndimage import binary_erosion
 
     obj = image_object

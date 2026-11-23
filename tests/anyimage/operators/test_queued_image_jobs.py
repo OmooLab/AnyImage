@@ -7,9 +7,9 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.operators.remove_background import BackgroundInput
 from anyimage.common.image import image_rgba
-from anyimage.common.image_input import cleanup_image_input, prepare_input_png
+from anyimage.common.image_input import cleanup_image_input, prepare_ai_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.runtime import runtime
 from tests.support.image_texture import write_result
@@ -116,9 +116,8 @@ def test_input_snapshot_exports_current_unsaved_pixels(tmp_path, kind):
     settings = image.source, image.filepath_raw, image.file_format
     path = None
     try:
-        path = prepare_input_png(image_rgba(image, before))
-        with Image.open(path) as snapshot:
-            np.testing.assert_allclose(np.asarray(snapshot).reshape(-1) / 255, before, atol=1 / 255)
+        path = prepare_ai_input(image, image_rgba(image, before))
+        np.testing.assert_allclose(np.load(path).reshape(-1) / 255, before, atol=1 / 255)
         np.testing.assert_array_equal(image_pixels(image), before)
         assert (image.source, image.filepath_raw, image.file_format) == settings
         if kind == "dirty":

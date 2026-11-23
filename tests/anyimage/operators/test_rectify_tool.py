@@ -123,7 +123,7 @@ class RectifyToolTest(BlenderTestCase):
     def test_concave_screen_selection_is_rejected_before_reading_pixels(self):
         operator = self.rectify.RectifyImagePerspective()
         operator._points = [(0, 0), (20, 0), (4, 4), (0, 20)]
-        with patch.object(self.rectify, "read_conversion_source") as read:
+        with patch.object(self.rectify, "read_rectify_source") as read:
             with self.assertRaisesRegex(ValueError, "convex"):
                 operator._begin_aspect_preview(None, None)
         read.assert_not_called()
@@ -205,10 +205,10 @@ class RectifyToolTest(BlenderTestCase):
     def test_rectify_preview_skips_cursor_at_last_clicked_point(self):
         points = ((10.0, 10.0), (80.0, 10.0), (70.0, 60.0))
 
-        stationary = self.rectify_preview.interactive_preview_polygon(
+        stationary = self.rectify.interactive_preview_polygon(
             points, points[-1]
         )
-        moving = self.rectify_preview.interactive_preview_polygon(
+        moving = self.rectify.interactive_preview_polygon(
             points, (20.0, 70.0)
         )
 
@@ -276,7 +276,7 @@ class RectifyToolTest(BlenderTestCase):
 
 
     def test_rectify_mouse_adjusts_preview_aspect_exponentially(self):
-        adjust = self.rectify_preview.aspect_ratio_from_mouse
+        adjust = self.rectify.aspect_ratio_from_mouse
 
         self.assertAlmostEqual(adjust(1.5, 240.0), 3.0)
         self.assertAlmostEqual(adjust(1.5, -240.0), 0.75)
@@ -285,7 +285,7 @@ class RectifyToolTest(BlenderTestCase):
             self.rectify_geometry.MAX_INTERACTIVE_ASPECT,
         )
         self.assertEqual(
-            self.rectify_preview.snapped_aspect_ratio(1.7),
+            self.rectify.snapped_aspect_ratio(1.7),
             (16.0 / 9.0, "16 : 9"),
         )
 

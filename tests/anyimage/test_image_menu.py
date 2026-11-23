@@ -77,11 +77,12 @@ class ImageMenuTest(BlenderTestCase):
 
     def test_image_operators_accept_jobs_while_processing(self):
         context = SimpleNamespace(
-            object=SimpleNamespace(type="EMPTY", empty_display_type="IMAGE", data={}),
+            object=SimpleNamespace(type="EMPTY", empty_display_type="IMAGE",
+                                   data=SimpleNamespace(size=(640, 480), source="FILE", get={}.get)),
         )
         operators = (
-            self.depth_plane_operators.ConvertToDepthPlane,
-            self.depth_plane_operators.ConvertToReliefPlane,
+            self.depth_plane.ConvertToDepthPlane,
+            self.depth_plane.ConvertToReliefPlane,
             self.remove_background.RemoveImageBackground,
         )
 

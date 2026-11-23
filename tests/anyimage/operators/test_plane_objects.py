@@ -1,14 +1,16 @@
 import bpy
 import numpy as np
+import pytest
 from mathutils import Matrix, Vector
 
-
 from anyimage.common import image as image_data
-from anyimage.common import object as object_data
-from anyimage.common.depth_geometry import depth_node_direction
+from anyimage.common import node
+from anyimage.common.depth_geometry import depth_node_direction, reference_and_median_depth
+from anyimage.common.geometry_image import camera_depth_values
 from anyimage.operators.convert_to_plane import create_plane_object
-from anyimage.operators.depth_plane import object as plane_object
+from anyimage.operators import depth_plane as plane_object
 from anyimage.operators.cutout_tool import shape as cutout_shape
+from tests.support.planes import surface
 from tests.support.image_objects import _depth_image, _evaluated_positions
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_plane import ODepthPlane
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_relief import ODepthRelief
@@ -126,18 +128,18 @@ def test_converted_planes_center_the_origin_without_moving_world_corners():
     assert depth_modifier.node_group == saved
     assert saved.name == "O Depth Plane"
     uniform_scale = depth_modifier[
-        object_data.modifier_input_identifier(
+        node.modifier_input_identifier(
             depth_modifier.node_group,
             "Uniform Scale",
         )
     ]
     assert np.isclose(
-        depth_modifier[object_data.modifier_input_identifier(saved, "Depth Limit")],
+        depth_modifier[node.modifier_input_identifier(saved, "Depth Limit")],
         0.5 * uniform_scale,
     )
     assert np.isclose(
         depth_modifier[
-            object_data.modifier_input_identifier(
+            node.modifier_input_identifier(
                 depth_modifier.node_group,
                 "Reference Depth",
             )
@@ -175,17 +177,17 @@ def test_relief_plane_builds_a_fixed_base_terrain_block():
     modifier = result.modifiers[0]
     group = modifier.node_group
     assert modifier[
-        object_data.modifier_input_identifier(group, "Thickness")
+        node.modifier_input_identifier(group, "Thickness")
     ] == 0.0
     assert modifier[
-        object_data.modifier_input_identifier(group, "Depth Scale")
+        node.modifier_input_identifier(group, "Depth Scale")
     ] == 0.5
     assert modifier[
-        object_data.modifier_input_identifier(group, "Depth Offset")
+        node.modifier_input_identifier(group, "Depth Offset")
     ] == 0.0
 
     def set_input(name, value):
-        object_data.set_modifier_input(modifier, name, value)
+        node.set_modifier_input(modifier, name, value)
         result.update_tag(refresh={"DATA"})
         bpy.context.view_layer.update()
 
@@ -278,12 +280,72 @@ def test_relief_plane_initializes_a_fitted_depth_direction():
     )
     modifier = result.modifiers[0]
     direction = modifier[
-        object_data.modifier_input_identifier(modifier.node_group, "Depth Direction")
+        node.modifier_input_identifier(modifier.node_group, "Depth Direction")
     ]
     uniform_scale = modifier[
-        object_data.modifier_input_identifier(modifier.node_group, "Uniform Scale")
+        node.modifier_input_identifier(modifier.node_group, "Uniform Scale")
     ]
     canonical = np.asarray((0.2 * uniform_scale, 1.0, -0.1 * uniform_scale))
     expected = np.asarray(depth_node_direction(canonical))
     expected /= np.linalg.norm(expected)
     np.testing.assert_allclose(direction, expected, atol=1e-6)
+
+
+def test_conversion_preserves_offset_world_placement_and_initializes_inputs(surface, monkeypatch):
+    obj, _, _, inputs, image = surface
+    group = obj.modifiers[0].node_group
+    monkeypatch.setattr(plane_object, "load_node_group", lambda name: group)
+    source = bpy.data.objects.new("Offset Image", None)
+    source.empty_display_type = "IMAGE"
+    source.data = image
+    source.empty_display_size = 4
+    source.empty_image_offset = (-0.2, -0.8)
+    source.matrix_world = Matrix.Translation((3, -2, 5)) @ Matrix.Rotation(0.7, 4, "Y") @ Matrix.Diagonal((2, 3, 1, 1))
+    bpy.context.collection.objects.link(source)
+    bounds = image_data.image_empty_bounds(source)
+    matrix = source.matrix_world.copy()
+    material = bpy.data.materials.new("Conversion")
+    intrinsics = ((4, 0, 5), (0, 4, 3), (0, 0, 1))
+    result = plane_object.create_depth_plane_object(
+        bpy.context, source, 2, material, image, intrinsics, "DEPTH")
+    assert result.name == "Offset Image"
+    assert result["o_image_object"] is True
+    assert "anyimage_mesh_shape" not in result
+    assert bpy.context.view_layer.objects.active == result
+    expected = sorted(tuple(matrix @ Vector((x, y, 0)))
+                      for x in bounds[:2] for y in bounds[2:])
+    actual = sorted(tuple(result.matrix_world @ v.co) for v in result.data.vertices)
+    np.testing.assert_allclose(actual, expected, atol=1e-6)
+    center = matrix @ Vector(((bounds[0] + bounds[1]) / 2, (bounds[2] + bounds[3]) / 2, 0))
+    np.testing.assert_allclose(result.matrix_world.translation, center, atol=1e-6)
+    modifier = result.modifiers[0]
+    assert modifier[inputs["Thickness"].identifier] == 0
+    assert modifier[inputs["Depth Image"].identifier] == image
+    assert modifier[inputs["Depth Mask"].identifier] is True
+    depth, valid = camera_depth_values(image_data.image_rgba(image))
+    reference, _ = reference_and_median_depth(depth[valid])
+    assert modifier[inputs["Reference Depth"].identifier] == pytest.approx(
+        reference * modifier[inputs["Uniform Scale"].identifier])
+    assert result.data.materials[0] == material
+
+
+def test_failed_modifier_initialization_removes_partial_object(surface, monkeypatch):
+    obj, _, _, _, image = surface
+    monkeypatch.setattr(plane_object, "load_node_group", lambda name: obj.modifiers[0].node_group)
+    source = bpy.data.objects.new("Source", None)
+    source.empty_display_type = "IMAGE"
+    source.data = image
+    bpy.context.collection.objects.link(source)
+    material = bpy.data.materials.new("Unused")
+    before_objects, before_meshes = set(bpy.data.objects), set(bpy.data.meshes)
+
+    def fail(*args):
+        raise RuntimeError("input failed")
+
+    monkeypatch.setattr(plane_object, "set_modifier_input", fail)
+    intrinsics = ((4, 0, 5), (0, 4, 3), (0, 0, 1))
+    with pytest.raises(RuntimeError, match="input failed"):
+        plane_object.create_depth_plane_object(bpy.context, source, 2, material, image, intrinsics, "DEPTH")
+    assert set(bpy.data.objects) == before_objects
+    assert set(bpy.data.meshes) == before_meshes
+    assert material.users == 0

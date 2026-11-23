@@ -120,7 +120,7 @@ def test_job_outputs_geometry_combines_alpha_once_and_skips_transparent_views(pa
     image = np.full((32, 64, 4), 255, np.uint8)
     image[:24, :, 3] = 0
     image[26:28, :, 3] = 128
-    np.save(source, image.astype(np.float32) / 255)
+    np.save(source, image)
     result = job.run(context, parameters)
     assert 0 < len(calls) < 12
     assert all(level == 3 and opts["fov_x"] == 90 for _, level, opts in calls)

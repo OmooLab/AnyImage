@@ -1,12 +1,44 @@
 """Shared Blender-side AI setup, validation, UI, and Job parameters."""
 
+from pathlib import Path
+
 import bpy
 
 from ..ai_preferences import configured_device, configured_geometry_model
 from ..preferences import addon_preferences
 from ..runtime import runtime
 from ..server import model_catalog as shared_model_catalog
-from .server_location import model_files_installed
+
+
+def server_root(location):
+    if not str(location).strip():
+        raise ValueError("Choose a Server Location")
+    selected = Path(location).expanduser().resolve()
+    root = next(
+        (path for path in (selected, *selected.parents) if path.name.lower() == ".anyimage"),
+        selected / ".anyimage",
+    )
+    if root.resolve() != root:
+        raise ValueError("Choose a location with a regular .anyimage directory")
+    return root
+
+
+def inspect_installation(root):
+    status = runtime.inspect_installation(root)
+    missing = []
+    for key in shared_model_catalog.DEFAULT_MODEL_KEYS:
+        model = shared_model_catalog.get_downloadable_model(key)
+        if not model_files_installed(root, model):
+            missing.append(key)
+    return {**status, "missing_models": tuple(missing)}
+
+
+def model_files_installed(root, model):
+    directory = Path(root) / "models" / model.directory_name
+    try:
+        return all((directory / name).stat().st_size == size for name, size, _checksum in model.files)
+    except OSError:
+        return False
 
 
 def model_catalog():

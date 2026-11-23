@@ -1,6 +1,7 @@
 """Generate radial depth and object normal textures from an RGBA panorama."""
 
 from ..media.exr import write_float_exr
+from ..media.input import load_ai_input
 from ..geometry.panorama import (
     camera_bases, merge_distances, merge_normals, pad_panorama_seam,
     panorama_sample_coordinates, sample_panorama, view_rays,
@@ -23,7 +24,7 @@ def run(context, parameters):
         "object_normal": context.directory / "object-normal.png",
     }
     try:
-        source = np.load(parameters["input"], allow_pickle=False)
+        source = load_ai_input(parameters["input"])
         source_shape = source.shape[:2]
         height, width = source_shape
         if width != height * 2:
@@ -56,7 +57,8 @@ def run(context, parameters):
                 continue
             if session is None:
                 session, _load_ms = manager.get_session(parameters["model"], parameters["device"])
-            color = sample_panorama(padded[..., :3], coords) * view_alpha[..., None]
+            color = sample_panorama(padded[..., :3], coords)
+            color[~visible] = 0
             prediction = adapter.infer(session, color, parameters["resolution_level"],
                                        fov_x=90.0, source_valid=visible,
                                        **refinement_options)

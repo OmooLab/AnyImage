@@ -7,7 +7,7 @@
 | `ai.py` | 环境与模型就绪检查、安装与下载入口、输入路径校验、`geometry_job_parameters()` 和安装 UI |
 | `image.py` | `image_rgba()`、Image User 帧设置读取、像素采样与摘要、真实引用检查、结果 Image 和 `replace_empty_image()` |
 | `image_input.py` | 创建独立输入快照、导出当前像素和清理临时输入文件 |
-| `job_image.py` | 校验排队任务的图像目标、准备 AI 分析输入，加载产物并通过 `ImageEditTarget` 提交结果 |
+| `job_image.py` | 加载图像编辑结果并通过 `ImageEditTarget` 提交结果 |
 | `color_image.py` | 从原图创建打包的材质贴图、配置颜色空间和归一化 |
 | `hdr_image.py` | HDR 分析颜色、EXR 保存和浮点图片创建 |
 | `image_target.py` | Image Empty、带能力标记的 Mesh 与 Shader Image Texture 编辑目标 |
@@ -27,9 +27,13 @@
 
 ## 图像生命周期
 
-业务像素采用 Top-down RGBA，`image_pixels()` 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。`ImageEditTarget` 校验目标绑定、颜色解释与像素摘要后，经 `replace_empty_image()` 或 `replace_texture_image()` 提交。未共享的 Image 原地替换内容；其他 Empty、材质或纹理仍引用源图时，为当前目标使用独立 Image，共享材质也按当前对象隔离。失败时回滚源数据。同一目标的排队任务跟随成功提交更新基线，外部改图后新提交使用新的目标状态。
+业务像素采用 Top-down RGBA，`image_pixels()` 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。`ImageEditTarget` 确认目标仍绑定原 Image 后，经 `replace_empty_image()` 或 `replace_texture_image()` 提交。未共享的 Image 原地替换内容；其他 Empty、材质或纹理仍引用源图时，为当前目标使用独立 Image，共享材质也按当前对象隔离。失败时回滚源数据。同一目标的排队任务跟随成功提交更新基线，同一 Image 在等待期间的像素编辑允许被结果覆盖。移除背景与高清化在回填时记录 Undo，有未保存像素时先保存其撤销状态。
 
-`image_input.py` 的 `prepare_image_input()` 为图像编辑任务准备独立快照。几何推理使用 `job_image.py` 的 `prepare_recognition_input()`，把给定范围内的像素写成带源透明度的 sRGB PNG。HDR 只在生成识别图时做色调映射。`color_image.py` 的 `material_color_image()` 从原图创建并打包材质贴图。各工具的取图范围见 [Convert To 与 Cutout 的图像流程](operators/index.md)。
+去背景、2倍高清和 MoGe 共用 `prepare_ai_input()`。它读取 Blender 当前 RGBA，将颜色按源色彩空间转为 sRGB，Non-Color 保留数据值，Alpha 单独保存。HDR 识别先按线性亮度压缩高光，再编码为 sRGB。整图与裁剪使用相同的亮度映射。
+
+临时输入统一为 `.npy`。原尺寸的 8 位 sRGB 或 Non-Color 用 `uint8`，经过颜色转换、缩放或来自浮点缓冲区的输入用 `float32`。MoGe 读取归一化浮点值，去背景和高清在模型入口取 8 位 RGB。
+
+`color_image.py` 的 `material_color_image()` 从原图创建并打包材质贴图。各工具的取图范围见 [Convert To 与 Cutout 的图像流程](operators/index.md)。
 
 ## 颜色参考生命周期
 

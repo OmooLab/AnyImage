@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from anyimage.common.image import image_pixels
 from anyimage.common.material import create_image_material
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 from anyimage.operators.bake_mesh import BakeMesh
 from anyimage.operators.bake_mesh.geometry import PROTOCOL_ATTRIBUTES, mesh_bake_modifiers
 from anyimage.operators.bake_mesh import materialization

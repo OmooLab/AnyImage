@@ -13,8 +13,7 @@ from .operators.color_match import MatchColorReference, SetColorReference
 from .operators.convert_to_plane import ConvertToPlane
 from .operators.convert_to_world import ConvertToWorld
 from .operators.cutout_tool import CreateCutoutShape
-from .operators.cutout_tool.ai_interaction import SelectCutoutSelection
-from .operators.cutout_tool.ai_operators import CutoutSelectionToShape
+from .operators.cutout_tool.ai_operators import CutoutSelectionToShape, SelectCutoutSelection
 from .operators.frame_tool import FrameImages
 from .operators.mask_tool import EditImageAlpha
 from .operators.rectify_tool import RectifyImagePerspective
@@ -31,8 +30,8 @@ from .operators.remove_background import RemoveImageBackground
 from .operators.upscale import UpscaleImage
 
 from .ai_menus import ImageMenu, ObjectMenu, TextureNodeMenu
-from .color_panel import ColorMatchPanel
-from .panel import ServerPanel, DangerZonePanel
+from .ai_panels import DangerZonePanel, ServerPanel
+from .panels import ColorMatchPanel
 from .common.image import is_image_empty
 from .common.image_target import is_image_object, active_texture_node, object_image_texture
 from .tools import FrameTool, MaskTool, RectifyTool

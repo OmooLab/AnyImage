@@ -1,9 +1,8 @@
 import bpy
 
-from anyimage.common.object import set_modifier_input
 
 from anyimage.common.image_plane import create_image_plane_mesh
-from anyimage.common.node import load_node_group
+from anyimage.common.node import load_node_group, set_modifier_input
 
 
 def evaluated_mesh(obj):

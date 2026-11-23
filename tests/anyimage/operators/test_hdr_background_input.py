@@ -4,31 +4,30 @@ from unittest.mock import patch
 import bpy
 import numpy as np
 import pytest
-from PIL import Image
+from anyimage.server.media.input import load_ai_input
 
-from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.operators.remove_background import BackgroundInput
 from anyimage.common.hdr_image import save_hdr_image
 from anyimage.common.image import image_pixels, image_content_state, image_rgba, restore_image_content
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
 from anyimage.common import image_target as targets
-from tests.support.image_texture import texture, texture_context
-from tests.support.hdr_image import hdr_texture
+from tests.support.image_texture import hdr_texture, texture, texture_context
 
 
-def test_hdr_recognition_png_has_straight_color_and_source_opacity(hdr_texture):
+def test_hdr_recognition_has_straight_color_and_source_opacity(hdr_texture):
     source = hdr_texture.image
     rgba = np.array([[[1, 1, 1, .5], [2, 2, 2, 1]]], dtype=np.float32)
     snapshot = BackgroundInput.prepare(source, rgba)
     try:
-        with Image.open(snapshot.path) as preview:
-            np.testing.assert_array_equal(np.asarray(preview), [[[213, 213, 213, 128], [213, 213, 213, 255]]])
+        preview = load_ai_input(snapshot.path, as_bytes=True)
+        np.testing.assert_array_equal(preview, [[[213, 213, 213, 128], [213, 213, 213, 255]]])
     finally:
         cleanup_image_input(snapshot.path)
 
 
 def test_failed_hdr_undo_preserves_pixels_with_unused_alpha(hdr_texture, tmp_path):
-    from anyimage.operators.remove_background import image as background_image
+    from anyimage.common import image_target as background_image
 
     image = hdr_texture.image
     image.alpha_mode = "NONE"
@@ -51,7 +50,7 @@ def test_failed_hdr_undo_preserves_pixels_with_unused_alpha(hdr_texture, tmp_pat
 
 
 def test_queued_hdr_results_follow_successful_target_replacements(hdr_texture, tmp_path):
-    from anyimage.operators.remove_background import image as background_image
+    from anyimage.common import image_target as background_image
 
     first_target, rgba = ImageEditTarget.capture(texture_context(hdr_texture))
     first = BackgroundInput.prepare(first_target.image, rgba)
@@ -126,9 +125,9 @@ def test_hdr_commit_keeps_float_pixels_and_transaction(hdr_texture, tmp_path, so
     alpha_path = tmp_path / "alpha.npy"
     np.save(alpha_path, alpha)
     try:
-        with Image.open(snapshot.path) as preview:
-            assert preview.size == (4, 3)
-            assert np.asarray(preview)[0, 0, :3].max() == 0
+        preview = np.load(snapshot.path)
+        assert preview.shape == (3, 4, 4)
+        assert preview[0, 0, :3].max() == 0
         result = snapshot.apply(target, alpha_path)
         expected = rgba.copy()
         expected[..., 3] *= alpha
@@ -174,6 +173,10 @@ def test_hdr_rejects_invalid_result_and_source_changes(hdr_texture, tmp_path, in
     before = image_rgba(hdr_texture.image).copy()
     count = len(bpy.data.images)
     try:
+        if invalid in {"source", "colorspace"}:
+            result = snapshot.apply(target, path)
+            np.testing.assert_array_equal(image_rgba(result)[..., :3], rgba[..., :3])
+            return
         with pytest.raises(RuntimeError):
             snapshot.apply(target, path)
         np.testing.assert_array_equal(image_rgba(hdr_texture.image), before)
@@ -190,8 +193,7 @@ def test_hdr_preview_is_fixed_and_preserves_source(hdr_texture):
     bpy.context.scene.view_settings.exposure = 7
     second = BackgroundInput.prepare(image, image_rgba(image))
     try:
-        with Image.open(first.path) as a, Image.open(second.path) as b:
-            np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+        np.testing.assert_array_equal(np.load(first.path), np.load(second.path))
         np.testing.assert_array_equal(image_rgba(image), before)
     finally:
         cleanup_image_input(first.path)

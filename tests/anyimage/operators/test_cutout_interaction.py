@@ -8,7 +8,7 @@ import pytest
 
 from anyimage.common.selection import SelectionPath
 from anyimage.common import image_gesture
-from anyimage.operators.cutout_tool import ai_interaction as interaction
+from anyimage.operators.cutout_tool import ai_operators
 from anyimage.operators.cutout_tool import operators as cutout_main
 
 
@@ -55,14 +55,14 @@ def cutout_context(
 def test_cutout_menu_captures_fine_outline_before_later_redraw(monkeypatch):
     window_manager = WindowManager()
     context = cutout_context(window_manager)
-    monkeypatch.setattr(interaction, "ai_ready", lambda: False)
+    monkeypatch.setattr(ai_operators, "ai_ready", lambda: False)
 
     def delayed_popup(_event, draw, **_options):
         context.scene.anyimage_settings.cutout_fine_outline = False
         draw(SimpleNamespace(layout=SimpleNamespace(menu_pie=lambda: window_manager.pie)), None)
 
     window_manager.popup_menu_pie = delayed_popup
-    interaction.open_shape_pie(context, object(), cutout_source(),
+    ai_operators.SelectCutoutSelection.show_shape_menu(context, object(), cutout_source(),
                                SelectionPath(points=((0, 0), (10, 0), (0, 10))))
     assert all(call[2].fine_outline is True for call in window_manager.pie.calls)
 
@@ -75,9 +75,9 @@ def test_cutout_pie_uses_two_local_shapes_without_ai(monkeypatch):
     window_manager = WindowManager()
     context = cutout_context(window_manager, generate_normal=True)
     source = cutout_source()
-    monkeypatch.setattr(interaction, "ai_ready", lambda: False)
+    monkeypatch.setattr(ai_operators, "ai_ready", lambda: False)
 
-    interaction.open_shape_pie(
+    ai_operators.SelectCutoutSelection.show_shape_menu(
         context,
         object(),
         source,
@@ -114,7 +114,7 @@ def test_cutout_pie_passes_image_lasso_options_to_all_ai_shapes(monkeypatch):
         fine_outline=False,
     )
     source = cutout_source(size=(4096, 2048))
-    monkeypatch.setattr(interaction, "ai_ready", lambda: True)
+    monkeypatch.setattr(ai_operators, "ai_ready", lambda: True)
     serialized = []
     original_to_json = SelectionPath.to_json
 
@@ -125,7 +125,7 @@ def test_cutout_pie_passes_image_lasso_options_to_all_ai_shapes(monkeypatch):
 
     monkeypatch.setattr(SelectionPath, "to_json", record_to_json)
 
-    interaction.open_shape_pie(
+    ai_operators.SelectCutoutSelection.show_shape_menu(
         context,
         object(),
         source,
@@ -166,10 +166,10 @@ def test_cutout_lasso_submission_passes_only_the_selected_path(monkeypatch):
     source = cutout_source()
     window_manager = WindowManager()
     context = cutout_context(window_manager)
-    monkeypatch.setattr(interaction, "ai_ready", lambda: False)
+    monkeypatch.setattr(ai_operators, "ai_ready", lambda: False)
     path = SelectionPath(points=((0, 0), (10, 0), (0, 10)))
     operator = SimpleNamespace(source_object_name=source.name, _pie_event=object(), gesture="LASSO",
-                               show_shape_menu=interaction.open_shape_pie)
+                               show_shape_menu=ai_operators.SelectCutoutSelection.show_shape_menu)
     result = cutout_main.SelectCutoutSelection._submit_selection_path(operator, context, source, path)
     assert result == {"FINISHED"}
     assert SelectionPath.from_json(window_manager.pie.calls[0][2].selection_path_json) == path
@@ -178,14 +178,14 @@ def test_cutout_lasso_submission_passes_only_the_selected_path(monkeypatch):
 def test_cutout_menu_keeps_submitted_gesture_during_redraw(monkeypatch):
     window_manager = WindowManager()
     context = cutout_context(window_manager)
-    monkeypatch.setattr(interaction, "ai_ready", lambda: True)
+    monkeypatch.setattr(ai_operators, "ai_ready", lambda: True)
 
     def delayed_popup(_event, draw, **_options):
         context.scene.anyimage_settings.cutout_gesture = "LASSO"
         draw(SimpleNamespace(layout=SimpleNamespace(menu_pie=lambda: window_manager.pie)), None)
 
     window_manager.popup_menu_pie = delayed_popup
-    interaction.open_shape_pie(
+    ai_operators.SelectCutoutSelection.show_shape_menu(
         context, object(), cutout_source(),
         SelectionPath(points=((0, 0), (10, 0), (0, 10))), gesture="POLYLINE",
     )
@@ -207,13 +207,13 @@ def test_cutout_polyline_edits_and_submits_through_shared_gesture(monkeypatch, f
     monkeypatch.setattr(image_gesture, "active_view3d_tool_id", lambda _context: None)
     monkeypatch.setattr(image_gesture, "image_empty_bounds", lambda _source: None)
     monkeypatch.setattr(image_gesture, "screen_path_to_image_pixels", lambda path, *_args: path)
-    monkeypatch.setattr(interaction, "ai_ready", lambda: False)
+    monkeypatch.setattr(ai_operators, "ai_ready", lambda: False)
     operator = SimpleNamespace(
         _source_object=source, _source_image=source.data, _source_matrix=None,
         active_tool_id="anyimage.cutout_lasso", _path=[(0, 0)],
         _polyline_confirm_type=None,
         _finish=Mock(),
-        show_shape_menu=interaction.open_shape_pie,
+        show_shape_menu=ai_operators.SelectCutoutSelection.show_shape_menu,
     )
     for name in ("_modal_polyline", "_confirm_polyline", "_complete", "_submit_selection_path"):
         setattr(operator, name, MethodType(getattr(cutout_main.SelectCutoutSelection, name), operator))

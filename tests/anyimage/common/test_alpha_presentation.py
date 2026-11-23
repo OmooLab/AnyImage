@@ -1,4 +1,4 @@
-from anyimage.common.job_image import load_image_edit_result
+from anyimage.operators.upscale import load_upscale_result, upscale_output_format
 from anyimage.common import projective_image
 
 from types import SimpleNamespace
@@ -198,13 +198,13 @@ def test_job_loader_reads_only_the_returned_file(tmp_path):
     Image.new("RGBA", (2, 2), (255, 0, 0, 255)).save(tmp_path / "foreground.png")
     Image.new("RGBA", (4, 4), (0, 0, 255, 255)).save(tmp_path / "upscale.png")
     original = bpy.data.images.new("Source", width=1, height=1, alpha=True)
-    result = load_image_edit_result(original, tmp_path / "upscale.png")
+    result = load_upscale_result(original, tmp_path / "upscale.png", upscale_output_format(original))
     try:
         assert tuple(result.size) == (4, 4)
         assert result.source == "FILE"
         assert result.packed_file is None
         with pytest.raises(RuntimeError, match="Color result image does not exist"):
-            load_image_edit_result(original, tmp_path / "missing.png")
+            load_upscale_result(original, tmp_path / "missing.png", upscale_output_format(original))
     finally:
         bpy.data.images.remove(result)
         bpy.data.images.remove(original)

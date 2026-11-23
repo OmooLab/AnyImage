@@ -16,6 +16,7 @@ from ..common.color_match import (
 from ..common.color_reference import get_color_reference, invalidate_color_reference
 from ..common.color_space import image_rgba_to_linear, linear_rgba_to_image
 from ..common.image import (
+    image_content_signature,
     TEMPORARY_IMAGE_PREVIEW_PROPERTY,
     create_image_edit_result,
     create_linear_image_edit_result,
@@ -138,7 +139,7 @@ class MatchColorReference(bpy.types.Operator):
         try:
             self._target, rgba = ImageEditTarget.capture(context)
             self._reference = _prepare_match_reference(current_color_reference(context), self._target.image)
-            self._preview_signature = self._target.content_signature
+            self._preview_signature = image_content_signature(self._target.image, rgba[::-1])
             linear = image_rgba_to_linear(self._target.image, rgba)
             self._mapping = build_color_mapping(self._reference.transfer, linear)
             self._preview_match = build_color_match(
@@ -285,13 +286,14 @@ class MatchColorReference(bpy.types.Operator):
         if (prepared.content_digest != self._reference.content_digest
                 or prepared.metadata != self._reference.metadata):
             raise RuntimeError("The color reference changed during preview")
-        if self._target.content_signature != self._preview_signature:
+        self._target.validate_binding()
+        image = self._target.image
+        rgba = image_rgba(image)
+        if image_content_signature(image, rgba[::-1]) != self._preview_signature:
             raise RuntimeError("The source image content or settings have changed")
         if self._color == 0.0 and self._lightness == 0.0:
-            self._target.validate()
             return
-        image = self._target.image
-        linear = image_rgba_to_linear(image, image_rgba(image))
+        linear = image_rgba_to_linear(image, rgba)
         _commit_color_match(self._target, linear, self._mapping, self._color, self._lightness)
 
     def _draw_overlay(self):

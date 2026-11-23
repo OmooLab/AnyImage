@@ -4,7 +4,7 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 
 
 from tests.support.depth_surface import assert_no_boundary_ear_triangles

@@ -1,70 +1,37 @@
-
+import numpy as np
 import pytest
-from PIL import Image
 
 from tests.anyimage.server.support import load_server_module
 
 
-@pytest.fixture
-def media():
-    return load_server_module("media.input")
+@pytest.mark.parametrize("dtype", [np.uint8, np.float32])
+def test_model_rgb_is_independent_of_visible_opacity(tmp_path, dtype):
+    media = load_server_module("media.input")
+    pixels = np.array([[[24, 65, 192, 128], [99, 99, 99, 0]]], np.uint8)
+    path = tmp_path / "input.npy"
+    np.save(path, pixels if dtype == np.uint8 else pixels.astype(np.float32) / 255)
+    np.testing.assert_array_equal(media.load_ai_input(path, as_bytes=True), pixels)
+    np.testing.assert_allclose(media.load_ai_input(path), pixels / 255, atol=1e-7)
 
 
-@pytest.mark.parametrize("suffix", [".PNG", ".JPG", ".webp", ".jpeg"])
-def test_supported_format_is_case_insensitive(media, tmp_path, suffix):
-    path = tmp_path / f"input{suffix}"
-    Image.new("RGB", (2, 1)).save(path)
-    with media.open_image(path) as image:
-        assert image.size == (2, 1)
+@pytest.mark.parametrize("pixels", [
+    np.zeros((2, 2, 3), np.uint8), np.zeros((0, 1, 4), np.uint8),
+    np.zeros((1, 2, 4), np.uint16), np.zeros((1, 2, 4), object),
+    *(np.full((1, 1, 4), value, np.float32) for value in (-1, 2, np.nan, np.inf)),
+])
+def test_invalid_array_is_rejected(tmp_path, pixels):
+    path = tmp_path / "input.npy"
+    np.save(path, pixels)
+    with pytest.raises(ValueError):
+        load_server_module("media.input").load_ai_input(path)
 
 
-@pytest.mark.parametrize("suffix,kind", [(".png", "image"), (".mp4", "image")])
-def test_missing_path_precedes_format_validation(media, tmp_path, suffix, kind):
-    with pytest.raises(RuntimeError, match=f"Source {kind} file does not exist"):
-        with media.open_image(tmp_path / f"missing{suffix}"):
-            pass
-
-
-def test_image_decode_error_keeps_cause(media, tmp_path):
-    path = tmp_path / "broken.png"
-    path.write_bytes(b"broken")
-    with pytest.raises(RuntimeError, match="Unable to read image") as error:
-        with media.open_image(path):
-            pytest.fail("Broken image must not reach processing")
-    assert isinstance(error.value.__cause__, OSError)
-
-
-def test_processing_error_is_not_relabelled(media, tmp_path):
-    path = tmp_path / "valid.png"
-    Image.new("RGB", (2, 2)).save(path)
-    failure = OSError("inference failed")
-    with pytest.raises(OSError) as error:
-        with media.open_image(path):
-            raise failure
-    assert error.value is failure
-
-
-@pytest.mark.parametrize("suffix", [".mp4", ".mts", ".gif", ".tiff", ""])
-def test_unsupported_formats_are_rejected(media, tmp_path, suffix):
-    path = tmp_path / f"input{suffix}"
-    path.touch()
-    with pytest.raises(RuntimeError, match="Unsupported input format"):
-        with media.open_image(path):
-            pass
-
-
-def test_frame_directory_is_rejected(media, tmp_path):
-    Image.new("RGB", (2, 2)).save(tmp_path / "frame.png")
-    with pytest.raises(RuntimeError, match="Source image file does not exist"):
-        with media.open_image(tmp_path):
-            pass
-
-
-def test_animated_png_is_rejected(media, tmp_path):
-    path = tmp_path / "animated.png"
-    Image.new("RGB", (2, 2), "red").save(
-        path, save_all=True, append_images=[Image.new("RGB", (2, 2), "blue")], duration=100,
-    )
-    with pytest.raises(RuntimeError, match="Only still images"):
-        with media.open_image(path):
-            pytest.fail("Animated images must not reach processing")
+def test_archive_and_unreadable_input_are_rejected(tmp_path):
+    media = load_server_module("media.input")
+    archive = tmp_path / "archive.npz"
+    np.savez(archive, image=np.zeros((1, 1, 4), np.uint8))
+    with pytest.raises(ValueError, match="single RGBA"):
+        media.load_ai_input(archive)
+    with pytest.raises(ValueError, match="Unable to read") as failure:
+        media.load_ai_input(tmp_path / "missing.npy")
+    assert isinstance(failure.value.__cause__, OSError)

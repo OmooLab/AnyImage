@@ -8,6 +8,7 @@ import bpy
 
 from .image import (
     COLOR_NORMALIZED_PROPERTY,
+    ImageFormat,
     image_base_name,
     image_rgba,
     is_animated_image,
@@ -163,25 +164,25 @@ def _material_png_colors(rgba, source_space):
     return palette[indices].reshape(rgb.shape).astype(np.float32) / 255.0
 
 
-def linear_color_rgba(image, rgba=None, *, material_image=None, alpha_mode=None):
+def linear_color_rgba(image, rgba=None, *, material_space=None, alpha_mode=None):
     """Read straight-alpha linear RGB while preserving the image alpha."""
     import numpy as np
     from .color_space import srgb_to_linear_rgb
 
-    interpretation = material_image if material_image is not None else image
-    space = interpretation.colorspace_settings
+    space = material_space or image.colorspace_settings.name
+    mode = alpha_mode or image.alpha_mode
     rgba = image_rgba(image) if rgba is None else rgba.copy()
-    if interpretation != image:
+    if material_space is not None:
         source_space = image.colorspace_settings
         if not image.is_float and not source_space.is_data and source_space.name != "sRGB":
             rgba[..., :3] = _material_png_colors(rgba, source_space.name)
-        if image.is_float and interpretation.alpha_mode == "NONE":
+        if image.is_float and mode == "NONE":
             rgba[..., 3] = 1
-    if not image.is_float and space.name == "sRGB":
+    if not image.is_float and space == "sRGB":
         rgba[..., :3] = srgb_to_linear_rgb(rgba[..., :3])
-    elif not (image.is_float and (space.is_data or space.name == "Linear Rec.709")):
-        rgba = decode_color_image(image, space.name, rgba)
-    if image.is_float and (alpha_mode or interpretation.alpha_mode) in {"STRAIGHT", "PREMUL"}:
+    elif not (image.is_float and (space == "Linear Rec.709" or (material_space is None and image.colorspace_settings.is_data))):
+        rgba = decode_color_image(image, space, rgba)
+    if image.is_float and mode in {"STRAIGHT", "PREMUL"}:
         rgba[..., :3] /= np.where(rgba[..., 3:4] > 0, rgba[..., 3:4], 1)
     return rgba
 
@@ -204,11 +205,14 @@ def _luminance_split(values, percentile, *, logarithmic=False):
     return max(float(2 ** split if logarithmic else split), 0.0001)
 
 
-def estimate_highlight_threshold(image, *, panorama=False, material_image=None):
+def estimate_highlight_threshold(image, *, panorama=False, material_image=None, rgba=None, material_space=None, alpha_mode=None):
     """Estimate highlight onset from full RGB and spatial brightness contrast."""
     import numpy as np
 
-    rgba = linear_color_rgba(image, material_image=material_image)
+    if material_image is not None and material_image != image:
+        material_space = material_image.colorspace_settings.name
+        alpha_mode = material_image.alpha_mode
+    rgba = linear_color_rgba(image, rgba, material_space=material_space, alpha_mode=alpha_mode)
     if not (rgba[..., 3] > 0.1).any() or not np.isfinite(rgba).all():
         return 1.0
     # Transparent pixels retain the original surroundings; alpha is not a weight.
@@ -250,39 +254,26 @@ def require_static_color_image(image):
         raise ValueError("Material conversion supports static images only")
 
 
-def save_color_png(rgba, path, color_space, *, as_srgb=False):
+def save_color_png(rgba, path, color_space):
     """Save top-down RGBA pixels with their Blender color interpretation."""
     import numpy as np
 
     height, width = rgba.shape[:2]
     image = bpy.data.images.new("Material Color Export", width=width, height=height, alpha=True)
-    scene = None
     try:
         image.colorspace_settings.name = color_space
         image.alpha_mode = "STRAIGHT"
         image.pixels.foreach_set(np.flipud(rgba).ravel())
         image.file_format = "PNG"
-        if as_srgb and color_space != "sRGB":
-            scene = bpy.data.scenes.new("sRGB Export")
-            scene.display_settings.display_device = "sRGB"
-            scene.view_settings.view_transform = "Standard"
-            scene.view_settings.look = "None"
-            scene.render.dither_intensity = 0
-            image.save_render(str(path), scene=scene)
-        else:
-            image.save(filepath=str(path), save_copy=True)
+        image.save(filepath=str(path), save_copy=True)
         if not path.is_file():
             raise RuntimeError("Unable to export the material color image")
     finally:
-        if scene is not None:
-            bpy.data.scenes.remove(scene)
         bpy.data.images.remove(image)
 
 
 def create_material_color_image(source, bounds=None, rgba=None):
     """Pack the selected source pixels as a material PNG or scene-linear EXR."""
-    from .hdr_image import save_hdr_image
-
     require_static_color_image(source)
     width, height = map(int, source.size)
     if rgba is None:
@@ -293,26 +284,52 @@ def create_material_color_image(source, bounds=None, rgba=None):
     if not (0 <= left < right <= width and 0 <= top < bottom <= height):
         raise ValueError("The material color bounds are outside the image")
     cropped = rgba[top:bottom, left:right]
-    suffix = ".exr" if source.is_float else ".png"
+    return create_crop_color_image(image_base_name(source), ImageFormat.capture(source), cropped)
+
+
+def material_highlight_threshold(source, rgba, scene, *, panorama=False):
+    """Evaluate the full source using the material crop's color interpretation."""
+    if source.is_float:
+        space = "Linear Rec.709"
+        alpha = "PREMUL" if source.alpha_mode == "STRAIGHT" else source.alpha_mode
+    else:
+        space = material_color_space_name(scene)
+        alpha = color_alpha_mode(space)
+    return estimate_highlight_threshold(source, rgba=rgba, material_space=space, alpha_mode=alpha, panorama=panorama)
+
+
+def write_material_color(directory, fmt, rgba):
+    from .hdr_image import save_hdr_image
+
+    if fmt.is_float:
+        path = directory / "color.exr"
+        save_hdr_image(rgba, path)
+    else:
+        path = directory / "color.png"
+        save_color_png(rgba, path, fmt.color_space)
+    return path
+
+
+def load_material_color(path, name, fmt):
+    image = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        image.name = f"{name}_color{path.suffix}"
+        image.colorspace_settings.name = "Linear Rec.709" if fmt.is_float else fmt.color_space
+        image.alpha_mode = "PREMUL" if fmt.is_float and fmt.alpha_mode == "STRAIGHT" else fmt.alpha_mode
+        if fmt.normalized:
+            image[COLOR_NORMALIZED_PROPERTY] = True
+        image.pack()
+        return image
+    except Exception:
+        bpy.data.images.remove(image)
+        raise
+
+
+def create_crop_color_image(name, fmt, cropped):
+    """Pack a captured material crop without accessing its source datablock."""
     with tempfile.TemporaryDirectory(prefix="anyimage-color-") as directory:
-        path = Path(directory) / ("color" + suffix)
-        if source.is_float:
-            # Store float colors directly; the EXR interpretation is applied on load.
-            save_hdr_image(cropped, path)
-        else:
-            save_color_png(cropped, path, source.colorspace_settings.name)
-        image = bpy.data.images.load(str(path), check_existing=False)
-        try:
-            image.name = f"{image_base_name(source)}_color{suffix}"
-            image.colorspace_settings.name = "Linear Rec.709" if source.is_float else source.colorspace_settings.name
-            image.alpha_mode = "PREMUL" if source.is_float and source.alpha_mode == "STRAIGHT" else source.alpha_mode
-            if source.get(COLOR_NORMALIZED_PROPERTY):
-                image[COLOR_NORMALIZED_PROPERTY] = True
-            image.pack()
-            return image
-        except Exception:
-            bpy.data.images.remove(image)
-            raise
+        path = write_material_color(Path(directory), fmt, cropped)
+        return load_material_color(path, name, fmt)
 
 
 @contextmanager

@@ -72,7 +72,7 @@ def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel
         if not mask.any():
             continue
         normal = np.asarray(normal, dtype=np.float32)
-        length = np.linalg.norm(normal, axis=-1)
+        length = np.sqrt(np.einsum("...i,...i->...", normal, normal))
         valid = mask & np.isfinite(length) & (length > 1e-8)
         unit = np.zeros_like(normal)
         np.divide(normal, length[..., None], out=unit, where=valid[..., None])
@@ -93,8 +93,8 @@ def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel
         for field, basis in fields:
             rays = visible @ basis.T
             edge = np.maximum(abs(rays[:, 0]), abs(rays[:, 1]))
-            inside = edge < rays[:, 2]
-            if not inside.any():
+            inside = np.flatnonzero(edge < rays[:, 2])
+            if not inside.size:
                 continue
             forward = rays[inside, 2]
             projected = rays[inside, :2] / forward[:, None]
@@ -102,10 +102,10 @@ def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel
                       (projected[:, 0] + 1) * field.shape[1] / 2 - .5)
             weight = forward ** 4 * np.clip((1 - edge[inside] / forward) / .2, 0, 1)
             # Invalid normals are already zero before interpolation.
-            sampled = np.stack([map_coordinates(field[..., c], coords, order=1,
-                                                mode="nearest") for c in range(3)], axis=-1)
-            total[inside] += sampled * weight[..., None]
-        length = np.linalg.norm(total, axis=-1, keepdims=True)
+            for channel in range(3):
+                sampled = map_coordinates(field[..., channel], coords, order=1, mode="nearest")
+                total[inside, channel] += sampled * weight
+        length = np.sqrt(np.einsum("ij,ij->i", total, total))[:, None]
         merged = -visible
         np.divide(total, length, out=merged, where=length > 1e-8)
         directions *= -1
@@ -116,25 +116,23 @@ def merge_normals(normals, masks, bases, width, height, *, coverage=None, cancel
     return result
 
 
-def warp_log_distances(log_distances, masks, bases, directions):
+def _sample_view_depth(log_distance, mask, basis, directions):
+    """Sample one view at visible panorama pixels and return their forward cosines."""
     from scipy.ndimage import map_coordinates
 
-    logs, validities = [], []
-    for log_distance, mask, basis in zip(log_distances, masks, bases):
-        rays = directions @ basis.T
-        projected = rays[..., :2] / np.maximum(rays[..., 2:], 1e-8)
-        valid = (rays[..., 2] > 0) & (np.abs(projected) < 0.98).all(axis=-1)
-        size = log_distance.shape[0]
-        coords = ((projected[..., 1] + 1) * size / 2 - 0.5,
-                  (projected[..., 0] + 1) * size / 2 - 0.5)
-        inside = valid.copy()
-        coords = tuple(coordinate[inside] for coordinate in coords)
-        valid[inside] &= map_coordinates(mask, coords, order=0, mode="nearest") > 0.5
-        sampled = np.zeros(directions.shape[:2], dtype=log_distance.dtype)
-        sampled[inside] = map_coordinates(log_distance, coords, order=1, mode="nearest")
-        logs.append(sampled)
-        validities.append(valid)
-    return np.asarray(logs), np.asarray(validities)
+    rays = directions @ basis.T
+    edge = np.maximum(abs(rays[..., 0]), abs(rays[..., 1]))
+    rows, cols = np.nonzero(edge < 0.98 * rays[..., 2])
+    rays = rays[rows, cols]
+    forward = rays[:, 2]
+    projected = rays[:, :2] / forward[:, None]
+    size = log_distance.shape[0]
+    coords = ((projected[:, 1] + 1) * size / 2 - .5,
+              (projected[:, 0] + 1) * size / 2 - .5)
+    visible = map_coordinates(mask, coords, order=0, mode="nearest") > .5
+    coords = tuple(axis[visible] for axis in coords)
+    depth = map_coordinates(log_distance, coords, order=1, mode="nearest")
+    return (rows[visible], cols[visible]), depth, forward[visible]
 
 
 def _solve_log_distances(logs, valid, cancel_check):
@@ -144,7 +142,7 @@ def _solve_log_distances(logs, valid, cancel_check):
     This independent implementation solves normal equations on a bounded panorama grid.
     """
     from scipy.sparse import coo_matrix, diags
-    from scipy.sparse.linalg import spsolve
+    from scipy.sparse.linalg import splu
 
     view_count, height, width = logs.shape
     count = width * height
@@ -176,7 +174,10 @@ def _solve_log_distances(logs, valid, cancel_check):
     target = g.T @ grad_target[edge_valid.any(0)] + l.T @ lap_target[lap_valid.any(0)]
     if cancel_check is not None:
         cancel_check()
-    solution = spsolve(matrix.tocsc(), target + 1e-7 * baseline.ravel(), permc_spec="MMD_AT_PLUS_A").reshape(height, width)
+    # The gradient and Laplacian Gram matrices plus the positive diagonal are SPD.
+    factor = splu(matrix.tocsc(), permc_spec="MMD_AT_PLUS_A", diag_pivot_thresh=0.0,
+                  options={"SymmetricMode": True})
+    solution = factor.solve(target + 1e-7 * baseline.ravel()).reshape(height, width)
     if cancel_check is not None:
         cancel_check()
     solution += np.median(baseline[coverage] - solution[coverage])
@@ -191,9 +192,13 @@ def merge_distances(distances, masks, bases, width, height, *, cancel_check=None
         cancel_check()
     coarse_width, coarse_height = (512, 256) if width > 512 else (width, height)
     log_distances = [np.log(np.maximum(distance, 1e-6)) for distance in distances]
-    logs, valid = warp_log_distances(
-        log_distances, masks, bases, panorama_directions(coarse_width, coarse_height),
-    )
+    directions = panorama_directions(coarse_width, coarse_height)
+    logs = np.zeros((len(bases), coarse_height, coarse_width), dtype=np.result_type(*log_distances))
+    valid = np.zeros(logs.shape, dtype=bool)
+    for i, (view, mask, basis) in enumerate(zip(log_distances, masks, bases)):
+        pixels, samples, _ = _sample_view_depth(view, mask, basis, directions)
+        logs[i][pixels] = samples
+        valid[i][pixels] = True
     coarse_log, coverage = _solve_log_distances(logs, valid, cancel_check)
     if width == coarse_width:
         return np.exp(coarse_log).astype(np.float32), coverage
@@ -204,7 +209,7 @@ def merge_distances(distances, masks, bases, width, height, *, cancel_check=None
     correction_maps = np.pad(corrections, ((0, 0), (0, 0), (1, 1)), mode="wrap")
     fallback_map = np.pad(coarse_log, ((0, 0), (1, 1)), mode="wrap")
     result = np.empty((height, width), np.float32)
-    mask = np.empty((height, width), bool)
+    mask = np.zeros((height, width), bool)
     tile_height = max(1, 65536 // width)
     for start in range(0, height, tile_height):
         if cancel_check is not None:
@@ -213,25 +218,21 @@ def merge_distances(distances, masks, bases, width, height, *, cancel_check=None
         u, v = np.meshgrid((np.arange(width) + 0.5) / width,
                            (np.arange(start, stop) + 0.5) / height)
         directions = uv_directions(u, v)
-        detail, visible = warp_log_distances(log_distances, masks, bases, directions)
         total = np.zeros(u.shape)
         weights = np.zeros(u.shape)
         coords = (np.clip(v * coarse_height - .5, 0, coarse_height - 1), u * coarse_width + .5)
-        for index, basis in enumerate(bases):
-            forward = directions @ basis[2]
-            visible_pixels = visible[index] & (forward > 0)
-            if not visible_pixels.any():
-                continue
-            view_coords = tuple(coordinate[visible_pixels] for coordinate in coords)
+        for index, (view, view_mask, basis) in enumerate(zip(log_distances, masks, bases)):
+            pixels, detail, forward = _sample_view_depth(view, view_mask, basis, directions)
+            view_coords = tuple(coordinate[pixels] for coordinate in coords)
             support = map_coordinates(support_maps[index], view_coords, order=1, mode="nearest")
             correction = map_coordinates(correction_maps[index], view_coords, order=1, mode="nearest")
             correction /= np.maximum(support, 1e-8)
-            weight = forward[visible_pixels] ** 4 * (support > 1e-8)
-            total[visible_pixels] += (detail[index][visible_pixels] + correction) * weight
-            weights[visible_pixels] += weight
+            weight = forward ** 4 * (support > 1e-8)
+            total[pixels] += (detail + correction) * weight
+            weights[pixels] += weight
+            mask[start:stop][pixels] = True
         fallback = map_coordinates(fallback_map, coords, order=1, mode="nearest")
         np.divide(total, weights, out=fallback, where=weights > 0)
         result[start:stop] = np.exp(fallback)
-        mask[start:stop] = visible.any(axis=0)
     return result, mask
 

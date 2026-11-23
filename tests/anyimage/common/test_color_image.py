@@ -8,8 +8,8 @@ import pytest
 from PIL import Image
 
 from anyimage.common import color_image as colors, image as images, material
-from anyimage.common.image_input import cleanup_image_input, prepare_moge_input
-from anyimage.common.job_image import prepare_recognition_input
+from anyimage.common.image_input import cleanup_image_input, prepare_ai_input
+from anyimage.server.media.input import load_ai_input
 
 
 @pytest.fixture
@@ -140,6 +140,7 @@ def test_float_straight_uses_exr_interpretation_without_rejecting_hidden_rgb(sou
 
 @pytest.mark.parametrize("floating,space,gray,expected", [
     (False, "sRGB", .5, 128),
+    (False, "Non-Color", .5, 128),
     (False, "Linear Rec.709", .5, 188),
     (True, "Linear Rec.709", 2.0, 231),
 ])
@@ -149,32 +150,23 @@ def test_recognition_crop_is_srgb_with_source_opacity(source, floating, space, g
     image.alpha_mode = "PREMUL" if floating else "STRAIGHT"
     image.pixels.foreach_set(np.array([1, 0, 0, 1, gray, gray, gray, .5, 0, 0, 0, 0], np.float32))
     crop = images.image_rgba(image)[:, 1:]
-    path = prepare_recognition_input(image, crop)
+    before = crop.copy()
+    path = prepare_ai_input(image, crop)
     try:
         assert list(path.parent.iterdir()) == [path]
-        with Image.open(path) as png:
-            assert (png.format, png.mode, png.size) == ("PNG", "RGBA", (2, 1))
-            np.testing.assert_allclose(png.getpixel((0, 0)), (expected, expected, expected, 128), atol=1)
-            assert png.getpixel((1, 0))[3] == 0
-    finally:
-        cleanup_image_input(path)
-
-    path = prepare_moge_input(image, crop)
-    try:
-        model_rgba = np.load(path)
-        assert model_rgba.dtype == np.float32 and model_rgba.shape == crop.shape
-        np.testing.assert_array_equal(model_rgba[..., 3], crop[..., 3])
-        if floating:
-            # Linear gray 2 with half coverage maps to linear 4 / (1 + 4).
-            np.testing.assert_allclose(model_rgba[0, 0, :3], 1.055 * .8 ** (1 / 2.4) - .055, atol=1e-6)
-        else:
-            np.testing.assert_array_equal(model_rgba, crop)
+        pixels = np.load(path)
+        assert pixels.shape == crop.shape
+        assert pixels.dtype == (np.float32 if floating or space == "Linear Rec.709" else np.uint8)
+        model_rgba = load_ai_input(path)
+        np.testing.assert_allclose(model_rgba[0, 0, :3], expected / 255, atol=.5 / 255)
+        np.testing.assert_allclose(model_rgba[..., 3], crop[..., 3], atol=1e-7)
+        np.testing.assert_array_equal(crop, before)
     finally:
         cleanup_image_input(path)
 
 
 @pytest.mark.parametrize("dtype,white", [(np.uint8, 255), (np.uint16, 65535)])
-def test_srgb_png_bit_depth_preserves_moge_brightness(tmp_path, dtype, white):
+def test_srgb_png_bit_depth_preserves_ai_brightness(tmp_path, dtype, white):
     path = tmp_path / "gray.png"
     levels = np.array([[0, 128, 255]], dtype=dtype) * (white // 255)
     Image.fromarray(levels).save(path)
@@ -182,24 +174,86 @@ def test_srgb_png_bit_depth_preserves_moge_brightness(tmp_path, dtype, white):
     try:
         assert image.colorspace_settings.name == "sRGB"
         assert image.is_float == (dtype == np.uint16)
-        snapshot = prepare_moge_input(image, images.image_rgba(image))
+        snapshot = prepare_ai_input(image, images.image_rgba(image))
         try:
-            np.testing.assert_allclose(np.load(snapshot)[0, :, 0], [0, 128 / 255, 1], atol=1e-4)
+            np.testing.assert_allclose(load_ai_input(snapshot)[0, :, 0], [0, 128 / 255, 1], atol=1e-4)
         finally:
             cleanup_image_input(snapshot)
     finally:
         bpy.data.images.remove(image)
 
 
-def test_srgb_job_png_matches_blender_for_a_transparent_crop(source, tmp_path):
+def test_resized_byte_image_keeps_interpolated_rgba(source):
+    rgba = images.image_rgba(source)
+    path = prepare_ai_input(source, rgba, max_input_size=2, panorama=True)
+    try:
+        pixels = np.load(path)
+        assert pixels.dtype == np.float32 and pixels.shape == (1, 2, 4)
+        expected_alpha = Image.fromarray(rgba[..., 3]).resize((2, 1), Image.Resampling.BOX)
+        np.testing.assert_array_equal(pixels[..., 3], np.asarray(expected_alpha))
+    finally:
+        cleanup_image_input(path)
+
+
+def test_hdr_crop_uses_the_same_mapping_as_the_full_image(tmp_path):
+    path = tmp_path / "edited.png"
+    Image.fromarray(np.full((1, 3), 32768, np.uint16)).save(path)
+    image = bpy.data.images.load(str(path))
+    paths = []
+    try:
+        image.pixels[0:4] = (2, 2, 2, 1)
+        image.update()
+        rgba = images.image_rgba(image)
+        paths.append(prepare_ai_input(image, rgba))
+        paths.append(prepare_ai_input(image, rgba, bounds=(1, 0, 3, 1)))
+        full, crop = (np.load(p) for p in paths)
+        np.testing.assert_array_equal(crop, full[:, 1:])
+        assert 0.45 < crop[0, 0, 0] < 0.47
+        assert rgba[0, 0, 0] == 2
+    finally:
+        for snapshot in paths:
+            cleanup_image_input(snapshot)
+        bpy.data.images.remove(image)
+
+
+def test_wide_gamut_16bit_tiff_keeps_sdr_midtone_brightness(tmp_path):
+    from anyimage.common.hdr_image import is_hdr_source
+
+    path = tmp_path / "p3.tiff"
+    source = bpy.data.images.new("P3 swatches", 2, 1, alpha=True, float_buffer=True)
+    scene = bpy.data.scenes.new("SDR export")
+    try:
+        source.pixels[:] = (1, 0, 0, 1, .21586, .21586, .21586, 1)
+        scene.view_settings.view_transform = "Standard"
+        settings = scene.render.image_settings
+        settings.file_format = "TIFF"
+        settings.color_depth = "16"
+        source.save_render(str(path), scene=scene)
+    finally:
+        bpy.data.images.remove(source)
+        bpy.data.scenes.remove(scene)
+    image = bpy.data.images.load(str(path))
+    snapshot = None
+    try:
+        image.colorspace_settings.name = "Display P3"
+        rgba = images.image_rgba(image)
+        assert rgba[0, 0, 0] > 1 and not is_hdr_source(image, rgba)
+        snapshot = prepare_ai_input(image, rgba)
+        np.testing.assert_array_equal(load_ai_input(snapshot, as_bytes=True)[0, 1], (128, 128, 128, 255))
+    finally:
+        cleanup_image_input(snapshot)
+        bpy.data.images.remove(image)
+
+
+def test_byte_snapshot_matches_blender_for_a_transparent_crop(source, tmp_path):
     rgba = images.image_rgba(source)[:, :3]
     rgba[0, 1] = (1, .5, .25, 0)
     rgba[1, 2] = (.5 / 255, .5, 1.5, .5)
     expected = tmp_path / "blender.png"
     colors.save_color_png(rgba, expected, "sRGB")
-    path = prepare_recognition_input(source, rgba)
+    path = prepare_ai_input(source, rgba)
     try:
-        with Image.open(path) as actual, Image.open(expected) as reference:
-            np.testing.assert_array_equal(np.asarray(actual), np.asarray(reference))
+        with Image.open(expected) as reference:
+            np.testing.assert_array_equal(np.load(path), np.asarray(reference))
     finally:
         cleanup_image_input(path)

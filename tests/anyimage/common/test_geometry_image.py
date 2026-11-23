@@ -217,7 +217,7 @@ def test_loaded_normal_image_uses_normal_texture_name(tmp_path):
     Image.new("RGB", (1, 1), (128, 128, 255)).save(path)
     source = SimpleNamespace(data=SimpleNamespace(name="Poster.png"))
 
-    image = geometry_image.load_normal_result_image(path, source)
+    image = geometry_image.load_normal_result_image(path, geometry_image.normal_data_name(source))
 
     assert image.name == "Poster_normal.png"
     assert image.colorspace_settings.is_data

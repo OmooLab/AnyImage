@@ -18,7 +18,7 @@ from .operators.mask_tool import EditImageAlpha
 from .operators.rectify_tool import RectifyImagePerspective
 
 from .menus import ImageMenuLite, ObjectMenuLite, TextureNodeMenuLite
-from .color_panel import ColorMatchPanel
+from .panels import ColorMatchPanel
 from .common.image import is_image_empty
 from .common.image_target import is_image_object, active_texture_node, object_image_texture
 from .tools import CutoutTool, FrameTool, MaskTool, RectifyTool

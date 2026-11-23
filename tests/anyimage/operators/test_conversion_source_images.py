@@ -9,7 +9,7 @@ from PIL import Image
 
 from anyimage.common import image as images, material
 from anyimage.operators import convert_to_plane as operators
-from anyimage.operators.depth_plane import object as conversion
+from anyimage.operators import depth_plane as conversion
 
 
 @pytest.fixture
@@ -49,12 +49,16 @@ def run_conversion(source, entry, monkeypatch):
         monkeypatch.setattr(conversion, "load_normal_result_image", load_depth)
         monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data,
             ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **_: {"FINISHED"}))))
-        operator = SimpleNamespace(_source_object=source, _source_image=source.data,
-                                   plane_type=entry, bl_label="Convert to Depth Plane",
-                                   _source_signature=images.image_content_signature(source.data))
-        conversion.create_depth_plane_from_result(
-            bpy.context, SimpleNamespace(file=lambda key: key, value={"intrinsics": [[2, 0, 1], [0, 2, 0.5], [0, 0, 1]]}), operator,
-        )
+        operator = SimpleNamespace(_scene=bpy.context.scene, _source_object=source, _source_image=source.data,
+                                   plane_type=entry, bl_label="Convert to Depth Plane", ready_message="Depth Plane is ready")
+        monkeypatch.setattr(conversion, "geometry_job_parameters", lambda _: {})
+        conversion.DepthPlaneJob.request(operator, bpy.context)
+        try:
+            conversion.DepthPlaneJob.response(
+                operator, bpy.context, SimpleNamespace(file=lambda key: key, value={"intrinsics": [[2, 0, 1], [0, 2, 0.5], [0, 0, 1]]}),
+            )
+        finally:
+            conversion.DepthPlaneJob.cleanup(operator)
     return bpy.context.object
 
 
@@ -82,6 +86,24 @@ def test_conversion_selects_source_by_empty_identity(source, monkeypatch, entry,
     if sharing == "material":
         existing = bpy.data.materials["Existing"]
         assert next(n.image for n in existing.node_tree.nodes if n.type == "TEX_IMAGE") == original
+
+
+def test_depth_plane_uses_submitted_color_and_aspect_after_resize(source, monkeypatch):
+    expected = images.image_pixels(source.data)
+    check_binding = conversion.conversion_source
+
+    def resize_then_check(operator, scene):
+        source.data.scale(1, 4)
+        source.data.pixels.foreach_set(np.zeros(16, dtype=np.float32))
+        return check_binding(operator, scene)
+
+    monkeypatch.setattr(conversion, "conversion_source", resize_then_check)
+    obj = run_conversion(source, "DEPTH", monkeypatch)
+    color = next(node.image for node in obj.active_material.node_tree.nodes if node.type == "TEX_IMAGE")
+    assert tuple(color.size) == (2, 1)
+    np.testing.assert_allclose(images.image_pixels(color), expected, atol=1 / 255)
+    vertices = np.array([vertex.co for vertex in obj.data.vertices])
+    assert np.ptp(vertices[:, 0]) == pytest.approx(2 * np.ptp(vertices[:, 2]))
 
 
 @pytest.mark.parametrize("shared,failure,entry", [
@@ -137,11 +159,11 @@ def test_conversion_pixels_survive_library_reload(source, tmp_path, monkeypatch,
 
 @pytest.mark.parametrize("entry", ["DEPTH", "RELIEF"])
 def test_depth_result_rejects_replaced_source_image(source, entry):
-    operator = SimpleNamespace(_source_object=source,
-                               _source_image=source.data, _source_signature=images.image_content_signature(source.data), plane_type=entry)
+    operator = SimpleNamespace(_scene=bpy.context.scene, _source_object=source,
+                               _source_image=source.data, plane_type=entry)
     source.data = source.data.copy()
     with pytest.raises(RuntimeError, match="source image has changed"):
-        conversion.create_depth_plane_from_result(bpy.context, None, operator)
+        conversion.DepthPlaneJob.response(operator, bpy.context, None)
 
 
 @pytest.mark.parametrize("shared", [False, True])
@@ -171,21 +193,20 @@ def test_plane_undo_redo_restores_image_configuration(source, monkeypatch, share
 
 
 def test_conversion_source_survives_object_and_image_renaming(source):
-    from anyimage.common.object import require_conversion_source
+    from anyimage.common.object import conversion_source
 
-    operator = SimpleNamespace(_source_object=source, _source_image=source.data, _source_signature=images.image_content_signature(source.data))
+    operator = SimpleNamespace(_scene=bpy.context.scene, _source_object=source, _source_image=source.data)
     source.name = "Renamed source"
     source.data.name = "Renamed image"
-    assert require_conversion_source(operator) == source
+    assert conversion_source(operator) == source
 
 
 @pytest.mark.parametrize("change", ["pixels", "size", "color_space"])
-def test_conversion_rejects_in_place_source_edits(source, change):
-    from anyimage.common.object import require_conversion_source
+def test_conversion_accepts_in_place_source_edits(source, change):
+    from anyimage.common.object import conversion_source
 
     operator = SimpleNamespace(
         _source_object=source, _source_image=source.data,
-        _source_signature=images.image_content_signature(source.data),
     )
     if change == "pixels":
         source.data.pixels[0] = 0.8
@@ -193,5 +214,4 @@ def test_conversion_rejects_in_place_source_edits(source, change):
         source.data.scale(4, 2)
     else:
         source.data.colorspace_settings.name = "Non-Color"
-    with pytest.raises(RuntimeError, match="source image has changed"):
-        require_conversion_source(operator)
+    assert conversion_source(operator) == source

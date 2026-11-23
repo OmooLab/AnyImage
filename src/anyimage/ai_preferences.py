@@ -7,7 +7,7 @@ from pathlib import Path
 import bpy
 import platform
 import sys
-from .server.media.resolution import (
+from .server.media.input import (
     DEFAULT_MAX_AI_INPUT_SIZE,
     MAX_MAX_AI_INPUT_SIZE,
     MIN_MAX_AI_INPUT_SIZE,

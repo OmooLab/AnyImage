@@ -4,7 +4,7 @@ import numpy as np
 
 from anyimage.common.image import image_rgba
 from anyimage.common.selection import SelectionMask
-from anyimage.operators.cutout_tool.object import create_cutout_shape
+from anyimage.operators.cutout_tool.object import CutoutSource, create_cutout_shape
 
 
 def _inputs(group):
@@ -40,8 +40,8 @@ def _create_cutout_shape(
     if selection_values is None:
         selection_values = np.ones((bottom - top, right - left), dtype=np.float32)
     return create_cutout_shape(
-        bpy.context, source, shape, edge_length, SelectionMask(selection_values, bounds),
-        source_rgba=image_rgba(source.data),
+        bpy.context, CutoutSource.capture(bpy.context, source, bounds, image_rgba(source.data)),
+        shape, edge_length, SelectionMask(selection_values, bounds),
         depth_image=depth_image,
         intrinsics=intrinsics,
         gesture=gesture,

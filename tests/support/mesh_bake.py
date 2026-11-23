@@ -4,7 +4,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 
 
 def add_post_bake_modifiers(obj, depth_image=None):

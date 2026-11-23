@@ -7,7 +7,7 @@ from PIL import Image
 
 from anyimage.common import color_image, image as images
 from anyimage.common.color_space import normalize_color_rgba, srgb_to_linear_rgb
-from anyimage.common.job_image import load_image_edit_result
+from anyimage.operators.upscale import load_upscale_result, upscale_output_format
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ def test_edits_preserve_state_and_fresh_replacement_clears_it(source, tmp_path):
     assert edited[images.COLOR_NORMALIZED_PROPERTY]
     path = tmp_path / "edit.png"
     Image.new("RGBA", (4, 1), (10, 20, 30, 255)).save(path)
-    result = load_image_edit_result(source, path)
+    result = load_upscale_result(source, path, upscale_output_format(source))
     images.restore_image_content(source, images.image_content_state(result))
     assert source[images.COLOR_NORMALIZED_PROPERTY]
     fresh = bpy.data.images.load(str(path), check_existing=False)

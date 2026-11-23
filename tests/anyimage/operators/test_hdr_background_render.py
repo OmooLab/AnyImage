@@ -2,12 +2,11 @@ import bpy
 import numpy as np
 import pytest
 
-from anyimage.operators.remove_background.image import BackgroundInput
+from anyimage.operators.remove_background import BackgroundInput
 from anyimage.common.image import image_rgba
 from anyimage.common.image_input import cleanup_image_input
 from anyimage.common.image_target import ImageEditTarget
-from tests.support.hdr_image import hdr_texture
-from tests.support.image_texture import texture, texture_context
+from tests.support.image_texture import hdr_texture, texture, texture_context
 
 
 @pytest.mark.parametrize("use_alpha", [False, True])

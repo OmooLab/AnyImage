@@ -18,16 +18,6 @@ def redraw_area(context):
         tag_redraw()
 
 
-def image_edit_keymap(operator_id, *events):
-    return (
-        *((operator_id, {"type": "LEFTMOUSE", "value": value}, None) for value in events),
-        ("view3d.select", {"type": "LEFTMOUSE", "value": "CLICK"},
-         {"properties": [("deselect_all", True)]}),
-        ("view3d.select", {"type": "LEFTMOUSE", "value": "CLICK", "shift": True},
-         {"properties": [("toggle", True)]}),
-    )
-
-
 def simplify_screen_path(path):
     pixels = []
     for point in path:

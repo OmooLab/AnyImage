@@ -10,7 +10,7 @@ from tests.support.blender import BlenderTestCase
 class ServerLocationTest(BlenderTestCase):
     def setUp(self):
         super().setUp()
-        self.storage = importlib.import_module("anyimage.common.server_location")
+        self.storage = importlib.import_module("anyimage.common.ai")
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
@@ -33,8 +33,8 @@ class ServerLocationTest(BlenderTestCase):
     def test_inspection_adds_model_status_to_runtime_environment_status(self):
         with (
             patch.object(self.anyimage.runtime, "inspect_installation", return_value={"environment_ready": True}) as inspect,
-            patch.object(self.storage, "DEFAULT_MODEL_KEYS", ("first", "second")),
-            patch.object(self.storage, "get_downloadable_model", side_effect=lambda key: key),
+            patch.object(self.storage.shared_model_catalog, "DEFAULT_MODEL_KEYS", ("first", "second")),
+            patch.object(self.storage.shared_model_catalog, "get_downloadable_model", side_effect=lambda key: key),
             patch.object(self.storage, "model_files_installed", side_effect=(True, False)),
         ):
             status = self.storage.inspect_installation(self.target)

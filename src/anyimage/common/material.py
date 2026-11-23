@@ -21,13 +21,15 @@ def create_image_material(
     texture_extension="EXTEND",
     emission_strength=0.0,
     panorama=False,
+    highlight_threshold=None,
+    material_name=None,
 ):
     material_image = color_images.configure_material_color_image(
         color_image, scene,
     )
     if material_image.source == "GENERATED" or material_image.is_dirty:
         material_image.pack()
-    material = bpy.data.materials.new(image_base_name(source_image))
+    material = bpy.data.materials.new(material_name or image_base_name(source_image))
     try:
         material.use_nodes = True
         material.surface_render_method = "DITHERED"
@@ -47,11 +49,12 @@ def create_image_material(
         material_inputs.node_tree = load_node_group(IMAGE_MATERIAL_NODE_GROUP_NAME)
         material_inputs.width = material_inputs.node_tree.default_group_node_width
         material_inputs.location = (-300.0, 300.0)
-        threshold = color_images.estimate_highlight_threshold(
-            material_image if color_is_full_source else source_image,
-            material_image=material_image, panorama=panorama,
-        )
-        material_inputs.inputs["Highlight Threshold"].default_value = threshold
+        if highlight_threshold is None:
+            highlight_threshold = color_images.estimate_highlight_threshold(
+                material_image if color_is_full_source else source_image,
+                material_image=material_image, panorama=panorama,
+            )
+        material_inputs.inputs["Highlight Threshold"].default_value = highlight_threshold
         if normal_space not in {"TANGENT", "OBJECT"}:
             raise ValueError(f"Unsupported normal space: {normal_space}")
         # Without a normal texture, the neutral tangent input follows the mesh.

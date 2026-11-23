@@ -11,8 +11,8 @@ from ...common.selection import ImageEditWarning, SelectionPath
 from ...common.image_gesture import ImageGesture
 from ...common.viewport import report_image_edit_exception
 from .geometry import cutout_selection_mask
-from .object import create_cutout_shape
-from .interaction import open_shape_pie
+from .object import CutoutSource, create_cutout_shape
+from .shape import CUTOUT_SHAPE_LABELS
 from .preview import CutoutGridPreview, screen_to_grid_matrix
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
@@ -45,16 +45,60 @@ class CreateCutoutShape(bpy.types.Operator):
             context.view_layer.objects.active = source
             source.select_set(True)
             create_cutout_shape(
-                context, source, self.shape, self.edge_length, selection,
+                context, CutoutSource.capture(context, source, selection.bounds, rgba),
+                self.shape, self.edge_length, selection,
                 alpha_threshold=self.alpha_threshold,
                 fine_outline=self.fine_outline,
                 boundary_padding=configured_cutout_boundary_padding(context),
-                source_rgba=rgba, gesture=self.gesture, report=self.report,
+                gesture=self.gesture, report=self.report,
             )
         except (ImageEditWarning, OSError, RuntimeError, TypeError, ValueError) as error:
             report_image_edit_exception(self, error)
             return {"CANCELLED"}
         return {"FINISHED"}
+
+
+def flat_and_solid_buttons(operator):
+    return (("FLAT", "MESH_GRID", operator), ("SOLID", "MESH_UVSPHERE", operator))
+
+
+def open_shape_pie(
+    context,
+    event,
+    source_object,
+    selection_path,
+    *,
+    gesture="LASSO",
+    buttons=None,
+):
+    if buttons is None:
+        buttons = flat_and_solid_buttons(CreateCutoutShape)
+    settings = context.scene.anyimage_settings
+    parameters = {
+        "source_object_name": source_object.name,
+        "selection_path_json": selection_path.to_json(),
+        "edge_length": settings.cutout_edge_length,
+        "alpha_threshold": settings.cutout_alpha_threshold,
+        "fine_outline": settings.cutout_fine_outline,
+        "gesture": gesture,
+    }
+
+    def draw(menu, _context):
+        pie = menu.layout.menu_pie()
+        for shape, icon, operator_type in buttons:
+            operator = pie.operator(
+                operator_type.bl_idname, text=CUTOUT_SHAPE_LABELS[shape], text_ctxt="AnyImage", icon=icon,
+            )
+            operator.shape = shape
+            for name, value in parameters.items():
+                setattr(operator, name, value)
+
+    context.window_manager.popup_menu_pie(
+        event,
+        draw,
+        title="Cutout Shape",
+        icon="MESH_DATA",
+    )
 
 
 class SelectCutoutSelection(ImageGesture, bpy.types.Operator):

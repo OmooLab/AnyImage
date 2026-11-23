@@ -59,13 +59,18 @@ class CutoutOperatorsTest(BlenderTestCase):
         module = self.cutout_operators
         for shape in ("FLAT", "SOLID"):
             operator = SimpleNamespace(source_object_name="Source", selection_path_json=json.dumps({"points": [[1, 1], [9, 1], [9, 9]]}), shape=shape, gesture="POLYLINE", edge_length=0.1, alpha_threshold=0.25, fine_outline=False, report=Mock())
+            source.bounds = (-4, 4, -4, 4)
+            source.image_name, source.image_format = "Color", Mock()
+            source.rgba = np.ones((8, 8, 4))
+            color = Mock(users=1)
             mesh = SimpleNamespace(mask="Mask")
             with (
                 patch.object(module, "require_image_empty", return_value=source),
                 patch.object(module, "is_animated_image", return_value=False),
                 patch.object(module, "image_rgba", return_value=np.ones((10, 10, 4))),
                 patch.object(self.cutout_geometry, "rasterize_selection_path", return_value=selection),
-                patch.object(self.cutout_object, "material_color_image", return_value=nullcontext("Color")),
+                patch.object(module.CutoutSource, "capture", return_value=source),
+                patch.object(self.cutout_object, "create_crop_color_image", return_value=color),
                 patch.object(self.cutout_object, "build_cutout_shape", return_value=mesh),
                 patch.object(self.cutout_object, "pad_cutout_images") as pad,
                 patch.object(self.cutout_object, "push_cutout_undo") as undo,
@@ -73,7 +78,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             ):
                 self.assertEqual(module.CreateCutoutShape.execute(operator, context), {"FINISHED"})
             self.assertEqual(create.call_args.args, (context, source, shape, (-4, 4, -4, 4), mesh))
-            self.assertEqual(create.call_args.kwargs["color_image"], "Color")
+            self.assertEqual(create.call_args.kwargs["color_image"], color)
             self.assertEqual(create.call_args.kwargs["gesture"], "POLYLINE")
             self.assertEqual(pad.call_args.args[0].shape, (8, 8, 4))
             undo.assert_called_once_with(shape)
@@ -117,7 +122,7 @@ class CutoutOperatorsTest(BlenderTestCase):
                 "image_rgba",
                 return_value=source_rgba,
             ) as read_rgba,
-            patch.object(self.cutout_main, "image_content_signature", return_value="snapshot"),
+            patch.object(self.cutout_main.CutoutSource, "capture"),
             patch.object(
                 self.cutout_geometry,
                 "rasterize_selection_path",
@@ -130,7 +135,7 @@ class CutoutOperatorsTest(BlenderTestCase):
             ),
             patch.object(
                 self.cutout_main,
-                "prepare_moge_input",
+                "prepare_ai_input",
                 return_value=Path(__file__),
             ) as prepare_input,
             patch.object(self.cutout_main, "geometry_job_parameters", return_value={}),
@@ -146,7 +151,8 @@ class CutoutOperatorsTest(BlenderTestCase):
         read_rgba.assert_called_once_with(source.data)
         rasterize.assert_called_once()
         self.assertIs(prepare_input.call_args.args[0], source.data)
-        np.testing.assert_array_equal(prepare_input.call_args.args[1], source_rgba[1:3, 1:7])
+        np.testing.assert_array_equal(prepare_input.call_args.args[1], source_rgba)
+        self.assertEqual(prepare_input.call_args.kwargs["bounds"], selection_mask.bounds)
 
 
     def test_transparent_cutout_stops_before_material_export_or_ai_setup(self):
@@ -171,8 +177,8 @@ class CutoutOperatorsTest(BlenderTestCase):
                     patch.object(module, "require_image_empty", return_value=source),
                     patch.object(module, "image_rgba", return_value=rgba),
                     patch.object(self.cutout_main, "invoke_ai_setup_if_needed") as setup,
-                    patch.object(self.cutout_object, "material_color_image") as local_color,
-                    patch.object(self.cutout_main, "prepare_moge_input") as ai_color,
+                    patch.object(self.cutout_object, "create_crop_color_image") as local_color,
+                    patch.object(self.cutout_main, "prepare_ai_input") as ai_color,
                 ):
                     self.assertEqual(operator.execute(context), {"CANCELLED"})
                 operator.report.assert_called_once_with({"WARNING"}, "The Cutout selection contains no visible image pixels")
@@ -183,12 +189,14 @@ class CutoutOperatorsTest(BlenderTestCase):
 
     def test_cutout_request_only_adds_depth_for_depth_shapes(self):
         operator = self.cutout_main.CutoutSelectionToShape()
-        operator._source_image = Mock()
+        operator._selection = SimpleNamespace(bounds=(1, 2, 5, 5))
         with (
-            patch.object(self.cutout_main, "prepare_moge_input", return_value=Path("input.npy")),
+            patch.object(self.cutout_main.CutoutSource, "capture"),
+            patch.object(self.cutout_main, "prepare_ai_input", return_value=Path("input.npy")),
             patch.object(self.cutout_main, "geometry_job_parameters", return_value={"model": "MOGE3_VITL"}),
         ):
             for shape in ("FLAT", "SOLID", "DEPTH_SOLID", "DEPTH_SYMMETRY"):
+                operator._source_object = Mock()
                 operator._input_rgba = SimpleNamespace(shape=(3, 4, 4))
                 operator.shape = shape
                 self.assertEqual(operator.request(None), {
@@ -271,24 +279,16 @@ class CutoutOperatorsTest(BlenderTestCase):
         operator.edge_length = 0.1
         operator._selection = self.image_selection.SelectionMask(content_values, bounds)
         operator._source_object = source
-        operator._source_image = source.data
         operator.boundary_padding = 3.5
         results = (
             JobResult("cutout", Path(__file__).parent, {}),
             JobResult("cutout", Path(__file__).parent, {"object_normal": "missing.png"}),
         )
 
-        with (
-            patch.object(
-                self.cutout_main,
-                "read_conversion_source",
-                return_value=(source, pixels),
-            ),
-            patch.object(self.cutout_main, "create_cutout_shape") as create_shape,
-        ):
-            context = SimpleNamespace(scene=SimpleNamespace(
-                anyimage_settings=SimpleNamespace(cutout_gesture="LASSO")
-            ))
+        collection = Mock()
+        operator._cutout = SimpleNamespace(collection=collection, image_name="Source")
+        with patch.object(self.cutout_main, "create_cutout_shape") as create_shape:
+            context = SimpleNamespace(scene=SimpleNamespace(collection=collection))
             for result in results:
                 message = operator.response(context, result)
 
@@ -299,7 +299,7 @@ class CutoutOperatorsTest(BlenderTestCase):
         )
         self.assertEqual(create_shape.call_args.kwargs["gesture"], "POLYLINE")
         self.assertIs(create_shape.call_args.args[4], operator._selection)
-        np.testing.assert_array_equal(create_shape.call_args.kwargs["source_rgba"], pixels.reshape(24, 24, 4)[::-1])
+        self.assertIs(create_shape.call_args.args[1], operator._cutout)
         self.assertEqual(create_shape.call_args.kwargs["alpha_threshold"], 0.25)
         self.assertIs(create_shape.call_args.kwargs["fine_outline"], False)
         self.assertEqual(create_shape.call_args.kwargs["boundary_padding"], 3.5)

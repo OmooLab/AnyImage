@@ -1,12 +1,25 @@
-"""Encode HDR images and build their recognition previews."""
-
-from concurrent.futures import ThreadPoolExecutor
+"""Identify HDR sources and encode scene-linear EXR images."""
 
 import bpy
 import numpy as np
 
 from .image import image_rgba
-from .color_space import linear_rgb_to_srgb
+
+
+def save_image_exr(image, path, color_space):
+    """Write a 32-bit RGBA EXR in the requested color space."""
+    scene = bpy.data.scenes.new("Any Image EXR Export")
+    try:
+        settings = scene.render.image_settings
+        settings.file_format = "OPEN_EXR"
+        settings.color_mode = "RGBA"
+        settings.color_depth = "32"
+        settings.exr_codec = "ZIP"
+        settings.color_management = "OVERRIDE"
+        settings.linear_colorspace_settings.name = color_space
+        image.save_render(str(path), scene=scene)
+    finally:
+        bpy.data.scenes.remove(scene)
 
 
 def save_hdr_image(rgba, path):
@@ -14,21 +27,12 @@ def save_hdr_image(rgba, path):
     height, width = rgba.shape[:2]
     image = bpy.data.images.new("Any Image HDR Result", width=width, height=height,
                                 alpha=True, float_buffer=True)
-    scene = None
     try:
         image.alpha_mode = "PREMUL"
         image.colorspace_settings.name = "Linear Rec.709"
         image.pixels.foreach_set(np.flipud(rgba).ravel())
-        scene = bpy.data.scenes.new("Any Image HDR Export")
-        settings = scene.render.image_settings
-        settings.file_format = "OPEN_EXR"
-        settings.color_mode = "RGBA"
-        settings.color_depth = "32"
-        settings.exr_codec = "ZIP"
-        image.save_render(str(path), scene=scene)
+        save_image_exr(image, path, "Linear Rec.709")
     finally:
-        if scene is not None:
-            bpy.data.scenes.remove(scene)
         bpy.data.images.remove(image)
 
 
@@ -51,31 +55,23 @@ def create_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
         raise
 
 
-def build_recognition_rgba(image, rgba):
-    """Encode Blender's linear float pixels for recognition, preserving sRGB source brightness."""
-    alpha_mode = image.alpha_mode
-    tone_map = image.colorspace_settings.name != "sRGB"
-    preview = np.empty(rgba.shape, dtype=np.float32)
-
-    def map_rows(top):
-        rows = slice(top, top + 64)
-        source = rgba[rows]
-        if not np.isfinite(source).all():
-            raise ValueError("HDR recognition requires finite RGBA values")
-        alpha = source[..., 3]
-        rgb = np.array(source[..., :3].transpose(2, 0, 1), dtype=np.float64, order="C")
-        np.maximum(rgb, 0, out=rgb)
-        divisor = 1.0 if alpha_mode in {"CHANNEL_PACKED", "NONE"} else np.where(alpha > 0, alpha, np.inf)
-        if tone_map:
-            # Unpremultiplying then tone mapping gives RGB / (alpha + luminance).
-            luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
-            divisor = divisor + luminance
-        rgb /= divisor
-        encoded = linear_rgb_to_srgb(rgb.astype(np.float32))
-        preview[rows, :, :3] = np.clip(encoded, 0, 1).transpose(1, 2, 0)
-        preview[rows, :, 3] = 1 if alpha_mode == "NONE" else np.clip(alpha, 0, 1)
-
-    # Workers only touch independent NumPy rows; all Blender access stays on the caller.
-    with ThreadPoolExecutor(max_workers=4) as workers:
-        list(workers.map(map_rows, range(0, len(rgba), 64)))
-    return preview
+def is_hdr_source(image, rgba=None):
+    """Classify the source before cropping so each job maps the same highlights."""
+    if not image.is_float:
+        return False
+    if image.file_format in {"OPEN_EXR", "OPEN_EXR_MULTILAYER", "HDR"}:
+        return True
+    if image.source == "GENERATED" and image.colorspace_settings.name != "sRGB":
+        return True
+    if rgba is None or (not image.is_dirty and image.file_format in {"PNG", "JPEG2000"}):
+        return False
+    # Blender's color conversion can put SDR white slightly above 1.
+    alpha = rgba[..., 3:4]
+    associated = not image.colorspace_settings.is_data and image.alpha_mode in {"STRAIGHT", "PREMUL"}
+    ceiling = alpha if associated else 1.0
+    rgb = rgba[..., :3]
+    if not image.colorspace_settings.is_data and image.colorspace_settings.name not in {"sRGB", "Linear Rec.709"}:
+        # Wide-gamut SDR can exceed a Rec.709 primary while staying below reference white.
+        luminance = rgb @ np.array([.2126, .7152, .0722], np.float32)
+        return bool(np.any(luminance[..., None] > ceiling + .0005))
+    return bool(np.any(rgb > ceiling + .0005))

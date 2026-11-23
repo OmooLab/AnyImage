@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .image_tensor import imagenet_rgb_tensor
+from ..media.input import imagenet_rgb_tensor
 from .onnx_runtime import create_session as create_runtime_session
 from .onnx_runtime import run_session
 

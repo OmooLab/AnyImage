@@ -24,7 +24,7 @@ from ...common.viewport import (
     screen_path_to_image_pixels,
 )
 from ...common.selection import ImageEditWarning
-from ...common.object import read_conversion_source, require_conversion_source
+from ...common.object import conversion_source
 from ...common.image import image_content_signature, create_linear_image_edit_result, image_pixels, image_empty_bounds, replace_empty_image, require_image_empty, is_animated_image
 from ...common.projective_image import premultiplied_rgba, warp_projective_pixels
 from ...common.color_space import image_rgba_to_linear
@@ -32,23 +32,71 @@ from .geometry import (
     MAX_INTERACTIVE_ASPECT,
     MIN_INTERACTIVE_ASPECT,
     canonical_perspective_quad,
+    corners_in_cyclic_order,
     extract_perspective_pixels,
     perspective_quad_aspect,
     perspective_quad_overlaps_image,
     validate_perspective_quad,
     validated_corner_ring,
 )
-from .preview import (
-    PREVIEW_TEXTURE_SIZE,
-    aspect_ratio_from_mouse,
-    aspect_ratio_label,
-    interactive_preview_polygon,
-    snapped_aspect_ratio,
-)
 
 
 MIN_QUAD_AREA = 16.0
 RECTIFY_TOOL_ID = "anyimage.rectify"
+PREVIEW_TEXTURE_SIZE = 512
+ASPECT_PIXELS_PER_DOUBLE = 240.0
+ASPECT_PRESETS = (
+    ("9 : 16", 9.0 / 16.0),
+    ("3 : 4", 3.0 / 4.0),
+    ("1 : 1", 1.0),
+    ("4 : 3", 4.0 / 3.0),
+    ("16 : 9", 16.0 / 9.0),
+)
+
+
+def interactive_preview_polygon(points, cursor):
+    """Return the clicked points plus one distinct moving cursor point."""
+    vertices = list(points)
+    if (
+        cursor is not None
+        and vertices
+        and len(vertices) < 4
+        and math.dist(vertices[-1], cursor) >= 2.0
+    ):
+        vertices.append(cursor)
+    return corners_in_cyclic_order(vertices)
+
+
+def aspect_ratio_from_mouse(initial_ratio, horizontal_delta):
+    ratio = initial_ratio * math.pow(
+        2.0, float(horizontal_delta) / ASPECT_PIXELS_PER_DOUBLE
+    )
+    return min(max(ratio, MIN_INTERACTIVE_ASPECT), MAX_INTERACTIVE_ASPECT)
+
+
+def snapped_aspect_ratio(aspect_ratio):
+    label, ratio = min(
+        ASPECT_PRESETS,
+        key=lambda preset: abs(math.log(aspect_ratio / preset[1])),
+    )
+    return ratio, label
+
+
+def aspect_ratio_label(aspect_ratio, preset_label=None):
+    if preset_label is not None:
+        return preset_label
+    if aspect_ratio >= 1.0:
+        return f"{aspect_ratio:.2f} : 1"
+    return f"1 : {1.0 / aspect_ratio:.2f}"
+
+
+def read_rectify_source(operator):
+    """Read and check the source of an interactive perspective preview."""
+    source = conversion_source(operator)
+    pixels = image_pixels(source.data)
+    if image_content_signature(source.data, pixels) != operator._source_signature:
+        raise RuntimeError("The conversion source image has changed")
+    return source, pixels
 
 
 def _rectify_sampling_pixels(image, pixels):
@@ -262,7 +310,7 @@ class RectifyImagePerspective(bpy.types.Operator):
 
     def _begin_aspect_preview(self, context, event):
         validated_corner_ring(self._points, MIN_QUAD_AREA)
-        source, pixels = read_conversion_source(self)
+        source, pixels = read_rectify_source(self)
         image = source.data
         image_size = tuple(image.size)
         quad = screen_path_to_image_pixels(
@@ -295,7 +343,7 @@ class RectifyImagePerspective(bpy.types.Operator):
     def execute(self, context):
         try:
             source_object = (
-                require_conversion_source(self)
+                read_rectify_source(self)[0]
                 if self._source_object is not None
                 else require_image_empty(self.source_object_name)
             )

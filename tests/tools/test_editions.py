@@ -43,7 +43,6 @@ def test_lite_contents_and_dependencies(tmp_path):
         assert archive.read("assets/O_AnyImage.blend") == other.read("assets/O_AnyImage.blend")
         assert not any(name.startswith("server/") for name in archive.namelist())
         assert "runtime.py" not in archive.namelist()
-        assert "common/job_image.py" not in archive.namelist()
         assert not any(
             name == excluded or name.startswith(excluded + "/")
             for name in archive.namelist()
@@ -120,8 +119,9 @@ source.select_set(True)
 shape_object = importlib.import_module('second_repo.anyimage.operators.cutout_tool.object')
 mesh = SimpleNamespace(vertices=np.array([[-1, 0, -1], [1, 0, -1], [1, 0, 1], [-1, 0, 1]]),
                        faces=[(0, 1, 2, 3)], uv=np.array([[0, 0], [1, 0], [1, 1], [0, 1]]), balloon=np.zeros(4))
+cutout = shape_object.CutoutSource.capture(bpy.context, source, (0, 0, 4, 4), np.ones((4, 4, 4), np.float32))
 for shape in ('FLAT', 'SOLID'):
-    result = shape_object.create_shape_object(bpy.context, source, shape, (-1, 1, -1, 1), mesh, color_image=image)
+    result = shape_object.create_shape_object(bpy.context, cutout, shape, (-1, 1, -1, 1), mesh, color_image=image)
     assert len(result.data.vertices) == 4
     assert result.modifiers[0].node_group.name == 'O Cutout'
 bpy.context.view_layer.objects.active = result
@@ -145,9 +145,12 @@ full = importlib.import_module('first_repo.anyimage')
 full.runtime.enable = Mock()
 first, second = (full, lite) if sys.argv[1] == 'full' else (lite, full)
 first.register()
+assert bpy.types.ANYIMAGE_PT_color_match is first.ColorMatchPanel
+assert hasattr(bpy.types, 'ANYIMAGE_PT_server') == (first is full)
+assert hasattr(bpy.types, 'ANYIMAGE_PT_danger_zone') == (first is full)
 selection = next(cls for cls in first.CLASSES if getattr(cls, 'bl_idname', '') == 'anyimage.select_cutout_selection')
 assert bpy.types.Operator.bl_rna_get_subclass_py(selection.bl_rna.identifier) is selection
-assert selection.show_shape_menu.__module__.endswith('.ai_interaction' if first is full else '.interaction')
+assert selection.show_shape_menu.__module__.endswith('.ai_operators' if first is full else '.operators')
 assert hasattr(bpy.context.scene.anyimage_settings, 'cutout_generate_normal') == (first is full)
 first.unregister()
 assert not hasattr(bpy.types.Scene, 'anyimage_settings')

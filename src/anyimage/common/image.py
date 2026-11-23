@@ -1,5 +1,6 @@
 """Shared Blender Image and Image Empty lifecycle helpers."""
 
+from dataclasses import dataclass
 import hashlib
 from pathlib import Path
 
@@ -127,24 +128,40 @@ def create_linear_image_edit_result(source_image, linear_rgba):
     return create_image_edit_result(source_image, rgba[::-1].ravel(), rgba.shape[1::-1])
 
 
-def create_image_edit_result(source_image, pixels, output_size):
+@dataclass(frozen=True)
+class ImageFormat:
+    """Local color and storage settings captured with job pixels."""
+
+    color_space: str
+    alpha_mode: str
+    is_float: bool
+    normalized: bool
+
+    @classmethod
+    def capture(cls, image):
+        return cls(image.colorspace_settings.name, image.alpha_mode, image.is_float,
+                   bool(image.get(COLOR_NORMALIZED_PROPERTY)))
+
+
+def create_image_edit_result(source_image, pixels, output_size, *, image_format=None):
     """Create an Image datablock from edited RGBA pixels."""
     output_width, output_height = (int(value) for value in output_size)
     if output_width <= 0 or output_height <= 0:
         raise ValueError("The edited image dimensions must be positive")
     if len(pixels) != output_width * output_height * 4:
         raise ValueError("The edited pixels do not match the image dimensions")
+    fmt = image_format or ImageFormat.capture(source_image)
     image = bpy.data.images.new(
         source_image.name,
         width=output_width,
         height=output_height,
         alpha=True,
-        float_buffer=bool(getattr(source_image, "is_float", False)),
+        float_buffer=fmt.is_float,
     )
     try:
-        image.colorspace_settings.name = source_image.colorspace_settings.name
-        image.alpha_mode = source_image.alpha_mode
-        if source_image.get(COLOR_NORMALIZED_PROPERTY):
+        image.colorspace_settings.name = fmt.color_space
+        image.alpha_mode = fmt.alpha_mode
+        if fmt.normalized:
             image[COLOR_NORMALIZED_PROPERTY] = True
         image.pixels.foreach_set(pixels)
         image.update()
@@ -377,8 +394,8 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
             bpy.data.images.remove(result_image)
 
 
-def image_empty_bounds(source_object):
-    image_width, image_height = source_object.data.size
+def image_empty_bounds(source_object, image_size=None):
+    image_width, image_height = source_object.data.size if image_size is None else image_size
     if image_width <= 0 or image_height <= 0:
         raise ValueError("The source image has no readable dimensions")
 

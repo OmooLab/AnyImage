@@ -15,13 +15,13 @@ from ...properties import (
     cutout_edge_length_property,
 )
 from ...runtime import JobOperator
-from ...common.image_input import cleanup_image_input, prepare_moge_input
+from ...common.image_input import cleanup_image_input, prepare_ai_input
 from ...common.ai import (
+    ai_ready,
     invoke_ai_setup_if_needed,
     geometry_job_parameters,
 )
-from ...common.image import image_content_signature, image_rgba, require_image_empty, is_animated_image
-from ...common.object import read_conversion_source
+from ...common.image import image_rgba, require_image_empty, is_animated_image
 from ...common.geometry_image import (
     load_depth_result_image,
     load_normal_result_image,
@@ -31,7 +31,8 @@ from ...common.viewport import (
 )
 from ...common.selection import ImageEditWarning, SelectionPath
 from .geometry import cutout_selection_mask
-from .object import create_cutout_shape
+from .object import CutoutSource, create_cutout_shape
+from .operators import CreateCutoutShape, SelectCutoutSelection as SharedSelection, flat_and_solid_buttons, open_shape_pie
 from .shape import CUTOUT_NODE_GROUP_NAMES, DEPTH_CUTOUT_SHAPES
 
 _HIDDEN = {"HIDDEN", "SKIP_SAVE"}
@@ -64,7 +65,6 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         try:
             source_object = require_image_empty(self.source_object_name)
             self._source_object = source_object
-            self._source_image = source_object.data
             if is_animated_image(source_object.data):
                 raise ValueError("Cutout currently supports still images")
             if self.shape not in CUTOUT_NODE_GROUP_NAMES:
@@ -76,12 +76,8 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
             setup_result = invoke_ai_setup_if_needed(self)
             if setup_result is not None:
                 return setup_result
-            self._source_signature = image_content_signature(source_object.data, source_rgba[::-1])
-            context.view_layer.objects.active = source_object
-            source_object.select_set(True)
             self.boundary_padding = configured_cutout_boundary_padding(context)
-            left, top, right, bottom = self._selection.bounds
-            self._input_rgba = source_rgba[top:bottom, left:right]
+            self._input_rgba = source_rgba
         except (
             ImageEditWarning,
             OSError,
@@ -95,37 +91,41 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
 
     def request(self, context):
         parameters = geometry_job_parameters(context)
-        output_size = self._input_rgba.shape[1::-1]
-        self._input_path = prepare_moge_input(
-            self._source_image, self._input_rgba, max_input_size=configured_max_ai_input_size(context),
+        self._cutout = CutoutSource.capture(context, self._source_object, self._selection.bounds, self._input_rgba)
+        left, top, right, bottom = self._selection.bounds
+        self._input_path = prepare_ai_input(
+            self._source_object.data, self._input_rgba, bounds=self._selection.bounds,
+            max_input_size=configured_max_ai_input_size(context),
         )
-        self._input_rgba = None
+        self._input_rgba = self._source_object = None
         return {
             **parameters,
             "input": str(self._input_path),
-            "output_size": output_size,
+            "output_size": (right - left, bottom - top),
             "generate_depth": self.shape in DEPTH_CUTOUT_SHAPES,
         }
 
     def response(self, context, result):
-        source_object, pixels = read_conversion_source(self)
+        source = self._cutout
+        if source.collection != context.scene.collection and source.collection not in context.scene.collection.children_recursive:
+            raise RuntimeError("The cutout collection is no longer available")
         normal_image = None
         depth_image = None
         try:
-            normal_image = load_normal_result_image(result.file("object_normal"), source_object)
+            normal_image = load_normal_result_image(result.file("object_normal"), f"{source.image_name}_normal.png")
         except (FileNotFoundError, RuntimeError):
             pass
         try:
             intrinsics = None
             if self.shape in DEPTH_CUTOUT_SHAPES:
                 intrinsics = result.value["intrinsics"]
-                depth_image = load_depth_result_image(result.file("depth"), source_object)
+                depth_image = load_depth_result_image(result.file("depth"), f"{source.image_name}_depth.exr")
             create_cutout_shape(
-                context, source_object, self.shape, self.edge_length, self._selection,
+                context, source, self.shape, self.edge_length, self._selection,
                 depth_image=depth_image, intrinsics=intrinsics,
                 normal_image=normal_image, alpha_threshold=self.alpha_threshold,
                 fine_outline=self.fine_outline, boundary_padding=self.boundary_padding,
-                source_rgba=image_rgba(source_object.data, pixels), gesture=self.gesture, report=self.report,
+                gesture=self.gesture, report=self.report,
             )
             if normal_image is None:
                 self.report({"WARNING"}, "The normal texture is missing; the shape was created without it")
@@ -142,5 +142,28 @@ class CutoutSelectionToShape(JobOperator, bpy.types.Operator):
         cleanup_image_input(self._input_path)
         self._selection = None
         self._source_object = None
-        self._source_image = None
-        self._source_signature = None
+        self._cutout = None
+
+
+class SelectCutoutSelection(SharedSelection):
+    bl_idname = "anyimage.select_cutout_selection"
+    bl_label = "Start Cutout Selection"
+
+    @staticmethod
+    def show_shape_menu(context, event, source_object, selection_path, *, gesture="LASSO"):
+        buttons = None
+        if ai_ready():
+            basic = CutoutSelectionToShape if context.scene.anyimage_settings.cutout_generate_normal else CreateCutoutShape
+            buttons = (
+                *flat_and_solid_buttons(basic),
+                ("DEPTH_SYMMETRY", "META_BALL", CutoutSelectionToShape),
+                ("DEPTH_SOLID", "SURFACE_NCURVE", CutoutSelectionToShape),
+            )
+        open_shape_pie(
+            context,
+            event,
+            source_object,
+            selection_path,
+            gesture=gesture,
+            buttons=buttons,
+        )

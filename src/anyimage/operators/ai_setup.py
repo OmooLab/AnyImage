@@ -4,8 +4,7 @@ from ..preferences import ADDON_PACKAGE
 from ..ai_preferences import storage_root
 from ..runtime import JobOperator, runtime
 from ..server.model_catalog import DEFAULT_MODEL_KEYS, get_downloadable_model
-from ..common.ai import require_environment
-from ..common.server_location import inspect_installation, server_root
+from ..common.ai import inspect_installation, require_environment, server_root
 
 
 def format_download_size(size):

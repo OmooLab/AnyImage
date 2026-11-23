@@ -10,10 +10,11 @@ import pytest
 from PIL import Image
 from mathutils import Matrix
 
-from anyimage.operators.convert_to_panorama import operators, object as conversion
+from anyimage.operators import convert_to_panorama
 from anyimage.operators.convert_to_world import ConvertToWorld
 from server.media.exr import write_float_exr
-from anyimage.common.image import image_content_signature
+from anyimage.common.color_image import write_material_color
+from anyimage.common.image import ImageFormat, image_rgba
 from anyimage.common.panorama import panorama_crop_bounds
 
 
@@ -64,23 +65,23 @@ def test_entry_crops_arbitrary_aspect_before_submitting_and_warns(source, monkey
         assert operator.crop_bounds == (0, 2, 30, 17)
         return {"FINISHED"}
 
-    monkeypatch.setattr(operators, "invoke_ai_setup_if_needed", lambda _operator: None)
+    monkeypatch.setattr(convert_to_panorama, "invoke_ai_setup_if_needed", lambda _operator: None)
     monkeypatch.setattr(runtime, "can_submit", lambda: True)
-    monkeypatch.setattr(operators.JobOperator, "execute", submit)
-    bpy.utils.register_class(operators.ConvertToPanorama)
+    monkeypatch.setattr(convert_to_panorama.JobOperator, "execute", submit)
+    bpy.utils.register_class(convert_to_panorama.ConvertToPanorama)
     try:
         assert bpy.ops.anyimage.convert_to_panorama() == {"FINISHED"}
         assert "Panorama input cropped from 31 x 20 to 30 x 15" in capfd.readouterr().out
     finally:
-        bpy.utils.unregister_class(operators.ConvertToPanorama)
+        bpy.utils.unregister_class(convert_to_panorama.ConvertToPanorama)
 
 
 @pytest.mark.parametrize("image_source,size", [("MOVIE", (32, 16)), ("SEQUENCE", (32, 16)), ("FILE", (1, 32))])
 def test_invalid_input_is_rejected_before_setup(image_source, size, monkeypatch):
     setup = Mock()
-    monkeypatch.setattr(operators, "invoke_ai_setup_if_needed", setup)
+    monkeypatch.setattr(convert_to_panorama, "invoke_ai_setup_if_needed", setup)
     obj = SimpleNamespace(data=SimpleNamespace(source=image_source, size=size))
-    assert operators.ConvertToPanorama.execute(SimpleNamespace(report=Mock()), SimpleNamespace(object=obj)) == {"CANCELLED"}
+    assert convert_to_panorama.ConvertToPanorama.execute(SimpleNamespace(report=Mock()), SimpleNamespace(object=obj)) == {"CANCELLED"}
     setup.assert_not_called()
 
 
@@ -94,9 +95,12 @@ def artifacts(tmp_path, source):
     normal.save(tmp_path / "object-normal.png")
     files = {"depth": "depth.exr", "object_normal": "object-normal.png"}
     result = SimpleNamespace(directory=tmp_path, file=lambda key: tmp_path / files[key])
-    operator = SimpleNamespace(_source_object=source,
-                               _source_image=source.data, _source_signature=image_content_signature(source.data),
+    operator = SimpleNamespace(_scene=bpy.context.scene, _source_object=source,
+                               _source_image=source.data, _color_format=ImageFormat.capture(source.data),
+                               _highlight_threshold=None,
                                crop_bounds=panorama_crop_bounds(*source.data.size))
+    left, top, right, bottom = operator.crop_bounds
+    operator._color_path = write_material_color(tmp_path, operator._color_format, image_rgba(source.data)[top:bottom, left:right])
     return result, operator
 
 
@@ -112,7 +116,8 @@ def test_world_and_panorama_interpret_the_same_srgb_image(source, artifacts, vie
     standalone = next(n.image for n in scene.world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
 
     bpy.context.view_layer.objects.active = source
-    conversion.create_panorama_from_result(bpy.context, *artifacts)
+    result, operator = artifacts
+    convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result)
     panorama = next(n.image for n in scene.world.node_tree.nodes if n.type == "TEX_ENVIRONMENT")
     assert standalone.colorspace_settings.name == panorama.colorspace_settings.name
     assert standalone.alpha_mode == panorama.alpha_mode
@@ -127,15 +132,16 @@ def test_result_replaces_source_with_zero_rotation_and_object_normal_material(so
     source.matrix_world = matrix
     source.empty_image_offset = (0.3, -0.8)
     undo = Mock(return_value={"FINISHED"})
-    monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=undo))))
+    monkeypatch.setattr(convert_to_panorama, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(object=bpy.ops.object, ed=SimpleNamespace(undo_push=undo))))
     source_name = source.name
-    obj = conversion.create_panorama_from_result(bpy.context, result, operator)
+    assert convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result) == "Panorama is ready"
+    obj = bpy.data.objects[source_name]
     assert obj["o_image_object"] is True
     assert obj.visible_shadow is False
     assert not obj.children
     assert "anyimage_mesh_shape" not in obj
     assert obj.modifiers[0].node_group == saved
-    from anyimage.common.object import get_modifier_input, modifier_input_identifier
+    from anyimage.common.node import get_modifier_input, modifier_input_identifier
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Subdivide")) == 6
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Horizon Bend")) == pytest.approx(-0.1)
     assert get_modifier_input(obj.modifiers[0], modifier_input_identifier(saved, "Depth Split")) == pytest.approx(0.01)
@@ -200,13 +206,15 @@ def test_panorama_preserves_hdr_pixels_color_space_and_alpha(source, artifacts, 
     hdr.pixels.foreach_set(rgba.ravel())
     source.data = hdr
     operator._source_image = hdr
-    operator._source_signature = image_content_signature(hdr)
+    operator._color_format = ImageFormat.capture(hdr)
+    operator._color_path = write_material_color(operator._color_path.parent, operator._color_format, image_rgba(hdr))
     if shared:
         other = source.copy()
         bpy.context.collection.objects.link(other)
     original_space, original_alpha = hdr.colorspace_settings.name, hdr.alpha_mode
-    monkeypatch.setattr(conversion, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **kw: {"FINISHED"})) ))
-    obj = conversion.create_panorama_from_result(bpy.context, result, operator)
+    monkeypatch.setattr(convert_to_panorama, "bpy", SimpleNamespace(data=bpy.data, ops=SimpleNamespace(object=bpy.ops.object, ed=SimpleNamespace(undo_push=lambda **kw: {"FINISHED"})) ))
+    convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result)
+    obj = bpy.context.object
     color = next(n.image for n in obj.data.materials[0].node_tree.nodes if n.type == "TEX_IMAGE")
     assert color != hdr
     assert color.is_float and color.packed_file
@@ -230,9 +238,9 @@ def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, m
     bpy.context.scene.world = previous_world
     before = {name: set(getattr(bpy.data, name)) for name in ("images", "objects", "meshes", "materials", "worlds")}
     if failure == "modifier":
-        monkeypatch.setattr(conversion, "set_modifier_input", Mock(side_effect=RuntimeError("Failed modifier")))
+        monkeypatch.setattr(convert_to_panorama, "set_modifier_input", Mock(side_effect=RuntimeError("Failed modifier")))
     elif failure == "finalize":
-        monkeypatch.setattr(conversion, "finalize_object_result", Mock(side_effect=RuntimeError("Failed finalize")))
+        monkeypatch.setattr(convert_to_panorama, "finalize_object_result", Mock(side_effect=RuntimeError("Failed finalize")))
     elif failure == "world":
         from anyimage.common import panorama
         monkeypatch.setattr(panorama, "load_node_group", Mock(side_effect=RuntimeError("Failed world")))
@@ -244,7 +252,7 @@ def test_failed_response_keeps_source_and_cleans_owned_data(source, artifacts, m
         width = 8 if failure == "depth_ratio" else 16
         write_float_exr(np.ones((8, width, 4), np.float32), result.file("depth"))
     with pytest.raises((RuntimeError, ValueError), match="2:1" if failure == "depth_ratio" else None):
-        conversion.create_panorama_from_result(bpy.context, result, operator)
+        convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result)
     for name, values in before.items():
         assert set(getattr(bpy.data, name)) == values
     assert bpy.context.scene.world == previous_world
@@ -257,16 +265,21 @@ def test_panorama_conversion_undo_restores_empty(source, artifacts, monkeypatch)
     result, operator = artifacts
     name = source.name
     image_name = source.data.name
-    original_space, original_alpha = source.data.colorspace_settings.name, source.data.alpha_mode
+    source.data.pack()
+    original_space = source.data.colorspace_settings.name
     bpy.context.scene.world = bpy.data.worlds.new("Original World")
     bpy.context.preferences.edit.use_global_undo = True
     def execute(self, context):
-        conversion.create_panorama_from_result(context, result, operator)
+        convert_to_panorama.ConvertToPanorama.response(operator, context, result)
         return {"FINISHED"}
-    with patch.object(operators.ConvertToPanorama, "execute", execute):
-        bpy.utils.register_class(operators.ConvertToPanorama)
+    with patch.object(convert_to_panorama.ConvertToPanorama, "execute", execute):
+        bpy.utils.register_class(convert_to_panorama.ConvertToPanorama)
         try:
             bpy.ops.ed.undo_push(message="Before Panorama")
+            source.data.alpha_mode = "CHANNEL_PACKED"
+            source.data.pixels[0] = .25
+            source.data.update()
+            painted = image_rgba(source.data)
             assert bpy.ops.anyimage.convert_to_panorama("EXEC_DEFAULT") == {"FINISHED"}
             assert bpy.data.objects[name].type == "MESH"
             world_name = bpy.context.scene.world.name
@@ -275,25 +288,28 @@ def test_panorama_conversion_undo_restores_empty(source, artifacts, monkeypatch)
             assert bpy.context.scene.world.name == "Original World"
             assert bpy.data.objects[name].type == "EMPTY"
             assert (bpy.data.images[image_name].colorspace_settings.name,
-                    bpy.data.images[image_name].alpha_mode) == (original_space, original_alpha)
+                    bpy.data.images[image_name].alpha_mode) == (original_space, "CHANNEL_PACKED")
+            np.testing.assert_array_equal(image_rgba(bpy.data.images[image_name]), painted)
             assert bpy.ops.ed.redo() == {"FINISHED"}
             assert bpy.context.scene.world.name == world_name
             assert bpy.data.objects[name].type == "MESH"
             assert not bpy.data.objects[name].children
         finally:
-            bpy.utils.unregister_class(operators.ConvertToPanorama)
+            bpy.utils.unregister_class(convert_to_panorama.ConvertToPanorama)
 
 
 def test_depth_mask_default_removes_background_dome(source, artifacts, monkeypatch):
-    from anyimage.common.object import get_modifier_input, modifier_input_identifier
+    from anyimage.common.node import get_modifier_input, modifier_input_identifier
 
     rgba = np.ones((16, 32, 4), np.float32)
     rgba[..., :3] = 3
     rgba[:8, :, 3] = 0
-    write_float_exr(rgba, artifacts[0].file("depth"))
-    monkeypatch.setattr(conversion, "bpy", SimpleNamespace(
-        data=bpy.data, ops=SimpleNamespace(ed=SimpleNamespace(undo_push=lambda **kw: {"FINISHED"})) ))
-    obj = conversion.create_panorama_from_result(bpy.context, *artifacts)
+    result, operator = artifacts
+    write_float_exr(rgba, result.file("depth"))
+    monkeypatch.setattr(convert_to_panorama, "bpy", SimpleNamespace(
+        data=bpy.data, ops=SimpleNamespace(object=bpy.ops.object, ed=SimpleNamespace(undo_push=lambda **kw: {"FINISHED"})) ))
+    convert_to_panorama.ConvertToPanorama.response(operator, bpy.context, result)
+    obj = bpy.context.object
     modifier = obj.modifiers[0]
     identifier = modifier_input_identifier(modifier.node_group, "Depth Mask")
     assert get_modifier_input(modifier, identifier) is True

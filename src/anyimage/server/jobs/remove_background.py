@@ -1,6 +1,6 @@
 import time
 
-from ..media.input import open_image
+from ..media.input import load_ai_input
 from ..model_catalog import BACKGROUND_MODELS
 from ..models import model_adapter
 
@@ -19,15 +19,15 @@ def run(context, parameters):
     output_directory = context.directory
     output_directory.mkdir(parents=True, exist_ok=True)
     context.progress(0.12, "Loading {model}", model=parameters["model"])
-    with open_image(parameters["input"]) as opened:
-        source = opened.convert("RGBA")
+    rgba = load_ai_input(parameters["input"], as_bytes=True)
+    rgba[..., :3][rgba[..., 3] == 0] = 0
+    model_image = Image.fromarray(rgba[..., :3])
+    del rgba
     context.check_cancelled()
     model, load_ms = context.resource("model_manager").get_session(
         parameters["model"], parameters["device"],
     )
     context.check_cancelled()
-    model_image = Image.new("RGB", source.size, (0, 0, 0))
-    model_image.paste(source, (0, 0), source)
     context.progress(0.35, "Removing background")
     inference_started = time.perf_counter()
     alpha = model_adapter(parameters["model"]).infer_alpha(model, model_image)

@@ -29,22 +29,6 @@ def load_common_modules():
             / "common"
             / "node.py",
         ),
-        (
-            "anyimage.common.material",
-            PROJECT_ROOT
-            / "src"
-            / "anyimage"
-            / "common"
-            / "material.py",
-        ),
-        (
-            "anyimage.common.object",
-            PROJECT_ROOT
-            / "src"
-            / "anyimage"
-            / "common"
-            / "object.py",
-        ),
     )
     packages = {
         name: ModuleType(name)
@@ -68,4 +52,4 @@ def load_common_modules():
             specification.loader.exec_module(module)
             loaded.append(module)
 
-    return SimpleNamespace(image=loaded[0], material=loaded[2], object=loaded[3])
+    return SimpleNamespace(image=loaded[0], node=loaded[1])

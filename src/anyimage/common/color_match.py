@@ -4,16 +4,18 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import NamedTuple
 
 import numpy as np
+from materialyoucolor.quantize import QuantizeCelebi
+from materialyoucolor.score.score import Score, ScoreOptions
 from scipy import ndimage
 from scipy.interpolate import PchipInterpolator
 from scipy.optimize import linprog
 
-from .color_palette import extract_color_palette
-from .color_space import linear_rgb_to_oklab, oklab_to_linear_rgb
+from .color_space import linear_rgb_to_oklab, linear_rgb_to_srgb, oklab_to_linear_rgb, srgb_to_linear_rgb
 
 COLOR_LIMITS = (0.0, 1.0)
 LIGHTNESS_LIMITS = (0.0, 1.0)
 PREVIEW_MAX_SIZE = 512
+_PALETTE_MERGE_DISTANCE = 0.06
 _ANALYSIS_SAMPLES = 16_384
 _QUANTILES = np.asarray((0.0, 0.02, 0.08, 0.2, 0.5, 0.8, 0.92, 0.98, 1.0))
 
@@ -61,6 +63,59 @@ def resize_rgba_proxy(rgba, max_size=PREVIEW_MAX_SIZE):
     ).astype(np.float32, copy=False)
 
 
+def _extract_color_palette(rgb):
+    """Return prominent display colors and area weights from linear RGB samples."""
+    srgb = linear_rgb_to_srgb(np.clip(rgb, 0.0, 1.0))
+    channels = np.rint(srgb * 255).astype(np.uint32)
+    if np.all(channels == channels[:, :1]):
+        levels, counts = np.unique(channels[:, 0], return_counts=True)
+        populations = dict(zip((0xFF000000 | levels * 0x010101).tolist(), counts.tolist()))
+    else:
+        populations = QuantizeCelebi(channels.tolist(), 128)
+    selected = Score.score(populations, ScoreOptions(desired=4, filter=False))
+    candidates = np.asarray(list(populations), dtype=np.uint32)
+
+    def linear_colors(argb):
+        channels = (np.asarray(argb, dtype=np.uint32)[:, None] >> (16, 8, 0)) & 255
+        values = channels.astype(np.float32) / 255.0
+        return srgb_to_linear_rgb(values)
+
+    colors = linear_colors(selected)
+    distance = np.sum(
+        (linear_rgb_to_oklab(linear_colors(candidates))[:, None, :]
+         - linear_rgb_to_oklab(colors)[None, :, :]) ** 2,
+        axis=2,
+    )
+    weights = np.bincount(
+        np.argmin(distance, axis=1),
+        weights=list(populations.values()),
+        minlength=len(colors),
+    )
+    colors, weights = _merge_palette_colors(colors, weights)
+    return colors.astype(np.float32), weights.astype(np.float32)
+
+
+def _merge_palette_colors(colors, weights):
+    """Merge perceptually close colors while retaining selected representatives."""
+    lab = linear_rgb_to_oklab(colors)
+    distances = np.linalg.norm(lab[:, None, :] - lab[None, :, :], axis=2)
+    groups = [[index] for index in range(len(colors))]
+    while len(groups) > 1:
+        distance, first, second = min(
+            (
+                (float(distances[np.ix_(groups[first], groups[second])].max()), first, second)
+                for first in range(len(groups))
+                for second in range(first + 1, len(groups))
+            ),
+        )
+        if distance >= _PALETTE_MERGE_DISTANCE:
+            break
+        groups[first].extend(groups.pop(second))
+    representatives = [max(group, key=lambda index: weights[index]) for group in groups]
+    merged_weights = np.asarray([weights[group].sum() for group in groups])
+    return colors[representatives], merged_weights / merged_weights.sum()
+
+
 def prepare_color_reference(rgba):
     """Sample by opacity once for both the display palette and HDR lightness."""
     pixels = _require_rgba(rgba).reshape(-1, 4)
@@ -71,7 +126,7 @@ def prepare_color_reference(rgba):
     count = min(len(pixels), _ANALYSIS_SAMPLES)
     positions = (np.arange(count) + 0.5) * cumulative[-1] / count
     samples = pixels[np.searchsorted(cumulative, positions), :3]
-    colors, weights = extract_color_palette(samples)
+    colors, weights = _extract_color_palette(samples)
     lightness = linear_rgb_to_oklab(samples)[:, 0]
     return ColorReference(
         colors, weights.astype(np.float64),
@@ -116,7 +171,7 @@ def build_color_mapping(reference, target_rgba):
     pixels = _require_rgba(target_rgba).reshape(-1, 4)
     indices = np.linspace(0, len(pixels) - 1, min(len(pixels), _ANALYSIS_SAMPLES), dtype=np.intp)
     samples = pixels[indices, :3]
-    colors, weights = extract_color_palette(samples)
+    colors, weights = _extract_color_palette(samples)
     anchors = linear_rgb_to_oklab(colors)
     delta = _transport_palette(anchors, weights, reference)
     lightness = np.quantile(linear_rgb_to_oklab(samples)[:, 0], _QUANTILES, method="hazen")

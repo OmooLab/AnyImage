@@ -9,7 +9,7 @@ from unittest.mock import Mock
 from anyimage.common import color_image as color_images
 from anyimage.common.image import image_content_state, image_pixels
 from anyimage.common.material import create_image_material
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 from anyimage.operators.bake_mesh.geometry import PROTOCOL_ATTRIBUTES, TARGET_UV, build_layout, mesh_bake_modifiers
 from anyimage.operators.bake_mesh.materialization import materialize_mesh_and_textures
 from anyimage.operators.bake_mesh import BakeMesh
@@ -517,7 +517,7 @@ def test_conversion_preserves_normalized_fixed_light_appearance(cutout, tmp_path
 
 
 def test_color_tiles_preserve_hdr_alpha_and_transparent_rgb(cutout):
-    from anyimage.operators.bake_mesh.textures import build_color_tiles
+    from anyimage.operators.bake_mesh.materialization import build_color_tiles
     from anyimage.common.image import image_pixels
 
     image = next(n.image for n in cutout.active_material.node_tree.nodes if n.type == "TEX_IMAGE")

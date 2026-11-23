@@ -3,7 +3,7 @@
 import bpy
 import numpy as np
 import pytest
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 from nodes.O_AnyImage.O_AnyImage.geometry.o_depth_cutout import ODepthCutout
 from nodes.O_AnyImage.O_AnyImage.geometry.o_cutout_symmetry import OCutoutSymmetry
 

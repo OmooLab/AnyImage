@@ -5,7 +5,7 @@ import bmesh
 import numpy as np
 import pytest
 
-from anyimage.common.object import set_modifier_input
+from anyimage.common.node import set_modifier_input
 from tests.support.boundary import boundary_neighbors
 from tests.support.depth_surface import evaluated, surface
 

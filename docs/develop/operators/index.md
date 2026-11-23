@@ -2,14 +2,14 @@
 
 ## Convert To 与 Cutout 的图像流程
 
-先确定工具使用原图的哪一块。需要深度或法线时，把这块图转成 sRGB PNG 交给 AI。材质和 World 的颜色始终取自原图的同一区域，普通图打包为 PNG，HDR 打包为 32 位线性 EXR，保留高光与透明度。
+先确定工具使用原图的哪一块。需要深度或法线时，将所选区域交给 MoGe。材质和 World 的颜色始终取自原图的同一区域，普通图打包为 PNG，HDR 打包为 32 位线性 EXR，保留高光与透明度。
 
 ```mermaid
 flowchart TD
     source["确定原图范围"] --> ai{"需要深度或法线？"}
     ai -->|否| color["从原图同一区域创建颜色贴图"]
-    ai -->|是| png["导出 sRGB PNG 给 AI"]
-    png --> geometry["收到深度或法线，校验原图"]
+    ai -->|是| input["提交所选区域给 MoGe"]
+    input --> geometry["收到深度或法线"]
     geometry --> color
     color --> result["创建物体或 World"]
 ```

@@ -1527,6 +1527,36 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#convert-to-cutout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convert To 与 Cutout 的图像流程
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        源码索引
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -1546,6 +1576,64 @@
 
 
 <h1 id="operator">Operator 实现索引</h1>
+<h2 id="convert-to-cutout">Convert To 与 Cutout 的图像流程</h2>
+<p>先确定工具使用原图的哪一块。需要深度或法线时，将所选区域交给 MoGe。材质和 World 的颜色始终取自原图的同一区域，普通图打包为 PNG，HDR 打包为 32 位线性 EXR，保留高光与透明度。</p>
+<pre class="mermaid"><code>flowchart TD
+    source["确定原图范围"] --&gt; ai{"需要深度或法线？"}
+    ai --&gt;|否| color["从原图同一区域创建颜色贴图"]
+    ai --&gt;|是| input["提交所选区域给 MoGe"]
+    input --&gt; geometry["收到深度或法线"]
+    geometry --&gt; color
+    color --&gt; result["创建物体或 World"]</code></pre>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>使用哪块原图</th>
+<th>AI 提供什么</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Plane</td>
+<td>整图</td>
+<td>无</td>
+<td>矩形面片</td>
+</tr>
+<tr>
+<td>Depth Plane</td>
+<td>整图</td>
+<td>深度、对象空间法线</td>
+<td>随透视起伏的表面</td>
+</tr>
+<tr>
+<td>Relief</td>
+<td>整图</td>
+<td>深度、切线空间法线</td>
+<td>浮雕</td>
+</tr>
+<tr>
+<td>World</td>
+<td>最大居中 2:1 区域</td>
+<td>无</td>
+<td>世界环境</td>
+</tr>
+<tr>
+<td>Panorama</td>
+<td>最大居中 2:1 区域</td>
+<td>深度、法线及烘焙权重</td>
+<td>全景物体与 World，共用一张颜色贴图</td>
+</tr>
+<tr>
+<td>Cutout</td>
+<td>选区外接矩形，选区与源 Alpha 决定轮廓</td>
+<td>面片与体块可选法线，深度形状需要深度与法线</td>
+<td>沿轮廓生成的网格</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_1">源码索引</h2>
 <table>
 <thead>
 <tr>

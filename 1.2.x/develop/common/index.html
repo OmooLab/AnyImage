@@ -1698,7 +1698,7 @@
 <tbody>
 <tr>
 <td><code>ai.py</code></td>
-<td>环境与模型状态、就绪检查、安装和模型下载入口、输入路径校验、<code>production_device()</code>、<code>geometry_job_parameters()</code> 与安装 UI</td>
+<td>环境与模型就绪检查、安装与下载入口、输入路径校验、<code>geometry_job_parameters()</code> 和安装 UI</td>
 </tr>
 <tr>
 <td><code>image.py</code></td>
@@ -1710,11 +1710,11 @@
 </tr>
 <tr>
 <td><code>job_image.py</code></td>
-<td>校验排队任务的图像目标、准备 AI 分析输入，加载产物并通过 <code>ImageEditTarget</code> 提交结果</td>
+<td>加载图像编辑结果并通过 <code>ImageEditTarget</code> 提交结果</td>
 </tr>
 <tr>
 <td><code>color_image.py</code></td>
-<td>材质颜色文件的准备、清理、颜色空间设置和归一化</td>
+<td>从原图创建打包的材质贴图、配置颜色空间和归一化</td>
 </tr>
 <tr>
 <td><code>hdr_image.py</code></td>
@@ -1742,7 +1742,7 @@
 </tr>
 <tr>
 <td><code>color_reference.py</code></td>
-<td>参考签名、内容摘要、色板、缩略图及交互资源引用</td>
+<td>参考图候选集合、内容摘要、色板和缩略图缓存</td>
 </tr>
 <tr>
 <td><code>color_match.py</code>、<code>color_palette.py</code>、<code>color_space.py</code></td>
@@ -1779,8 +1779,10 @@
 </tbody>
 </table>
 <h2 id="_1">图像生命周期</h2>
-<p>业务像素采用 Top-down RGBA，<code>image_pixels()</code> 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。<code>ImageEditTarget</code> 校验目标绑定、颜色解释与像素摘要后，经 <code>replace_empty_image()</code> 或 <code>replace_texture_image()</code> 提交。未共享的 Image 原地替换内容；其他 Empty、材质或纹理仍引用源图时，为当前目标使用独立 Image，共享材质也按当前对象隔离。失败时回滚源数据。同一目标的排队任务跟随成功提交更新基线，外部改图后新提交使用新的目标状态。</p>
-<p><code>image_input.py</code> 的 <code>prepare_image_input()</code> 为当前图像准备独立快照：未改动的文件直接复制，Packed、未保存修改和 Generated 图像导出当前像素；<code>cleanup_image_input()</code> 与创建方配对。<code>hdr_image.py</code> 将 HDR 像素映射为分析预览，并复用 <code>color_space.py</code> 的 sRGB 编码。<code>color_image.py</code> 的 <code>prepare_material_color_input()</code> 准备材质颜色，<code>job_image.py</code> 的 <code>material_analysis_input()</code> 提供分析输入；<strong>立体裁切</strong>按几何 bounds 裁切。</p>
+<p>业务像素采用 Top-down RGBA，<code>image_pixels()</code> 使用 Blender 像素顺序。预乘采样用于投影插值；文件或 Packed 图像的业务读取保留隐藏 RGB。<code>ImageEditTarget</code> 确认目标仍绑定原 Image 后，经 <code>replace_empty_image()</code> 或 <code>replace_texture_image()</code> 提交。未共享的 Image 原地替换内容；其他 Empty、材质或纹理仍引用源图时，为当前目标使用独立 Image，共享材质也按当前对象隔离。失败时回滚源数据。同一目标的排队任务跟随成功提交更新基线，同一 Image 在等待期间的像素编辑允许被结果覆盖。移除背景与高清化在回填时记录 Undo，有未保存像素时先保存其撤销状态。</p>
+<p>去背景、2倍高清和 MoGe 共用 <code>prepare_ai_input()</code>。它读取 Blender 当前 RGBA，将颜色按源色彩空间转为 sRGB，Non-Color 保留数据值，Alpha 单独保存。HDR 识别先按线性亮度压缩高光，再编码为 sRGB。整图与裁剪使用相同的亮度映射。</p>
+<p>临时输入统一为 <code>.npy</code>。原尺寸的 8 位 sRGB 或 Non-Color 用 <code>uint8</code>，经过颜色转换、缩放或来自浮点缓冲区的输入用 <code>float32</code>。MoGe 读取归一化浮点值，去背景和高清在模型入口取 8 位 RGB。</p>
+<p><code>color_image.py</code> 的 <code>material_color_image()</code> 从原图创建并打包材质贴图。各工具的取图范围见 <a href="../operators/">Convert To 与 Cutout 的图像流程</a>。</p>
 <h2 id="_2">颜色参考生命周期</h2>
 <p><code>properties.py</code> 管理各 Scene 的参考选择、画廊与色板同步，并注册 load、Undo、Redo 回调和 <code>image_content_handlers</code> 的编辑通知。公共参考模块准备签名、色板与缩略图，使用像素摘要检查内容身份。长期缓存保留紧凑派生数据，完整像素只在准备及匹配交互期间使用。</p>
 <p>Scene 清空或替换参考时，按其他 Scene 与活动交互的引用释放资源。匹配确认、取消和失败会结束交互引用；扩展注销清理自身 handler 与预览资源。</p>

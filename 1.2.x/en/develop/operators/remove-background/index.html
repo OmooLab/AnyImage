@@ -1558,18 +1558,15 @@
 
 
 <h1 id="_1">移除背景</h1>
-<p><code>operators/remove_background/operators.py</code> 从 Image Empty、Any Image 图片 Mesh 或当前 Shader Image Texture 准备输入。<code>RemoveImageBackground</code> 提供操作入口与 AI 设置检查，<code>RunBackgroundRemoval</code> 准备输入、提交 Job 并应用结果。</p>
+<p><code>RemoveImageBackground</code> 从 Image Empty、Any Image 图片 Mesh 或当前 Shader Image Texture 读取像素，提交去背景任务，并在 Blender 中应用结果。</p>
 <pre class="mermaid"><code>flowchart TD
     A[ImageEditTarget 取得编辑目标] --&gt; B[准备图像输入]
     B --&gt; C[remove_background Job]
     C --&gt; D[所选背景模型生成前景 Alpha]
-    D --&gt; E{输入类型}
-    E -- 普通图片 --&gt; F[透明 PNG 前景]
-    E -- HDR --&gt; G[alpha.npy]
-    F --&gt; H[应用结果与 Undo]
-    G --&gt; H</code></pre>
-<p><code>server/jobs/remove_background.py</code> 读取单张输入，通过 <code>model_adapter()</code> 调用 BiRefNet 或 BEN2 的 ONNX 适配器，再将模型前景 Alpha 与源 Alpha 合成。</p>
-<p>普通图片与 HDR 都提交当前像素，并通过 <code>ImageEditTarget</code> 校验源绑定、颜色解释与像素摘要，结果只影响当前目标，其他对象和纹理保留源图。HDR 使用 <code>operators/remove_background/hdr.py</code> 的 <code>HdrBackgroundInput</code> 准备分析输入，并将返回 Alpha 应用于提交时的浮点 RGB。Operator 负责临时输入清理与 Undo。</p>
+    D --&gt; E[写出 alpha.npy]
+    E --&gt; F[确认目标仍绑定原 Image，将遮罩乘入提交时的 Alpha]
+    F --&gt; H[提交结果与 Undo]</code></pre>
+<p><code>server/jobs/remove_background.py</code> 调用 BiRefNet 或 BEN2 生成前景遮罩。<code>operators/remove_background/image.py</code> 的 <code>BackgroundInput</code> 保留提交时的 RGBA、颜色空间和 Alpha 模式。回填时确认目标仍绑定原 Image，再合成 Alpha。HDR 结果保留浮点 RGB。Operator 负责临时输入清理与 Undo。</p>
 
 
 

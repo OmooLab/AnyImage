@@ -1558,18 +1558,16 @@
 
 
 <h1 id="_1">转为面片、转为凹凸面与转为浮雕</h1>
-<p>普通面片入口位于 <code>operators/convert_to_plane.py</code>，通过 <code>common/image_plane.py</code> 创建基础矩形网格与面片。凹凸面与浮雕集中在 <code>operators/depth_plane/</code>：<code>operators.py</code> 定义两个转换入口和内部任务 <code>GeneratePlaneGeometry</code>，准备输入快照并提交几何 Job；<code>object.py</code> 导入深度产物、创建对象并提交 Undo；<code>__init__.py</code> 导出 Operator。两个转换入口分别指定固定的 Depth 或 Relief 类型。</p>
+<p>普通面片入口位于 <code>operators/convert_to_plane.py</code>。<code>operators/depth_plane/operators.py</code> 将整张图提交给 MoGe，<code>object.py</code> 在结果返回后用提交时留下的颜色贴图创建材质，并用深度与法线创建对象。三种面片共用 <code>common/image_plane.py</code> 的基础矩形网格。</p>
 <pre class="mermaid"><code>flowchart TD
-    A[Image Empty] --&gt; B[准备材质颜色]
-    B --&gt; C{转换类型}
-    C -- 面片 --&gt; D[四边形与 O Plane]
-    C -- Depth 或 Relief --&gt; E[静态图提交几何 Job]
-    E --&gt; F[加载深度、元数据与法线]
-    F --&gt; G[对应节点修改器与材质]
-    D --&gt; H[创建对象并替换源 Empty]
-    G --&gt; H</code></pre>
+    source["整张原图"] --&gt; type{"转换类型"}
+    type --&gt;|面片| material["用原始颜色创建材质"]
+    type --&gt;|凹凸面或浮雕| ai["MoGe 生成深度与法线"]
+    ai --&gt; checked["检查源对象与图片绑定"]
+    checked --&gt; material
+    material --&gt; result["创建面片和对应的节点修改器"]</code></pre>
 <p>三种转换都只接受静态图片。基础网格以局部中心为原点，对象矩阵补偿源 Empty 的显示范围。</p>
-<p>Depth 与 Relief 从 Preferences 读取几何模型、分辨率级别和 AI 输入上限。<code>create_depth_plane_from_result()</code> 导入产物并创建修改器。排队时保留源 Object 和 Image 的原生引用，回填时校验其绑定与图像内容摘要，重命名保持任务有效，等待期间换图或修改像素、尺寸、颜色解释会拒绝回填。<code>O Depth Plane</code> 使用相机 XYZ 与对象空间法线构建深度表面；<code>O Depth Relief</code> 使用深度 Z 与切线空间法线构建浮雕。</p>
+<p>Depth 与 Relief 从 Preferences 读取几何模型、分辨率级别和 AI 输入上限。<code>create_depth_plane_from_result()</code> 导入产物并创建修改器。Blender 在提交时留存颜色贴图。回填时，原场景中的源 Object 仍绑定同一 Image 就可替换，材质与几何都使用提交时的图像尺寸和内容。<code>O Depth Plane</code> 使用相机 XYZ 与对象空间法线构建深度表面；<code>O Depth Relief</code> 使用深度 Z 与切线空间法线构建浮雕。</p>
 <p>节点构建见<a href="../../node-assets/">节点资产</a>，文件协议见<a href="../../outputs/">Job 产物</a>。</p>
 
 

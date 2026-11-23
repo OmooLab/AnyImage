@@ -1556,7 +1556,7 @@
 
 
 <h1 id="_1">烘焙网格</h1>
-<p><code>operators/bake_mesh/operators.py</code> 定义 <code>BakeMesh</code>，固化面片、凹凸面、浮雕、立体全景及受支持的立体裁切节点栈。<code>materialization.py</code> 管理网格求值、UV、烘焙和提交；<code>textures.py</code> 处理 Color 区域拼接、Alpha 合并及 Emission 编码；<code>materials.py</code> 将节点组输出连接到静态贴图。</p>
+<p><code>operators/bake_mesh/operators.py</code> 定义 <code>BakeMesh</code>，固化面片、凹凸面、浮雕、立体全景及受支持的立体裁切节点栈。<code>geometry.py</code> 求值修改器并排布 UV。<code>materialization.py</code> 烘焙并提交结果，<code>textures.py</code> 拼接 Color、合并 Alpha 并编码 Emission，<code>materials.py</code> 将静态贴图接回材质。</p>
 <p>烘焙读取原材质及 <code>O Texture to Layer</code> 的实际参数，使用临时 Cycles CPU 场景，完成后恢复原场景。单区保留 UV，多区按来源区域缩放、平移和翻转 UV。</p>
 <table>
 <thead>
@@ -1568,7 +1568,7 @@
 <tbody>
 <tr>
 <td>Base Color、Alpha</td>
-<td>同一张 RGBA Color 图，保留颜色空间与精度，将计算后的 Alpha 写入 A 通道；浮点 RGB 随 Alpha 调整预乘关系</td>
+<td>将烘焙的 Alpha 合入颜色图，浮点源按 Alpha 调整预乘 RGB，再归一化为 sRGB PNG</td>
 </tr>
 <tr>
 <td>Roughness</td>

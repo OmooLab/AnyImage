@@ -108,7 +108,7 @@ def test_hdr_background_undo_redo(hdr_texture, tmp_path, owner_kind, shared):
             bpy.ops.ed.undo_push(message="Before HDR removal")
             assert bpy.ops.anyimage.remove_image_background("EXEC_DEFAULT", True) == {"FINISHED"}
             after = image_rgba(current_image()).copy()
-            np.testing.assert_array_equal(after[..., :3], before[..., :3])
+            np.testing.assert_array_equal(after[..., :3], before[..., :3] * np.float32(0.37123))
             np.testing.assert_allclose(after[..., 3], before[..., 3] * np.float32(0.37123), atol=1e-7)
             assert bpy.ops.ed.undo() == {"FINISHED"}
             np.testing.assert_array_equal(image_rgba(current_image()), before)
@@ -192,7 +192,11 @@ def test_byte_background_mask_keeps_submitted_rgb_after_reload(texture, tmp_path
         result.reload()
         restored = image_rgba(result)
         np.testing.assert_allclose(restored[..., :3], submitted[..., :3], atol=1 / 255)
-        expected = alpha if mode == "NONE" else submitted[..., 3] * alpha
+        assert result.alpha_mode == mode
+        expected = 1 if mode == "NONE" else submitted[..., 3] * alpha
         np.testing.assert_allclose(restored[..., 3], expected, atol=1 / 255)
+        if mode == "NONE":
+            result.alpha_mode = "STRAIGHT"
+            np.testing.assert_allclose(image_rgba(result)[..., 3], submitted[..., 3] * alpha, atol=1 / 255)
     finally:
         cleanup_image_input(snapshot.path)

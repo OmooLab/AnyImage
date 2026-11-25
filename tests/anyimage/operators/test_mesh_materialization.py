@@ -60,6 +60,12 @@ def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     source_mesh = cutout.data
     source_material = cutout.active_material
     source_scene = bpy.context.window.scene
+    camera = bpy.data.objects.new("Camera", bpy.data.cameras.new("Camera"))
+    source_scene.collection.objects.link(camera)
+    source_scene.camera = camera
+    viewport = next(area.spaces.active for area in bpy.context.screen.areas if area.type == "VIEW_3D")
+    viewport.camera = camera
+    viewport.region_3d.view_perspective = "CAMERA"
     source_selection = list(bpy.context.selected_objects)
     source_material.node_tree.nodes.new("ShaderNodeGroup")
     source_textures = [n.image for n in source_material.node_tree.nodes if n.type == "TEX_IMAGE"]
@@ -86,6 +92,7 @@ def test_materialization_reuses_material_and_preserves_source_geometry(cutout):
     assert all(image.filepath_raw == "//" + image.name + ".exr" for image in source_textures), [(image.name, image.filepath_raw) for image in source_textures]
     assert len(bpy.data.scenes) == 1
     assert bpy.context.window.scene == source_scene
+    assert viewport.camera == camera and viewport.region_3d.view_perspective == "CAMERA"
     assert bpy.context.object == cutout and list(bpy.context.selected_objects) == source_selection
     assert not any(g.name.endswith('.001') for g in bpy.data.node_groups)
 

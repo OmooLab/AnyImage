@@ -141,10 +141,10 @@ def test_float_straight_uses_exr_interpretation_without_rejecting_hidden_rgb(sou
 @pytest.mark.parametrize("floating,space,gray,expected", [
     (False, "sRGB", .5, 128),
     (False, "Non-Color", .5, 128),
-    (False, "Linear Rec.709", .5, 188),
+    (False, "Linear Rec.709", .5, 128),
     (True, "Linear Rec.709", 2.0, 231),
 ])
-def test_recognition_crop_is_srgb_with_source_opacity(source, floating, space, gray, expected):
+def test_recognition_crop_preserves_source_color_and_opacity(source, floating, space, gray, expected):
     image = bpy.data.images.new("Cutout", width=3, height=1, alpha=True, float_buffer=floating)
     image.colorspace_settings.name = space
     image.alpha_mode = "PREMUL" if floating else "STRAIGHT"
@@ -156,7 +156,7 @@ def test_recognition_crop_is_srgb_with_source_opacity(source, floating, space, g
         assert list(path.parent.iterdir()) == [path]
         pixels = np.load(path)
         assert pixels.shape == crop.shape
-        assert pixels.dtype == (np.float32 if floating or space == "Linear Rec.709" else np.uint8)
+        assert pixels.dtype == (np.float32 if floating else np.uint8)
         model_rgba = load_ai_input(path)
         np.testing.assert_allclose(model_rgba[0, 0, :3], expected / 255, atol=.5 / 255)
         np.testing.assert_allclose(model_rgba[..., 3], crop[..., 3], atol=1e-7)
@@ -208,7 +208,7 @@ def test_hdr_crop_uses_the_same_mapping_as_the_full_image(tmp_path):
         paths.append(prepare_ai_input(image, rgba, bounds=(1, 0, 3, 1)))
         full, crop = (np.load(p) for p in paths)
         np.testing.assert_array_equal(crop, full[:, 1:])
-        assert 0.45 < crop[0, 0, 0] < 0.47
+        assert 0.60 < crop[0, 0, 0] < 0.62
         assert rgba[0, 0, 0] == 2
     finally:
         for snapshot in paths:
@@ -250,7 +250,7 @@ def test_byte_snapshot_matches_blender_for_a_transparent_crop(source, tmp_path):
     rgba[0, 1] = (1, .5, .25, 0)
     rgba[1, 2] = (.5 / 255, .5, 1.5, .5)
     expected = tmp_path / "blender.png"
-    colors.save_color_png(rgba, expected, "sRGB")
+    Image.fromarray(np.floor(np.clip(rgba, 0, 1) * 255 + .5).astype(np.uint8)).save(expected)
     path = prepare_ai_input(source, rgba)
     try:
         with Image.open(expected) as reference:

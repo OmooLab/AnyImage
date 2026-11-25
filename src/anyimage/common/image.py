@@ -142,14 +142,45 @@ class ImageFormat:
                    bool(image.get(COLOR_NORMALIZED_PROPERTY)))
 
 
-def create_image_edit_result(source_image, pixels, output_size, *, image_format=None):
+def byte_pixels(rgba):
+    """Quantize normalized RGBA to byte pixels in strips."""
+    import numpy as np
+
+    pixels = np.empty(rgba.shape, dtype=np.uint8)
+    # Quantize in strips to avoid a second full-size float buffer.
+    for top in range(0, len(rgba), 128):
+        rows = slice(top, top + 128)
+        values = np.clip(rgba[rows], 0, 1)
+        values *= 255
+        values += 0.5
+        pixels[rows] = values
+    return pixels
+
+
+def load_image_edit_result(path, source):
+    """Interpret the encoded result using the source image settings."""
+    image = bpy.data.images.load(str(path), check_existing=False)
+    try:
+        image.name = source.name
+        image.colorspace_settings.name = source.colorspace_settings.name
+        image.alpha_mode = source.alpha_mode
+        image.use_view_as_render = source.use_view_as_render
+        if source.get(COLOR_NORMALIZED_PROPERTY):
+            image[COLOR_NORMALIZED_PROPERTY] = True
+        return image
+    except Exception:
+        bpy.data.images.remove(image)
+        raise
+
+
+def create_image_edit_result(source_image, pixels, output_size):
     """Create an Image datablock from edited RGBA pixels."""
     output_width, output_height = (int(value) for value in output_size)
     if output_width <= 0 or output_height <= 0:
         raise ValueError("The edited image dimensions must be positive")
     if len(pixels) != output_width * output_height * 4:
         raise ValueError("The edited pixels do not match the image dimensions")
-    fmt = image_format or ImageFormat.capture(source_image)
+    fmt = ImageFormat.capture(source_image)
     image = bpy.data.images.new(
         source_image.name,
         width=output_width,
@@ -160,6 +191,7 @@ def create_image_edit_result(source_image, pixels, output_size, *, image_format=
     try:
         image.colorspace_settings.name = fmt.color_space
         image.alpha_mode = fmt.alpha_mode
+        image.use_view_as_render = source_image.use_view_as_render
         if fmt.normalized:
             image[COLOR_NORMALIZED_PROPERTY] = True
         image.pixels.foreach_set(pixels)
@@ -315,7 +347,6 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
     try:
         source_image = source_object.data
         original_fake_user = source_image.use_fake_user
-        original_blending = source_object.use_empty_image_alpha
         image_user = source_object.image_user
         original_timing = image_user_settings(source_object)
         original_auto_refresh = image_user.use_auto_refresh
@@ -346,7 +377,6 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
                 pack_image_result(result_image, source_image)
                 final_image = source_image
             source_object.data = final_image
-            source_object.use_empty_image_alpha = True
             if alignment is not None:
                 source_object.empty_display_size = alignment[0]
                 source_object.empty_image_offset = alignment[1]
@@ -354,7 +384,6 @@ def replace_empty_image(source_object, result_image, *, placement_bounds=None,
             if original_content is not None:
                 restore_image_content(source_image, original_content)
             source_object.data = source_image
-            source_object.use_empty_image_alpha = original_blending
             if original_alignment is not None:
                 source_object.empty_display_size, source_object.empty_image_offset = original_alignment
             (image_user.frame_start, image_user.frame_offset,

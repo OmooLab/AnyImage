@@ -1,3 +1,4 @@
+from anyimage.common.image import ImageFormat
 from anyimage.operators.remove_background import BackgroundInput
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -50,7 +51,7 @@ def _material(kind="PLAIN", image=None):
 
 
 def test_pending_edits_follow_shared_material_replacement(tmp_path):
-    from anyimage.operators.upscale import apply_upscale_result, upscale_output_format
+    from anyimage.operators.upscale import apply_upscale_result
     bpy.ops.wm.read_factory_settings(use_empty=True)
     material, image = _material()
     first_owner = _image_object(material, "First")
@@ -58,8 +59,8 @@ def test_pending_edits_follow_shared_material_replacement(tmp_path):
     first, _ = ImageEditTarget.capture(_context(first_owner))
     second, _ = ImageEditTarget.capture(_context(first_owner))
     write_result(tmp_path)
-    apply_upscale_result(first, tmp_path / "foreground.png", upscale_output_format(first.image))
-    apply_upscale_result(second, tmp_path / "foreground.png", upscale_output_format(second.image))
+    apply_upscale_result(first, tmp_path / "foreground.png")
+    apply_upscale_result(second, tmp_path / "foreground.png")
     assert first_owner.active_material != material
     assert second_owner.active_material == material
     assert object_image_texture(second_owner).image == image
@@ -222,9 +223,7 @@ def test_object_action_undo_redo_restores_shared_material(
         operator._image_target, rgba = ImageEditTarget.capture(_context(current))
         if operation == upscale.UpscaleImage:
             operator._model = "HAT_GAN_X4_SHARPER"
-            operator._output_format = upscale.upscale_output_format(operator._image_target.image)
         else:
-            from anyimage.common.image import ImageFormat
             operator._background_input = BackgroundInput(rgba, ImageFormat.capture(operator._image_target.image), tmp_path / "input.npy")
         operator.response(
             context,

@@ -1,4 +1,4 @@
-from anyimage.operators.upscale import load_upscale_result, upscale_output_format
+from anyimage.operators.upscale import load_upscale_result
 from unittest.mock import patch
 from types import SimpleNamespace
 import bpy
@@ -50,7 +50,7 @@ def test_image_edit_replacement_preserves_alpha_mode(source, tmp_path, alpha_mod
         result = edit_result(source)
     else:
         Image.new("RGBA", (4, 3), (100, 150, 200, 128)).save(tmp_path / entry)
-        result = load_upscale_result(original, tmp_path / entry, upscale_output_format(original))
+        result = load_upscale_result(original, tmp_path / entry)
     assert result.alpha_mode == alpha_mode
     images.replace_empty_image(source, result)
     assert source.data.alpha_mode == alpha_mode
@@ -89,7 +89,7 @@ def test_shared_edit_preserves_other_empty(source, sharing):
 @pytest.mark.parametrize("entry", ["replace", "job"])
 def test_empty_edit_isolates_material_references(source, tmp_path, entry):
     from anyimage.common.image_target import ImageEditTarget
-    from anyimage.operators.upscale import apply_upscale_result, upscale_output_format
+    from anyimage.operators.upscale import apply_upscale_result
     from tests.support.image_texture import write_result
 
     original = source.data
@@ -103,7 +103,7 @@ def test_empty_edit_isolates_material_references(source, tmp_path, entry):
         images.replace_empty_image(source, edit_result(source))
     else:
         target, _ = ImageEditTarget.capture(SimpleNamespace(object=source, space_data=None))
-        apply_upscale_result(target, write_result(tmp_path), upscale_output_format(target.image))
+        apply_upscale_result(target, write_result(tmp_path))
     assert source.data != original
     assert node.image == original
     np.testing.assert_array_equal(images.image_rgba(original), before)

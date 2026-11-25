@@ -36,23 +36,55 @@ def save_hdr_image(rgba, path):
         bpy.data.images.remove(image)
 
 
-def create_hdr_image(rgba, name, path, *, alpha_mode="PREMUL"):
-    """Create a float image and verify its encoded pixels."""
-    result = None
-    save_hdr_image(rgba, path)
-    try:
-        result = bpy.data.images.load(str(path), check_existing=False)
-        result.alpha_mode = alpha_mode
-        if (not result.is_float
-                or result.colorspace_settings.name != "Linear Rec.709"
-                or not np.allclose(image_rgba(result), rgba, rtol=2e-6, atol=1e-7)):
-            raise RuntimeError("The HDR result did not preserve float colors")
-        result.name = name
-        return result
-    except Exception:
-        if result is not None:
-            bpy.data.images.remove(result)
-        raise
+def source_encoded_rgba(image, rgba):
+    """Read float source samples, retaining unsaved or externally replaced pixels."""
+    space = image.colorspace_settings.name
+    mode = image.alpha_mode
+    if image.source == "FILE" and not image.is_dirty:
+        # Reading raw avoids lossy OCIO round trips and preserves hidden colors.
+        reader = image.copy()
+        try:
+            if tuple(reader.size) == tuple(image.size) and np.array_equal(image_rgba(reader), rgba, equal_nan=True):
+                reader.colorspace_settings.name = "Non-Color"
+                reader.alpha_mode = "CHANNEL_PACKED"
+                encoded = image_rgba(reader)
+                if mode == "PREMUL" and not image.colorspace_settings.is_data:
+                    alpha = encoded[..., 3:4]
+                    encoded[..., :3] /= np.where(alpha > 0, alpha, 1)
+                return encoded
+        finally:
+            bpy.data.images.remove(reader)
+    encoded = rgba.copy()
+    if image.colorspace_settings.is_data:
+        return encoded
+    if mode in {"PREMUL", "STRAIGHT"}:
+        alpha = rgba[..., 3:4]
+        encoded[..., :3] /= np.where(alpha > 0, alpha, 1)
+    if space == "sRGB":
+        from .color_space import linear_rgb_to_srgb
+        encoded[..., :3] = linear_rgb_to_srgb(encoded[..., :3])
+    elif space != "Linear Rec.709":
+        import tempfile
+        from pathlib import Path
+
+        height, width = rgba.shape[:2]
+        reader = bpy.data.images.new("Source encoding", width, height, alpha=True, float_buffer=True)
+        try:
+            encoded[..., 3] = 1
+            reader.pixels.foreach_set(encoded[::-1].ravel())
+            with tempfile.TemporaryDirectory(prefix="anyimage-color-") as directory:
+                path = Path(directory) / "source.exr"
+                save_image_exr(reader, path, space)
+                raw = bpy.data.images.load(str(path), check_existing=False)
+                try:
+                    raw.colorspace_settings.name = "Non-Color"
+                    encoded = image_rgba(raw)
+                finally:
+                    bpy.data.images.remove(raw)
+            encoded[..., 3] = rgba[..., 3]
+        finally:
+            bpy.data.images.remove(reader)
+    return encoded
 
 
 def is_hdr_source(image, rgba=None):

@@ -10,7 +10,7 @@ from tests.support.image_texture import hdr_texture, texture, texture_context
 
 
 @pytest.mark.parametrize("use_alpha", [False, True])
-def test_hdr_texture_rgb_remains_visible_independently_of_alpha(hdr_texture, tmp_path, use_alpha):
+def test_hdr_texture_preserves_premultiplied_color(hdr_texture, tmp_path, use_alpha):
     source = hdr_texture.image
     source.pixels.foreach_set(np.tile([4, 2, 0.5, 1], 12).astype(np.float32))
     alpha = np.tile([0, 0.25, 0.5, 1], (3, 1)).astype(np.float32)
@@ -22,11 +22,11 @@ def test_hdr_texture_rgb_remains_visible_independently_of_alpha(hdr_texture, tmp
     finally:
         cleanup_image_input(snapshot.path)
 
-    # A second removal must accept its own independent-channel result and keep RGB intact.
+    # Reapplying the mask scales the associated color and opacity together.
     snapshot = BackgroundInput.prepare(result, image_rgba(result))
     try:
         snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture))[0], path)
-        np.testing.assert_array_equal(image_rgba(result)[..., :3], np.tile([4, 2, 0.5], (3, 4, 1)))
+        np.testing.assert_array_equal(image_rgba(result)[..., :3], alpha[..., None] ** 2 * [4, 2, 0.5])
     finally:
         cleanup_image_input(snapshot.path)
     result.reload()
@@ -76,5 +76,5 @@ def test_hdr_texture_rgb_remains_visible_independently_of_alpha(hdr_texture, tmp
         patch = pixels[4:12, index * 16 + 4:index * 16 + 12]
         expected_alpha = opacity if use_alpha else 1
         np.testing.assert_allclose(patch[..., 3].mean(), expected_alpha, atol=0.035)
-        expected_rgb = patch[..., 3:4] * np.array([4, 2, 0.5])
+        expected_rgb = (patch[..., 3:4] if use_alpha else np.full_like(patch[..., 3:4], opacity)) * np.array([4, 2, 0.5])
         np.testing.assert_allclose(patch[..., :3], expected_rgb, rtol=2e-5, atol=1e-6)

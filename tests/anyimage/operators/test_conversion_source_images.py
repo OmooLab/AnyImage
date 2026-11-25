@@ -62,6 +62,15 @@ def run_conversion(source, entry, monkeypatch):
     return bpy.context.object
 
 
+@pytest.mark.parametrize("entry", ["PLANE", "DEPTH", "RELIEF"])
+def test_conversion_requests_material_preview(source, monkeypatch, entry):
+    calls = []
+    module = operators if entry == "PLANE" else conversion
+    monkeypatch.setattr(module, "apply_material_preview", calls.append)
+    run_conversion(source, entry, monkeypatch)
+    assert calls == [bpy.context]
+
+
 @pytest.mark.parametrize("entry,sharing", [
     ("PLANE", "none"),
     ("PLANE", "material"),

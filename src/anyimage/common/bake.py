@@ -27,10 +27,6 @@ def bake_context(mesh, material, matrix):
         scene.cycles.device = "CPU"
         scene.cycles.samples = 1
         scene.cycles.use_denoising = False
-        window = bpy.context.window
-        if window:
-            cleanup.callback(setattr, window, "scene", window.scene)
-            window.scene = scene
         with bpy.context.temp_override(scene=scene, view_layer=layer, object=obj,
                                        active_object=obj, selected_objects=[obj],
                                        selected_editable_objects=[obj]):

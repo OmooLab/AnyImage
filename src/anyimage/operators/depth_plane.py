@@ -27,6 +27,7 @@ from ..common.image_target import prepare_image_undo
 from ..common.material import create_image_material
 from ..common.node import load_node_group, set_modifier_input
 from ..common.object import conversion_source, finalize_object_result
+from ..common.viewport import apply_material_preview
 from ..runtime import JobOperator
 
 
@@ -170,6 +171,7 @@ class DepthPlaneJob(JobOperator):
             raise
         if "FINISHED" not in bpy.ops.ed.undo_push(message=self.bl_label):
             raise RuntimeError(f"Unable to create the {self.bl_label} Undo step")
+        apply_material_preview(context)
         return self.ready_message
 
     def cleanup(self):

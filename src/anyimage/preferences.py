@@ -58,7 +58,7 @@ class PreferencesLite(bpy.types.AddonPreferences):
 
     auto_material_preview: bpy.props.BoolProperty(
         name="Automatic Material Preview",
-        description="Show materials after Cutout and use the scene World after World or Panorama conversion",
+        description="Preview materials after Cutout, Plane, Depth Plane or Relief conversion, and use the scene World for World or Panorama",
         default=True,
     )
 

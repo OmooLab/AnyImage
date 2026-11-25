@@ -145,25 +145,6 @@ def decode_color_image(image, color_space, rgba=None):
         bpy.data.images.remove(reader)
 
 
-def _material_png_colors(rgba, source_space):
-    """Convert distinct source RGB values with Blender's material PNG encoder."""
-    import numpy as np
-    from PIL import Image
-
-    rgb = np.rint(rgba[..., :3] * 255).astype(np.uint8)
-    colors, indices = np.unique(rgb.reshape(-1, 3), axis=0, return_inverse=True)
-    width = min(1024, len(colors))
-    rows = (len(colors) + width - 1) // width
-    swatches = np.ones((rows * width, 4), dtype=np.float32)
-    swatches[:len(colors), :3] = colors / 255.0
-    with tempfile.TemporaryDirectory(prefix="anyimage-color-") as directory:
-        path = Path(directory) / "swatches.png"
-        save_color_png(swatches.reshape(rows, width, 4), path, source_space)
-        with Image.open(path) as encoded:
-            palette = np.asarray(encoded.convert("RGB")).reshape(-1, 3)
-    return palette[indices].reshape(rgb.shape).astype(np.float32) / 255.0
-
-
 def linear_color_rgba(image, rgba=None, *, material_space=None, alpha_mode=None):
     """Read straight-alpha linear RGB while preserving the image alpha."""
     import numpy as np
@@ -172,12 +153,8 @@ def linear_color_rgba(image, rgba=None, *, material_space=None, alpha_mode=None)
     space = material_space or image.colorspace_settings.name
     mode = alpha_mode or image.alpha_mode
     rgba = image_rgba(image) if rgba is None else rgba.copy()
-    if material_space is not None:
-        source_space = image.colorspace_settings
-        if not image.is_float and not source_space.is_data and source_space.name != "sRGB":
-            rgba[..., :3] = _material_png_colors(rgba, source_space.name)
-        if image.is_float and mode == "NONE":
-            rgba[..., 3] = 1
+    if material_space is not None and image.is_float and mode == "NONE":
+        rgba[..., 3] = 1
     if not image.is_float and space == "sRGB":
         rgba[..., :3] = srgb_to_linear_rgb(rgba[..., :3])
     elif not (image.is_float and (space == "Linear Rec.709" or (material_space is None and image.colorspace_settings.is_data))):
@@ -254,21 +231,39 @@ def require_static_color_image(image):
         raise ValueError("Material conversion supports static images only")
 
 
-def save_color_png(rgba, path, color_space):
-    """Save top-down RGBA pixels with their Blender color interpretation."""
+def save_color_png(rgba, path):
+    """Write source byte samples without applying Blender color management."""
+    from PIL import Image
+    from .image import byte_pixels
+
+    Image.fromarray(byte_pixels(rgba)).save(path)
+
+
+def save_float_png(rgba, path):
+    """Preserve SDR float storage using raw 16-bit PNG samples."""
     import numpy as np
 
     height, width = rgba.shape[:2]
-    image = bpy.data.images.new("Material Color Export", width=width, height=height, alpha=True)
+    image = bpy.data.images.new("16-bit color", width, height, alpha=True, float_buffer=True)
+    scene = None
     try:
-        image.colorspace_settings.name = color_space
-        image.alpha_mode = "STRAIGHT"
-        image.pixels.foreach_set(np.flipud(rgba).ravel())
-        image.file_format = "PNG"
-        image.save(filepath=str(path), save_copy=True)
-        if not path.is_file():
-            raise RuntimeError("Unable to export the material color image")
+        image.colorspace_settings.name = "Non-Color"
+        # Blender's PNG writer divides RGB by nonzero alpha in a float buffer.
+        associated = rgba.copy()
+        alpha = rgba[..., 3:4]
+        associated[..., :3] *= np.where(alpha > 0, alpha, 1)
+        image.pixels.foreach_set(associated[::-1].ravel())
+        scene = bpy.data.scenes.new("16-bit PNG")
+        scene.view_settings.view_transform = "Raw"
+        scene.render.dither_intensity = 0
+        settings = scene.render.image_settings
+        settings.file_format = "PNG"
+        settings.color_mode = "RGBA"
+        settings.color_depth = "16"
+        image.save_render(str(path), scene=scene)
     finally:
+        if scene is not None:
+            bpy.data.scenes.remove(scene)
         bpy.data.images.remove(image)
 
 
@@ -306,7 +301,7 @@ def write_material_color(directory, fmt, rgba):
         save_hdr_image(rgba, path)
     else:
         path = directory / "color.png"
-        save_color_png(rgba, path, fmt.color_space)
+        save_color_png(rgba, path)
     return path
 
 

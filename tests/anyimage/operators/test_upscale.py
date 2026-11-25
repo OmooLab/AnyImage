@@ -8,7 +8,7 @@ from PIL import Image
 
 from anyimage.common.image import image_pixels
 from anyimage.common.image_target import ImageEditTarget
-from anyimage.operators.upscale import UpscaleImage, upscale_output_format
+from anyimage.operators.upscale import UpscaleImage
 from tests.support.blender import BlenderTestCase
 
 
@@ -70,7 +70,7 @@ def test_upscale_result_replacement_undo_restores_source(tmp_path, shared, float
     try:
         bpy.ops.ed.undo_push(message="Before Upscale")
         target, _ = ImageEditTarget.capture(SimpleNamespace(object=owner))
-        operator = SimpleNamespace(_image_target=target, _output_format=upscale_output_format(source),
+        operator = SimpleNamespace(_image_target=target,
                                    _model="HAT_GAN_X4_SHARPER")
         source.alpha_mode = "CHANNEL_PACKED"
         source.pixels[0] = .25
@@ -79,7 +79,8 @@ def test_upscale_result_replacement_undo_restores_source(tmp_path, shared, float
 
         UpscaleImage.response(operator, bpy.context, SimpleNamespace(file=lambda _: path))
         assert tuple(owner.data.size) == (16, 16)
-        assert owner.data.alpha_mode == operator._output_format.alpha_mode
+        assert owner.data.is_float == floating
+        assert owner.data.alpha_mode == "CHANNEL_PACKED"
         assert bpy.ops.ed.undo() == {"FINISHED"}
         restored = bpy.data.objects[owner_name].data
         assert tuple(restored.size) == (8, 8)

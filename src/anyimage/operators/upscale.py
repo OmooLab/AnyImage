@@ -1,4 +1,5 @@
 from pathlib import Path
+import tempfile
 
 import bpy
 
@@ -6,8 +7,9 @@ from ..ai_preferences import configured_max_ai_input_size, configured_upscale_mo
 from ..server.model_catalog import UPSCALE_MODELS
 from ..runtime import JobOperator
 from ..common.ai import invoke_ai_setup_if_needed, model_job_parameters
+from ..common.color_image import save_float_png
 from ..common.hdr_image import is_hdr_source
-from ..common.image import COLOR_NORMALIZED_PROPERTY, ImageFormat
+from ..common.image import load_image_edit_result
 from ..common.image_input import cleanup_image_input, prepare_ai_input
 from ..common.image_target import ImageEditTarget, editable_still_image
 
@@ -28,36 +30,35 @@ def upscale_input_size_allowed(image, max_input_size):
     return max(width, height) < int(max_input_size)
 
 
-def load_upscale_result(source_image, output_path, image_format):
-    """Load the upscaled PNG with the format captured at submission."""
+def load_upscale_result(source_image, output_path):
+    """Load the upscaled PNG with the current source image settings."""
     output_path = Path(output_path)
     if not output_path.is_file():
         raise RuntimeError(f"Color result image does not exist: {output_path}")
-    result_image = None
-    try:
-        result_image = bpy.data.images.load(str(output_path), check_existing=False)
-        result_image.colorspace_settings.name = image_format.color_space
-        result_image.alpha_mode = image_format.alpha_mode
-        if image_format.normalized:
-            result_image[COLOR_NORMALIZED_PROPERTY] = True
-        result_image.name = source_image.name
-    except (OSError, RuntimeError, TypeError, ValueError) as error:
-        if result_image is not None:
-            bpy.data.images.remove(result_image, do_unlink=True)
-        raise RuntimeError("Unable to load the color result") from error
-    return result_image
+    if source_image.is_float:
+        import numpy as np
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory(prefix="anyimage-upscale-") as directory:
+            path = Path(directory) / "result.png"
+            with Image.open(output_path) as png:
+                rgba = np.asarray(png.convert("RGBA"), dtype=np.float32) / 255
+                if source_image.alpha_mode == "PREMUL" and not source_image.colorspace_settings.is_data:
+                    rgba[..., :3] *= rgba[..., 3:4]
+                save_float_png(rgba, path)
+            image = load_image_edit_result(path, source_image)
+            try:
+                image.pack()
+                return image
+            except Exception:
+                bpy.data.images.remove(image)
+                raise
+    return load_image_edit_result(output_path, source_image)
 
 
-def upscale_output_format(image):
-    """Describe the returned byte PNG using the submitted image settings."""
-    space = image.colorspace_settings
-    return ImageFormat(space.name if space.is_data else "sRGB", image.alpha_mode, False,
-                       bool(image.get(COLOR_NORMALIZED_PROPERTY)))
-
-
-def apply_upscale_result(target, path, image_format):
+def apply_upscale_result(target, path):
     target.validate_binding()
-    result = load_upscale_result(target.image, path, image_format)
+    result = load_upscale_result(target.image, path)
     return target.commit(result, prepare_undo=True)
 
 
@@ -107,7 +108,6 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
             raise ValueError(bpy.app.translations.pgettext_rpt(
                 "Image long edge must be smaller than Maximum AI Input Size ({size} px)"
             ).format(size=max_input_size))
-        self._output_format = upscale_output_format(source_image)
         self._input_path = prepare_ai_input(source_image, rgba)
         return {
             **parameters,
@@ -116,7 +116,7 @@ class UpscaleImage(JobOperator, bpy.types.Operator):
         }
 
     def response(self, _context, result):
-        apply_upscale_result(self._image_target, result.file("upscale"), self._output_format)
+        apply_upscale_result(self._image_target, result.file("upscale"))
         if "FINISHED" not in bpy.ops.ed.undo_push(message="Upscale"):
             raise RuntimeError("Unable to create the Upscale Undo step")
         model_label = UPSCALE_MODELS[self._model].label

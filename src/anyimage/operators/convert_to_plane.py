@@ -6,6 +6,7 @@ from ..common.color_image import material_color_image
 from ..common.image_plane import IMAGE_PLANE_NODE_GROUP_NAME, build_image_plane_matrix, create_image_plane_mesh
 from ..common.node import load_node_group
 from ..common.object import finalize_object_result
+from ..common.viewport import apply_material_preview
 
 
 def create_plane_object(context, source_object, material):
@@ -64,4 +65,5 @@ class ConvertToPlane(bpy.types.Operator):
                 self.report({"ERROR"}, str(error))
                 return {"CANCELLED"}
             raise
+        apply_material_preview(context)
         return {"FINISHED"}

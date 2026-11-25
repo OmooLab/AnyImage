@@ -9,8 +9,9 @@ import numpy as np
 
 from ..ai_preferences import configured_background_model
 from ..common.ai import invoke_ai_setup_if_needed, model_job_parameters
-from ..common.hdr_image import create_hdr_image
-from ..common.image import ImageFormat, create_image_edit_result
+from ..common.color_image import save_float_png
+from ..common.hdr_image import is_hdr_source, save_hdr_image, source_encoded_rgba
+from ..common.image import ImageFormat, create_image_edit_result, load_image_edit_result
 from ..common.image_input import cleanup_image_input, prepare_ai_input
 from ..common.image_target import ImageEditTarget, editable_still_image
 from ..runtime import JobOperator
@@ -23,18 +24,21 @@ class BackgroundInput:
     rgba: np.ndarray
     image_format: ImageFormat
     path: Path
+    hdr: bool = False
 
     @classmethod
     def prepare(cls, image, rgba):
+        source = rgba
         if image.is_float:
             if image.source not in {"FILE", "GENERATED"}:
                 raise RuntimeError("HDR background removal requires a file or generated image")
             if image.colorspace_settings.is_data:
                 raise RuntimeError("HDR background removal requires a color image with opacity alpha")
-            if not np.isfinite(rgba).all() or np.any((rgba[..., 3] < 0) | (rgba[..., 3] > 1)):
+            source = source_encoded_rgba(image, rgba)
+            if not np.isfinite(source).all() or np.any((source[..., 3] < 0) | (source[..., 3] > 1)):
                 raise RuntimeError("HDR image contains invalid color or alpha values")
-        path = prepare_ai_input(image, rgba)
-        return cls(rgba, ImageFormat.capture(image), path)
+        path = prepare_ai_input(image, rgba, source_rgba=source)
+        return cls(source, ImageFormat.capture(image), path, is_hdr_source(image, rgba))
 
     def apply(self, target, alpha_path, *, prepare_undo=False):
         target.validate_binding()
@@ -49,19 +53,24 @@ class BackgroundInput:
         if (alpha.dtype != np.float32 or alpha.shape != self.rgba.shape[:2]
                 or not np.isfinite(alpha).all() or np.any((alpha < 0) | (alpha > 1))):
             raise RuntimeError("Invalid background alpha result")
-        # Keep RGB independent of the new mask, including completely transparent pixels.
+        fmt = self.image_format
         rgba = self.rgba.copy()
-        if self.image_format.alpha_mode == "NONE":
-            rgba[..., 3] = 1
         rgba[..., 3] *= alpha
-        if self.image_format.is_float:
-            with tempfile.TemporaryDirectory(prefix="anyimage-hdr-result-") as directory:
-                result = create_hdr_image(rgba, image.name, Path(directory) / "result.exr", alpha_mode="CHANNEL_PACKED")
-                return target.commit(result, prepare_undo=prepare_undo)
-        result = create_image_edit_result(image, rgba[::-1].ravel(), rgba.shape[1::-1], image_format=self.image_format)
-        if self.image_format.alpha_mode == "NONE":
-            result.alpha_mode = "STRAIGHT"
-        return target.commit(result, prepare_undo=prepare_undo)
+        if not fmt.is_float:
+            result = create_image_edit_result(image, rgba[::-1].ravel(), rgba.shape[1::-1])
+            return target.commit(result, prepare_undo=prepare_undo)
+        if fmt.alpha_mode == "PREMUL":
+            source_alpha = self.rgba[..., 3:4]
+            rgba[..., :3] *= np.where(source_alpha > 0, source_alpha, 1) * alpha[..., None]
+        with tempfile.TemporaryDirectory(prefix="anyimage-background-") as directory:
+            if self.hdr:
+                path = Path(directory) / "result.exr"
+                save_hdr_image(rgba, path)
+            else:
+                path = Path(directory) / "result.png"
+                save_float_png(rgba, path)
+            result = load_image_edit_result(path, image)
+            return target.commit(result, prepare_undo=prepare_undo)
 
 
 class RemoveImageBackground(JobOperator, bpy.types.Operator):

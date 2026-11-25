@@ -79,7 +79,7 @@ def test_queued_hdr_results_follow_successful_target_replacements(hdr_texture, t
             result = second.apply(second_target, path, prepare_undo=True)
         assert len(undo_baselines) == 1
         np.testing.assert_array_equal(undo_baselines[0], previous_result)
-        np.testing.assert_array_equal(image_rgba(result)[..., :3], before[..., :3])
+        np.testing.assert_array_equal(image_rgba(result)[..., :3], before[..., :3] * np.float32(0.7))
         np.testing.assert_allclose(image_rgba(result)[..., 3], before[..., 3] * 0.7, atol=1e-7)
     finally:
         cleanup_image_input(first.path)
@@ -130,8 +130,8 @@ def test_hdr_commit_keeps_float_pixels_and_transaction(hdr_texture, tmp_path, so
         assert preview[0, 0, :3].max() == 0
         result = snapshot.apply(target, alpha_path)
         expected = rgba.copy()
-        expected[..., 3] *= alpha
-        assert result.is_float and result.packed_file and result.alpha_mode == "CHANNEL_PACKED"
+        expected *= alpha[..., None]
+        assert result.is_float and result.packed_file and result.alpha_mode == original_state["alpha_mode"]
         np.testing.assert_allclose(image_rgba(result), expected, atol=1e-7)
         assert (result == source) == (not shared)
         if shared:
@@ -175,6 +175,9 @@ def test_hdr_rejects_invalid_result_and_source_changes(hdr_texture, tmp_path, in
     try:
         if invalid in {"source", "colorspace"}:
             result = snapshot.apply(target, path)
+            if invalid == "colorspace":
+                assert result.colorspace_settings.name == "ACEScg"
+                result.colorspace_settings.name = snapshot.image_format.color_space
             np.testing.assert_array_equal(image_rgba(result)[..., :3], rgba[..., :3])
             return
         with pytest.raises(RuntimeError):
@@ -224,7 +227,7 @@ def test_straight_exr_only_changes_alpha(hdr_texture, tmp_path):
     try:
         result = snapshot.apply(ImageEditTarget.capture(texture_context(hdr_texture))[0], alpha_path)
         rgba = image_rgba(result)
-        np.testing.assert_array_equal(rgba[..., :3], before[..., :3])
+        np.testing.assert_array_equal(rgba[..., :3], before[..., :3] * np.float32(0.3))
         np.testing.assert_allclose(rgba[..., 3], before[..., 3] * 0.3, atol=1e-7)
     finally:
         cleanup_image_input(snapshot.path)

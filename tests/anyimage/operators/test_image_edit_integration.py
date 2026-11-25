@@ -96,7 +96,7 @@ def test_image_edit_result_uses_complete_shared_source_name():
     assert shared.data == source_image
     assert source_image.alpha_mode == "STRAIGHT"
     assert result_image.alpha_mode == "STRAIGHT"
-    assert source.use_empty_image_alpha
+    assert not source.use_empty_image_alpha
     assert source.data == result_image
     assert result_image.name == "Poster.png.001"
     assert "_color" not in result_image.name
@@ -149,7 +149,7 @@ def test_mask_frame_mask_extend_preserves_packed_hidden_rgb(monkeypatch):
     )
     assert not result.is_float and result.colorspace_settings.name == "sRGB"
     assert result.alpha_mode == "STRAIGHT"
-    assert source.use_empty_image_alpha
+    assert not source.use_empty_image_alpha
     assert result.packed_file is not None
     packed = np.asarray(Image.open(BytesIO(result.packed_file.data)).convert("RGBA")) / 255.0
     np.testing.assert_allclose(packed[..., :3], expected[..., :3], atol=1 / 255)

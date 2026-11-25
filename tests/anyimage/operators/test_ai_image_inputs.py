@@ -8,6 +8,8 @@ import pytest
 from PIL import Image
 
 from anyimage.common import ai
+from anyimage.common.image import image_rgba
+from anyimage.common.image_target import ImageEditTarget
 from anyimage.operators import upscale
 from anyimage.operators import depth_plane
 from anyimage.operators import remove_background as background
@@ -16,11 +18,8 @@ from anyimage.server.media.input import load_ai_input
 from tests.support.image_texture import texture, texture_context
 
 
-@pytest.mark.parametrize("space,expected", [
-    ("sRGB", (128, 64, 26)), ("Linear Rec.709", (188, 137, 90)),
-    ("Display P3", (138, 59, 10)), ("Non-Color", (128, 64, 26)),
-])
-def test_three_jobs_submit_the_same_half_transparent_color(texture, monkeypatch, space, expected):
+@pytest.mark.parametrize("space", ["sRGB", "Linear Rec.709", "Display P3", "Non-Color", "AgX Base sRGB"])
+def test_three_jobs_submit_the_same_half_transparent_color(texture, monkeypatch, space):
     image = texture.image
     image.colorspace_settings.name = space
     image.alpha_mode = "STRAIGHT"
@@ -39,12 +38,52 @@ def test_three_jobs_submit_the_same_half_transparent_color(texture, monkeypatch,
         for operation, state in operations:
             path = operation.request(state, context)["input"]
             snapshots.append(np.load(path))
-            np.testing.assert_array_equal(load_ai_input(path, as_bytes=True)[0, 0], (*expected, 128))
+            np.testing.assert_array_equal(load_ai_input(path, as_bytes=True)[0, 0], (128, 64, 26, 128))
         for snapshot in snapshots[1:]:
             np.testing.assert_array_equal(snapshot, snapshots[0])
     finally:
         for operation, state in operations:
             operation.cleanup(state)
+
+
+def test_inverse_material_edits_roundtrip_source_samples(texture, tmp_path, monkeypatch):
+    image = texture.image
+    image.colorspace_settings.name = "AgX Base sRGB"
+    image.alpha_mode = "STRAIGHT"
+    swatches = np.array([[34, 20, 80, 0], [96, 96, 96, 128], [245, 172, 36, 255], [255, 255, 255, 255]], np.uint8)
+    original = np.tile(swatches, (3, 1, 1))
+    image.pixels.foreach_set((original[::-1].astype(np.float32) / 255).ravel())
+    context = texture_context(texture)
+    state = SimpleNamespace(_input_path=None)
+    monkeypatch.setattr(upscale, "model_job_parameters", lambda _: {})
+    try:
+        request = upscale.UpscaleImage.request(state, context)
+        submitted = load_ai_input(request["input"], as_bytes=True)
+        np.testing.assert_array_equal(submitted, original)
+        doubled = submitted.repeat(2, axis=0).repeat(2, axis=1)
+        output = tmp_path / "upscale.png"
+        Image.fromarray(doubled).save(output)
+        upscale.apply_upscale_result(state._image_target, output)
+    finally:
+        upscale.UpscaleImage.cleanup(state)
+    image.reload()
+    assert image.colorspace_settings.name == "AgX Base sRGB" and image.alpha_mode == "STRAIGHT"
+    np.testing.assert_array_equal(np.rint(image_rgba(image) * 255), doubled)
+
+    target, rgba = ImageEditTarget.capture(context)
+    snapshot = background.BackgroundInput.prepare(image, rgba)
+    try:
+        mask = np.ones(rgba.shape[:2], np.float32)
+        mask[:, 2:5] = 0
+        alpha_path = tmp_path / "mask.npy"
+        np.save(alpha_path, mask)
+        snapshot.apply(target, alpha_path)
+    finally:
+        background.cleanup_image_input(snapshot.path)
+    image.reload()
+    assert image.colorspace_settings.name == "AgX Base sRGB" and image.alpha_mode == "STRAIGHT"
+    doubled[..., 3] *= mask.astype(np.uint8)
+    np.testing.assert_array_equal(np.rint(image_rgba(image) * 255), doubled)
 
 
 @pytest.mark.parametrize("module", [upscale, background], ids=["upscale", "remove_background"])
@@ -108,7 +147,7 @@ def test_missing_model_stops_before_image_capture(operation, monkeypatch):
     capture.assert_not_called()
 
 
-@pytest.mark.parametrize("space,gray", [("sRGB", 128), ("Linear Rec.709", 188)])
+@pytest.mark.parametrize("space,gray", [("sRGB", 128), ("Linear Rec.709", 128), ("AgX Base sRGB", 128)])
 def test_upscale_accepts_16bit_sdr_and_rejects_out_of_range_edits(tmp_path, monkeypatch, space, gray):
 
     path = tmp_path / "gray16.png"
@@ -131,6 +170,15 @@ def test_upscale_accepts_16bit_sdr_and_rejects_out_of_range_edits(tmp_path, monk
         snapshot = load_ai_input(parameters["input"], as_bytes=True)
         np.testing.assert_array_equal(snapshot[0, 0], (gray, gray, gray, 255))
         np.testing.assert_array_equal(snapshot[0, 1], (255, 255, 255, 255))
+        doubled = snapshot.repeat(2, axis=0).repeat(2, axis=1)
+        output = tmp_path / "upscale.png"
+        Image.fromarray(doubled).save(output)
+        upscale.apply_upscale_result(operation._image_target, output)
+        image.reload()
+        assert image.is_float and image.colorspace_settings.name == space
+        upscale.UpscaleImage.cleanup(operation)
+        again = upscale.UpscaleImage.request(operation, bpy.context)
+        np.testing.assert_array_equal(load_ai_input(again["input"], as_bytes=True), doubled)
         image.pixels[0] = 2
         image.update()
         with pytest.raises(ValueError, match="non-HDR"):
@@ -139,6 +187,34 @@ def test_upscale_accepts_16bit_sdr_and_rejects_out_of_range_edits(tmp_path, monk
         upscale.UpscaleImage.cleanup(operation)
         bpy.data.objects.remove(owner, do_unlink=True)
         bpy.data.images.remove(image)
+
+
+def test_remove_background_keeps_16bit_inverse_source_samples(texture, tmp_path):
+    from anyimage.common.color_image import save_float_png
+
+    rgba = np.array([[[.18, .45, .83, .5], [.9, .4, .2, 1]]], np.float32)
+    path = tmp_path / "source16.png"
+    save_float_png(rgba, path)
+    image = bpy.data.images.load(str(path))
+    image.colorspace_settings.name = "AgX Base sRGB"
+    image.alpha_mode = "STRAIGHT"
+    texture.image = image
+    target, pixels = ImageEditTarget.capture(texture_context(texture))
+    snapshot = background.BackgroundInput.prepare(image, pixels)
+    try:
+        np.testing.assert_allclose(load_ai_input(snapshot.path), rgba, atol=3e-5)
+        mask = np.array([[.5, .75]], np.float32)
+        alpha_path = tmp_path / "mask.npy"
+        np.save(alpha_path, mask)
+        result = snapshot.apply(target, alpha_path)
+        result.reload()
+        assert result.is_float and result.file_format == "PNG"
+        assert result.alpha_mode == "STRAIGHT" and result.colorspace_settings.name == "AgX Base sRGB"
+        result.colorspace_settings.name = "Non-Color"
+        rgba[..., 3] *= mask
+        np.testing.assert_allclose(image_rgba(result), rgba, atol=3e-5)
+    finally:
+        background.cleanup_image_input(snapshot.path)
 
 
 @pytest.mark.parametrize("kind", ["external", "packed", "generated"])

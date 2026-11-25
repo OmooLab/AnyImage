@@ -59,11 +59,15 @@ class CutoutGridPreview:
                         p.x - p.y / (2.0 * height));
                     vec3 footprint = max(fwidth(grid), vec3(0.00001));
                     vec3 distance = abs(fract(grid + 0.5) - 0.5) / footprint;
-                    vec3 lines = (1.0 - smoothstep(vec3(0.0), vec3(1.0), distance))
-                        * smoothstep(vec3(3.0), vec3(8.0), 1.0 / footprint);
-                    float line = max(lines.x, max(lines.y, lines.z));
-                    fragColor = vec4(color.rgb * mix(1.0, 0.55, line),
-                        color.a + 0.04 * line);
+                    float nearest = min(distance.x, min(distance.y, distance.z));
+                    float core = 1.0 - smoothstep(0.15, 0.85, nearest);
+                    float rim = 1.0 - smoothstep(0.5, 1.1, nearest);
+                    float spacing = 1.0 / max(footprint.x, max(footprint.y, footprint.z));
+                    float visibleRim = (rim - core) * smoothstep(4.0, 12.0, spacing);
+                    float fillAlpha = color.a * 0.5 * (1.0 - core - visibleRim);
+                    float alpha = fillAlpha + 0.20 * (core + visibleRim);
+                    float brightness = (fillAlpha + 0.20 * (0.12 * core + visibleRim)) / alpha;
+                    fragColor = vec4(color.rgb * brightness, alpha);
                 }
             """)
             self.shader = gpu.shader.create_from_info(info)
